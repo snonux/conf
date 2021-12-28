@@ -1,2 +1,2 @@
-pkg_scripts="uptimed httpd"
+pkg_scripts="uptimed httpd geminid"
 httpd_flags=
