@@ -30,7 +30,19 @@ func main() {
 			path:     "/var/gemini/gemtexter/buetow.org",
 		},
 		{
+			domain:   "www.buetow.org",
+			certFile: "/etc/ssl/buetow.org.fullchain.pem",
+			keyFile:  "/etc/ssl/private/buetow.org.key",
+			path:     "/var/gemini/gemtexter/buetow.org",
+		},
+		{
 			domain:   "snonux.de",
+			certFile: "/etc/ssl/snonux.de.fullchain.pem",
+			keyFile:  "/etc/ssl/private/snonux.de.key",
+			path:     "/var/gemini/gemtexter/snonux.de",
+		},
+		{
+			domain:   "www.snonux.de",
 			certFile: "/etc/ssl/snonux.de.fullchain.pem",
 			keyFile:  "/etc/ssl/private/snonux.de.key",
 			path:     "/var/gemini/gemtexter/snonux.de",
