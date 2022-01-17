@@ -1,0 +1,37 @@
+$ORIGIN buetow.org.
+$TTL 4h
+@        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
+                  2022011713      ; serial
+                  1h              ; refresh
+                  30m             ; retry
+                  7d              ; expire
+                  1h )            ; negative
+         IN NS    blowfish.buetow.org.
+         IN NS    twofish.buetow.org.
+
+         IN MX 10 buetow.org.
+         IN MX 20 www.buetow.org.
+         86400 IN A 23.88.35.144
+         86400 IN AAAA 2a01:4f8:c17:20f1::42
+
+*        IN MX 10 buetow.org.
+*        IN MX 20 www.buetow.org.
+*        86400 IN A 23.88.35.144
+*        86400 IN AAAA 2a01:4f8:c17:20f1::42
+
+blowfish 86400 IN A 23.88.35.144
+blowfish 86400 IN AAAA 2a01:4f8:c17:20f1::42
+git1     3600 IN CNAME blowfish
+
+twofish  86400 IN A 108.160.134.135
+twofish  86400 IN AAAA 2401:c080:1000:45af:5400:3ff:fec6:ca1d
+git2     3600 IN CNAME twofish
+www      3600 IN CNAME twofish
+
+vulcan   86400 IN A 95.216.174.192
+vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1
+vu       86400 IN CNAME vulcan
+wolke7   3600 IN CNAME vulcan
+
+sofia    86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
+www2     3600 IN CNAME snonux.codeberg.page.
