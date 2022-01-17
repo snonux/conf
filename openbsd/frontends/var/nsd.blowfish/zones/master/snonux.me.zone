@@ -1,15 +1,16 @@
 $ORIGIN snonux.me.
 $TTL 4h
 @        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
-                  2022011605      ; serial
+                  2022011701      ; serial
                   1h              ; refresh
                   30m             ; retry
                   7d              ; expire
                   1h )            ; negative
-         IN  NS   blowfish.buetow.org.
-         IN  NS   twofish.buetow.org.
+         IN NS   blowfish.buetow.org.
+         IN NS   twofish.buetow.org.
 
-         IN  MX   0 buetow.org.
-         IN  MX   0 www.buetow.org.
+         86400 IN ALIAS blowfish.buetow.org.
+*        86400 IN ALIAS blowfish.buetow.org.
+www      86400 IN ALIAS twofish.buetow.org.
+www2     86400 IN ALIAS snonux.codeberg.page.
 
-*	 IN  CNAME	buetow.org.
