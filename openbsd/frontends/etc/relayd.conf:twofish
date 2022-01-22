@@ -1,0 +1,18 @@
+log connection
+
+tcp protocol "gemini" {
+    tls keypair buetow.org
+    tls keypair snonux.de
+}
+
+relay "gemini4" {
+    listen on 108.160.134.135 port 1965 tls
+    protocol "gemini"
+    forward to 127.0.0.1 port 11965
+}
+
+relay "gemini6" {
+    listen on 2401:c080:1000:45af:5400:3ff:fec6:ca1d port 1965 tls
+    protocol "gemini"
+    forward to 127.0.0.1 port 11965
+}
