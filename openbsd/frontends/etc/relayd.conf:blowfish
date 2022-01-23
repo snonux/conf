@@ -8,7 +8,7 @@ tcp protocol "gemini" {
 }
 
 relay "gemini4" {
-    listen on 23.88.35.14 port 1965 tls
+    listen on 23.88.35.144 port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
 }
