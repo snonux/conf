@@ -55,7 +55,9 @@ stats () {
 
 top_n () {
 	fields="$1"
-	echo "Top $TOP `head -n 1 $STATSFILE | cut -d, -f"$fields"`:"
+	descr="$2"
+
+	echo "Top $TOP `head -n 1 $STATSFILE | cut -d, -f"$fields"`$descr:"
  	cut -d, -f"$fields" | sort | uniq -c | sort -nr | head -n $TOP | indent
 	echo
 }
@@ -73,6 +75,8 @@ ip_stats () {
 main () {
 	parse_logs
 	filter 
+	stats | grep -F .suffix | top_n '1,2,4,5,7' ' (Only .suffix)'
+	stats | grep -F atom.xml | top_n '1,2,4,5,7' ' (Only atom.xml)'
 	stats | top_n 1
 	stats | top_n 2
 	stats | top_n '4,5'
