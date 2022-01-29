@@ -38,8 +38,8 @@ filter () {
 	# 1. You visit 2 sites within one single second
 	# 2. You try to call an odd file or path
 	cut -d, -f2,3,6,7 $STATSFILE |
-	perl -l -n -e '$s{$_}++ if /\.suffix/;
-	$s{$_}+=1000 if /(?:\.php|\.env|robots\.txt|\/wp|\/wordpress\/|\/\.git\/|HNAP)/;
+	perl -l -n -e '($k)=m/(.*?,.*?,.*?),/; $s{$k}++ if /\.suffix/;
+	$s{$k}+=1000 if /(?:\.php|\.env|robots\.txt|\/wp|\/wordpress\/|\/\.git\/|HNAP)/;
 	END { while (($k,$v) = each %s) { print $k =~ /.*?,(.*?),/ if $v > 1 } }' |
 	sort -u > $BOTSFILE
 	grep -F -v -f $BOTSFILE $STATSFILE > $STATSFILE.clean
