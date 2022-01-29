@@ -45,7 +45,7 @@ filter () {
 
 	# Filte out all bot IPs, also only filter out all known file "types".
 	grep -F -v -f $BOTSFILE $STATSFILE > $STATSFILE.clean1
-	grep -v -E '(proto,host|\.suffix|atom\.xml|\.gif|\.png|\.jpg)' $STATSFILE.clean1 > $STATSFILE.dirt
+	grep -v -E '(proto,host|\.suffix|atom\.xml|\.gif|\.png|\.jpg|,,)' $STATSFILE.clean1 > $STATSFILE.dirt
 	#grep -E '(proto,host|\.suffix|atom\.xml|\.gif|\.png|\.jpg)' $STATSFILE.clean1 > $STATSFILE.clean2
 	mv $STATSFILE.clean1 $STATSFILE
 }
@@ -82,12 +82,20 @@ ip_daily_stats () {
 	done
 }
 
+ip_daily_subscribers () {
+	echo "Unique atom.xml subscribers by day"
+	for back in $(jot 90); do
+		now=$(date +%s)
+		date=$(date -r $(echo "$now - 86400 * $back" | bc) +%d,%b)
+		echo -n "\t $date:"
+		stats | grep $date | grep atom.xml | cut -d, -f3 | sort -u | wc -l		
+	done
+}
+
 main () {
 	parse_logs
 	filter 
 	stats | grep -F .suffix | top_n '1,2,4,5,7' ' (Only content)'
-	stats | grep -F atom.xml | top_n '1,2,4,5,7' ' (Only atom.xml)'
-	stats | top_n 1
 	stats | top_n 2
 	stats | top_n '4,5'
 	stats | top_n 7
@@ -95,6 +103,7 @@ main () {
 	stats | top_n '1,2,7'
 	ip_stats
 	ip_daily_stats
+	ip_daily_subscribers
 }
 
 main | sed 's/\.suffix//'
