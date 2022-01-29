@@ -39,11 +39,15 @@ filter () {
 	# 2. You try to call an odd file or path
 	cut -d, -f2,3,6,7 $STATSFILE |
 	perl -l -n -e '($k)=m/(.*?,.*?,.*?),/; $s{$k}++ if /\.suffix/;
-	$s{$k}+=1000 if /(?:\.php|\.env|robots\.txt|\/wp|\/wordpress\/|\/\.git\/|HNAP)/;
+	$s{$k}+=1000 if /(?:target\.suffix|\.php|wordpress|\/wp|\.asp|\.\.|robots\.txt|\.env|\?|\+|%|\*|HNAP1|\/admin\/|\.git\/|microsoft\.exchange|\.lua|\/owa\/)/;
 	END { while (($k,$v) = each %s) { print $k =~ /.*?,(.*?),/ if $v > 1 } }' |
 	sort -u > $BOTSFILE
-	grep -F -v -f $BOTSFILE $STATSFILE > $STATSFILE.clean
-	mv $STATSFILE.clean $STATSFILE
+
+	# Filte out all bot IPs, also only filter out all known file "types".
+	grep -F -v -f $BOTSFILE $STATSFILE > $STATSFILE.clean1
+	grep -v -E '(proto,host|\.suffix|atom\.xml|\.gif|\.png|\.jpg)' $STATSFILE.clean1 > $STATSFILE.dirt
+	#grep -E '(proto,host|\.suffix|atom\.xml|\.gif|\.png|\.jpg)' $STATSFILE.clean1 > $STATSFILE.clean2
+	mv $STATSFILE.clean1 $STATSFILE
 }
 
 stats () {
@@ -81,7 +85,7 @@ ip_daily_stats () {
 main () {
 	parse_logs
 	filter 
-	stats | grep -F .suffix | top_n '1,2,4,5,7' ' (Only .suffix)'
+	stats | grep -F .suffix | top_n '1,2,4,5,7' ' (Only content)'
 	stats | grep -F atom.xml | top_n '1,2,4,5,7' ' (Only atom.xml)'
 	stats | top_n 1
 	stats | top_n 2
@@ -93,4 +97,4 @@ main () {
 	ip_daily_stats
 }
 
-main
+main | sed 's/\.suffix//'
