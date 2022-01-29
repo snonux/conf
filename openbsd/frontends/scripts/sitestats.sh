@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# This is a quick and dirty script to get some stats for my site.
+# Yes, this could be programmed cleaner, but I wanted to do something quick
+# and dirty and this also with only tools available on OpenBSD.
+
 STATSFILE=/tmp/sitestats.csv
 BOTSFILE=/tmp/sitebots.txt
 TOP=20
@@ -8,24 +12,17 @@ header () {
 	echo "proto,host,ip,day,month,time,path"
 }
 
-indent () {
-	sed 's/^/    /'
-}
-
 http_stats () {
 	zgrep -h . /var/www/logs/access.log* |
 	perl -l -n -e 's/\.html/.suffix/; @s=split / +/; next if @s!=11;
-	$s[4]=~s|\[(\d\d)/(...)/\d{4}:(.*)|$1,$2,$3|;
-	print "http,".join ",",@s[0,1,4,7];' 
+	$s[4]=~s|\[(\d\d)/(...)/\d{4}:(.*)|$1,$2,$3|; print "http,".join ",",@s[0,1,4,7];' 
 }
 
 gemini_stats () {
 	zgrep -h . /var/log/daemon* |
 	perl -l -n -e '@s=split / +/; @v=@s and next if $s[4] eq "vger:";
-	next if !/relayd.*gemini/;
-	($path) = $v[-1] =~ m|gemini://.*?(/.*)|;
-	next if $path eq "";
-	$path =~ s/\.gmi/.suffix/;
+	next if !/relayd.*gemini/; ($path) = $v[-1] =~ m|gemini://.*?(/.*)|;
+	next if $path eq ""; $path =~ s/\.gmi/.suffix/;
 	print "gemini,".(split("/", $v[6]))[2].",$s[12],$s[1],$s[0],$s[2],$path"'
 }
 
@@ -58,7 +55,7 @@ top_n () {
 	descr="$2"
 
 	echo "Top $TOP `head -n 1 $STATSFILE | cut -d, -f"$fields"`$descr:"
- 	cut -d, -f"$fields" | sort | uniq -c | sort -nr | head -n $TOP | indent
+ 	cut -d, -f"$fields" | sort | uniq -c | sort -nr | head -n $TOP | sed 's/^/    /'
 	echo
 }
 
@@ -66,7 +63,6 @@ ip_stats () {
 	for proto in http gemini; do 
 		echo -n "Unique $proto IPv4 IPs:\t"
  		stats | grep "^$proto," | cut -d, -f3 | grep -F -v : | sort -u | wc -l
-
 		echo -n "Unique $proto IPv6 IPs:\t" 
 		stats | grep "^$proto," | cut -d, -f3 | grep -F : | sort -u | wc -l
 	done
