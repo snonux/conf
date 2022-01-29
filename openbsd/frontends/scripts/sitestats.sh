@@ -2,7 +2,7 @@
 
 # This is a quick and dirty script to get some stats for my site.
 # Yes, this could be programmed cleaner, but I wanted to do something quick
-# and dirty and this also with only tools available on OpenBSD.
+# and dirty and this also with only tools available on the OpenBSD base install.
 
 STATSFILE=/tmp/sitestats.csv
 BOTSFILE=/tmp/sitebots.txt
