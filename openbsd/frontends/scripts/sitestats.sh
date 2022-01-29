@@ -68,6 +68,16 @@ ip_stats () {
 	done
 }
 
+ip_daily_stats () {
+	echo "Unique IPs by day"
+	for back in $(jot 90); do
+		now=$(date +%s)
+		date=$(date -r $(echo "$now - 86400 * $back" | bc) +%d,%b)
+		echo -n "\t $date:"
+		stats | grep $date | cut -d, -f3 | sort -u | wc -l		
+	done
+}
+
 main () {
 	parse_logs
 	filter 
@@ -80,6 +90,7 @@ main () {
 	stats | top_n '1,7'
 	stats | top_n '1,2,7'
 	ip_stats
+	ip_daily_stats
 }
 
 main
