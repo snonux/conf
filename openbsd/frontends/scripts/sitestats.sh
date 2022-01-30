@@ -93,6 +93,8 @@ ip_daily_subscribers () {
 }
 
 main () {
+	date
+	echo
 	parse_logs
 	filter 
 	stats | grep -F .suffix | top_n '1,2,4,5,7' ' (Only content)'
