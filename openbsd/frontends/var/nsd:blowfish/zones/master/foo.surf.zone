@@ -1,7 +1,7 @@
 $ORIGIN foo.surf.
 $TTL 4h
 @        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
-                  2022012202      ; serial
+                  2022013001      ; serial
                   1h              ; refresh
                   30m             ; retry
                   7d              ; expire
@@ -9,12 +9,9 @@ $TTL 4h
          IN NS   blowfish.buetow.org.
          IN NS   twofish.buetow.org.
 
-         IN MX 10 buetow.org.
-         IN MX 20 www.buetow.org.
+         IN MX 20 buetow.org.
+         IN MX 10 www.buetow.org.
 
-
-         86400 IN A 23.88.35.144
-         86400 IN AAAA 2a01:4f8:c17:20f1::42
-*        86400 IN CNAME blowfish.buetow.org.
-www      86400 IN CNAME twofish.buetow.org.
-www2     86400 IN CNAME foozone.codeberg.page.
+	 86400 IN A 108.160.134.135
+         86400 IN AAAA 2401:c080:1000:45af:5400:3ff:fec6:ca1d
+www      86400 IN CNAME blowfish.buetow.org.
