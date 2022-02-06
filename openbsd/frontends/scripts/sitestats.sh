@@ -74,7 +74,7 @@ ip_stats () {
 
 ip_daily_stats () {
 	echo "Unique IPs by day"
-	for back in $(jot 90); do
+	for back in $(jot 14); do
 		now=$(date +%s)
 		date=$(date -r $(echo "$now - 86400 * $back" | bc) +%d,%b)
 		echo -n "\t $date:"
@@ -84,7 +84,7 @@ ip_daily_stats () {
 
 ip_daily_subscribers () {
 	echo "Unique atom.xml subscribers by day"
-	for back in $(jot 90); do
+	for back in $(jot 14); do
 		now=$(date +%s)
 		date=$(date -r $(echo "$now - 86400 * $back" | bc) +%d,%b)
 		echo -n "\t $date:"
@@ -101,7 +101,7 @@ main () {
 	stats | top_n 2
 	stats | top_n '4,5'
 	stats | top_n 7
-	stats | top_n '1,7'
+	stats | grep -F .suffix | top_n 7 ' (Only content)'
 	stats | top_n '1,2,7'
 	ip_stats
 	ip_daily_stats
