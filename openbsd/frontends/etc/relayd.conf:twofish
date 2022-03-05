@@ -1,10 +1,10 @@
 log connection
 
 tcp protocol "gemini" {
-    tls keypair foo.zone
-    tls keypair foo.surf
     tls keypair buetow.org
     tls keypair snonux.de
+    tls keypair foo.zone
+    tls keypair irregular.ninja
 }
 
 relay "gemini4" {
