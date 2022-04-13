@@ -1,7 +1,7 @@
 $ORIGIN buetow.org.
 $TTL 4h
 @        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
-                  2022031700      ; serial
+                  2022031701      ; serial
                   1h              ; refresh
                   30m             ; retry
                   7d              ; expire
@@ -35,4 +35,4 @@ wolke7   3600 IN CNAME vulcan
 edge     3600 IN CNAME vulcan
 
 sofia    86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
-www2     3600 IN CNAME foozone.codeberg.page.
+www2     3600 IN CNAME snonux.codeberg.page.
