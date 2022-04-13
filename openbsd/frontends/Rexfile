@@ -1,0 +1,38 @@
+use Rex -feature => ['1.4'];
+
+
+group frontends => 'blowfish.buetow.org', 'twofish.buetow.org';
+group dnsmaster => 'blowfish.buetow.org';
+group dnsslaves => 'twofish.buetow.org';
+
+user 'rex';
+sudo TRUE;
+
+parallelism 5;
+
+task 'id', group => 'frontends',
+  sub {
+    my $output = run 'id';
+    say $output;
+  };
+
+task 'dump-info', group => 'frontends',
+  sub { dump_system_information };
+
+desc 'Get the uptime of all servers';
+task 'uptime', group => 'frontends',
+  sub {
+    my $output = run 'uptime';
+    say $output;
+  };
+
+desc 'Setup inetd';
+task 'inetd', group => 'frontends',
+  sub {
+    my $output = run 'cat /etc/inetd.conf';
+    say $output;
+  };
+
+1;
+
+# vim: syntax=perl
