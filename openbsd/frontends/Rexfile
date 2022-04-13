@@ -1,5 +1,5 @@
 use Rex -feature => ['1.4'];
-
+use File::Slurp;
 
 group frontends => 'blowfish.buetow.org', 'twofish.buetow.org';
 group dnsmaster => 'blowfish.buetow.org';
@@ -7,6 +7,7 @@ group dnsslaves => 'twofish.buetow.org';
 
 user 'rex';
 sudo TRUE;
+sudo_password read_file "$ENV{'HOME'}/.ssh/rex_password";
 
 parallelism 5;
 
@@ -16,7 +17,7 @@ task 'id', group => 'frontends',
     say $output;
   };
 
-task 'dump-info', group => 'frontends',
+task 'dump_info', group => 'frontends',
   sub { dump_system_information };
 
 desc 'Get the uptime of all servers';
@@ -29,8 +30,21 @@ task 'uptime', group => 'frontends',
 desc 'Setup inetd';
 task 'inetd', group => 'frontends',
   sub {
-    my $output = run 'cat /etc/inetd.conf';
-    say $output;
+    file '/etc/inetd.conf',
+      source => "./etc/inetd.conf",
+      on_change => sub {
+        service 'inetd' => 'restart';
+      };
+  };
+
+desc 'Setup failover';
+task 'failover', group => 'frontends',
+  sub {
+    file '/usr/local/bin/ha.pl',
+      source => "./usr/local/bin/ha.pl",
+      owner => 'root',
+      group => 'wheel',
+      mode => '755';
   };
 
 1;
