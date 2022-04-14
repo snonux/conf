@@ -7,7 +7,6 @@ group dnsslaves => 'twofish.buetow.org';
 
 user 'rex';
 sudo TRUE;
-sudo_password read_file "$ENV{'HOME'}/.ssh/rex_password";
 
 parallelism 5;
 
@@ -31,20 +30,28 @@ desc 'Setup inetd';
 task 'inetd', group => 'frontends',
   sub {
     file '/etc/inetd.conf',
-      source => "./etc/inetd.conf",
+      source => './etc/inetd.conf',
       on_change => sub {
         service 'inetd' => 'restart';
       };
+    service 'inetd', ensure => 'started';
   };
 
-desc 'Setup failover';
-task 'failover', group => 'frontends',
+desc 'Setup HA';
+task 'ha', group => 'frontends',
   sub {
     file '/usr/local/bin/ha.pl',
-      source => "./usr/local/bin/ha.pl",
+      source => './usr/local/bin/ha.pl',
       owner => 'root',
       group => 'wheel',
       mode => '755';
+
+    file '/var/run/ha.status',
+      content => '# Initial HA status file',
+      owner => 'www',
+      group => 'wheel',
+      mode => '644',
+      no_overwrite => TRUE;
   };
 
 1;
