@@ -10,21 +10,8 @@ sudo TRUE;
 
 parallelism 5;
 
-task 'id', group => 'frontends',
-  sub {
-    my $output = run 'id';
-    say $output;
-  };
-
-task 'dump_info', group => 'frontends',
-  sub { dump_system_information };
-
-desc 'Get the uptime of all servers';
-task 'uptime', group => 'frontends',
-  sub {
-    my $output = run 'uptime';
-    say $output;
-  };
+task 'id', group => 'frontends', sub { say run 'id' };
+task 'dump_info', group => 'frontends', sub { dump_system_information };
 
 desc 'Setup inetd';
 task 'inetd', group => 'frontends',
@@ -52,6 +39,13 @@ task 'ha', group => 'frontends',
       group => 'wheel',
       mode => '644',
       no_overwrite => TRUE;
+  };
+
+desc 'frontend';
+task 'frontend', group => 'frontends',
+  sub {
+    inetd();
+    ha();
   };
 
 1;
