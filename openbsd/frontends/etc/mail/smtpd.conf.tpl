@@ -11,7 +11,7 @@ table virtualdomains file:/etc/mail/virtualdomains
 table virtualusers file:/etc/mail/virtualusers
 
 listen on socket
-listen on all tls pki "buetow_org_tls" hostname "buetow.org"
+listen on all tls pki "buetow_org_tls" hostname "<%= $mail_hostname->($hostname) %>"
 #listen on all
 
 action localmail mbox alias <aliases>

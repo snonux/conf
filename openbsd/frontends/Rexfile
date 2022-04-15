@@ -72,6 +72,53 @@ task 'relayd', group => 'frontends',
     service 'relayd', ensure => 'started';
   };
 
+desc 'Setup OpenSMTPD';
+task 'smtpd', group => 'frontends',
+  sub {
+    file '/etc/mail/aliases',
+      source => './etc/mail/aliases',
+      owner => 'root',
+      group => 'wheel',
+      mode => '644',
+      on_change => sub {
+        say run 'newaliases';
+      };
+
+    file '/etc/mail/virtualdomains',
+      source => './etc/mail/virtualdomains',
+      owner => 'root',
+      group => 'wheel',
+      mode => '644',
+      on_change => sub {
+        service 'smtpd' => 'restart';
+      };
+
+    file '/etc/mail/virtualusers',
+      source => './etc/mail/virtualusers',
+      owner => 'root',
+      group => 'wheel',
+      mode => '644',
+      on_change => sub {
+        service 'smtpd' => 'restart';
+      };
+
+    file '/etc/mail/smtpd.conf',
+      content => template('./etc/mail/smtpd.conf.tpl', mail_hostname => sub {
+          my $hostname = shift;
+          return 'buetow.org' if $hostname eq 'blowfish';
+          return 'www.buetow.org' if $hostname eq 'twofish';
+          return 'buetow.org';
+        }),
+      owner => 'root',
+      group => 'wheel',
+      mode => '644',
+      on_change => sub {
+        service 'smtpd' => 'restart';
+      };
+
+    service 'smtpd', ensure => 'started';
+  };
+
 desc 'Setup HA';
 task 'ha', group => 'frontends',
   sub {
@@ -96,6 +143,7 @@ task 'frontend', group => 'frontends',
     httpd();
     inetd();
     relayd();
+    smtpd();
     ha();
   };
 
