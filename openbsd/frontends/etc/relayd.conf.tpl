@@ -8,13 +8,13 @@ tcp protocol "gemini" {
 }
 
 relay "gemini4" {
-    listen on 23.88.35.144 port 1965 tls
+    listen on <%= $vio0_ip %> port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
 }
 
 relay "gemini6" {
-    listen on 2a01:4f8:c17:20f1::42 port 1965 tls
+    listen on <%= $ipv6address->($hostname) %> port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
 }

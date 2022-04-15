@@ -13,15 +13,63 @@ parallelism 5;
 task 'id', group => 'frontends', sub { say run 'id' };
 task 'dump_info', group => 'frontends', sub { dump_system_information };
 
+our $ipv6address = sub {
+  my $hostname = shift;
+  return '2a01:4f8:c17:20f1::42' if $hostname eq 'blowfish';
+  return '2401:c080:1000:45af:5400:3ff:fec6:ca1d' if $hostname eq 'twofish';
+  return '::1';
+};
+
+desc 'Install various packages';
+task 'packages', group => 'frontends',
+  sub {
+    pkg 'rsync', ensure => present;
+    pkg 'sudo', ensure => present;
+    pkg 'tig', ensure => present;
+    pkg 'vger', ensure => present;
+    pkg 'zsh', ensure => present;
+  };
+
+desc 'Setup httpd';
+task 'httpd', group => 'frontends',
+  sub {
+    file '/etc/httpd.conf',
+      source => './etc/httpd.conf',
+      owner => 'www',
+      group => 'wheel',
+      mode => '644',
+      on_change => sub {
+        service 'httpd' => 'restart';
+      };
+    service 'httpd', ensure => 'started';
+  };
+
 desc 'Setup inetd';
 task 'inetd', group => 'frontends',
   sub {
     file '/etc/inetd.conf',
       source => './etc/inetd.conf',
+      owner => 'www',
+      group => 'wheel',
+      mode => '644',
       on_change => sub {
         service 'inetd' => 'restart';
       };
     service 'inetd', ensure => 'started';
+  };
+
+desc 'Setup relayd';
+task 'relayd', group => 'frontends',
+  sub {
+    file '/etc/relayd.conf',
+      content => template('./etc/relayd.conf.tpl', ipv6address => $ipv6address),
+      owner => 'root',
+      group => 'wheel',
+      mode => '600',
+      on_change => sub {
+        service 'relayd' => 'restart';
+      };
+    service 'relayd', ensure => 'started';
   };
 
 desc 'Setup HA';
@@ -44,7 +92,10 @@ task 'ha', group => 'frontends',
 desc 'frontend';
 task 'frontend', group => 'frontends',
   sub {
+    packages();
+    httpd();
     inetd();
+    relayd();
     ha();
   };
 
