@@ -4,7 +4,6 @@ server:
 	hide-version: yes
 	verbosity: 1
 	database: "" # disable database
-	debug-mode: no
 
 remote-control:
 	control-enable: yes
@@ -13,7 +12,6 @@ remote-control:
 <% for my $zone (@$dns_zones) { %>
 zone:
 	name: "<%= $zone %>"
-	zonefile: "master/<%= $zone %>.zone"
-	notify: 108.160.134.135 blowfish.buetow.org
-	provide-xfr: 108.160.134.135 blowfish.buetow.org
+	allow-notify: 23.88.35.144 blowfish.buetow.org
+	request-xfr: 23.88.35.144 blowfish.buetow.org
 <% } %>

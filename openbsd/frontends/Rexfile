@@ -20,6 +20,8 @@ our $ipv6address = sub {
   return '::1';
 };
 
+our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me/;
+
 sub secret {
   my $secret = shift;
   read_file($ENV{HOME} . '/.rexsecrets/' . $secret);
@@ -140,7 +142,8 @@ task 'dnsmaster', group => 'dnsmaster',
       };
 
     file '/var/nsd/etc/nsd.conf',
-      content => template('./var/nsd/etc/nsd.conf.master.tpl'),
+      content => template('./var/nsd/etc/nsd.conf.master.tpl',
+          dns_zones => \@dns_zones),
       owner => 'root',
       group => '_nsd',
       mode => '640',
@@ -148,11 +151,9 @@ task 'dnsmaster', group => 'dnsmaster',
         $restart = TRUE;
       };
 
-    for my $tpl (<./var/nsd/zones/master/*.zone.tpl>) {
-      my $zone = $tpl;
-      $zone =~ s/\.tpl$//;
-      file $zone,
-        content => template($tpl),
+    for my $zone (@dns_zones) {
+      file "/var/nsd/zones/master/$zone.zone",
+        content => template("./var/nsd/zones/master/$zone.zone.tpl"),
         owner => 'root',
         group => 'wheel',
         mode => '644',
@@ -160,6 +161,35 @@ task 'dnsmaster', group => 'dnsmaster',
           $restart = TRUE;
         };
      }
+
+    service 'nsd' => 'restart' if $restart;
+    service 'nsd', ensure => 'started';
+  };
+
+desc 'Setup DNS slaves';
+task 'dnsslaves', group => 'dnsslaves',
+  sub {
+    my $restart = FALSE;
+
+    file '/var/nsd/etc/key.conf',
+      content => template('./var/nsd/etc/key.conf.tpl',
+          nsd_secret => secret('nsd_secret')),
+      owner => 'root',
+      group => '_nsd',
+      mode => '640',
+      on_change => sub {
+        $restart = TRUE;
+      };
+
+    file '/var/nsd/etc/nsd.conf',
+      content => template('./var/nsd/etc/nsd.conf.slave.tpl',
+          dns_zones => \@dns_zones),
+      owner => 'root',
+      group => '_nsd',
+      mode => '640',
+      on_change => sub {
+        $restart = TRUE;
+      };
 
     service 'nsd' => 'restart' if $restart;
     service 'nsd', ensure => 'started';
