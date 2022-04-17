@@ -20,6 +20,11 @@ our $ipv6address = sub {
   return '::1';
 };
 
+sub secret {
+  my $secret = shift;
+  read_file($ENV{HOME} . '/.rexsecrets/' . $secret);
+}
+
 desc 'Install various packages';
 task 'packages', group => 'frontends',
   sub {
@@ -117,6 +122,47 @@ task 'smtpd', group => 'frontends',
       };
 
     service 'smtpd', ensure => 'started';
+  };
+
+desc 'Setup DNS master';
+task 'dnsmaster', group => 'dnsmaster',
+  sub {
+    my $restart = FALSE;
+
+    file '/var/nsd/etc/key.conf',
+      content => template('./var/nsd/etc/key.conf.tpl',
+          nsd_secret => secret('nsd_secret')),
+      owner => 'root',
+      group => '_nsd',
+      mode => '640',
+      on_change => sub {
+        $restart = TRUE;
+      };
+
+    file '/var/nsd/etc/nsd.conf',
+      content => template('./var/nsd/etc/nsd.conf.master.tpl'),
+      owner => 'root',
+      group => '_nsd',
+      mode => '640',
+      on_change => sub {
+        $restart = TRUE;
+      };
+
+    for my $tpl (<./var/nsd/zones/master/*.zone.tpl>) {
+      my $zone = $tpl;
+      $zone =~ s/\.tpl$//;
+      file $zone,
+        content => template($tpl),
+        owner => 'root',
+        group => 'wheel',
+        mode => '644',
+        on_change => sub {
+          $restart = TRUE;
+        };
+     }
+
+    service 'nsd' => 'restart' if $restart;
+    service 'nsd', ensure => 'started';
   };
 
 desc 'Setup HA';

@@ -1,4 +1,4 @@
 key:
         name: blowfish.buetow.org
         algorithm: hmac-sha256
-	secret: %%ADDSECRETHEREIN"MARKS%%
+        secret: "<%= $nsd_secret %>"

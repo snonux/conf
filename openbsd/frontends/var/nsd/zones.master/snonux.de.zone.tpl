@@ -1,7 +1,7 @@
-$ORIGIN snonux.me.
+$ORIGIN snonux.de.
 $TTL 4h
 @        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
-                  2022011707      ; serial
+                  <%= time() %>   ; serial
                   1h              ; refresh
                   30m             ; retry
                   7d              ; expire

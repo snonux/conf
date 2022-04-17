@@ -1,7 +1,7 @@
 $ORIGIN dtail.dev.
 $TTL 4h
 @        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
-                  2022011708      ; serial
+                  <%= time() %>   ; serial
                   1h              ; refresh
                   30m             ; retry
                   7d              ; expire
