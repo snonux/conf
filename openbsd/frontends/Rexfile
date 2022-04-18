@@ -1,5 +1,18 @@
+# How to use:
+#
+# rex commons nsd_master nsd_slaves
+#
+# Why use Rex to automate my servers? Because Rex is KISS, Puppet, SALT and Chef
+# are not. So, why not use Ansible then? To use Ansible correctly you should also
+# install Python on the target machines (not mandatory, though. But better).
+# Rex is programmed in Perl and there is already Perl in the base system of OpenBSD.
+# Also, I find Perl > Python (my personal opinion).
+
 use Rex -feature => ['1.4'];
+use Rex::Logger;
 use File::Slurp;
+
+# REX CONFIG SECTION
 
 group frontends => 'blowfish.buetow.org', 'twofish.buetow.org';
 group dnsmaster => 'blowfish.buetow.org';
@@ -10,14 +23,25 @@ sudo TRUE;
 
 parallelism 5;
 
-task 'id', group => 'frontends', sub { say run 'id' };
-task 'dump_info', group => 'frontends', sub { dump_system_information };
+# CUSTOM (PERL-ish) CONFIG SECTION (what Rex can't do by itself)
 
+# Gather IPv6 addresses based on hostname.
 our $ipv6address = sub {
   my $hostname = shift;
   return '2a01:4f8:c17:20f1::42' if $hostname eq 'blowfish';
   return '2401:c080:1000:45af:5400:3ff:fec6:ca1d' if $hostname eq 'twofish';
+  Rex::Logger::info("Unable to determine IPv6 address for $hostname", 'error');
   return '::1';
+};
+
+# Bootstrapping the FQDN based on the server IP as the hostname and domain
+# facts aren't set yet due to the myname file in the first place.
+our $fqdns = sub {
+  my $ipv4 = shift;
+  return 'blowfish.buetow.org' if $ipv4 eq '23.88.35.144'; 
+  return 'twofish.buetow.org' if $ipv4 eq '108.160.134.135';
+  Rex::Logger::info("Unable to determine hostname for $ipv4", 'error');
+  return 'HOSTNAME-UNKNOWN.buetow.org';
 };
 
 our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me/;
@@ -27,22 +51,48 @@ sub secret {
   read_file($ENV{HOME} . '/.rexsecrets/' . $secret);
 }
 
-desc 'Install various packages';
-task 'packages', group => 'frontends',
+# UTILITY TASKS
+
+task 'id', group => 'frontends', sub { say run 'id' };
+task 'dump_info', group => 'frontends', sub { dump_system_information };
+
+# OPENBSD TASKS SECTION
+
+desc 'Install base stuff';
+task 'base', group => 'frontends',
   sub {
     pkg 'rsync', ensure => present;
     pkg 'sudo', ensure => present;
     pkg 'tig', ensure => present;
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
+
+    append_if_no_such_line '/etc/rc.conf.local', 'pkg_scripts="uptimed httpd"';
+
+    file '/etc/myname',
+      content => template('./etc/myname.tpl', fqdns => $fqdns),
+      owner => 'root',
+      group => 'wheel',
+      mode => '644';
+  };
+
+desc 'Setup uptimed';
+task 'uptimed', group => 'frontends',
+  sub {
+    Rex::Logger::info('Setting up uptimed');
+    pkg 'uptimed', ensure => present;
+    service 'uptimed', ensure => 'started';
   };
 
 desc 'Setup httpd';
 task 'httpd', group => 'frontends',
   sub {
+    append_if_no_such_line '/etc/rc.conf.local', 'httpd_flags=';
+    #delete_lines_according_to qr{httpd_flags}, '/etc/rc.conf.local';
+
     file '/etc/httpd.conf',
       source => './etc/httpd.conf',
-      owner => 'www',
+      owner => 'root',
       group => 'wheel',
       mode => '644',
       on_change => sub {
@@ -54,9 +104,11 @@ task 'httpd', group => 'frontends',
 desc 'Setup inetd';
 task 'inetd', group => 'frontends',
   sub {
+    append_if_no_such_line '/etc/rc.conf.local', 'inetd_flags=';
+
     file '/etc/inetd.conf',
       source => './etc/inetd.conf',
-      owner => 'www',
+      owner => 'root',
       group => 'wheel',
       mode => '644',
       on_change => sub {
@@ -68,6 +120,8 @@ task 'inetd', group => 'frontends',
 desc 'Setup relayd';
 task 'relayd', group => 'frontends',
   sub {
+    append_if_no_such_line '/etc/rc.conf.local', 'relayd_flags=';
+
     file '/etc/relayd.conf',
       content => template('./etc/relayd.conf.tpl', ipv6address => $ipv6address),
       owner => 'root',
@@ -126,10 +180,11 @@ task 'smtpd', group => 'frontends',
     service 'smtpd', ensure => 'started';
   };
 
-desc 'Setup DNS master';
-task 'dnsmaster', group => 'dnsmaster',
+desc 'Setup DNS server';
+task 'nsd_master', group => 'dnsmaster',
   sub {
     my $restart = FALSE;
+    append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
 
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
@@ -167,7 +222,7 @@ task 'dnsmaster', group => 'dnsmaster',
   };
 
 desc 'Setup DNS slaves';
-task 'dnsslaves', group => 'dnsslaves',
+task 'nsd_slaves', group => 'dnsslaves',
   sub {
     my $restart = FALSE;
 
@@ -212,10 +267,13 @@ task 'ha', group => 'frontends',
       no_overwrite => TRUE;
   };
 
-desc 'frontend';
-task 'frontend', group => 'frontends',
+# COMBINED TASKS SECTION
+
+desc 'Common configs of all hosts';
+task 'commons', group => 'frontends',
   sub {
-    packages();
+    base();
+    uptimed();
     httpd();
     inetd();
     relayd();
