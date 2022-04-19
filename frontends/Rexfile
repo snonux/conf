@@ -11,7 +11,6 @@
 use Rex -feature => ['1.4'];
 use Rex::Logger;
 use File::Slurp;
-use Cwd qw(cwd);
 
 # REX CONFIG SECTION
 
@@ -183,7 +182,7 @@ task 'relayd', group => 'frontends',
 desc 'Setup OpenSMTPD';
 task 'smtpd', group => 'frontends',
   sub {
-    Rex::Logger::info('Setting up mail aliases');
+    Rex::Logger::info('Installing mail aliases');
     file '/etc/mail/aliases',
       source => './etc/mail/aliases',
       owner => 'root',
@@ -193,7 +192,7 @@ task 'smtpd', group => 'frontends',
         say run 'newaliases';
       };
 
-    Rex::Logger::info('Setting up mail virtual domains');
+    Rex::Logger::info('Installing mail virtual domains');
     file '/etc/mail/virtualdomains',
       source => './etc/mail/virtualdomains',
       owner => 'root',
@@ -203,7 +202,7 @@ task 'smtpd', group => 'frontends',
         service 'smtpd' => 'restart';
       };
 
-    Rex::Logger::info('Setting up mail virtual users');
+    Rex::Logger::info('Installing mail virtual users');
     file '/etc/mail/virtualusers',
       source => './etc/mail/virtualusers',
       owner => 'root',
@@ -213,7 +212,7 @@ task 'smtpd', group => 'frontends',
         service 'smtpd' => 'restart';
       };
 
-    Rex::Logger::info('Setting up smtpd.conf');
+    Rex::Logger::info('Installing smtpd.conf');
     file '/etc/mail/smtpd.conf',
       content => template('./etc/mail/smtpd.conf.tpl', mail_hostname => sub {
           my $hostname = shift;
@@ -237,7 +236,7 @@ task 'nsd_master', group => 'dnsmaster',
     my $restart = FALSE;
     append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
 
-    Rex::Logger::info('Setting up master DNS key');
+    Rex::Logger::info('Installing master DNS key');
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
           nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
@@ -248,7 +247,7 @@ task 'nsd_master', group => 'dnsmaster',
         $restart = TRUE;
       };
 
-    Rex::Logger::info('Setting up master DNS config');
+    Rex::Logger::info('Installing master DNS config');
     file '/var/nsd/etc/nsd.conf',
       content => template('./var/nsd/etc/nsd.conf.master.tpl',
           dns_zones => \@dns_zones),
@@ -260,7 +259,7 @@ task 'nsd_master', group => 'dnsmaster',
       };
 
     for my $zone (@dns_zones) {
-      Rex::Logger::info("Setting up DNS zone $zone");
+      Rex::Logger::info("Installing DNS zone $zone");
       file "/var/nsd/zones/master/$zone.zone",
         content => template("./var/nsd/zones/master/$zone.zone.tpl"),
         owner => 'root',
@@ -280,7 +279,7 @@ task 'nsd_slaves', group => 'dnsslaves',
   sub {
     my $restart = FALSE;
 
-    Rex::Logger::info('Setting up slave DNS key');
+    Rex::Logger::info('Installing slave DNS key');
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
           nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
@@ -291,7 +290,7 @@ task 'nsd_slaves', group => 'dnsslaves',
         $restart = TRUE;
       };
 
-    Rex::Logger::info('Setting up slave DNS config');
+    Rex::Logger::info('Installing slave DNS config');
     file '/var/nsd/etc/nsd.conf',
       content => template('./var/nsd/etc/nsd.conf.slave.tpl',
           dns_zones => \@dns_zones),
