@@ -50,6 +50,7 @@ our $filewalk;
 our $filewalk = sub {
   my $dir = shift;
   my @files;
+
   opendir my $dh, $dir or die $!;
   while (my $entry = readdir $dh) {
     next if $entry eq '.' or $entry eq '..';
@@ -62,6 +63,7 @@ our $filewalk = sub {
     }
   }
   closedir $dh;
+
   return @files;
 };
 
@@ -87,7 +89,7 @@ task 'certs', group => 'frontends',
       $dest =~ s/.*secrets//;
       my $mode = $dest =~ /private/ ? '440' : '644';
 
-      Rex::Logger::info("Installing $dest");
+      Rex::Logger::info("Dealing with $dest");
       file $dest,
         source => $source,
         owner => 'root',
@@ -141,9 +143,8 @@ task 'httpd', group => 'frontends',
       owner => 'root',
       group => 'wheel',
       mode => '644',
-      on_change => sub {
-        service 'httpd' => 'restart';
-      };
+      on_change => sub { service 'httpd' => 'restart' };
+
     service 'httpd', ensure => 'started';
   };
 
@@ -157,9 +158,8 @@ task 'inetd', group => 'frontends',
       owner => 'root',
       group => 'wheel',
       mode => '644',
-      on_change => sub {
-        service 'inetd' => 'restart';
-      };
+      on_change => sub { service 'inetd' => 'restart' };
+
     service 'inetd', ensure => 'started';
   };
 
@@ -173,46 +173,39 @@ task 'relayd', group => 'frontends',
       owner => 'root',
       group => 'wheel',
       mode => '600',
-      on_change => sub {
-        service 'relayd' => 'restart';
-      };
+      on_change => sub { service 'relayd' => 'restart' };
+
     service 'relayd', ensure => 'started';
   };
 
 desc 'Setup OpenSMTPD';
 task 'smtpd', group => 'frontends',
   sub {
-    Rex::Logger::info('Installing mail aliases');
+    Rex::Logger::info('Dealing with mail aliases');
     file '/etc/mail/aliases',
       source => './etc/mail/aliases',
       owner => 'root',
       group => 'wheel',
       mode => '644',
-      on_change => sub {
-        say run 'newaliases';
-      };
+      on_change => sub { say run 'newaliases' };
 
-    Rex::Logger::info('Installing mail virtual domains');
+    Rex::Logger::info('Dealing with mail virtual domains');
     file '/etc/mail/virtualdomains',
       source => './etc/mail/virtualdomains',
       owner => 'root',
       group => 'wheel',
       mode => '644',
-      on_change => sub {
-        service 'smtpd' => 'restart';
-      };
+      on_change => sub { service 'smtpd' => 'restart' };
 
-    Rex::Logger::info('Installing mail virtual users');
+    Rex::Logger::info('Dealing with mail virtual users');
     file '/etc/mail/virtualusers',
       source => './etc/mail/virtualusers',
       owner => 'root',
       group => 'wheel',
       mode => '644',
-      on_change => sub {
-        service 'smtpd' => 'restart';
-      };
+      on_change => sub { service 'smtpd' => 'restart' };
 
-    Rex::Logger::info('Installing smtpd.conf');
+    Rex::Logger::info('Dealing with smtpd.conf');
     file '/etc/mail/smtpd.conf',
       content => template('./etc/mail/smtpd.conf.tpl', mail_hostname => sub {
           my $hostname = shift;
@@ -223,9 +216,7 @@ task 'smtpd', group => 'frontends',
       owner => 'root',
       group => 'wheel',
       mode => '644',
-      on_change => sub {
-        service 'smtpd' => 'restart';
-      };
+      on_change => sub { service 'smtpd' => 'restart' };
 
     service 'smtpd', ensure => 'started';
   };
@@ -236,38 +227,32 @@ task 'nsd_master', group => 'dnsmaster',
     my $restart = FALSE;
     append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
 
-    Rex::Logger::info('Installing master DNS key');
+    Rex::Logger::info('Dealing with master DNS key');
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
           nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
       owner => 'root',
       group => '_nsd',
       mode => '640',
-      on_change => sub {
-        $restart = TRUE;
-      };
+      on_change => sub { $restart = TRUE };
 
-    Rex::Logger::info('Installing master DNS config');
+    Rex::Logger::info('Dealing with master DNS config');
     file '/var/nsd/etc/nsd.conf',
       content => template('./var/nsd/etc/nsd.conf.master.tpl',
           dns_zones => \@dns_zones),
       owner => 'root',
       group => '_nsd',
       mode => '640',
-      on_change => sub {
-        $restart = TRUE;
-      };
+      on_change => sub { $restart = TRUE };
 
     for my $zone (@dns_zones) {
-      Rex::Logger::info("Installing DNS zone $zone");
+      Rex::Logger::info("Dealing with DNS zone $zone");
       file "/var/nsd/zones/master/$zone.zone",
         content => template("./var/nsd/zones/master/$zone.zone.tpl"),
         owner => 'root',
         group => 'wheel',
         mode => '644',
-        on_change => sub {
-          $restart = TRUE;
-        };
+        on_change => sub { $restart = TRUE };
      }
 
     service 'nsd' => 'restart' if $restart;
@@ -279,27 +264,23 @@ task 'nsd_slaves', group => 'dnsslaves',
   sub {
     my $restart = FALSE;
 
-    Rex::Logger::info('Installing slave DNS key');
+    Rex::Logger::info('Dealing with slave DNS key');
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
           nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
       owner => 'root',
       group => '_nsd',
       mode => '640',
-      on_change => sub {
-        $restart = TRUE;
-      };
+      on_change => sub { $restart = TRUE };
 
-    Rex::Logger::info('Installing slave DNS config');
+    Rex::Logger::info('Dealing with slave DNS config');
     file '/var/nsd/etc/nsd.conf',
       content => template('./var/nsd/etc/nsd.conf.slave.tpl',
           dns_zones => \@dns_zones),
       owner => 'root',
       group => '_nsd',
       mode => '640',
-      on_change => sub {
-        $restart = TRUE;
-      };
+      on_change => sub { $restart = TRUE };
 
     service 'nsd' => 'restart' if $restart;
     service 'nsd', ensure => 'started';
