@@ -11,6 +11,7 @@
 use Rex -feature => ['1.4'];
 use Rex::Logger;
 use File::Slurp;
+use Cwd qw(cwd);
 
 # REX CONFIG SECTION
 
@@ -24,6 +25,8 @@ sudo TRUE;
 parallelism 5;
 
 # CUSTOM (PERL-ish) CONFIG SECTION (what Rex can't do by itself)
+# Note we using anonymous subs here. This is so we can pass the subs as
+# Rex template variables too.
 
 # Gather IPv6 addresses based on hostname.
 our $ipv6address = sub {
@@ -44,12 +47,29 @@ our $fqdns = sub {
   return 'HOSTNAME-UNKNOWN.buetow.org';
 };
 
-our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me/;
+our $filewalk;
+our $filewalk = sub {
+  my $dir = shift;
+  my @files;
+  opendir my $dh, $dir or die $!;
+  while (my $entry = readdir $dh) {
+    next if $entry eq '.' or $entry eq '..';
+    if (-d "$dir/$entry") {
+      push @files, $_ for $filewalk->("$dir/$entry");
+    } elsif (-f "$dir/$entry") {
+      push @files, "$dir/$entry";
+    } else {
+      Rex::Logger::info("Unsupported file type for $dir/$entry", 'error');
+    }
+  }
+  closedir $dh;
+  return @files;
+};
 
-sub secret {
-  my $secret = shift;
-  read_file($ENV{HOME} . '/.rexsecrets/' . $secret);
-}
+# The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
+our $secrets =  sub { read_file './secrets/' . shift };
+
+our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me/;
 
 # UTILITY TASKS
 
@@ -58,11 +78,39 @@ task 'dump_info', group => 'frontends', sub { dump_system_information };
 
 # OPENBSD TASKS SECTION
 
+desc 'Install certificates from the secret store';
+task 'certs', group => 'frontends',
+  sub {
+    my $restart_services = FALSE;
+
+    for my $source ($filewalk->('./secrets/etc/ssl')) {
+      my $dest = $source;
+      $dest =~ s/.*secrets//;
+      my $mode = $dest =~ /private/ ? '440' : '644';
+
+      Rex::Logger::info("Installing $dest");
+      file $dest,
+        source => $source,
+        owner => 'root',
+        group => 'www',
+        mode => $mode,
+        on_change => sub {
+          Rex::Logger::info("$dest changed, scheduling services restart");
+          $restart_services = TRUE;
+        };
+    }
+
+    if ($restart_services) {
+      service 'httpd' => 'restart';
+      service 'relayd' => 'restart';
+      service 'smtpd' => 'restart';
+    }
+  };
+
 desc 'Install base stuff';
 task 'base', group => 'frontends',
   sub {
     pkg 'rsync', ensure => present;
-    pkg 'sudo', ensure => present;
     pkg 'tig', ensure => present;
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
@@ -79,7 +127,6 @@ task 'base', group => 'frontends',
 desc 'Setup uptimed';
 task 'uptimed', group => 'frontends',
   sub {
-    Rex::Logger::info('Setting up uptimed');
     pkg 'uptimed', ensure => present;
     service 'uptimed', ensure => 'started';
   };
@@ -136,6 +183,7 @@ task 'relayd', group => 'frontends',
 desc 'Setup OpenSMTPD';
 task 'smtpd', group => 'frontends',
   sub {
+    Rex::Logger::info('Setting up mail aliases');
     file '/etc/mail/aliases',
       source => './etc/mail/aliases',
       owner => 'root',
@@ -145,6 +193,7 @@ task 'smtpd', group => 'frontends',
         say run 'newaliases';
       };
 
+    Rex::Logger::info('Setting up mail virtual domains');
     file '/etc/mail/virtualdomains',
       source => './etc/mail/virtualdomains',
       owner => 'root',
@@ -154,6 +203,7 @@ task 'smtpd', group => 'frontends',
         service 'smtpd' => 'restart';
       };
 
+    Rex::Logger::info('Setting up mail virtual users');
     file '/etc/mail/virtualusers',
       source => './etc/mail/virtualusers',
       owner => 'root',
@@ -163,6 +213,7 @@ task 'smtpd', group => 'frontends',
         service 'smtpd' => 'restart';
       };
 
+    Rex::Logger::info('Setting up smtpd.conf');
     file '/etc/mail/smtpd.conf',
       content => template('./etc/mail/smtpd.conf.tpl', mail_hostname => sub {
           my $hostname = shift;
@@ -186,9 +237,10 @@ task 'nsd_master', group => 'dnsmaster',
     my $restart = FALSE;
     append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
 
+    Rex::Logger::info('Setting up master DNS key');
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
-          nsd_secret => secret('nsd_secret')),
+          nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
       owner => 'root',
       group => '_nsd',
       mode => '640',
@@ -196,6 +248,7 @@ task 'nsd_master', group => 'dnsmaster',
         $restart = TRUE;
       };
 
+    Rex::Logger::info('Setting up master DNS config');
     file '/var/nsd/etc/nsd.conf',
       content => template('./var/nsd/etc/nsd.conf.master.tpl',
           dns_zones => \@dns_zones),
@@ -207,6 +260,7 @@ task 'nsd_master', group => 'dnsmaster',
       };
 
     for my $zone (@dns_zones) {
+      Rex::Logger::info("Setting up DNS zone $zone");
       file "/var/nsd/zones/master/$zone.zone",
         content => template("./var/nsd/zones/master/$zone.zone.tpl"),
         owner => 'root',
@@ -226,9 +280,10 @@ task 'nsd_slaves', group => 'dnsslaves',
   sub {
     my $restart = FALSE;
 
+    Rex::Logger::info('Setting up slave DNS key');
     file '/var/nsd/etc/key.conf',
       content => template('./var/nsd/etc/key.conf.tpl',
-          nsd_secret => secret('nsd_secret')),
+          nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
       owner => 'root',
       group => '_nsd',
       mode => '640',
@@ -236,6 +291,7 @@ task 'nsd_slaves', group => 'dnsslaves',
         $restart = TRUE;
       };
 
+    Rex::Logger::info('Setting up slave DNS config');
     file '/var/nsd/etc/nsd.conf',
       content => template('./var/nsd/etc/nsd.conf.slave.tpl',
           dns_zones => \@dns_zones),
@@ -272,6 +328,7 @@ task 'ha', group => 'frontends',
 desc 'Common configs of all hosts';
 task 'commons', group => 'frontends',
   sub {
+    certs();
     base();
     uptimed();
     httpd();
