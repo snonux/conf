@@ -116,7 +116,7 @@ task 'base', group => 'frontends',
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
 
-    append_if_no_such_line '/etc/rc.conf.local', 'pkg_scripts="uptimed httpd"';
+    append_if_no_such_line '/etc/rc.conf.local', 'pkg_scripts="uptimed httpd failunderd"';
 
     file '/etc/myname',
       content => template('./etc/myname.tpl', fqdns => $fqdns),
@@ -286,21 +286,10 @@ task 'nsd_slaves', group => 'dnsslaves',
     service 'nsd', ensure => 'started';
   };
 
-desc 'Setup HA';
-task 'ha', group => 'frontends',
+desc 'Setup failunderd';
+task 'failunderd', group => 'frontends',
   sub {
-    file '/usr/local/bin/ha.pl',
-      source => './usr/local/bin/ha.pl',
-      owner => 'root',
-      group => 'wheel',
-      mode => '755';
 
-    file '/var/run/ha.status',
-      content => '# Initial HA status file',
-      owner => 'www',
-      group => 'wheel',
-      mode => '644',
-      no_overwrite => TRUE;
   };
 
 # COMBINED TASKS SECTION
@@ -315,7 +304,7 @@ task 'commons', group => 'frontends',
     inetd();
     relayd();
     smtpd();
-    ha();
+    failunderd();
   };
 
 1;

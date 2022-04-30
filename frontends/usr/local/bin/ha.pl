@@ -12,11 +12,12 @@ use Data::Dumper;
 
 use constant {
     STATUS_FILE => '/var/run/ha.status',
+    # TMP file must be on the same FS as the final file!
     TMP_STATUS_FILE => '/tmp/ha.status',
     PARTICIPANTS => qw(blowfish.buetow.org twofish.buetow.org),
     HA_STATUS_PORT => 4242,
     MAX_STATUS_AGE => 60,
-}
+};
 
 sub update_ha_status {
     my @status = @_;
