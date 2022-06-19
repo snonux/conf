@@ -13,7 +13,7 @@ $TTL 4h
          IN MX 20 www.buetow.org.
 
 
-         86400 IN A 23.88.35.144
-         86400 IN AAAA 2a01:4f8:c17:20f1::42
-*        86400 IN CNAME blowfish.buetow.org.
-www      86400 IN CNAME twofish.buetow.org.
+         300 IN A 23.88.35.144
+         300 IN AAAA 2a01:4f8:c17:20f1::42
+*        300 IN CNAME blowfish.buetow.org.
+www      300 IN CNAME twofish.buetow.org.
