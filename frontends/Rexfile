@@ -70,7 +70,7 @@ our $filewalk = sub {
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets =  sub { read_file './secrets/' . shift };
 
-our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me/;
+our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me snonux.land/;
 
 # UTILITY TASKS
 
