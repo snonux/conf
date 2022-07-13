@@ -64,25 +64,27 @@ server "<%= $prefix %>buetow.org" {
     certificate "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
     key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
   }
-  root "/htdocs/buetow.org"
-  location match "/tmp/.*" {
-    directory auto index
-  }
-  location match "/.*" {
-    block return 302 "https://paul.buetow.org"
-  }
+  block return 302 "https://paul.buetow.org"
 }
 
-<% if ($primary) { %>
-server "paul.buetow.org" {
+server "<%= $prefix %>paul.buetow.org" {
   listen on * tls port 443
   tls {
-    certificate "/etc/ssl/paul.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/paul.buetow.org.key"
+    certificate "/etc/ssl/<%= $prefix %>paul.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>paul.buetow.org.key"
   }
   block return 302 "https://foo.zone/contact-information.html"
 }
-<% } %>
+
+server "<%= $prefix %>tmp.buetow.org" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>tmp.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>tmp.buetow.org.key"
+  }
+  root "/htdocs/buetow.org/tmp"
+  directory auto index
+}
 
 # Legacy hosts
 server "snonux.de" {
