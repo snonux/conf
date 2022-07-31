@@ -2,21 +2,16 @@
 # See smtpd.conf(5) for more information.
 
 # I used https://www.checktls.com/TestReceiver for testing.
-#
-<%
-  our $primary = $is_primary->($vio0_ip);
-  our $prefix = $primary ? '' : 'www.';
-%>
 
-pki "buetow_org_tls" cert "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
-pki "buetow_org_tls" key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
+pki "buetow_org_tls" cert "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"
+pki "buetow_org_tls" key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
 
 table aliases file:/etc/mail/aliases
 table virtualdomains file:/etc/mail/virtualdomains
 table virtualusers file:/etc/mail/virtualusers
 
 listen on socket
-listen on all tls pki "buetow_org_tls" hostname "<%= $prefix %>buetow.org"
+listen on all tls pki "buetow_org_tls" hostname "<%= "$hostname.$domain" %>"
 #listen on all
 
 action localmail mbox alias <aliases>

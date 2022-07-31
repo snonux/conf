@@ -17,6 +17,18 @@ server "<%= $prefix.$host %>" {
 }
 <% } %>
 
+# Current server's FQDN (e.g. for mail server ACME cert requests)
+server "<%= "$hostname.$domain" %>" {
+  listen on * port 80
+  location "/.well-known/acme-challenge/*" {
+    root "/acme"
+    request strip 2
+  }
+  location * {
+    block return 302 "https://<%= $prefix %>buetow.org"
+  }
+}
+
 # Gemtexter hosts
 <% for my $host (qw/foo.zone snonux.land/) { %>
 server "<%= $prefix.$host %>" {

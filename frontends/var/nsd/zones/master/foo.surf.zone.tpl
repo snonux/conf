@@ -9,8 +9,8 @@ $TTL 4h
          IN NS   blowfish.buetow.org.
          IN NS   twofish.buetow.org.
 
-         IN MX 20 buetow.org.
-         IN MX 10 www.buetow.org.
+         IN MX 20 blowfish.buetow.org.
+         IN MX 10 twofish.buetow.org.
 
 	 86400 IN A 108.160.134.135
          86400 IN AAAA 2401:c080:1000:45af:5400:3ff:fec6:ca1d

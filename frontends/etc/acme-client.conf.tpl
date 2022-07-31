@@ -35,3 +35,10 @@ domain <%= $prefix.$host %> {
 	sign with letsencrypt
 }
 <% } %>
+
+# Mail server domains
+domain <%= "$hostname.$domain" %> {
+	domain key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
+	domain full chain certificate "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"
+	sign with letsencrypt
+}

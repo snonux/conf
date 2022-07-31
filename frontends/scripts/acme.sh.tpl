@@ -25,6 +25,12 @@ if [ $? -eq 0 ]; then
 fi
 <% } -%>
 
+# Current server's FQDN (e.g. for mail server certs)
+handle_cert <%= "$hostname.$domain" %>
+if [ $? -eq 0 ]; then
+    has_update=yes
+fi
+
 # Pick up the new certs.
 if [ $has_update = yes ]; then
     /usr/sbin/rcctl reload httpd

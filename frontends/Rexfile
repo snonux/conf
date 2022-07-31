@@ -223,8 +223,7 @@ task 'smtpd', group => 'frontends',
 
     Rex::Logger::info('Dealing with smtpd.conf');
     file '/etc/mail/smtpd.conf',
-      content => template('./etc/mail/smtpd.conf.tpl',
-        is_primary => $is_primary),
+      content => template('./etc/mail/smtpd.conf.tpl'),
       owner => 'root',
       group => 'wheel',
       mode => '644',
