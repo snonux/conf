@@ -1,5 +1,7 @@
 #!/bin/sh
 
+PATH=$PATH:/usr/local/bin
+
 function ensure_site {
     dir=$1
     repo=$2
