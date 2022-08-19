@@ -321,6 +321,12 @@ task 'failunderd', group => 'frontends',
 
   };
 
+desc 'Setup dory.buetow.org';
+task 'dory', group => 'frontends',
+  sub {
+  };
+
+
 # COMBINED TASKS SECTION
 
 desc 'Common configs of all hosts';

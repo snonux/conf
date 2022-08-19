@@ -77,7 +77,7 @@ server "<%= $prefix %>dory.buetow.org" {
     key "/etc/ssl/private/<%= $prefix %>dory.buetow.org.key"
   }
   location * {
-    root "/htdocs/dory.buetow.org"
+    root "/htdocs/joern/dory.buetow.org"
     directory auto index
   }
 }
