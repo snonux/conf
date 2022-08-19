@@ -110,6 +110,24 @@ task 'uptimed', group => 'frontends',
     service 'uptimed', ensure => 'started';
   };
 
+desc 'Configure the gemtexter sites';
+task 'gemtexter', group => 'frontends',
+  sub {
+    file '/usr/local/bin/gemtexter.sh',
+      content => template('./scripts/gemtexter.sh.tpl'),
+      owner => 'root',
+      group => 'wheel',
+      mode => '744';
+
+    file '/etc/daily.local',
+      ensure => 'present',
+      owner => 'root',
+      group => 'wheel',
+      mode => '644';
+
+    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/gemtexter.sh';
+  };
+
 desc 'Configure ACME client';
 task 'acme', group => 'frontends',
   sub {
@@ -311,6 +329,7 @@ task 'commons', group => 'frontends',
     base();
     uptimed();
     httpd();
+    gemtexter();
     acme();
     acme_invoke();
     inetd();
