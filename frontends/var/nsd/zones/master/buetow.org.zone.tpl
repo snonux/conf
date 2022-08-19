@@ -24,13 +24,15 @@ blowfish 86400 IN AAAA 2a01:4f8:c17:20f1::42
 git1     3600 IN CNAME blowfish
 paul     3600 IN CNAME blowfish
 tmp      3600 IN CNAME blowfish
+dory     3600 IN CNAME blowfish
 
 twofish  86400 IN A 108.160.134.135
 twofish  86400 IN AAAA 2401:c080:1000:45af:5400:3ff:fec6:ca1d
 git2     3600 IN CNAME twofish
 www      3600 IN CNAME twofish
 www.paul 3600 IN CNAME twofish
-www.tmp 3600 IN CNAME twofish
+www.tmp  3600 IN CNAME twofish
+www.dory 3600 IN CNAME twofish
 
 vulcan   86400 IN A 95.216.174.192
 vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1

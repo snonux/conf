@@ -77,7 +77,7 @@ our $filewalk = sub {
 our $secrets =  sub { read_file './secrets/' . shift };
 
 our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me snonux.land/;
-our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
+our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
 
 # UTILITY TASKS
 

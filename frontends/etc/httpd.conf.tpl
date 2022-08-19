@@ -69,6 +69,19 @@ server "<%= $prefix %>irregular.ninja" {
   }
 }
 
+# Dory special host
+server "<%= $prefix %>dory.buetow.org" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>dory.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>dory.buetow.org.key"
+  }
+  location * {
+    root "/htdocs/dory.buetow.org"
+    directory auto index
+  }
+}
+
 # buetow.org special host.
 server "<%= $prefix %>buetow.org" {
   listen on * tls port 443
