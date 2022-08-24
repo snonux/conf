@@ -115,7 +115,7 @@ server "<%= $prefix %>tmp.buetow.org" {
 server "snonux.de" {
   alias "www.snonux.de"
   listen on * port 80
-  block return 302 "https://foo.zone$REQUEST_URI"
+  block return 302 "https://snonux.land"
 }
 
 server "snonux.de" {
@@ -125,7 +125,7 @@ server "snonux.de" {
     certificate "/etc/ssl/snonux.de.fullchain.pem"
     key "/etc/ssl/private/snonux.de.key"
   }
-  block return 302 "https://foo.zone$REQUEST_URI"
+  block return 302 "https://snonux.land$REQUEST_URI"
 }
 
 server "foo.surf" {
