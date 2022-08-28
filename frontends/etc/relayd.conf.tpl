@@ -7,8 +7,9 @@ log connection
 
 tcp protocol "gemini" {
     tls keypair <%= $prefix %>foo.zone
-    tls keypair <%= $prefix %>buetow.org
     tls keypair <%= $prefix %>snonux.land
+    tls keypair <%= $prefix %>buetow.org
+    tls keypair <%= $prefix %>paul.buetow.org
     tls keypair snonux.de
 }
 

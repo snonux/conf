@@ -23,7 +23,7 @@ function ensure_site {
     fi
 }
 
-for site in foo.zone snonux.land; do 
+for site in foo.zone snonux.land paul.buetow.org; do
     ensure_site \
         /var/gemini/$site \
         https://codeberg.org/snonux/$site \

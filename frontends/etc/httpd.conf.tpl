@@ -30,7 +30,7 @@ server "<%= "$hostname.$domain" %>" {
 }
 
 # Gemtexter hosts
-<% for my $host (qw/foo.zone snonux.land/) { %>
+<% for my $host (qw/foo.zone snonux.land paul.buetow.org/) { %>
 server "<%= $prefix.$host %>" {
   listen on * tls port 443
   tls {
@@ -43,6 +43,18 @@ server "<%= $prefix.$host %>" {
   }
 }
 <% } %>
+
+# buetow.org special host
+server "<%= $prefix %>buetow.org" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
+  }
+  location * {
+    block return 302 "https://<%= $prefix %>paul.buetow.org"
+  }
+}
 
 # DTail special host
 server "<%= $prefix %>dtail.dev" {
@@ -80,25 +92,6 @@ server "<%= $prefix %>dory.buetow.org" {
     root "/htdocs/joern/dory.buetow.org"
     directory auto index
   }
-}
-
-# buetow.org special host.
-server "<%= $prefix %>buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
-  }
-  block return 302 "https://paul.buetow.org"
-}
-
-server "<%= $prefix %>paul.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>paul.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>paul.buetow.org.key"
-  }
-  block return 302 "https://foo.zone/contact-information.html"
 }
 
 server "<%= $prefix %>tmp.buetow.org" {
