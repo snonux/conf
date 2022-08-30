@@ -113,18 +113,29 @@ desc 'Setup rsync';
 task 'rsync', group => 'frontends',
   sub {
     pkg 'rsync', ensure => present;
+
     file '/etc/rsyncd.conf',
       content => template('./etc/rsyncd.conf.tpl'),
       owner => 'root',
       group => 'wheel',
       mode => '644';
+
+    file '/usr/local/bin/rsync.sh',
+      content => template('./scripts/rsync.sh.tpl',
+        is_primary => $is_primary),
+      owner => 'root',
+      group => 'wheel',
+      mode => '755';
+
+      append_if_no_such_line '/etc/daily.local', '/usr/local/bin/rsync.sh';
   };
 
 desc 'Configure the gemtexter sites';
 task 'gemtexter', group => 'frontends',
   sub {
     file '/usr/local/bin/gemtexter.sh',
-      content => template('./scripts/gemtexter.sh.tpl'),
+      content => template('./scripts/gemtexter.sh.tpl',
+        is_primary => $is_primary),
       owner => 'root',
       group => 'wheel',
       mode => '744';
