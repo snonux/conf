@@ -89,7 +89,6 @@ task 'dump_info', group => 'frontends', sub { dump_system_information };
 desc 'Install base stuff';
 task 'base', group => 'frontends',
   sub {
-    pkg 'rsync', ensure => present;
     pkg 'tig', ensure => present;
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
@@ -108,6 +107,17 @@ task 'uptimed', group => 'frontends',
   sub {
     pkg 'uptimed', ensure => present;
     service 'uptimed', ensure => 'started';
+  };
+
+desc 'Setup rsync';
+task 'rsync', group => 'frontends',
+  sub {
+    pkg 'rsync', ensure => present;
+    file '/etc/rsyncd.conf',
+      content => template('./etc/rsyncd.conf.tpl'),
+      owner => 'root',
+      group => 'wheel',
+      mode => '644';
   };
 
 desc 'Configure the gemtexter sites';
