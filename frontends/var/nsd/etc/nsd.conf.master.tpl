@@ -14,6 +14,8 @@ remote-control:
 zone:
 	name: "<%= $zone %>"
 	zonefile: "master/<%= $zone %>.zone"
-	notify: 108.160.134.135 blowfish.buetow.org
-	provide-xfr: 108.160.134.135 blowfish.buetow.org
+	<% for my $slave_ip (qw/108.160.134.135 46.23.94.99/) { %>
+	notify: <%= $slave_ip %> blowfish.buetow.org
+	provide-xfr: <%= $slave_ip %> blowfish.buetow.org
+	<% } -%>
 <% } %>

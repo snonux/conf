@@ -16,3 +16,4 @@ $TTL 4h
          300 IN AAAA 2a01:4f8:c17:20f1::42
 *        300 IN CNAME blowfish.buetow.org.
 www      300 IN CNAME twofish.buetow.org.
+codeberg 3600 IN CNAME snonux.codeberg.page.
