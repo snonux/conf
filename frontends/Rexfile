@@ -364,6 +364,7 @@ task 'commons', group => 'frontends',
     inetd();
     relayd();
     smtpd();
+    rsync();
     failunderd();
   };
 
