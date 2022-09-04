@@ -7,13 +7,13 @@ $TTL 4h
                   7d              ; expire
                   1h )            ; negative
          IN NS   blowfish.buetow.org.
-         IN NS   twofish.buetow.org.
+         IN NS   fishfinger.buetow.org.
 
          IN MX 10 blowfish.buetow.org.
-         IN MX 20 twofish.buetow.org.
+         IN MX 20 fishfinger.buetow.org.
 
          300 IN A 23.88.35.144
          300 IN AAAA 2a01:4f8:c17:20f1::42
 *        300 IN CNAME blowfish.buetow.org.
-www      300 IN CNAME twofish.buetow.org.
+www      300 IN CNAME fishfinger.buetow.org.
 codeberg 3600 IN CNAME snonux.codeberg.page.

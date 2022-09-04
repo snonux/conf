@@ -7,18 +7,15 @@ $TTL 4h
                   7d              ; expire
                   1h )            ; negative
          IN NS    blowfish.buetow.org.
-         IN NS    twofish.buetow.org.
          IN NS    fishfinger.buetow.org.
 
          IN MX 10 blowfish.buetow.org.
-         IN MX 20 twofish.buetow.org.
-         IN MX 30 fishfinger.buetow.org.
+         IN MX 20 fishfinger.buetow.org.
          86400 IN A 23.88.35.144
          86400 IN AAAA 2a01:4f8:c17:20f1::42
 
 *        IN MX 10 blowfish.buetow.org.
-*        IN MX 20 twofish.buetow.org.
-*        IN MX 30 fishfinger.buetow.org.
+*        IN MX 20 fishfinger.buetow.org.
 *        86400 IN A 23.88.35.144
 *        86400 IN AAAA 2a01:4f8:c17:20f1::42
 
@@ -29,21 +26,13 @@ paul     3600 IN CNAME blowfish
 tmp      3600 IN CNAME blowfish
 dory     3600 IN CNAME blowfish
 
-twofish  86400 IN A 108.160.134.135
-twofish  86400 IN AAAA 2401:c080:1000:45af:5400:3ff:fec6:ca1d
-git2     3600 IN CNAME twofish
-www      3600 IN CNAME twofish
-www.paul 3600 IN CNAME twofish
-www.tmp  3600 IN CNAME twofish
-www.dory 3600 IN CNAME twofish
-
 fishfinger  86400 IN A 46.23.94.99
 fishfinger  86400 IN AAAA 2a03:6000:6f67:624::99
-git3      3600 IN CNAME fishfinger
-ww3      3600 IN CNAME fishfinger
-ww3.paul 3600 IN CNAME fishfinger
-ww3.tmp  3600 IN CNAME fishfinger
-ww3.dory 3600 IN CNAME fishfinger
+git2      3600 IN CNAME fishfinger
+www      3600 IN CNAME fishfinger
+www.paul 3600 IN CNAME fishfinger
+www.tmp  3600 IN CNAME fishfinger
+www.dory 3600 IN CNAME fishfinger
 
 vulcan   86400 IN A 95.216.174.192
 vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1

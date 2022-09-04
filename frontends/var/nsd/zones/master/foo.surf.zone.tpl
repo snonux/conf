@@ -7,10 +7,10 @@ $TTL 4h
                   7d              ; expire
                   1h )            ; negative
          IN NS   blowfish.buetow.org.
-         IN NS   twofish.buetow.org.
+         IN NS   fishfinger.buetow.org.
 
          IN MX 20 blowfish.buetow.org.
-         IN MX 10 twofish.buetow.org.
+         IN MX 10 fishfinger.buetow.org.
 
 	 86400 IN A 108.160.134.135
          86400 IN AAAA 2401:c080:1000:45af:5400:3ff:fec6:ca1d

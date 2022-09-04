@@ -14,9 +14,9 @@ use File::Slurp;
 
 # REX CONFIG SECTION
 
-group frontends => 'blowfish.buetow.org', 'fishfinger.buetow.org', 'twofish.buetow.org';
+group frontends => 'blowfish.buetow.org', 'fishfinger.buetow.org';
 group dnsmaster => 'blowfish.buetow.org';
-group dnsslaves => 'fishfinger.buetow.org', 'twofish.buetow.org';
+group dnsslaves => 'fishfinger.buetow.org';
 
 user 'rex';
 sudo TRUE;
@@ -31,7 +31,6 @@ parallelism 5;
 our $ipv6address = sub {
   my $hostname = shift;
   return '2a01:4f8:c17:20f1::42' if $hostname eq 'blowfish';
-  return '2401:c080:1000:45af:5400:3ff:fec6:ca1d' if $hostname eq 'twofish';
   return '2a03:6000:6f67:624::99' if $hostname eq 'fishfinger';
   Rex::Logger::info("Unable to determine IPv6 address for $hostname", 'error');
   return '::1';
@@ -42,7 +41,6 @@ our $ipv6address = sub {
 our $fqdns = sub {
   my $ipv4 = shift;
   return 'blowfish.buetow.org' if $ipv4 eq '23.88.35.144';
-  return 'twofish.buetow.org' if $ipv4 eq '108.160.134.135';
   return 'fishfinger.buetow.org' if $ipv4 eq '46.23.94.99';
   Rex::Logger::info("Unable to determine hostname for $ipv4", 'error');
   return 'HOSTNAME-UNKNOWN.buetow.org';

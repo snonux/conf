@@ -1,4 +1,4 @@
-<% my $allow = '108.160.134.135,2401:c080:1000:45af:5400:3ff:fec6:ca1d,*.buetow.org,localhost'; %>
+<% my $allow = '*.buetow.org,localhost'; %>
 max connections = 5
 timeout = 300
 
