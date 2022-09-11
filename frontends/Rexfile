@@ -347,7 +347,6 @@ task 'dory', group => 'frontends',
   sub {
   };
 
-
 # COMBINED TASKS SECTION
 
 desc 'Common configs of all hosts';
