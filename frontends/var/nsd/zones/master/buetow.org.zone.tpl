@@ -33,9 +33,9 @@ paul IN MX 10 mail.protonmail.ch.
 paul IN MX 20 mailsec.protonmail.ch.
 paul IN MX 42 blowfish
 paul IN MX 42 fishfinger
-protonmail._domainkey.paul IN CNAME rotonmail.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
-protonmail2._domainkey.paul IN CNAME rotonmail2.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
-protonmail3._domainkey.paul IN CNAME rotonmail3.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
+protonmail._domainkey.paul IN CNAME protonmail.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
+protonmail2._domainkey.paul IN CNAME protonmail2.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
+protonmail3._domainkey.paul IN CNAME protonmail3.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 
 fishfinger  86400 IN A 46.23.94.99
 fishfinger  86400 IN AAAA 2a03:6000:6f67:624::99
