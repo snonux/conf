@@ -394,7 +394,8 @@ task 'commons', group => 'frontends',
     relayd();
     smtpd();
     rsync();
-    dtail();
+    # Requires manually installing the binary!
+    # dtail();
     failunderd();
   };
 
