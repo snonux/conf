@@ -43,6 +43,7 @@ fishfinger 86400 IN AAAA 2a03:6000:6f67:624::99
 git2       3600 IN CNAME fishfinger
 www        3600 IN CNAME fishfinger
 www.tmp    3600 IN CNAME fishfinger
+www.znc    3600 IN CNAME fishfinger
 www.dory   3600 IN CNAME fishfinger
 www.footos 3600 IN CNAME fishfinger
 www.paul   3600 IN CNAME fishfinger
@@ -52,6 +53,7 @@ vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1
 vu       86400 IN CNAME vulcan
 wolke7   3600 IN CNAME vulcan
 edge     3600 IN CNAME vulcan
+bnc      3600 IN CNAME www.znc
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2         3600 IN CNAME snonux.codeberg.page.

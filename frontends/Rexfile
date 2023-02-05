@@ -8,7 +8,7 @@
 # Rex is programmed in Perl and there is already Perl in the base system of OpenBSD.
 # Also, I find Perl > Python (my personal opinion).
 
-use Rex -feature => ['1.4'];
+use Rex -feature => ['1.13'];
 use Rex::Logger;
 use File::Slurp;
 
@@ -17,6 +17,8 @@ use File::Slurp;
 group frontends => 'blowfish.buetow.org', 'fishfinger.buetow.org';
 group dnsmaster => 'blowfish.buetow.org';
 group dnsslaves => 'fishfinger.buetow.org';
+our $ircbouncer_server = 'fishfinger.buetow.org';
+group ircbouncer => $ircbouncer_server;
 
 user 'rex';
 sudo TRUE;
@@ -73,11 +75,15 @@ our $filewalk = sub {
   return @files;
 };
 
+sub hostname {
+  run 'hostname';
+}
+
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets =  sub { read_file './secrets/' . shift };
 
 our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me snonux.land/;
-our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org footos.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
+our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org footos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
 
 # UTILITY TASKS
 
@@ -93,7 +99,10 @@ task 'base', group => 'frontends',
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
 
-    append_if_no_such_line '/etc/rc.conf.local', 'pkg_scripts="uptimed httpd failunderd dserver"';
+    my @pkg_scripts = qw/uptimed httpd dserver/;
+    push @pkg_scripts, 'znc' if connection->server eq $ircbouncer_server;
+    my $pkg_scripts = join ' ', @pkg_scripts;
+    append_if_no_such_line '/etc/rc.conf.local', "pkg_scripts=\"$pkg_scripts\"";
 
     file '/etc/myname',
       content => template('./etc/myname.tpl', fqdns => $fqdns),
@@ -373,10 +382,11 @@ task 'dtail', group => 'frontends',
       service 'dserver', ensure => 'started';
    };
 
-desc 'Setup failunderd';
-task 'failunderd', group => 'frontends',
+desc 'Setup IRC bouncer';
+task 'ircbouncer', group => 'ircbouncer',
   sub {
-
+    pkg 'znc', ensure => present;
+    service 'znc', ensure => 'started';
   };
 
 # COMBINED TASKS SECTION
@@ -396,7 +406,6 @@ task 'commons', group => 'frontends',
     rsync();
     # Requires manually installing the binary!
     # dtail();
-    failunderd();
   };
 
 1;
