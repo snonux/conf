@@ -79,6 +79,7 @@ our $filewalk = sub {
 our $secrets =  sub { read_file './secrets/' . shift };
 
 our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
+our @dns_zones_remove = qw/foo.surf snonux.de snonux.me sidewalk.ninja/;
 our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org footos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
 
 # UTILITY TASKS
@@ -308,6 +309,11 @@ task 'nsd_master', group => 'dnsmaster',
         group => 'wheel',
         mode => '644',
         on_change => sub { $restart = TRUE };
+     }
+
+    for my $zone (@dns_zones_remove) {
+      Rex::Logger::info("Dealing with DNS zone removal $zone");
+      file "/var/nsd/zones/master/$zone.zone", ensure => 'absent';
      }
 
     service 'nsd' => 'restart' if $restart;
