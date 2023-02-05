@@ -389,7 +389,7 @@ task 'ircbouncer', group => 'ircbouncer',
   sub {
     pkg 'znc', ensure => present;
     # Requires runtime config in /var/znc before it can start.
-    # => geheim search var-znc
+    # => geheim search znc.conf
     service 'znc', ensure => 'started';
   };
 
