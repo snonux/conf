@@ -75,14 +75,10 @@ our $filewalk = sub {
   return @files;
 };
 
-sub hostname {
-  run 'hostname';
-}
-
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets =  sub { read_file './secrets/' . shift };
 
-our @dns_zones = qw/buetow.org dtail.dev foo.surf foo.zone irregular.ninja sidewalk.ninja snonux.de snonux.me snonux.land/;
+our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
 our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org footos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
 
 # UTILITY TASKS
