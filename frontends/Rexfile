@@ -314,7 +314,7 @@ task 'nsd_master', group => 'dnsmaster',
     for my $zone (@dns_zones_remove) {
       Rex::Logger::info("Dealing with DNS zone removal $zone");
       file "/var/nsd/zones/master/$zone.zone", ensure => 'absent';
-     }
+    }
 
     service 'nsd' => 'restart' if $restart;
     service 'nsd', ensure => 'started';
@@ -388,6 +388,8 @@ desc 'Setup IRC bouncer';
 task 'ircbouncer', group => 'ircbouncer',
   sub {
     pkg 'znc', ensure => present;
+    # Requires runtime config in /var/znc before it can start.
+    # => geheim search var-znc
     service 'znc', ensure => 'started';
   };
 
