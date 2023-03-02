@@ -78,9 +78,9 @@ our $filewalk = sub {
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets =  sub { read_file './secrets/' . shift };
 
-our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
+our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.land paul.cyou/;
 our @dns_zones_remove = qw/foo.surf snonux.de snonux.me sidewalk.ninja/;
-our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org footos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja snonux.land/;
+our @acme_hosts = qw/buetow.org paul.buetow.org tmp.buetow.org dory.buetow.org footos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja snonux.land paul.cyou/;
 
 # UTILITY TASKS
 

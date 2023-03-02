@@ -10,7 +10,7 @@ tcp protocol "gemini" {
     tls keypair <%= $prefix %>snonux.land
     tls keypair <%= $prefix %>buetow.org
     tls keypair <%= $prefix %>paul.buetow.org
-    tls keypair snonux.de
+    tls keypair <%= $prefix %>paul.cyou
 }
 
 relay "gemini4" {

@@ -44,19 +44,21 @@ server "<%= $prefix.$host %>" {
 }
 <% } %>
 
-# buetow.org special host
-server "<%= $prefix %>buetow.org" {
+# Redirect to paul.buetow.org
+<% for my $host (qw/buetow.org paul.cyou/) { %>
+server "<%= $prefix.$host %>" {
   listen on * tls port 443
   tls {
-    certificate "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
+    certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix.$host %>.key"
   }
   location * {
     block return 302 "https://<%= $prefix %>paul.buetow.org"
   }
 }
+<% } %>
 
-# DTail special host
+# Redirec to to gitub.dtail.dev
 server "<%= $prefix %>dtail.dev" {
   listen on * tls port 443
   tls {
