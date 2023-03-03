@@ -15,11 +15,32 @@ function ensure_site {
     fi
 
     cd $parent
+    if [ ! -e www.$basename ]; then
+        ln -s $basename www.$basename
+    fi
+
     if [ ! -d $basename ]; then
         git clone $repo -b $branch --single-branch $basename
     else
         cd $basename
         git pull
+    fi
+}
+
+function ensure_links {
+    dir=$1
+    target=$2
+
+    basename=$(basename $dir)
+    parent=$(dirname $dir)
+
+    cd $parent
+    if [ ! -e $target ]; then
+        ln -s $basename $target
+    fi
+
+    if [ ! -e www.$target ]; then
+        ln -s $basename www.$target
     fi
 }
 
@@ -34,4 +55,8 @@ for site in foo.zone snonux.land paul.cyou; do
         https://codeberg.org/snonux/$site \
         content-html
 done
+
+ensure_links /var/gemini/paul.cyou buetow.org
+ensure_links /var/gemini/paul.cyou paul.buetow.org
 <% } %>
+
