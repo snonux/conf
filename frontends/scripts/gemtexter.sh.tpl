@@ -24,7 +24,7 @@ function ensure_site {
 }
 
 <% if ($is_primary->($vio0_ip)) { %>
-for site in foo.zone snonux.land paul.buetow.org; do
+for site in foo.zone snonux.land paul.cyou; do
     ensure_site \
         /var/gemini/$site \
         https://codeberg.org/snonux/$site \
