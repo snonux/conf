@@ -38,6 +38,10 @@ protonmail._domainkey.paul IN CNAME protonmail.domainkey.d4xua2siwqfhvecokhuacmy
 protonmail2._domainkey.paul IN CNAME protonmail2.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 protonmail3._domainkey.paul IN CNAME protonmail3.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 
+# Canary test for failunderd
+master 300 IN CNAME blowfish
+hastatus 86400 IN CNAME master
+
 fishfinger 86400 IN A 46.23.94.99
 fishfinger 86400 IN AAAA 2a03:6000:6f67:624::99
 git2       3600 IN CNAME fishfinger
