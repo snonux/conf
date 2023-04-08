@@ -9,10 +9,15 @@ $TTL 4h
          IN NS    blowfish.buetow.org.
          IN NS    fishfinger.buetow.org.
 
-cloud    IN NS    ns-1037.awsdns-01.org.
-cloud    IN NS    ns-1799.awsdns-32.co.uk.
-cloud    IN NS    ns-478.awsdns-59.com.
-cloud    IN NS    ns-837.awsdns-40.net.
+aws      IN NS    ns-884.awsdns-46.net.
+aws      IN NS    ns-1756.awsdns-27.co.uk.
+aws      IN NS    ns-322.awsdns-40.com.
+aws      IN NS    ns-1105.awsdns-10.org.
+
+k8s      IN NS    ns-283.awsdns-35.com.
+k8s      IN NS    ns-1226.awsdns-25.org.
+k8s      IN NS    ns-626.awsdns-14.net.
+k8s      IN NS    ns-1580.awsdns-05.co.uk.
 
          IN MX 10 blowfish.buetow.org.
          IN MX 20 fishfinger.buetow.org.
