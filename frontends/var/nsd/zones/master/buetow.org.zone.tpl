@@ -9,6 +9,11 @@ $TTL 4h
          IN NS    blowfish.buetow.org.
          IN NS    fishfinger.buetow.org.
 
+cloud    IN NS    ns-1037.awsdns-01.org.
+cloud    IN NS    ns-1799.awsdns-32.co.uk.
+cloud    IN NS    ns-478.awsdns-59.com.
+cloud    IN NS    ns-837.awsdns-40.net.
+
          IN MX 10 blowfish.buetow.org.
          IN MX 20 fishfinger.buetow.org.
          86400 IN A 23.88.35.144
@@ -37,10 +42,6 @@ paul IN MX 42 fishfinger
 protonmail._domainkey.paul IN CNAME protonmail.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 protonmail2._domainkey.paul IN CNAME protonmail2.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 protonmail3._domainkey.paul IN CNAME protonmail3.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
-
-# Canary test for failunderd
-master 300 IN CNAME blowfish
-hastatus 86400 IN CNAME master
 
 fishfinger 86400 IN A 46.23.94.99
 fishfinger 86400 IN AAAA 2a03:6000:6f67:624::99

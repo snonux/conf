@@ -14,10 +14,10 @@ use File::Slurp;
 
 # REX CONFIG SECTION
 
-group frontends => 'blowfish.buetow.org', 'fishfinger.buetow.org';
-group dnsmaster => 'blowfish.buetow.org';
-group dnsslaves => 'fishfinger.buetow.org';
-our $ircbouncer_server = 'fishfinger.buetow.org';
+group frontends => 'blowfish.buetow.org:2', 'fishfinger.buetow.org:2';
+group dnsmaster => 'blowfish.buetow.org:2';
+group dnsslaves => 'fishfinger.buetow.org:2';
+our $ircbouncer_server = 'fishfinger.buetow.org:2';
 group ircbouncer => $ircbouncer_server;
 
 user 'rex';
