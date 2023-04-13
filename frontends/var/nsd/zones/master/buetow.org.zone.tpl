@@ -55,12 +55,12 @@ vu       86400 IN CNAME vulcan
 wolke7   3600 IN CNAME vulcan
 edge     3600 IN CNAME vulcan
 
-babylon9   86400 IN A 5.75.172.148
-babylon9   86400 IN AAAA 2a01:4f8:1c1c:4be9::1
-babylon9-2 86400 IN A 5.75.172.148
-babylon9-2 86400 IN AAAA 2a01:4f8:1c1c:4be9::2
-cloud      3600 IN CNAME babylon9
-bag        3600 IN CNAME babylon9-2
+babylon5   86400 IN A 5.75.172.148
+babylon5   86400 IN AAAA 2a01:4f8:1c1c:4be9::1
+babylon5-2 86400 IN A 5.75.172.148
+babylon5-2 86400 IN AAAA 2a01:4f8:1c1c:4be9::2
+cloud      3600 IN CNAME babylon5
+bag        3600 IN CNAME babylon5-2
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2         3600 IN CNAME snonux.codeberg.page.
