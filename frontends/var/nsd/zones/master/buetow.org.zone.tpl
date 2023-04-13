@@ -44,6 +44,7 @@ git2       3600 IN CNAME fishfinger
 www        3600 IN CNAME fishfinger
 www.tmp    3600 IN CNAME fishfinger
 www.znc    3600 IN CNAME fishfinger
+bnc        3600 IN CNAME www.znc
 www.dory   3600 IN CNAME fishfinger
 www.footos 3600 IN CNAME fishfinger
 www.paul   3600 IN CNAME fishfinger
@@ -53,7 +54,11 @@ vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1
 vu       86400 IN CNAME vulcan
 wolke7   3600 IN CNAME vulcan
 edge     3600 IN CNAME vulcan
-bnc      3600 IN CNAME www.znc
+
+babylon9 86400 IN A 5.75.172.148
+babylon9 86400 IN AAAA 2a01:4f8:1c1c:4be9::1
+cloud    3600 IN CNAME babylon9
+bag      3600 IN CNAME babylon9
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2         3600 IN CNAME snonux.codeberg.page.
