@@ -5,11 +5,12 @@ FROM rockylinux/rockylinux
 RUN dnf update -y
 RUN dnf install -y python39 
 
-ADD ./anki-sync-server /anki-sync-server
+ADD ./anki-sync-server/src /anki-sync-server
 RUN adduser anki-sync-server
-WORKDIR /anki-sync-server/src
+WORKDIR /anki-sync-server
 
-RUN pip3.9 install -r /anki-sync-server/src/requirements.txt
-RUN pip3.9 install -e /anki-sync-server/src
+RUN pip3.9 install -r /anki-sync-server/requirements.txt
+RUN pip3.9 install -e /anki-sync-server
+RUN sed -i 's|^data_root =.*|data_root = /data/collections|; s|^auth_db_path =.*|auth_db_path = /data/auth.db|' /anki-sync-server/ankisyncd.conf 
 
 CMD ["python3.9", "-m", "ankisyncd"]
