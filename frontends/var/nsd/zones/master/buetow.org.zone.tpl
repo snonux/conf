@@ -65,6 +65,7 @@ babylon5-4 86400 IN AAAA 2a01:4f8:1c1c:4be9::4
 cloud      3600 IN CNAME babylon5
 bag        3600 IN CNAME babylon5-2
 anki       3600 IN CNAME babylon5-3
+; Albena's devices are still configured to wolke7 for NextCloud sync.
 wolke7     3600 IN CNAME babylon5-4
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
