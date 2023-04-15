@@ -52,7 +52,6 @@ www.paul   3600 IN CNAME fishfinger
 vulcan   86400 IN A 95.216.174.192
 vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1
 vu       86400 IN CNAME vulcan
-wolke7   3600 IN CNAME vulcan
 edge     3600 IN CNAME vulcan
 
 babylon5   86400 IN A 5.75.172.148
@@ -64,6 +63,7 @@ babylon5-3 86400 IN AAAA 2a01:4f8:1c1c:4be9::3
 cloud      3600 IN CNAME babylon5
 bag        3600 IN CNAME babylon5-2
 anki       3600 IN CNAME babylon5-3
+wolke7     3600 IN CNAME babylon5
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2         3600 IN CNAME snonux.codeberg.page.
