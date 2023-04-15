@@ -60,10 +60,12 @@ babylon5-2 86400 IN A 5.75.172.148
 babylon5-2 86400 IN AAAA 2a01:4f8:1c1c:4be9::2
 babylon5-3 86400 IN A 5.75.172.148
 babylon5-3 86400 IN AAAA 2a01:4f8:1c1c:4be9::3
+babylon5-4 86400 IN A 5.75.172.148
+babylon5-4 86400 IN AAAA 2a01:4f8:1c1c:4be9::4
 cloud      3600 IN CNAME babylon5
 bag        3600 IN CNAME babylon5-2
 anki       3600 IN CNAME babylon5-3
-wolke7     3600 IN CNAME babylon5
+wolke7     3600 IN CNAME babylon5-4
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2         3600 IN CNAME snonux.codeberg.page.
