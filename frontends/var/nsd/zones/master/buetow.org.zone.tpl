@@ -11,22 +11,22 @@ $TTL 4h
 
          IN MX 10 blowfish.buetow.org.
          IN MX 20 fishfinger.buetow.org.
-         86400 IN A 23.88.35.144
-         86400 IN AAAA 2a01:4f8:c17:20f1::42
+         1800 IN A 23.88.35.144
+         1800 IN AAAA 2a01:4f8:c17:20f1::42
 
 *        IN MX 10 blowfish.buetow.org.
 *        IN MX 20 fishfinger.buetow.org.
-*        86400 IN A 23.88.35.144
-*        86400 IN AAAA 2a01:4f8:c17:20f1::42
+*        1800 IN A 23.88.35.144
+*        1800 IN AAAA 2a01:4f8:c17:20f1::42
 
 blowfish 86400 IN A 23.88.35.144
 blowfish 86400 IN AAAA 2a01:4f8:c17:20f1::42
-git1     3600 IN CNAME blowfish
-tmp      3600 IN CNAME blowfish
-dory     3600 IN CNAME blowfish
-footos   3600 IN CNAME blowfish
-paul 86400 IN A 23.88.35.144
-paul 86400 IN AAAA 2a01:4f8:c17:20f1::42
+git1     1800 IN CNAME blowfish
+tmp      1800 IN CNAME blowfish
+dory     1800 IN CNAME blowfish
+footos   1800 IN CNAME blowfish
+paul 1800 IN A 23.88.35.144
+paul 1800 IN AAAA 2a01:4f8:c17:20f1::42
 paul IN TXT protonmail-verification=a42447901e320064d13e536db4d73ce600d715b7
 paul IN TXT v=spf1 include:_spf.protonmail.ch mx ~all
 paul IN TXT v=DMARC1; p=none
@@ -40,19 +40,20 @@ protonmail3._domainkey.paul IN CNAME protonmail3.domainkey.d4xua2siwqfhvecokhuac
 
 fishfinger 86400 IN A 46.23.94.99
 fishfinger 86400 IN AAAA 2a03:6000:6f67:624::99
-git2       3600 IN CNAME fishfinger
-www        3600 IN CNAME fishfinger
-www.tmp    3600 IN CNAME fishfinger
-www.znc    3600 IN CNAME fishfinger
-bnc        3600 IN CNAME www.znc
-www.dory   3600 IN CNAME fishfinger
-www.footos 3600 IN CNAME fishfinger
-www.paul   3600 IN CNAME fishfinger
+git2       1800 IN CNAME fishfinger
+www        1800 IN CNAME fishfinger
+www.tmp    1800 IN CNAME fishfinger
+www.znc    1800 IN CNAME fishfinger
+bnc        1800 IN CNAME www.znc
+www.dory   1800 IN CNAME fishfinger
+www.footos 1800 IN CNAME fishfinger
+www.paul   1800 IN CNAME fishfinger
 
 vulcan   86400 IN A 95.216.174.192
 vulcan   86400 IN AAAA 2a01:4f9:c010:250e::1
 vu       86400 IN CNAME vulcan
-edge     3600 IN CNAME vulcan
+edge     1800 IN CNAME vulcan
+wolke7     1800 IN CNAME vulcan
 
 babylon5   86400 IN A 5.75.172.148
 babylon5   86400 IN AAAA 2a01:4f8:1c1c:4be9::1
@@ -62,11 +63,9 @@ babylon5-3 86400 IN A 5.75.172.148
 babylon5-3 86400 IN AAAA 2a01:4f8:1c1c:4be9::3
 babylon5-4 86400 IN A 5.75.172.148
 babylon5-4 86400 IN AAAA 2a01:4f8:1c1c:4be9::4
-cloud      3600 IN CNAME babylon5
-bag        3600 IN CNAME babylon5-2
-anki       3600 IN CNAME babylon5-3
-; Albena's devices are still configured to wolke7 for NextCloud sync.
-wolke7     3600 IN CNAME babylon5-4
+cloud      1800 IN CNAME babylon5
+bag        1800 IN CNAME babylon5-2
+anki       1800 IN CNAME babylon5-3
 
 zapad.sofia 86400 IN CNAME 79-100-3-54.ip.btc-net.bg.
-www2         3600 IN CNAME snonux.codeberg.page.
+www2         1800 IN CNAME snonux.codeberg.page.
