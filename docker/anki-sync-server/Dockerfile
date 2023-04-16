@@ -10,7 +10,7 @@ WORKDIR /anki-sync-server
 
 RUN pip3.9 install -r /anki-sync-server/requirements.txt
 RUN pip3.9 install -e /anki-sync-server
-RUN sed -i 's|^data_root =.*|data_root = /data/collections|; s|^auth_db_path =.*|auth_db_path = /data/auth.db|' /anki-sync-server/ankisyncd.conf 
+RUN sed -i 's|^data_root =.*|data_root = /data/collections|; s|^auth_db_path =.*|auth_db_path = /data/auth.db|; s|^session_db_path =.*|session_db_path = /data/session.db|' /anki-sync-server/ankisyncd.conf 
 
 RUN adduser anki-sync-server
 USER anki-sync-server
