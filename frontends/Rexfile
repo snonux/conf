@@ -96,7 +96,7 @@ task 'base', group => 'frontends',
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
 
-    my @pkg_scripts = qw/uptimed httpd dserver/;
+    my @pkg_scripts = qw/uptimed httpd dserver icinga2/;
     push @pkg_scripts, 'znc' if connection->server eq $ircbouncer_server;
     my $pkg_scripts = join ' ', @pkg_scripts;
     append_if_no_such_line '/etc/rc.conf.local', "pkg_scripts=\"$pkg_scripts\"";
@@ -384,6 +384,17 @@ task 'dtail', group => 'frontends',
       service 'dserver', ensure => 'started';
    };
 
+desc 'Setup Gogios monitoring system';
+task 'gogios', group => 'frontends',
+  sub {
+      file '/etc/gogios.json',
+        content => template('./etc/gogios.json.tpl',
+          acme_hosts => \@acme_hosts),
+        owner => 'root',
+        group => 'wheel',
+        mode => '755';
+  };
+
 desc 'Setup IRC bouncer';
 task 'ircbouncer', group => 'ircbouncer',
   sub {
@@ -408,6 +419,7 @@ task 'commons', group => 'frontends',
     relayd();
     smtpd();
     rsync();
+    gogios();
     # Requires manually installing the binary!
     # dtail();
   };
