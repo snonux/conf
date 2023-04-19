@@ -1,8 +1,9 @@
 {
   "EmailTo": "paul",
   "EmailFrom": "gogios@mx.buetow.org",
-  "CheckTimeoutS": 10,
+  "CheckTimeoutS": 4,
   "CheckConcurrency": 10,
+  "StateDir": "/var/run/gogios",
   "Checks": {
     <% for my $host (@$acme_hosts) { -%>
       <% for my $prefix ('', 'www.') { -%>
