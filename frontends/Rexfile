@@ -400,6 +400,7 @@ task 'gogios_install', group => 'frontends',
 desc 'Setup Gogios monitoring system';
 task 'gogios', group => 'frontends',
   sub {
+      pkg 'monitoring-plugins', ensure => present;
       my $gogios_path = '/usr/local/bin/gogios';
 
       file '/etc/gogios.json',
@@ -422,8 +423,13 @@ task 'gogios', group => 'frontends',
       run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
       run 'usermod -d /var/run/gogios _gogios';
 
-      run "echo '*/10 * * * * $gogios_path -cfg /etc/gogios.conf >/dev/null' | crontab -u _gogios -",
-          unless => 'crontab -l -u _gogios | grep $gogios_path';
+      file '/tmp/gogios.cron',
+        ensure => 'file',
+        content => "*/5 8-22 * * * $gogios_path >/dev/null\n0 7 * * * $gogios_path -renotify >/dev/null\n",
+        mode => '755';
+
+      run 'cat /tmp/gogios.cron | crontab -u _gogios -';
+      run 'rm /tmp/gogios.cron';
   };
 
 desc 'Setup IRC bouncer';
