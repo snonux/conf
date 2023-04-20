@@ -1,8 +1,8 @@
 {
   "EmailTo": "paul",
   "EmailFrom": "gogios@mx.buetow.org",
-  "CheckTimeoutS": 4,
-  "CheckConcurrency": 10,
+  "CheckTimeoutS": 10,
+  "CheckConcurrency": 2,
   "StateDir": "/var/run/gogios",
   "Checks": {
     <% for my $host (@$acme_hosts) { -%>

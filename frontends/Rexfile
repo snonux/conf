@@ -387,9 +387,21 @@ task 'dtail', group => 'frontends',
       service 'dserver', ensure => 'started';
    };
 
+desc 'Installing Gogios binary';
+task 'gogios_install', group => 'frontends',
+  sub {
+      file '/usr/local/bin/gogios',
+        source => 'usr/local/bin/gogios',
+        mode => '0755';
+        owner => 'root',
+        group => 'root';
+  };
+
 desc 'Setup Gogios monitoring system';
 task 'gogios', group => 'frontends',
   sub {
+      my $gogios_path = '/usr/local/bin/gogios';
+
       file '/etc/gogios.json',
         content => template('./etc/gogios.json.tpl',
           acme_hosts => \@acme_hosts),
@@ -397,14 +409,21 @@ task 'gogios', group => 'frontends',
         group => 'wheel',
         mode => '744';
 
-      run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
-      run 'usermod -d /var/run/gogios _gogios';
-
       file '/var/run/gogios',
         ensure => 'directory',
         owner => '_gogios',
         group => '_gogios',
         mode => '755';
+
+      unless (is_file($gogios_path)) {
+        Rex::Logger::info("Gogios not installed to $gogios_path! Run task 'gogios_install'", 'error');
+      }
+
+      run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
+      run 'usermod -d /var/run/gogios _gogios';
+
+      run "echo '*/10 * * * * $gogios_path -cfg /etc/gogios.conf >/dev/null' | crontab -u _gogios -",
+          unless => 'crontab -l -u _gogios | grep $gogios_path';
   };
 
 desc 'Setup IRC bouncer';
