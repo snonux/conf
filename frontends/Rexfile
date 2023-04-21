@@ -8,7 +8,7 @@
 # Rex is programmed in Perl and there is already Perl in the base system of OpenBSD.
 # Also, I find Perl > Python (my personal opinion).
 
-use Rex -feature => ['1.13'];
+use Rex -feature => ['1.14'];
 use Rex::Logger;
 use File::Slurp;
 
@@ -425,8 +425,9 @@ task 'gogios', group => 'frontends',
 
       file '/tmp/gogios.cron',
         ensure => 'file',
-        content => "*/5 8-22 * * * $gogios_path >/dev/null\n0 7 * * * $gogios_path -renotify >/dev/null\n",
-        mode => '755';
+        content => template('./etc/gogios.cron.tpl',
+            gogios_path => $fqdns),
+        mode => '600';
 
       run 'cat /tmp/gogios.cron | crontab -u _gogios -';
       run 'rm /tmp/gogios.cron';
