@@ -426,7 +426,7 @@ task 'gogios', group => 'frontends',
       file '/tmp/gogios.cron',
         ensure => 'file',
         content => template('./etc/gogios.cron.tpl',
-            gogios_path => $fqdns),
+            gogios_path => $gogios_path),
         mode => '600';
 
       run 'cat /tmp/gogios.cron | crontab -u _gogios -';
