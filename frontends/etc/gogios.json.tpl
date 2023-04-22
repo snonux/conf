@@ -47,6 +47,10 @@
     <% } -%>
     <% for my $host (qw(fishfinger blowfish)) { %>
       <% for my $proto (4, 6) { -%>
+    "Check Dig <%= $host %>.buetow.org IPv<%= $proto %>": {
+      "Plugin": "/usr/local/libexec/nagios/check_dig",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-l", "buetow.org", "-<%= $proto %>"]
+    },
     "Check SMTP <%= $host %>.buetow.org IPv<%= $proto %>": {
       "Plugin": "/usr/local/libexec/nagios/check_smtp",
       "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>"]
