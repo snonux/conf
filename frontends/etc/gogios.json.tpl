@@ -2,7 +2,7 @@
   "EmailTo": "paul",
   "EmailFrom": "gogios@mx.buetow.org",
   "CheckTimeoutS": 10,
-  "CheckConcurrency": 2,
+  "CheckConcurrency": 3,
   "StateDir": "/var/run/gogios",
   "Checks": {
     <% for my $host (@$acme_hosts) { -%>
@@ -21,7 +21,7 @@
     },
       <% } -%>
     <% } -%>
-    <% for my $host (qw(cloud anki wallabag)) { -%>
+    <% for my $host (qw(cloud anki bag babylon5)) { -%>
     "<%= $host %>.buetow.org TLS Certificate": {
       "Plugin": "/usr/local/libexec/nagios/check_http",
       "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "30" ]
@@ -35,7 +35,7 @@
       "Args": ["<%= $host %>.buetow.org", "-6"]
     },
     <% } -%>
-    <% for my $host (qw(fishfinger blowfish vulcan babylon)) { %>
+    <% for my $host (qw(fishfinger blowfish babylon5)) { %>
     "Check ICMP4 <%= $host %>.buetow.org": {
       "Plugin": "/usr/local/libexec/nagios/check_ping",
       "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "50,10%", "-c", "100,15%"]
@@ -61,6 +61,12 @@
     },
       <% } -%>
     <% } -%>
+    <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_nextcloud backup_anki)) { %>
+    "Check NRPE <%= $nrpe_check %> babylon5.buetow.org": {
+      "Plugin": "/usr/local/libexec/nagios/check_nrpe",
+      "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"]
+    },
+    <% } %>
     "Check Users <%= $hostname %>": {
       "Plugin": "/usr/local/libexec/nagios/check_users",
       "Args": ["-w", "2", "-c", "3"]

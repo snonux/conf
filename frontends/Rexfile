@@ -401,6 +401,8 @@ desc 'Setup Gogios monitoring system';
 task 'gogios', group => 'frontends',
   sub {
       pkg 'monitoring-plugins', ensure => present;
+      pkg 'nrpe', ensure => present;
+
       my $gogios_path = '/usr/local/bin/gogios';
 
       file '/etc/gogios.json',
