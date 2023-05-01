@@ -23,13 +23,13 @@
     "Check TLS Certificate <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "30" ],
-      "DependsOn": ["Check Ping4 <%= $prefix eq '' ? 'blowfish.buetow.org' : 'twofish.buetow.org' %>"]
+      "DependsOn": ["Check Ping4 <%= $prefix eq '' ? 'blowfish.buetow.org' : 'fishfinger.buetow.org' %>"]
     },
         <% for my $proto (4, 6) { -%>
     "Check HTTP IPv<%= $proto %> <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"],
-      "DependsOn": ["Check Ping<%= $proto %> <%= $prefix eq '' ? 'blowfish.buetow.org' : 'twofish.buetow.org' %>"]
+      "DependsOn": ["Check Ping<%= $proto %> <%= $prefix eq '' ? 'blowfish.buetow.org' : 'fishfinger.buetow.org' %>"]
     },
         <% } -%>
       <% } -%>
