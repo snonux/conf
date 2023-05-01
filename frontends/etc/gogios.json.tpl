@@ -8,6 +8,13 @@
   "CheckConcurrency": 3,
   "StateDir": "/var/run/gogios",
   "Checks": {
+    <% for my $host (qw(fishfinger blowfish)) { %>
+    "Check DTail <%= $host %>.buetow.org": {
+      "Plugin": "/usr/local/bin/dtailhealth",
+      "Args": ["--server", "<%= $host %>.buetow.org:2222"],
+      "DependsOn": ["Check Ping4 <%= $host %>.buetow.org", "Check Ping6 <%= $host %>.buetow.org"]
+    },
+    <% } -%>
     <% for my $host (qw(fishfinger blowfish babylon5)) { %>
     "Check Ping4 <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
