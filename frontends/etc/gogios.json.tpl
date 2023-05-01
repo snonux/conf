@@ -1,3 +1,6 @@
+<%
+  our $plugin_dir = '/usr/local/libexec/nagios';
+-%>
 {
   "EmailTo": "paul",
   "EmailFrom": "gogios@mx.buetow.org",
@@ -5,86 +8,90 @@
   "CheckConcurrency": 3,
   "StateDir": "/var/run/gogios",
   "Checks": {
+    <% for my $host (qw(fishfinger blowfish babylon5)) { %>
+    "Check Ping4 <%= $host %>.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_ping",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "50,10%", "-c", "100,15%"]
+    },
+    "Check Ping6 <%= $host %>.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_ping",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-6", "-w", "50,10%", "-c", "100,15%"]
+    },
+    <% } -%>
     <% for my $host (@$acme_hosts) { -%>
       <% for my $prefix ('', 'www.') { -%>
-    "<%= $prefix . $host %> TLS Certificate": {
-      "Plugin": "/usr/local/libexec/nagios/check_http",
-      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "30" ]
+    "Check TLS Certificate <%= $prefix . $host %>": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "30" ],
+      "DependsOn": ["Check Ping4 <%= $prefix eq '' ? 'blowfish.buetow.org' : 'twofish.buetow.org' %>"]
     },
-    "<%= $prefix . $host %> HTTP IPv4": {
-      "Plugin": "/usr/local/libexec/nagios/check_http",
-      "Args": ["<%= $prefix . $host %>", "-4"]
+        <% for my $proto (4, 6) { -%>
+    "Check HTTP IPv<%= $proto %> <%= $prefix . $host %>": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> <%= $prefix eq '' ? 'blowfish.buetow.org' : 'twofish.buetow.org' %>"]
     },
-    "<%= $prefix . $host %> HTTP IPv6": {
-      "Plugin": "/usr/local/libexec/nagios/check_http",
-      "Args": ["<%= $prefix . $host %>", "-6"]
-    },
+        <% } -%>
       <% } -%>
     <% } -%>
     <% for my $host (qw(cloud anki bag babylon5)) { -%>
-    "<%= $host %>.buetow.org TLS Certificate": {
-      "Plugin": "/usr/local/libexec/nagios/check_http",
-      "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "30" ]
+    "Check TLS Certificate <%= $host %>.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "30" ],
+      "DependsOn": ["Check Ping4 babylon5.buetow.org"]
     },
-    "<%= $host %>.buetow.org HTTP IPv4": {
-      "Plugin": "/usr/local/libexec/nagios/check_http",
-      "Args": ["<%= $host %>.buetow.org", "-4"]
+      <% for my $proto (4, 6) { -%>
+    "Check HTTP IPv<%= $proto %> <%= $host %>.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "Args": ["<%= $host %>.buetow.org", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> babylon5.buetow.org"]
     },
-    "<%= $host %>.buetow.org HTTP IPv6": {
-      "Plugin": "/usr/local/libexec/nagios/check_http",
-      "Args": ["<%= $host %>.buetow.org", "-6"]
-    },
-    <% } -%>
-    <% for my $host (qw(fishfinger blowfish babylon5)) { %>
-    "Check ICMP4 <%= $host %>.buetow.org": {
-      "Plugin": "/usr/local/libexec/nagios/check_ping",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "50,10%", "-c", "100,15%"]
-    },
-    "Check ICMP6 <%= $host %>.buetow.org": {
-      "Plugin": "/usr/local/libexec/nagios/check_ping",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-6", "-w", "50,10%", "-c", "100,15%"]
-    },
+      <% } -%>
     <% } -%>
     <% for my $host (qw(fishfinger blowfish)) { %>
       <% for my $proto (4, 6) { -%>
     "Check Dig <%= $host %>.buetow.org IPv<%= $proto %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_dig",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-l", "buetow.org", "-<%= $proto %>"]
+      "Plugin": "<%= $plugin_dir %>/check_dig",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-l", "buetow.org", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> <%= $host %>.buetow.org"]
     },
     "Check SMTP <%= $host %>.buetow.org IPv<%= $proto %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_smtp",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>"]
+      "Plugin": "<%= $plugin_dir %>/check_smtp",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> <%= $host %>.buetow.org"]
     },
     "Check Gemini TCP <%= $host %>.buetow.org IPv<%= $proto %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_tcp",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-p", "1965", "-<%= $proto %>"]
+      "Plugin": "<%= $plugin_dir %>/check_tcp",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-p", "1965", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> <%= $host %>.buetow.org"]
     },
       <% } -%>
     <% } -%>
     <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_nextcloud backup_anki)) { %>
     "Check NRPE <%= $nrpe_check %> babylon5.buetow.org": {
-      "Plugin": "/usr/local/libexec/nagios/check_nrpe",
-      "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"]
+      "Plugin": "<%= $plugin_dir %>/check_nrpe",
+      "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"],
+      "DependsOn": ["Check Ping4 babylon5.buetow.org"]
     },
     <% } %>
     "Check Users <%= $hostname %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_users",
+      "Plugin": "<%= $plugin_dir %>/check_users",
       "Args": ["-w", "2", "-c", "3"]
     },
     "Check SWAP <%= $hostname %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_swap",
+      "Plugin": "<%= $plugin_dir %>/check_swap",
       "Args": ["-w", "99%", "-c", "95%"]
     },
     "Check Procs <%= $hostname %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_procs",
+      "Plugin": "<%= $plugin_dir %>/check_procs",
       "Args": ["-w", "80", "-c", "100"]
     },
     "Check Disk <%= $hostname %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_disk",
+      "Plugin": "<%= $plugin_dir %>/check_disk",
       "Args": ["-w", "30%", "-c", "10%"]
     },
     "Check Load <%= $hostname %>": {
-      "Plugin": "/usr/local/libexec/nagios/check_load",
+      "Plugin": "<%= $plugin_dir %>/check_load",
       "Args": ["-w", "2,1,1", "-c", "4,3,3"]
     }
   }
