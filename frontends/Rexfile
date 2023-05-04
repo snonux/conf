@@ -92,9 +92,11 @@ task 'dump_info', group => 'frontends', sub { dump_system_information };
 desc 'Install base stuff';
 task 'base', group => 'frontends',
   sub {
+    pkg 'figlet', ensure => present;
     pkg 'tig', ensure => present;
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
+    pkg 'bash', ensure => present;
 
     my @pkg_scripts = qw/uptimed httpd dserver icinga2/;
     push @pkg_scripts, 'znc' if connection->server eq $ircbouncer_server;
@@ -212,6 +214,12 @@ task 'inetd', group => 'frontends',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'inetd_flags=';
 
+    file '/etc/login.conf.d/inetd',
+      source => './etc/login.conf.d/inetd',
+      owner => 'root',
+      group => 'wheel',
+      mode => '644';
+
     file '/etc/inetd.conf',
       source => './etc/inetd.conf',
       owner => 'root',
@@ -220,6 +228,15 @@ task 'inetd', group => 'frontends',
       on_change => sub { service 'inetd' => 'restart' };
 
     service 'inetd', ensure => 'started';
+
+    pkg 'cowsay', ensure => present;
+    run 'adduser -class inetd -group _habit -batch _habit', unless => 'id _habit';
+
+    file '/usr/local/bin/habit.pl',
+      source => './scripts/habit.pl',
+      owner => 'root',
+      group => 'wheel',
+      mode => '755';
   };
 
 desc 'Setup relayd';

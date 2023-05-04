@@ -1,0 +1,3 @@
+inetd:\
+    :maxproc=10:\
+    :tc=daemon:

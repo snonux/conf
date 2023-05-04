@@ -74,7 +74,7 @@
     },
       <% } -%>
     <% } -%>
-    <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_nextcloud backup_anki)) { %>
+    <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_nextcloud backup_anki backup_tidal backup_protonmail backup_codeberg)) { %>
     "Check NRPE <%= $nrpe_check %> babylon5.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_nrpe",
       "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"],
