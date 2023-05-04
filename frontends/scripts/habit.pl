@@ -26,6 +26,10 @@ our @habits = (
   'Enjoy my current task',
   'It\'s family time',
   'Help someone',
+  'Tonight, disconnect from work completely',
+  'Limit the use of social media',
+  'Only use my phone and computers intentionally',
+  'Learn vocs with Anki',
   'Learn/try out a new Linux/Unix command',
 );
 
