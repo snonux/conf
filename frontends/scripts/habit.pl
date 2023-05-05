@@ -31,6 +31,7 @@ our @habits = (
   'Only use my phone and computers intentionally',
   'Learn vocs with Anki',
   'Learn/try out a new Linux/Unix command',
+  'Got enough vitamins?',
 );
 
 my $habit = $habits[rand @habits];
