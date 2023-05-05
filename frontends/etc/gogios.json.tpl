@@ -29,7 +29,7 @@
       <% for my $prefix ('', 'www.') { -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "30" ],
+      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ],
       "DependsOn": ["Check Ping4 <%= $prefix eq '' ? 'blowfish.buetow.org' : 'fishfinger.buetow.org' %>"]
     },
         <% for my $proto (4, 6) { -%>
@@ -44,7 +44,7 @@
     <% for my $host (qw(cloud anki bag babylon5)) { -%>
     "Check TLS Certificate <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "30" ],
+      "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "20" ],
       "DependsOn": ["Check Ping4 babylon5.buetow.org"]
     },
       <% for my $proto (4, 6) { -%>
