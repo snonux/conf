@@ -18,6 +18,7 @@ our @habits = (
   'Listen to music',
   'Do nothing',
   'Breathing exercise',
+  '1h+ deep work',
   'Play with the cat',
   'Drink water',
   'Think about the purpose of what I am doing',
