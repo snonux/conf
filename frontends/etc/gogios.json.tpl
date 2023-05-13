@@ -18,11 +18,11 @@
     <% for my $host (qw(fishfinger blowfish babylon5)) { %>
     "Check Ping4 <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "50,10%", "-c", "100,15%"]
+      "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "100,10%", "-c", "200,15%"]
     },
     "Check Ping6 <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-6", "-w", "50,10%", "-c", "100,15%"]
+      "Args": ["-H", "<%= $host %>.buetow.org", "-6", "-w", "100,10%", "-c", "200,15%"]
     },
     <% } -%>
     <% for my $host (@$acme_hosts) { -%>
