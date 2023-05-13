@@ -38,6 +38,7 @@ our @habits = (
   'Have a positive attitute - Be solution oriented',
   'Focus on things I have under control',
   'Listen to a random 101 chapter today',
+  'Read my Gemini subscriptions',
 );
 
 my $habit = $habits[rand @habits];
