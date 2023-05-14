@@ -228,7 +228,11 @@ task 'inetd', group => 'frontends',
       on_change => sub { service 'inetd' => 'restart' };
 
     service 'inetd', ensure => 'started';
+  };
 
+desc 'Setup habit';
+task 'habit', group => 'frontends',
+  sub {
     pkg 'cowsay', ensure => present;
     run 'adduser -class inetd -group _habit -batch _habit', unless => 'id _habit';
 
@@ -237,6 +241,8 @@ task 'inetd', group => 'frontends',
       owner => 'root',
       group => 'wheel',
       mode => '755';
+
+    append_if_no_such_line '/etc/daily.local', '/usr/bin/telnet localhost 1234 | /usr/bin/mail -s Habit paul';
   };
 
 desc 'Setup relayd';
@@ -473,6 +479,7 @@ task 'commons', group => 'frontends',
     acme();
     acme_invoke();
     inetd();
+    habit();
     relayd();
     smtpd();
     rsync();

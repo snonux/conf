@@ -8,6 +8,7 @@ use Acme::Cow;
 
 our @habits = (
   'Do Push-ups',
+  'Do single-arm push-ups',
   'Do Yoga Wheel',
   'Do Yoga Bridge',
   'Do Yoga Cro',
@@ -15,6 +16,7 @@ our @habits = (
   'Do Yoga Warrior 3',
   'Do Yoga Half Moon',
   'Do Shoulder stand',
+  'Do one-legged squads',
   'Meditate',
   'Listen to music',
   'Do nothing',
