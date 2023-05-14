@@ -9,6 +9,7 @@ use Acme::Cow;
 our @habits = (
   'Do Push-ups',
   'Do Yoga Wheel',
+  'Do Yoga Bridge',
   'Do Yoga Cro',
   'Do Yoga Downward Facing Dog',
   'Do Yoga Warrior 3',
@@ -39,6 +40,7 @@ our @habits = (
   'Focus on things I have under control',
   'Listen to a random 101 chapter today',
   'Read my Gemini subscriptions',
+  'Write down 10 ideas (weird and non-weird)',
 );
 
 my $habit = $habits[rand @habits];
