@@ -16,7 +16,7 @@ our @habits = (
   'Do Yoga Warrior 3',
   'Do Yoga Half Moon',
   'Do Shoulder stand',
-  'Do one-legged squads',
+  'Do pistol squads',
   'Meditate',
   'Listen to music',
   'Do nothing',
@@ -43,6 +43,7 @@ our @habits = (
   'Listen to a random 101 chapter today',
   'Read my Gemini subscriptions',
   'Write down 10 ideas (weird and non-weird)',
+  "Read today's chapter of the daily stoic",
 );
 
 my $habit = $habits[rand @habits];
