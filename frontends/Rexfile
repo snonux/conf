@@ -242,7 +242,7 @@ task 'habit', group => 'frontends',
       group => 'wheel',
       mode => '755';
 
-    append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/habit.pl | /usr/bin/mail -s Habit paul';
+    append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/habit.pl';
   };
 
 desc 'Setup relayd';
