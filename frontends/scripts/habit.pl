@@ -43,6 +43,7 @@ our @habits = (
   'Listen to a random 101 chapter today',
   'Read my Gemini subscriptions',
   'Write down 10 ideas (weird and non-weird)',
+  'Have a walk without headphones plugged in',
   "Read today's chapter of the daily stoic",
 );
 
