@@ -116,6 +116,16 @@ server "<%= $prefix %>footos.buetow.org" {
   directory auto index
 }
 
+server "<%= $prefix %>fotos.buetow.org" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>fotos.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>fotos.buetow.org.key"
+  }
+  root "/htdocs/buetow.org/fotos"
+  directory auto index
+}
+
 # Legacy hosts
 server "snonux.de" {
   alias "www.snonux.de"

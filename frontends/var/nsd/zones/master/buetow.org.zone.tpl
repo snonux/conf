@@ -25,6 +25,7 @@ git1     1800 IN CNAME blowfish
 tmp      1800 IN CNAME blowfish
 dory     1800 IN CNAME blowfish
 footos   1800 IN CNAME blowfish
+fotos    1800 IN CNAME blowfish
 paul 1800 IN A 23.88.35.144
 paul 1800 IN AAAA 2a01:4f8:c17:20f1::42
 paul IN TXT protonmail-verification=a42447901e320064d13e536db4d73ce600d715b7
@@ -47,6 +48,7 @@ www.znc    1800 IN CNAME fishfinger
 bnc        1800 IN CNAME www.znc
 www.dory   1800 IN CNAME fishfinger
 www.footos 1800 IN CNAME fishfinger
+www.fotos 1800 IN CNAME fishfinger
 www.paul   1800 IN CNAME fishfinger
 
 vulcan   86400 IN A 95.216.174.192
