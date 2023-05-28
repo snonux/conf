@@ -8,6 +8,7 @@ $TTL 4h
                   1h )            ; negative
          IN NS   blowfish.buetow.org.
          IN NS   fishfinger.buetow.org.
+         IN TXT  da9a0a283c847df507efd4cd9c5332aa766e1ed6
 
          IN MX 10 blowfish.buetow.org.
          IN MX 20 fishfinger.buetow.org.
@@ -16,5 +17,3 @@ $TTL 4h
          1800 IN AAAA 2a01:4f8:c17:20f1::42
 *        1800 IN CNAME blowfish.buetow.org.
 www      1800 IN CNAME fishfinger.buetow.org.
-
-         IN TXT da9a0a283c847df507efd4cd9c5332aa766e1ed6
