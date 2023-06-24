@@ -37,6 +37,9 @@ server "<%= $prefix.$host %>" {
     certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
     key "/etc/ssl/private/<%= $prefix.$host %>.key"
   }
+  location "/.git*" {
+    block return 302 "https://<%= $prefix.$host %>"
+  }
   location * {
     root "/htdocs/gemtexter/<%= $host %>"
     directory auto index
@@ -124,55 +127,6 @@ server "<%= $prefix %>fotos.buetow.org" {
   }
   root "/htdocs/buetow.org/fotos"
   directory auto index
-}
-
-# Legacy hosts
-server "snonux.de" {
-  alias "www.snonux.de"
-  listen on * port 80
-  block return 302 "https://snonux.land"
-}
-
-server "snonux.de" {
-  alias "www.snonux.de"
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/snonux.de.fullchain.pem"
-    key "/etc/ssl/private/snonux.de.key"
-  }
-  block return 302 "https://snonux.land$REQUEST_URI"
-}
-
-server "foo.surf" {
-  alias "www.foo.surf"
-  listen on * port 80
-  block return 302 "https://foo.zone$REQUEST_URI"
-}
-
-server "foo.surf" {
-  alias "www.foo.surf"
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/foo.surf.fullchain.pem"
-    key "/etc/ssl/private/foo.surf.key"
-  }
-  block return 302 "https://foo.zone$REQUEST_URI"
-}
-
-server "sidewalk.ninja" {
-  alias "www.sidewalk.ninja"
-  listen on * port 80
-  block return 302 "https://irregular.ninja$REQUEST_URI"
-}
-
-server "sidewalk.ninja" {
-  alias "www.sidewalk.ninja"
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/sidewalk.ninja.fullchain.pem"
-    key "/etc/ssl/private/sidewalk.ninja.key"
-  }
-  block return 302 "https://irregular.ninja$REQUEST_URI"
 }
 
 # Defaults
