@@ -458,6 +458,42 @@ task 'gogios', group => 'frontends',
       run 'rm /tmp/gogios.cron';
   };
 
+desc 'Installing Gorum binary';
+task 'gorum_install', group => 'frontends',
+  sub {
+      file '/usr/local/bin/gorum',
+        source => 'usr/local/bin/gorum',
+        mode => '0755';
+        owner => 'root',
+        group => 'root';
+  };
+
+desc 'Setup Gorum quorum system';
+task 'gorum', group => 'frontends',
+  sub {
+      my $gorum_path = '/usr/local/bin/gorum';
+
+      file '/etc/gorum.json',
+        content => template('./etc/gorum.json.tpl',
+          acme_hosts => \@acme_hosts),
+        owner => 'root',
+        group => 'wheel',
+        mode => '744';
+
+      file '/var/run/gorum',
+        ensure => 'directory',
+        owner => '_gorum',
+        group => '_gorum',
+        mode => '755';
+
+      unless (is_file($gorum_path)) {
+        Rex::Logger::info("gorum not installed to $gorum_path! Run task 'gorum_install'", 'error');
+      }
+
+      run 'adduser -group _gorum -batch _gorum', unless => 'id _gorum';
+      run 'usermod -d /var/run/gorum _gorum';
+  };
+
 desc 'Setup IRC bouncer';
 task 'ircbouncer', group => 'ircbouncer',
   sub {
