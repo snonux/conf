@@ -58,5 +58,6 @@ done
 
 ensure_links /var/gemini/paul.buetow.org buetow.org
 ensure_links /var/gemini/paul.buetow.org paul.cyou
+ensure_links /var/gemini/paul.buetow.org snonux.foo
 <% } %>
 
