@@ -48,7 +48,7 @@ server "<%= $prefix.$host %>" {
 <% } %>
 
 # Redirect to paul.buetow.org
-<% for my $host (qw/buetow.org paul.cyou/) { %>
+<% for my $host (qw/buetow.org paul.cyou snonux.foo/) { %>
 server "<%= $prefix.$host %>" {
   listen on * tls port 443
   tls {
