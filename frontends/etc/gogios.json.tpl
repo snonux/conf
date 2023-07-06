@@ -91,7 +91,7 @@
     },
     "Check SWAP <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_swap",
-      "Args": ["-w", "99%", "-c", "95%"]
+      "Args": ["-w", "95%", "-c", "90%"]
     },
     "Check Procs <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_procs",
