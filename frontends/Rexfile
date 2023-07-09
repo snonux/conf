@@ -157,17 +157,24 @@ task 'gemtexter', group => 'frontends',
     append_if_no_such_line '/etc/daily.local', '/usr/local/bin/gemtexter.sh';
   };
 
-desc 'Configure task warrior reminder';
-task 'warrior', group => 'frontends',
+desc 'Configure taskwarrior reminder';
+task 'taskwarrior', group => 'frontends',
   sub {
-    file '/usr/local/bin/warrior.sh',
-      content => template('./scripts/warrior.sh.tpl',
-        is_primary => $is_primary),
+    pkg 'taskwarrior', ensure => present;
+
+    file '/usr/local/bin/taskwarrior.sh',
+      content => template('./scripts/taskwarrior.sh.tpl'),
       owner => 'root',
       group => 'wheel',
-      mode => '744';
+      mode => '500';
 
-    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/warrior.sh';
+    file '/etc/taskrc',
+        content => template('./etc/taskrc.tpl'),
+        owner => 'root',
+        group => 'wheel',
+        mode => '600';
+
+    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/taskwarrior.sh';
   };
 
 desc 'Configure ACME client';
@@ -525,7 +532,7 @@ task 'commons', group => 'frontends',
     uptimed();
     httpd();
     gemtexter();
-    warrior();
+    taskwarrior();
     acme();
     acme_invoke();
     inetd();
