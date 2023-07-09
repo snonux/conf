@@ -157,6 +157,19 @@ task 'gemtexter', group => 'frontends',
     append_if_no_such_line '/etc/daily.local', '/usr/local/bin/gemtexter.sh';
   };
 
+desc 'Configure task warrior reminder';
+task 'warrior', group => 'frontends',
+  sub {
+    file '/usr/local/bin/warrior.sh',
+      content => template('./scripts/warrior.sh.tpl',
+        is_primary => $is_primary),
+      owner => 'root',
+      group => 'wheel',
+      mode => '744';
+
+    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/warrior.sh';
+  };
+
 desc 'Configure ACME client';
 task 'acme', group => 'frontends',
   sub {
@@ -512,6 +525,7 @@ task 'commons', group => 'frontends',
     uptimed();
     httpd();
     gemtexter();
+    warrior();
     acme();
     acme_invoke();
     inetd();
