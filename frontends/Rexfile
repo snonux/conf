@@ -97,6 +97,7 @@ task 'base', group => 'frontends',
     pkg 'vger', ensure => present;
     pkg 'zsh', ensure => present;
     pkg 'bash', ensure => present;
+    pkg 'helix', ensure => present;
 
     my @pkg_scripts = qw/uptimed httpd dserver icinga2/;
     push @pkg_scripts, 'znc' if connection->server eq $ircbouncer_server;
