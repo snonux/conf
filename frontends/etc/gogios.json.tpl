@@ -45,7 +45,7 @@
         <% } -%>
       <% } -%>
     <% } -%>
-    <% for my $host (qw(cloud anki bag babylon5)) { -%>
+    <% for my $host (qw(cloud anki bag vault babylon5)) { -%>
     "Check TLS Certificate <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "20" ],
@@ -78,7 +78,7 @@
     },
       <% } -%>
     <% } -%>
-    <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_nextcloud backup_anki)) { %>
+    <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_vaultwarden backup_nextcloud backup_anki)) { %>
     "Check NRPE <%= $nrpe_check %> babylon5.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_nrpe",
       "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"],
