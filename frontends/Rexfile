@@ -8,7 +8,7 @@
 # Rex is programmed in Perl and there is already Perl in the base system of OpenBSD.
 # Also, I find Perl > Python (my personal opinion).
 
-use Rex -feature => ['1.14'];
+use Rex -feature => ['1.14', 'exec_autodie'];
 use Rex::Logger;
 use File::Slurp;
 
@@ -249,21 +249,6 @@ task 'inetd', group => 'frontends',
       on_change => sub { service 'inetd' => 'restart' };
 
     service 'inetd', ensure => 'started';
-  };
-
-desc 'Setup habit';
-task 'habit', group => 'frontends',
-  sub {
-    pkg 'cowsay', ensure => present;
-    run 'adduser -class inetd -group _habit -batch _habit', unless => 'id _habit';
-
-    file '/usr/local/bin/habit.pl',
-      source => './scripts/habit.pl',
-      owner => 'root',
-      group => 'wheel',
-      mode => '755';
-
-    append_if_no_such_line '/etc/daily.local', 'perl -T /usr/local/bin/habit.pl';
   };
 
 desc 'Setup relayd';
@@ -537,7 +522,6 @@ task 'commons', group => 'frontends',
     acme();
     acme_invoke();
     inetd();
-    habit();
     relayd();
     smtpd();
     rsync();
