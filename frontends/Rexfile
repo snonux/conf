@@ -19,6 +19,7 @@ group dnsmaster => 'blowfish.buetow.org:2';
 group dnsslaves => 'fishfinger.buetow.org:2';
 our $ircbouncer_server = 'fishfinger.buetow.org:2';
 group ircbouncer => $ircbouncer_server;
+group openbsd_canary => 'blowfish.buetow.org:2';
 
 user 'rex';
 sudo TRUE;
@@ -463,6 +464,17 @@ task 'gogios', group => 'frontends',
       run 'cat /tmp/gogios.cron | crontab -u _gogios -';
       run 'rm /tmp/gogios.cron';
   };
+
+use Rex::Commands::Cron;
+
+desc 'Cron test';
+task 'cron_test', group => 'openbsd_canary', sub {
+  cron add => '_gogios', {
+    minute => '5',
+    hour => '*',
+    command => '/bin/ls',
+  };
+};
 
 desc 'Installing Gorum binary';
 task 'gorum_install', group => 'frontends',
