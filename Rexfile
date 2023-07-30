@@ -1,1 +1,1 @@
-require './frontends/Rexfile';
+require $_ for glob '*/Rexfile'; 
