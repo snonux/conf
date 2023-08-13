@@ -16,4 +16,5 @@ $TTL 4h
          1800 IN AAAA 2a01:4f8:c17:20f1::42
 *        1800 IN CNAME blowfish.buetow.org.
 www      1800 IN CNAME fishfinger.buetow.org.
+www.tmp  1800 IN CNAME fishfinger.buetow.org.
 codeberg 1800 IN CNAME snonux.codeberg.page.

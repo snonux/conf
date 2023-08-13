@@ -109,6 +109,16 @@ server "<%= $prefix %>tmp.buetow.org" {
   directory auto index
 }
 
+server "<%= $prefix %>tmp.foo.zone" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>tmp.foo.zone.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>tmp.foo.zone.key"
+  }
+  root "/htdocs/buetow.org/tmp"
+  directory auto index
+}
+
 server "<%= $prefix %>footos.buetow.org" {
   listen on * tls port 443
   tls {
