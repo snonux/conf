@@ -1,0 +1,42 @@
+[paul@earth]~/git/rexfiles/testing% rex -m openbsd_cron_test &> openbsd_cron_test.txt
+[2023-07-30 13:36:19] INFO - Running task openbsd_cron_test on blowfish.buetow.org:2
+[2023-07-30 13:36:27] ERROR - Error executing task:
+[2023-07-30 13:36:27] ERROR - Error during `i_run` at /usr/share/perl5/vendor_perl/Rex/Helper/Run.pm line 120, <ARGV> line 8.
+	Rex::Helper::Run::i_run("( crontab -l -u _gogios >/tmp/johvumpjmtuo.tmp ) >& /dev/null"...) called at /usr/share/perl5/vendor_perl/Rex/Cron/FreeBSD.pm line 38
+	Rex::Cron::FreeBSD::read_user_cron(Rex::Cron::FreeBSD=HASH(0x55f31eb606b0), "_gogios") called at /usr/share/perl5/vendor_perl/Rex/Commands/Cron.pm line 224
+	Rex::Commands::Cron::cron("add", "_gogios", HASH(0x55f31e7a4198)) called at /loader/0x55f31d3e79c8/__Rexfile__.pm line 15
+	Rex::CLI::__ANON__(HASH(0x55f31e795d60), ARRAY(0x55f31e7889c0)) called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 59
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 41
+	Rex::Interface::Executor::Default::exec(Rex::Interface::Executor::Default=HASH(0x55f31e0731c0), HASH(0x55f31e795d60), ARRAY(0x55f31e7889c0)) called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 880
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 884
+	Rex::Task::run(Rex::Task=HASH(0x55f31e795bf8), Rex::Group::Entry::Server=HASH(0x55f31ccb1010), "in_transaction", 0, "params", undef, "args", undef) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 340
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 334
+	Rex::TaskList::Base::__ANON__(Rex::Fork::Task=HASH(0x55f31db4b820)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Task.pm line 32
+	Rex::Fork::Task::start(Rex::Fork::Task=HASH(0x55f31db4b820)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Manager.pm line 35
+	Rex::Fork::Manager::add(Rex::Fork::Manager=HASH(0x55f31ccbf6c8), CODE(0x55f31ccbf6f8)) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 316
+	Rex::TaskList::Base::run(Rex::TaskList::Base=HASH(0x55f31e072ed8), Rex::Task=HASH(0x55f31e72a460)) called at /usr/share/perl5/vendor_perl/Rex/TaskList.pm line 61
+	Rex::TaskList::run("Rex::TaskList", Rex::Task=HASH(0x55f31e72a460)) called at /usr/share/perl5/vendor_perl/Rex/RunList.pm line 67
+	Rex::RunList::run_tasks(Rex::RunList=HASH(0x55f31d6f6308)) called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+	Rex::CLI::__run__(Rex::CLI=HASH(0x55f31cc844e8)) called at /usr/bin/rex line 22
+
+[2023-07-30 13:36:27] ERROR - 1 out of 1 task(s) failed:
+[2023-07-30 13:36:27] ERROR - 	openbsd_cron_test failed on blowfish.buetow.org:2
+[2023-07-30 13:36:27] ERROR - 		Error during `i_run` at /usr/share/perl5/vendor_perl/Rex/Helper/Run.pm line 120, <ARGV> line 8.
+[2023-07-30 13:36:27] ERROR - 			Rex::Helper::Run::i_run("( crontab -l -u _gogios >/tmp/johvumpjmtuo.tmp ) >& /dev/null"...) called at /usr/share/perl5/vendor_perl/Rex/Cron/FreeBSD.pm line 38
+[2023-07-30 13:36:27] ERROR - 			Rex::Cron::FreeBSD::read_user_cron(Rex::Cron::FreeBSD=HASH(0x55f31eb606b0), "_gogios") called at /usr/share/perl5/vendor_perl/Rex/Commands/Cron.pm line 224
+[2023-07-30 13:36:27] ERROR - 			Rex::Commands::Cron::cron("add", "_gogios", HASH(0x55f31e7a4198)) called at /loader/0x55f31d3e79c8/__Rexfile__.pm line 15
+[2023-07-30 13:36:27] ERROR - 			Rex::CLI::__ANON__(HASH(0x55f31e795d60), ARRAY(0x55f31e7889c0)) called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 59
+[2023-07-30 13:36:27] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 41
+[2023-07-30 13:36:27] ERROR - 			Rex::Interface::Executor::Default::exec(Rex::Interface::Executor::Default=HASH(0x55f31e0731c0), HASH(0x55f31e795d60), ARRAY(0x55f31e7889c0)) called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 880
+[2023-07-30 13:36:27] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 884
+[2023-07-30 13:36:27] ERROR - 			Rex::Task::run(Rex::Task=HASH(0x55f31e795bf8), Rex::Group::Entry::Server=HASH(0x55f31ccb1010), "in_transaction", 0, "params", undef, "args", undef) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 340
+[2023-07-30 13:36:27] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 334
+[2023-07-30 13:36:27] ERROR - 			Rex::TaskList::Base::__ANON__(Rex::Fork::Task=HASH(0x55f31db4b820)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Task.pm line 32
+[2023-07-30 13:36:27] ERROR - 			Rex::Fork::Task::start(Rex::Fork::Task=HASH(0x55f31db4b820)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Manager.pm line 35
+[2023-07-30 13:36:27] ERROR - 			Rex::Fork::Manager::add(Rex::Fork::Manager=HASH(0x55f31ccbf6c8), CODE(0x55f31ccbf6f8)) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 316
+[2023-07-30 13:36:27] ERROR - 			Rex::TaskList::Base::run(Rex::TaskList::Base=HASH(0x55f31e072ed8), Rex::Task=HASH(0x55f31e72a460)) called at /usr/share/perl5/vendor_perl/Rex/TaskList.pm line 61
+[2023-07-30 13:36:27] ERROR - 			Rex::TaskList::run("Rex::TaskList", Rex::Task=HASH(0x55f31e72a460)) called at /usr/share/perl5/vendor_perl/Rex/RunList.pm line 67
+[2023-07-30 13:36:27] ERROR - 			Rex::RunList::run_tasks(Rex::RunList=HASH(0x55f31d6f6308)) called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+[2023-07-30 13:36:27] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+[2023-07-30 13:36:27] ERROR - 			Rex::CLI::__run__(Rex::CLI=HASH(0x55f31cc844e8)) called at /usr/bin/rex line 22

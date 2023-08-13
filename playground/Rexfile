@@ -1,0 +1,22 @@
+use Rex -feature => ['1.14', 'exec_autodie'];
+use Rex::Logger;
+use Rex::Commands::Cron;
+
+group openbsd_canary => 'blowfish.buetow.org:2';
+
+user 'rex';
+sudo TRUE;
+
+parallelism 5;
+
+desc 'Cron test';
+task 'openbsd_cron_test', group => 'openbsd_canary', sub {
+  cron add => '_gogios', {
+    minute => '5',
+    hour  => '*',
+    day_of_month   => '*',
+    month => '*',
+    day_of_week => '*',
+    command => '/path/to/your/cronjob',
+  };
+};

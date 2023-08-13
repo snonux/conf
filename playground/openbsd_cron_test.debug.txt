@@ -1,0 +1,766 @@
+[paul@earth]~/git/rexfiles/testing% rex -m -d openbsd_cron_test &> openbsd_cron_test.debug.txt
+[2023-07-30 13:36:36] DEBUG - This is Rex version: 1.14.2
+[2023-07-30 13:36:36] DEBUG - Command Line Parameters
+[2023-07-30 13:36:36] DEBUG - 	m = 1
+[2023-07-30 13:36:36] DEBUG - 	d = 1
+[2023-07-30 13:36:36] DEBUG - Creating lock-file (Rexfile.lock)
+[2023-07-30 13:36:36] DEBUG - Loading Rexfile
+[2023-07-30 13:36:36] DEBUG - Disabling usage of a tty
+[2023-07-30 13:36:36] DEBUG - Activating autodie.
+[2023-07-30 13:36:36] DEBUG - Using Net::OpenSSH if present.
+[2023-07-30 13:36:36] DEBUG - Add service check.
+[2023-07-30 13:36:36] DEBUG - Setting set() to not append data.
+[2023-07-30 13:36:36] DEBUG - Registering CMDB as template variables.
+[2023-07-30 13:36:36] DEBUG - activating featureset >= 0.51
+[2023-07-30 13:36:36] DEBUG - activating featureset >= 0.40
+[2023-07-30 13:36:36] DEBUG - activating featureset >= 0.35
+[2023-07-30 13:36:36] DEBUG - activating featureset >= 0.31
+[2023-07-30 13:36:36] DEBUG - Enabling exec_autodie
+[2023-07-30 13:36:36] DEBUG - Turning sudo globally on
+[2023-07-30 13:36:36] DEBUG - Creating new distribution class of type: Base
+[2023-07-30 13:36:36] DEBUG - new distribution class of type Rex::TaskList::Base created.
+[2023-07-30 13:36:36] DEBUG - Creating task: openbsd_cron_test
+[2023-07-30 13:36:36] DEBUG - Found Net::OpenSSH and Net::SFTP::Foreign - using it as default
+[2023-07-30 13:36:36] DEBUG - Registering task: openbsd_cron_test
+[2023-07-30 13:36:36] DEBUG - Initializing Logger from parameters found in Rexfile
+[2023-07-30 13:36:36] DEBUG - Returning existing distribution class of type: Rex::TaskList::Base
+[2023-07-30 13:36:36] DEBUG - Returning existing distribution class of type: Rex::TaskList::Base
+[2023-07-30 13:36:36] DEBUG - Waiting for children to finish
+[2023-07-30 13:36:36] INFO - Running task openbsd_cron_test on blowfish.buetow.org:2
+[2023-07-30 13:36:36] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:36] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:36] DEBUG - $VAR1 = '';
+
+[2023-07-30 13:36:36] DEBUG - Auth-Information inside Task:
+[2023-07-30 13:36:36] DEBUG - password => [[%s]]
+[2023-07-30 13:36:36] DEBUG - auth_type => [[try]]
+[2023-07-30 13:36:36] DEBUG - public_key => [[]]
+[2023-07-30 13:36:36] DEBUG - sudo => [[]]
+[2023-07-30 13:36:36] DEBUG - sudo_password => [[**********]]
+[2023-07-30 13:36:36] DEBUG - port => [[]]
+[2023-07-30 13:36:36] DEBUG - user => [[rex]]
+[2023-07-30 13:36:36] DEBUG - private_key => [[]]
+[2023-07-30 13:36:36] DEBUG - Using Net::OpenSSH for connection
+[2023-07-30 13:36:36] DEBUG - Using user: rex
+[2023-07-30 13:36:36] DEBUG - Connecting to blowfish.buetow.org:2 (rex)
+[2023-07-30 13:36:36] DEBUG - get_openssh_opt()
+[2023-07-30 13:36:36] DEBUG - $VAR1 = {};
+
+[2023-07-30 13:36:36] DEBUG - OpenSSH: key_auth or not defined: blowfish.buetow.org:2 - rex
+[2023-07-30 13:36:36] DEBUG - OpenSSH options: 
+[2023-07-30 13:36:36] DEBUG - $VAR1 = [
+          'blowfish.buetow.org',
+          'user',
+          'rex',
+          'port',
+          '2',
+          'master_opts',
+          [
+            '-o',
+            'LogLevel=QUIET',
+            '-o',
+            'ConnectTimeout=2'
+          ],
+          'default_ssh_opts',
+          $VAR1->[6]
+        ];
+
+[2023-07-30 13:36:36] DEBUG - OpenSSH constructor options: 
+[2023-07-30 13:36:36] DEBUG - $VAR1 = {};
+
+[2023-07-30 13:36:36] DEBUG - Trying following auth types:
+[2023-07-30 13:36:36] DEBUG - $VAR1 = [
+          'key',
+          'pass'
+        ];
+
+[2023-07-30 13:36:36] DEBUG - Current Error-Code: 0
+[2023-07-30 13:36:36] DEBUG - Connected and authenticated to blowfish.buetow.org.
+[2023-07-30 13:36:37] DEBUG - Successfully authenticated on blowfish.buetow.org:2.
+[2023-07-30 13:36:37] DEBUG - Executing: perl -MFile::Spec -le 'print File::Spec->tmpdir'
+[2023-07-30 13:36:37] DEBUG - Detecting shell...
+[2023-07-30 13:36:37] DEBUG - Searching for shell: zsh
+[2023-07-30 13:36:37] DEBUG - Searching for shell: ksh
+[2023-07-30 13:36:37] DEBUG - Found shell and using: ksh
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {};
+
+[2023-07-30 13:36:37] DEBUG - SSH/executing: LC_ALL=C ; export LC_ALL; perl -MFile::Spec -le 'print File::Spec->tmpdir' 
+[2023-07-30 13:36:37] DEBUG - /tmp
+
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:37] DEBUG - Sudo: Executing: which perl
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S',
+          'fail_ok' => 1,
+          'valid_retval' => [
+                              0
+                            ]
+        };
+
+[2023-07-30 13:36:37] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; which perl  '
+[2023-07-30 13:36:37] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; which perl  '
+[2023-07-30 13:36:37] DEBUG - /usr/bin/perl
+
+[2023-07-30 13:36:37] DEBUG - Executing openbsd_cron_test
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:37] DEBUG - Sudo: Executing: which lsb_release
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S',
+          'fail_ok' => 1,
+          'valid_retval' => [
+                              0
+                            ]
+        };
+
+[2023-07-30 13:36:37] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; which lsb_release  '
+[2023-07-30 13:36:37] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; which lsb_release  '
+[2023-07-30 13:36:37] DEBUG - ========= ERR ============
+[2023-07-30 13:36:37] DEBUG - which: lsb_release: Command not found.
+
+[2023-07-30 13:36:37] DEBUG - ========= ERR ============
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:37] DEBUG - Sudo: Executing: test -d c:/
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:37] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d c:/ '
+[2023-07-30 13:36:37] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d c:/ '
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:37] DEBUG - Sudo: Executing: test -e /etc/system-release
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:37] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/system-release '
+[2023-07-30 13:36:37] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/system-release '
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:37] DEBUG - Sudo: Executing: test -d /etc/system-release
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:37] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/system-release '
+[2023-07-30 13:36:37] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/system-release '
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:37] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:37] DEBUG - Sudo: Executing: test -e /etc/debian_version
+[2023-07-30 13:36:37] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:37] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:37] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/debian_version '
+[2023-07-30 13:36:37] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/debian_version '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -d /etc/debian_version
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/debian_version '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/debian_version '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -e /etc/SuSE-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SuSE-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SuSE-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -d /etc/SuSE-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SuSE-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SuSE-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -e /etc/SUSE-brand
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SUSE-brand '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SUSE-brand '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -d /etc/SUSE-brand
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SUSE-brand '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SUSE-brand '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -e /etc/mageia-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/mageia-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/mageia-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -d /etc/mageia-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/mageia-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/mageia-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -e /etc/fedora-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/fedora-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/fedora-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -d /etc/fedora-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/fedora-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/fedora-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -e /etc/gentoo-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/gentoo-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/gentoo-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:38] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:38] DEBUG - Sudo: Executing: test -d /etc/gentoo-release
+[2023-07-30 13:36:38] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:38] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:38] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/gentoo-release '
+[2023-07-30 13:36:38] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/gentoo-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -e /etc/altlinux-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/altlinux-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/altlinux-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -d /etc/altlinux-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/altlinux-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/altlinux-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -e /etc/redhat-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/redhat-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/redhat-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -d /etc/redhat-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/redhat-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/redhat-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -e /etc/openwrt_release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/openwrt_release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/openwrt_release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -d /etc/openwrt_release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/openwrt_release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/openwrt_release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -e /etc/arch-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/arch-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/arch-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -d /etc/arch-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/arch-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/arch-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -e /etc/manjaro-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/manjaro-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/manjaro-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: test -d /etc/manjaro-release
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/manjaro-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/manjaro-release '
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:39] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:39] DEBUG - Sudo: Executing: uname -s
+[2023-07-30 13:36:39] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:39] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S',
+          'fail_ok' => 0,
+          'valid_retval' => [
+                              0
+                            ]
+        };
+
+[2023-07-30 13:36:39] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; uname -s  '
+[2023-07-30 13:36:39] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; uname -s  '
+[2023-07-30 13:36:40] DEBUG - OpenBSD
+
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: which lsb_release
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S',
+          'fail_ok' => 1,
+          'valid_retval' => [
+                              0
+                            ]
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; which lsb_release  '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; which lsb_release  '
+[2023-07-30 13:36:40] DEBUG - ========= ERR ============
+[2023-07-30 13:36:40] DEBUG - which: lsb_release: Command not found.
+
+[2023-07-30 13:36:40] DEBUG - ========= ERR ============
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -d c:/
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d c:/ '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d c:/ '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -e /etc/system-release
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/system-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/system-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -d /etc/system-release
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/system-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/system-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -e /etc/debian_version
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/debian_version '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/debian_version '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -d /etc/debian_version
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/debian_version '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/debian_version '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -e /etc/SuSE-release
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SuSE-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SuSE-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -d /etc/SuSE-release
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SuSE-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SuSE-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -e /etc/SUSE-brand
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SUSE-brand '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/SUSE-brand '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -d /etc/SUSE-brand
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SUSE-brand '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/SUSE-brand '
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:40] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:40] DEBUG - Sudo: Executing: test -e /etc/mageia-release
+[2023-07-30 13:36:40] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:40] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:40] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/mageia-release '
+[2023-07-30 13:36:40] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/mageia-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -d /etc/mageia-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/mageia-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/mageia-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -e /etc/fedora-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/fedora-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/fedora-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -d /etc/fedora-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/fedora-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/fedora-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -e /etc/gentoo-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/gentoo-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/gentoo-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -d /etc/gentoo-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/gentoo-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/gentoo-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -e /etc/altlinux-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/altlinux-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/altlinux-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -d /etc/altlinux-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/altlinux-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/altlinux-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -e /etc/redhat-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/redhat-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/redhat-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -d /etc/redhat-release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/redhat-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/redhat-release '
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:41] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:41] DEBUG - Sudo: Executing: test -e /etc/openwrt_release
+[2023-07-30 13:36:41] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:41] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:41] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/openwrt_release '
+[2023-07-30 13:36:41] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/openwrt_release '
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: test -d /etc/openwrt_release
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/openwrt_release '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/openwrt_release '
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: test -e /etc/arch-release
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/arch-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/arch-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: test -d /etc/arch-release
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/arch-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/arch-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: test -e /etc/manjaro-release
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/manjaro-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -e /etc/manjaro-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: test -d /etc/manjaro-release
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/manjaro-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; test -d /etc/manjaro-release '
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: uname -s
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'valid_retval' => [
+                              0
+                            ],
+          'fail_ok' => 0,
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; uname -s  '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; uname -s  '
+[2023-07-30 13:36:42] DEBUG - OpenBSD
+
+[2023-07-30 13:36:42] DEBUG - Detecting shell...
+[2023-07-30 13:36:42] DEBUG - Found shell in cache: ksh
+[2023-07-30 13:36:42] DEBUG - Detecting shell...
+[2023-07-30 13:36:42] DEBUG - Found shell in cache: ksh
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: perl -e 'print scalar getpwuid($<)'
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'fail_ok' => 0,
+          'valid_retval' => [
+                              0
+                            ],
+          'prepend_command' => 'sudo  -p \'\' -S'
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; perl -e '\''print scalar getpwuid($<)'\''  '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; perl -e '\''print scalar getpwuid($<)'\''  '
+[2023-07-30 13:36:42] DEBUG - root
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (private_key): returning 
+[2023-07-30 13:36:42] DEBUG - Rex::Group::Entry::Server (public_key): returning 
+[2023-07-30 13:36:42] DEBUG - Sudo: Executing: ( crontab -l -u _gogios >/tmp/umkmfvxctxjg.tmp ) >& /dev/null ; cat /tmp/umkmfvxctxjg.tmp ; rm /tmp/umkmfvxctxjg.tmp
+[2023-07-30 13:36:42] DEBUG - Shell/Bash: Got options:
+[2023-07-30 13:36:42] DEBUG - $VAR1 = {
+          'prepend_command' => 'sudo  -p \'\' -S',
+          'valid_retval' => [
+                              0
+                            ],
+          'fail_ok' => 0
+        };
+
+[2023-07-30 13:36:42] DEBUG - sudo: exec: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; ( crontab -l -u _gogios >/tmp/umkmfvxctxjg.tmp ) >& /dev/null ; cat /tmp/umkmfvxctxjg.tmp ; rm /tmp/umkmfvxctxjg.tmp  '
+[2023-07-30 13:36:42] DEBUG - Rex::Interface::Exec::OpenSSH/executing: sudo  -p '' -S sh -c 'LC_ALL=C ; export LC_ALL; PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/pkg/bin:/usr/pkg/sbin; export PATH; ( crontab -l -u _gogios >/tmp/umkmfvxctxjg.tmp ) >& /dev/null ; cat /tmp/umkmfvxctxjg.tmp ; rm /tmp/umkmfvxctxjg.tmp  '
+[2023-07-30 13:36:42] DEBUG - ========= ERR ============
+[2023-07-30 13:36:42] DEBUG - sh: >&/dev/null : illegal file descriptor name
+cat: /tmp/umkmfvxctxjg.tmp: No such file or directory
+rm: /tmp/umkmfvxctxjg.tmp: No such file or directory
+
+[2023-07-30 13:36:42] DEBUG - ========= ERR ============
+[2023-07-30 13:36:42] DEBUG - Error executing `( crontab -l -u _gogios >/tmp/umkmfvxctxjg.tmp ) >& /dev/null ; cat /tmp/umkmfvxctxjg.tmp ; rm /tmp/umkmfvxctxjg.tmp`: 
+[2023-07-30 13:36:42] DEBUG - STDOUT:
+[2023-07-30 13:36:42] DEBUG - 
+[2023-07-30 13:36:42] DEBUG - STDERR:
+[2023-07-30 13:36:42] DEBUG - sh: >&/dev/null : illegal file descriptor name
+cat: /tmp/umkmfvxctxjg.tmp: No such file or directory
+rm: /tmp/umkmfvxctxjg.tmp: No such file or directory
+[2023-07-30 13:36:42] ERROR - Error executing task:
+[2023-07-30 13:36:42] ERROR - Error during `i_run` at /usr/share/perl5/vendor_perl/Rex/Helper/Run.pm line 120, <ARGV> line 8.
+	Rex::Helper::Run::i_run("( crontab -l -u _gogios >/tmp/umkmfvxctxjg.tmp ) >& /dev/null"...) called at /usr/share/perl5/vendor_perl/Rex/Cron/FreeBSD.pm line 38
+	Rex::Cron::FreeBSD::read_user_cron(Rex::Cron::FreeBSD=HASH(0x5603c05187c0), "_gogios") called at /usr/share/perl5/vendor_perl/Rex/Commands/Cron.pm line 224
+	Rex::Commands::Cron::cron("add", "_gogios", HASH(0x5603bfff6048)) called at /loader/0x5603bedbd710/__Rexfile__.pm line 15
+	Rex::CLI::__ANON__(HASH(0x5603bfa6efe0), ARRAY(0x5603bfa6f130)) called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 59
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 41
+	Rex::Interface::Executor::Default::exec(Rex::Interface::Executor::Default=HASH(0x5603bfa81380), HASH(0x5603bfa6efe0), ARRAY(0x5603bfa6f130)) called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 880
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 884
+	Rex::Task::run(Rex::Task=HASH(0x5603bfa81080), Rex::Group::Entry::Server=HASH(0x5603bfa6f460), "in_transaction", 0, "params", undef, "args", undef) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 340
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 334
+	Rex::TaskList::Base::__ANON__(Rex::Fork::Task=HASH(0x5603bfa6f430)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Task.pm line 32
+	Rex::Fork::Task::start(Rex::Fork::Task=HASH(0x5603bfa6f430)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Manager.pm line 35
+	Rex::Fork::Manager::add(Rex::Fork::Manager=HASH(0x5603befb5748), CODE(0x5603be7912d0)) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 316
+	Rex::TaskList::Base::run(Rex::TaskList::Base=HASH(0x5603bfa80e10), Rex::Task=HASH(0x5603bfa813e0)) called at /usr/share/perl5/vendor_perl/Rex/TaskList.pm line 61
+	Rex::TaskList::run("Rex::TaskList", Rex::Task=HASH(0x5603bfa813e0)) called at /usr/share/perl5/vendor_perl/Rex/RunList.pm line 67
+	Rex::RunList::run_tasks(Rex::RunList=HASH(0x5603bf0cad90)) called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+	eval {...} called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+	Rex::CLI::__run__(Rex::CLI=HASH(0x5603be6594e8)) called at /usr/bin/rex line 22
+
+[2023-07-30 13:36:42] DEBUG - Destroying all cached os information
+[2023-07-30 13:36:43] DEBUG - Need to reinitialize connections.
+[2023-07-30 13:36:43] DEBUG - Returning existing distribution class of type: Rex::TaskList::Base
+[2023-07-30 13:36:43] ERROR - 1 out of 1 task(s) failed:
+[2023-07-30 13:36:43] ERROR - 	openbsd_cron_test failed on blowfish.buetow.org:2
+[2023-07-30 13:36:43] ERROR - 		Error during `i_run` at /usr/share/perl5/vendor_perl/Rex/Helper/Run.pm line 120, <ARGV> line 8.
+[2023-07-30 13:36:43] ERROR - 			Rex::Helper::Run::i_run("( crontab -l -u _gogios >/tmp/umkmfvxctxjg.tmp ) >& /dev/null"...) called at /usr/share/perl5/vendor_perl/Rex/Cron/FreeBSD.pm line 38
+[2023-07-30 13:36:43] ERROR - 			Rex::Cron::FreeBSD::read_user_cron(Rex::Cron::FreeBSD=HASH(0x5603c05187c0), "_gogios") called at /usr/share/perl5/vendor_perl/Rex/Commands/Cron.pm line 224
+[2023-07-30 13:36:43] ERROR - 			Rex::Commands::Cron::cron("add", "_gogios", HASH(0x5603bfff6048)) called at /loader/0x5603bedbd710/__Rexfile__.pm line 15
+[2023-07-30 13:36:43] ERROR - 			Rex::CLI::__ANON__(HASH(0x5603bfa6efe0), ARRAY(0x5603bfa6f130)) called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 59
+[2023-07-30 13:36:43] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/Interface/Executor/Default.pm line 41
+[2023-07-30 13:36:43] ERROR - 			Rex::Interface::Executor::Default::exec(Rex::Interface::Executor::Default=HASH(0x5603bfa81380), HASH(0x5603bfa6efe0), ARRAY(0x5603bfa6f130)) called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 880
+[2023-07-30 13:36:43] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/Task.pm line 884
+[2023-07-30 13:36:43] ERROR - 			Rex::Task::run(Rex::Task=HASH(0x5603bfa81080), Rex::Group::Entry::Server=HASH(0x5603bfa6f460), "in_transaction", 0, "params", undef, "args", undef) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 340
+[2023-07-30 13:36:43] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 334
+[2023-07-30 13:36:43] ERROR - 			Rex::TaskList::Base::__ANON__(Rex::Fork::Task=HASH(0x5603bfa6f430)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Task.pm line 32
+[2023-07-30 13:36:43] ERROR - 			Rex::Fork::Task::start(Rex::Fork::Task=HASH(0x5603bfa6f430)) called at /usr/share/perl5/vendor_perl/Rex/Fork/Manager.pm line 35
+[2023-07-30 13:36:43] ERROR - 			Rex::Fork::Manager::add(Rex::Fork::Manager=HASH(0x5603befb5748), CODE(0x5603be7912d0)) called at /usr/share/perl5/vendor_perl/Rex/TaskList/Base.pm line 316
+[2023-07-30 13:36:43] ERROR - 			Rex::TaskList::Base::run(Rex::TaskList::Base=HASH(0x5603bfa80e10), Rex::Task=HASH(0x5603bfa813e0)) called at /usr/share/perl5/vendor_perl/Rex/TaskList.pm line 61
+[2023-07-30 13:36:43] ERROR - 			Rex::TaskList::run("Rex::TaskList", Rex::Task=HASH(0x5603bfa813e0)) called at /usr/share/perl5/vendor_perl/Rex/RunList.pm line 67
+[2023-07-30 13:36:43] ERROR - 			Rex::RunList::run_tasks(Rex::RunList=HASH(0x5603bf0cad90)) called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+[2023-07-30 13:36:43] ERROR - 			eval {...} called at /usr/share/perl5/vendor_perl/Rex/CLI.pm line 374
+[2023-07-30 13:36:43] ERROR - 			Rex::CLI::__run__(Rex::CLI=HASH(0x5603be6594e8)) called at /usr/bin/rex line 22
+[2023-07-30 13:36:43] DEBUG - Removing lockfile
+[2023-07-30 13:36:43] DEBUG - Returning existing distribution class of type: Rex::TaskList::Base
