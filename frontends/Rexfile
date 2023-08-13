@@ -55,27 +55,6 @@ our $is_primary = sub {
   $fqdns->($ipv4) eq 'blowfish.buetow.org';
 };
 
-our $filewalk;
-our $filewalk = sub {
-  my $dir = shift;
-  my @files;
-
-  opendir my $dh, $dir or die $!;
-  while (my $entry = readdir $dh) {
-    next if $entry eq '.' or $entry eq '..';
-    if (-d "$dir/$entry") {
-      push @files, $_ for $filewalk->("$dir/$entry");
-    } elsif (-f "$dir/$entry") {
-      push @files, "$dir/$entry";
-    } else {
-      Rex::Logger::info("Unsupported file type for $dir/$entry", 'error');
-    }
-  }
-  closedir $dh;
-
-  return @files;
-};
-
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets =  sub { read_file './secrets/' . shift };
 

@@ -20,3 +20,5 @@ task 'openbsd_cron_test', group => 'openbsd_canary', sub {
     command => '/path/to/your/cronjob',
   };
 };
+
+# vim: syntax=perl
