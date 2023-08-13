@@ -1,1 +1,1 @@
-require $_ for glob '*/Rexfile'; 
+require for <'*/Rexfile'>; 
