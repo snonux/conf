@@ -524,23 +524,22 @@ task 'ircbouncer', group => 'ircbouncer',
 # COMBINED TASKS SECTION
 
 desc 'Common configs of all hosts';
-task 'commons', group => 'frontends',
-  sub {
-    base();
-    uptimed();
-    httpd();
-    gemtexter();
-    taskwarrior();
-    acme();
-    acme_invoke();
-    inetd();
-    relayd();
-    smtpd();
-    rsync();
-    gogios();
-    # Requires manually installing the binary!
-    # dtail();
-  };
+task 'commons', group => 'frontends', sub {
+  run_task 'base';
+  run_task 'uptimed';
+  run_task 'httpd';
+  run_task 'gemtexter';
+  run_task 'taskwarrior';
+  run_task 'acme';
+  run_task 'acme_invoke';
+  run_task 'inetd';
+  run_task 'relayd';
+  run_task 'smtpd';
+  run_task 'rsync';
+  run_task 'gogios';
+  # Requires manually installing the binary!
+  # run_task 'dtail';
+};
 
 1;
 
