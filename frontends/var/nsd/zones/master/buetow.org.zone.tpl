@@ -14,6 +14,11 @@ $TTL 4h
          1800 IN A 23.88.35.144
          1800 IN AAAA 2a01:4f8:c17:20f1::42
 
+aws      IN NS    ns-1274.awsdns-31.org.
+aws      IN NS    ns-1868.awsdns-41.co.uk.
+aws      IN NS    ns-507.awsdns-63.com.
+aws      IN NS    ns-640.awsdns-16.net.
+
 *        IN MX 10 blowfish.buetow.org.
 *        IN MX 20 fishfinger.buetow.org.
 *        1800 IN A 23.88.35.144
