@@ -30,7 +30,7 @@ server "<%= "$hostname.$domain" %>" {
 }
 
 # Gemtexter hosts
-<% for my $host (qw/foo.zone snonux.land paul.buetow.org/) { %>
+<% for my $host (qw/foo.zone snonux.land paul.cyou/) { %>
 server "<%= $prefix.$host %>" {
   listen on * tls port 443
   tls {
@@ -47,8 +47,8 @@ server "<%= $prefix.$host %>" {
 }
 <% } %>
 
-# Redirect to paul.buetow.org
-<% for my $host (qw/buetow.org paul.cyou snonux.foo/) { %>
+# Redirect to paul.cyou
+<% for my $host (qw/buetow.org paul.buetow.org snonux.foo/) { %>
 server "<%= $prefix.$host %>" {
   listen on * tls port 443
   tls {
@@ -56,7 +56,7 @@ server "<%= $prefix.$host %>" {
     key "/etc/ssl/private/<%= $prefix.$host %>.key"
   }
   location * {
-    block return 302 "https://<%= $prefix %>paul.buetow.org"
+    block return 302 "https://<%= $prefix %>paul.cyou$REQUEST_URI"
   }
 }
 <% } %>
