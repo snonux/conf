@@ -83,6 +83,7 @@ task 'base', group => 'frontends',
     push @pkg_scripts, 'znc' if connection->server eq $ircbouncer_server;
     my $pkg_scripts = join ' ', @pkg_scripts;
     append_if_no_such_line '/etc/rc.conf.local', "pkg_scripts=\"$pkg_scripts\"";
+    run 'touch /etc/rc.local';
 
     file '/etc/myname',
       content => template('./etc/myname.tpl', fqdns => $fqdns),
@@ -442,6 +443,9 @@ task 'gogios', group => 'frontends',
 
       run 'cat /tmp/gogios.cron | crontab -u _gogios -';
       run 'rm /tmp/gogios.cron';
+
+      append_if_no_such_line '/etc/rc.local', 'if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi';
+      append_if_no_such_line '/etc/rc.local', 'chown _gogios /var/run/gogios';
   };
 
 use Rex::Commands::Cron;
