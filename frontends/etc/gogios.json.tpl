@@ -83,6 +83,8 @@
       "Plugin": "<%= $plugin_dir %>/check_nrpe",
       "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"],
       "DependsOn": ["Check Ping4 babylon5.buetow.org"]
+      "Retries": 3,
+      "RetryInterval": 3
     },
     <% } %>
     "Check Users <%= $hostname %>": {
