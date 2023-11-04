@@ -531,8 +531,9 @@ task 'commons', group => 'frontends', sub {
   run_task 'smtpd';
   run_task 'rsync';
   run_task 'gogios';
-  # Requires manually installing the binary!
-  # run_task 'dtail';
+  run_task 'gorum';
+  # Requires installing the binaries first!
+  #run_task 'dtail';
 };
 
 1;
