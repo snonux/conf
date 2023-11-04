@@ -362,6 +362,9 @@ task 'dtail', group => 'frontends',
    sub {
       my $restart = FALSE;
 
+      run 'adduser -class nologin -group _dserver -batch _dserver', unless => 'id _dserver';
+      run 'usermod -d /var/run/dserver _dserver';
+
       file '/etc/rc.d/dserver',
         content => template('./etc/rc.d/dserver.tpl'),
         owner => 'root',
@@ -390,9 +393,6 @@ task 'dtail', group => 'frontends',
 
       append_if_no_such_line '/etc/daily.local', '/usr/local/bin/dserver-update-key-cache.sh';
 
-      run 'adduser -class nologin -group _dserver -batch _dserver', unless => 'id _dserver';
-      run 'usermod -d /var/run/dserver _dserver';
-
       service 'dserver' => 'restart' if $restart;
       service 'dserver', ensure => 'started';
    };
@@ -415,6 +415,13 @@ task 'gogios', group => 'frontends',
 
       my $gogios_path = '/usr/local/bin/gogios';
 
+      unless (is_file($gogios_path)) {
+        Rex::Logger::info("Gogios not installed to $gogios_path! Run task 'gogios_install'", 'error');
+      }
+
+      run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
+      run 'usermod -d /var/run/gogios _gogios';
+
       file '/etc/gogios.json',
         content => template('./etc/gogios.json.tpl',
           acme_hosts => \@acme_hosts),
@@ -427,13 +434,6 @@ task 'gogios', group => 'frontends',
         owner => '_gogios',
         group => '_gogios',
         mode => '755';
-
-      unless (is_file($gogios_path)) {
-        Rex::Logger::info("Gogios not installed to $gogios_path! Run task 'gogios_install'", 'error');
-      }
-
-      run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
-      run 'usermod -d /var/run/gogios _gogios';
 
       file '/tmp/gogios.cron',
         ensure => 'file',
@@ -472,14 +472,22 @@ task 'gorum_install', group => 'frontends',
 desc 'Setup Gorum quorum system';
 task 'gorum', group => 'frontends',
   sub {
+      my $restart = FALSE;
       my $gorum_path = '/usr/local/bin/gorum';
 
+      unless (is_file($gorum_path)) {
+        Rex::Logger::info("gorum not installed to $gorum_path! Run task 'gorum_install'", 'error');
+      }
+
+      run 'adduser -class nologin -group _gorum -batch _gorum', unless => 'id _gorum';
+      run 'usermod -d /var/run/gorum _gorum';
+
       file '/etc/gorum.json',
-        content => template('./etc/gorum.json.tpl',
-          acme_hosts => \@acme_hosts),
+        content => template('./etc/gorum.json.tpl'),
         owner => 'root',
         group => 'wheel',
-        mode => '744';
+        mode => '744',
+        on_change => sub { $restart = TRUE };
 
       file '/var/run/gorum',
         ensure => 'directory',
@@ -487,12 +495,15 @@ task 'gorum', group => 'frontends',
         group => '_gorum',
         mode => '755';
 
-      unless (is_file($gorum_path)) {
-        Rex::Logger::info("gorum not installed to $gorum_path! Run task 'gorum_install'", 'error');
-      }
+      file '/etc/rc.d/gorum',
+        content => template('./etc/rc.d/gorum.tpl'),
+        owner => 'root',
+        group => 'wheel',
+        mode => '755',
+        on_change => sub { $restart = TRUE };
 
-      run 'adduser -group _gorum -batch _gorum', unless => 'id _gorum';
-      run 'usermod -d /var/run/gorum _gorum';
+      service 'gorum' => 'restart' if $restart;
+      service 'gorum', ensure => 'started';
   };
 
 desc 'Setup IRC bouncer';
