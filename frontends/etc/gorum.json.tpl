@@ -1,7 +1,7 @@
 {
   "StateDir": "/var/run/gorum",
   "Address": "<%= $hostname.'.'.$domain %>:4321",
-  "EmailTo": "paul",
+  "EmailTo": "",
   "EmailFrom": "gorum@mx.buetow.org",
   "Nodes": {
     "Blowfish": {
