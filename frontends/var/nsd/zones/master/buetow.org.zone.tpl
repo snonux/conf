@@ -18,7 +18,7 @@ aws      IN NS ns-1177.awsdns-19.org.
 aws      IN NS ns-1923.awsdns-48.co.uk.
 aws      IN NS ns-425.awsdns-53.com.
 aws      IN NS ns-874.awsdns-45.net.
-_6aaebb99f359959d8949dbcb4e7db4b4.aws.buetow.org. 300 IN CNAME _32f90181144c8430f214734e4bc9cd18.mhbtsbpdnt.acm-validations.aws.
+_8e093fe61a740703c45731483d32595d.buetow.org. 300 IN CNAME _23b46147d52f9c5c734ae0c0937803ba.mhbtsbpdnt.acm-validations.aws.
 
 *        IN MX 10 blowfish.buetow.org.
 *        IN MX 20 fishfinger.buetow.org.
