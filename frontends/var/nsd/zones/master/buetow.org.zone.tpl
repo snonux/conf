@@ -14,11 +14,11 @@ $TTL 4h
          1800 IN A 23.88.35.144
          1800 IN AAAA 2a01:4f8:c17:20f1::42
 
-aws      IN NS ns-1177.awsdns-19.org.
-aws      IN NS ns-1923.awsdns-48.co.uk.
-aws      IN NS ns-425.awsdns-53.com.
-aws      IN NS ns-874.awsdns-45.net.
-_8e093fe61a740703c45731483d32595d.buetow.org. 300 IN CNAME _23b46147d52f9c5c734ae0c0937803ba.mhbtsbpdnt.acm-validations.aws.
+aws      IN NS ns-648.awsdns-17.net.
+aws      IN NS ns-439.awsdns-54.com.
+aws      IN NS ns-1485.awsdns-57.org.
+aws      IN NS ns-2019.awsdns-60.co.uk.
+
 
 *        IN MX 10 blowfish.buetow.org.
 *        IN MX 20 fishfinger.buetow.org.
