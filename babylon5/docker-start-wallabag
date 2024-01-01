@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+
+set -x
+docker run -d --restart always -v /opt/wallabag/data:/var/www/wallabag/data -v /opt/wallabag/images:/var/www/wallabag/web/assets/images -p 81:80 -e "SYMFONY__ENV__DOMAIN_NAME=https://bag.buetow.org" wallabag/wallabag

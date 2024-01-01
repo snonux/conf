@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+
+set -x
+docker run -d --name anki-sync-server --user nobody --restart always -v /opt/anki-sync-server/data:/data -p 83:27701 anki-sync-server:latest

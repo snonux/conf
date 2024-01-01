@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+
+set -x
+
+# docker pull vaultwarden/server:latest
+docker run -d \
+  --restart always \
+  --name vaultwarden \
+  --volume /opt/vaultwarden/data/:/data/ \
+  --publish 90:80 vaultwarden/server:latest

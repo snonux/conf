@@ -1,0 +1,64 @@
+#!/usr/bin/bash
+
+set -euf -o pipefail
+declare -r DATE=$(date +%d)
+
+ensure_directory () {
+	local -r dir="$1"; shift
+
+	if [ ! -d "$dir" ]; then
+		mkdir "$dir"
+		chmod 700 "$dir"
+	fi
+}
+
+get_docker_id () {
+	local -r image="$1"; shift
+	docker ps | awk -v image="$image" '$2 == image { print $1 }'
+}
+
+backup_wallabag () {
+	ensure_directory /opt/backup/wallabag
+	local -r container="$(get_docker_id 'wallabag/wallabag')"
+	docker stop "$container"
+	tar -hcvpf /opt/backup/wallabag/wallabag.tar.gz.tmp /opt/wallabag &&
+		mv /opt/backup/wallabag/wallabag.tar.gz.tmp /opt/backup/wallabag/wallabag-$DATE.tar.gz &&
+		touch /opt/backup/wallabag.lastrun
+	docker start "$container"
+}
+
+backup_vaultwarden () {
+	ensure_directory /opt/backup/vaultwarden
+	local -r container="$(get_docker_id 'vaultwarden/server:latest')"
+	docker stop "$container"
+	tar -hcvpf /opt/backup/vaultwarden/vaultwarden.tar.gz.tmp /opt/vaultwarden &&
+		mv /opt/backup/vaultwarden/vaultwarden.tar.gz.tmp /opt/backup/vaultwarden/vaultwarden-$DATE.tar.gz &&
+		touch /opt/backup/vaultwarden.lastrun
+	docker start "$container"
+}
+
+backup_anki () {
+	ensure_directory /opt/backup/anki-sync-server
+	local -r container="$(get_docker_id 'anki-sync-server:latest')"
+	docker stop "$container"
+	tar -hcvpf /opt/backup/anki-sync-server/anki-sync-server.tar.gz.tmp /opt/anki-sync-server &&
+		mv /opt/backup/anki-sync-server/anki-sync-server.tar.gz.tmp \
+			/opt/backup/anki-sync-server/anki-sync-server-$DATE.tar.gz &&
+		touch /opt/backup/anki-sync-server.lastrun
+	docker start "$container"
+}
+
+backup_audiobookshelf_meta () {
+	ensure_directory /opt/backup/audiobookshelf
+	rsync -avz -delete /opt/audiobookshelf/metadata/backups/ /opt/backup/audiobookshelf
+}
+
+backup_wallabag
+backup_vaultwarden
+backup_anki
+backup_audiobookshelf_meta
+
+chgrp -R backup /opt/backup/
+find -L /opt/backup -mindepth 2 -type f -exec chmod 640 "{}" \;
+find -L /opt/backup -mindepth 2 -type d -exec chmod 750 "{}" \;
+chmod 755 /opt/backup/nextcloud/borg
