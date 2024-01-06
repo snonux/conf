@@ -15,7 +15,7 @@
       "DependsOn": ["Check Ping4 <%= $host %>.buetow.org", "Check Ping6 <%= $host %>.buetow.org"]
     },
     <% } -%>
-    <% for my $host (qw(fishfinger blowfish babylon5)) { %>
+    <% for my $host (qw(fishfinger blowfish)) { %>
     "Check Ping4 <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "100,10%", "-c", "200,15%"],
@@ -45,20 +45,6 @@
         <% } -%>
       <% } -%>
     <% } -%>
-    <% for my $host (qw(cloud anki bag vault babylon5)) { -%>
-    "Check TLS Certificate <%= $host %>.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "20" ],
-      "DependsOn": ["Check Ping4 babylon5.buetow.org"]
-    },
-      <% for my $proto (4, 6) { -%>
-    "Check HTTP IPv<%= $proto %> <%= $host %>.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["<%= $host %>.buetow.org", "-<%= $proto %>"],
-      "DependsOn": ["Check Ping<%= $proto %> babylon5.buetow.org"]
-    },
-      <% } -%>
-    <% } -%>
     <% for my $host (qw(fishfinger blowfish)) { %>
       <% for my $proto (4, 6) { -%>
     "Check Dig <%= $host %>.buetow.org IPv<%= $proto %>": {
@@ -78,15 +64,6 @@
     },
       <% } -%>
     <% } -%>
-    <% for my $nrpe_check (qw(load users disk zombie_procs total_procs backup_wallabag backup_vaultwarden backup_nextcloud backup_anki)) { %>
-    "Check NRPE <%= $nrpe_check %> babylon5.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_nrpe",
-      "Args": ["-H", "babylon5.buetow.org", "-c", "check_<%= $nrpe_check %>", "-p", "5666", "-4"],
-      "DependsOn": ["Check Ping4 babylon5.buetow.org"]
-      "Retries": 3,
-      "RetryInterval": 3
-    },
-    <% } %>
     "Check Users <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_users",
       "Args": ["-w", "2", "-c", "3"]
