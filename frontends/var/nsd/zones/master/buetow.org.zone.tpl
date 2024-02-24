@@ -24,7 +24,6 @@ blowfish 86400 IN AAAA 2a01:4f8:c17:20f1::42
 git1     1800 IN CNAME blowfish
 tmp      1800 IN CNAME blowfish
 dory     1800 IN CNAME blowfish
-footos   1800 IN CNAME blowfish
 fotos    1800 IN CNAME blowfish
 paul 1800 IN A 23.88.35.144
 paul 1800 IN AAAA 2a01:4f8:c17:20f1::42
@@ -47,7 +46,6 @@ www.tmp    1800 IN CNAME fishfinger
 www.znc    1800 IN CNAME fishfinger
 bnc        1800 IN CNAME www.znc
 www.dory   1800 IN CNAME fishfinger
-www.footos 1800 IN CNAME fishfinger
 www.fotos 1800 IN CNAME fishfinger
 www.paul   1800 IN CNAME fishfinger
 

@@ -119,13 +119,13 @@ server "<%= $prefix %>tmp.foo.zone" {
   directory auto index
 }
 
-server "<%= $prefix %>footos.buetow.org" {
+server "<%= $prefix %>fotos.buetow.org" {
   listen on * tls port 443
   tls {
-    certificate "/etc/ssl/<%= $prefix %>footos.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>footos.buetow.org.key"
+    certificate "/etc/ssl/<%= $prefix %>fotos.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>fotos.buetow.org.key"
   }
-  root "/htdocs/buetow.org/footos"
+  root "/htdocs/buetow.org/fotos"
   directory auto index
 }
 
