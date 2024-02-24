@@ -56,7 +56,7 @@ server "<%= $prefix.$host %>" {
     key "/etc/ssl/private/<%= $prefix.$host %>.key"
   }
   location * {
-    block return 302 "https://<%= $prefix %>paul.buetow.org$REQUEST_URI"
+    block return 302 "https://<%= $prefix %>paul.cyou$REQUEST_URI"
   }
 }
 <% } %>
@@ -116,16 +116,6 @@ server "<%= $prefix %>tmp.foo.zone" {
     key "/etc/ssl/private/<%= $prefix %>tmp.foo.zone.key"
   }
   root "/htdocs/buetow.org/tmp"
-  directory auto index
-}
-
-server "<%= $prefix %>fotos.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>fotos.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>fotos.buetow.org.key"
-  }
-  root "/htdocs/buetow.org/fotos"
   directory auto index
 }
 
