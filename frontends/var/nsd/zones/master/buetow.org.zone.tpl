@@ -9,6 +9,11 @@ $TTL 4h
          IN NS    blowfish.buetow.org.
          IN NS    fishfinger.buetow.org.
 
+cool     IN NS ns-75.awsdns-09.com.
+cool     IN NS ns-707.awsdns-24.net.
+cool     IN NS ns-1081.awsdns-07.org.
+cool     IN NS ns-1818.awsdns-35.co.uk.
+	
          IN MX 10 blowfish.buetow.org.
          IN MX 20 fishfinger.buetow.org.
          1800 IN A 23.88.35.144
