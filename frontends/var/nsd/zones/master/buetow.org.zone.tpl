@@ -23,6 +23,8 @@ cool     IN NS ns-1818.awsdns-35.co.uk.
 *        IN MX 20 fishfinger.buetow.org.
 *        1800 IN A 23.88.35.144
 *        1800 IN AAAA 2a01:4f8:c17:20f1::42
+@        1800 IN A 23.88.35.144
+@        1800 IN AAAA 2a01:4f8:c17:20f1::42
 
 blowfish 86400 IN A 23.88.35.144
 blowfish 86400 IN AAAA 2a01:4f8:c17:20f1::42
