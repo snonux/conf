@@ -19,6 +19,10 @@ function ensure_site {
         ln -s $basename www.$basename
     fi
 
+    if [ ! -e mirror.$basename ]; then
+        ln -s $basename mirror.$basename
+    fi
+
     if [ ! -d $basename ]; then
         git clone $repo -b $branch --single-branch $basename
     else
@@ -43,10 +47,13 @@ function ensure_links {
     if [ ! -e www.$target ]; then
         ln -s $basename www.$target
     fi
+
+    if [ ! -e mirror.$target ]; then
+        ln -s $basename mirror.$target
+    fi
 }
 
-<% if ($is_primary->($vio0_ip)) { %>
-for site in foo.zone paul.buetow.org; do
+for site in foo.zone paul.buetow.org snonux.foo; do
     ensure_site \
         /var/gemini/$site \
         https://codeberg.org/snonux/$site \
@@ -58,6 +65,3 @@ for site in foo.zone paul.buetow.org; do
 done
 
 ensure_links /var/gemini/paul.buetow.org buetow.org
-ensure_links /var/gemini/paul.buetow.org snonux.foo
-<% } %>
-

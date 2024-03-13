@@ -1,14 +1,9 @@
-<%
-  our $primary = $is_primary->($vio0_ip);
-  our $prefix = $primary ? '' : 'www.';
-%>
-
 log connection
 
 tcp protocol "gemini" {
-    tls keypair <%= $prefix %>foo.zone
-    tls keypair <%= $prefix %>buetow.org
-    tls keypair <%= $prefix %>paul.buetow.org
+    tls keypair foo.zone
+    tls keypair snonux.foo
+    tls keypair paul.buetow.org
 }
 
 relay "gemini4" {

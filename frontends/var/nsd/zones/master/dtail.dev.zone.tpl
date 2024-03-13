@@ -6,12 +6,15 @@ $TTL 4h
                   30m             ; retry
                   7d              ; expire
                   1h )            ; negative
-         IN NS   blowfish.buetow.org.
          IN NS   fishfinger.buetow.org.
+         IN NS   blowfish.buetow.org.
 
-         86400 IN A 23.88.35.144
-         86400 IN AAAA 2a01:4f8:c17:20f1::42
-*        86400 IN CNAME blowfish.buetow.org.
-www      86400 IN CNAME fishfinger.buetow.org.
+         IN MX 10 fishfinger.buetow.org.
+         IN MX 20 blowfish.buetow.org.
+
+         1800 IN A <%= $ips->{current_master}{ipv4} %>
+         1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
+*        1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
+mirror   1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
 github   86400 IN CNAME mimecast.github.io.
 

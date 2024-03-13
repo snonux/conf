@@ -1,12 +1,15 @@
 #!/bin/sh
 
-<%
-  our $primary = $is_primary->($vio0_ip);
-  our $prefix = $primary ? '' : 'www.';
--%>
+MY_IP=`ifconfig vio0 | awk '$1 == "inet" { print $2 }'`
 
 function handle_cert {
     host=$1
+    host_ip=`host $host | awk '/has address/ { print $(NF) }'`
+    if [ "$MY_IP" != "$host_ip" ]; then
+        echo "Not serving $host, skipping..."
+        return
+    fi
+
     # Create symlink, so that relayd also can read it.
     crt_path=/etc/ssl/$host
     if [ -e $crt_path.crt ]; then
@@ -19,10 +22,12 @@ function handle_cert {
 
 has_update=no
 <% for my $host (@$acme_hosts) { -%>
+<%   for my $prefix ('', 'www.', 'mirror.') { -%>
 handle_cert <%= $prefix.$host %>
 if [ $? -eq 0 ]; then
     has_update=yes
 fi
+<%   } -%>
 <% } -%>
 
 # Current server's FQDN (e.g. for mail server certs)

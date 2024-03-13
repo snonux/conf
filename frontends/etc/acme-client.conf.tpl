@@ -23,18 +23,15 @@ authority buypass-test {
 	contact "mailto:me@example.com"
 }
 
-<%
-  our $primary = $is_primary->($vio0_ip);
-  our $prefix = $primary ? '' : 'www.';
-%>
-
-<% for my $host (@$acme_hosts) { %>
+<% for my $host (@$acme_hosts) { -%>
+<%   for my $prefix ('', 'www.', 'mirror.') { -%>
 domain <%= $prefix.$host %> {
 	domain key "/etc/ssl/private/<%= $prefix.$host %>.key"
 	domain full chain certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
 	sign with letsencrypt
 }
-<% } %>
+<%   } -%>
+<% } -%>
 
 # Mail server domains
 domain <%= "$hostname.$domain" %> {

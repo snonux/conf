@@ -19,3 +19,10 @@ list = yes
 uid = www
 gid = www
 hosts allow = <%= $allow %>
+
+[sslcerts]
+comment = TLS certificates
+path = /etc/ssl
+read only = yes
+list = yes
+hosts allow = <%= $allow %>

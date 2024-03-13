@@ -1,10 +1,10 @@
 <%
-  our $primary = $is_primary->($vio0_ip);
-  our $prefix = $primary ? '' : 'www.';
+  our @prefixes = ('', 'www.', 'mirror.');
 %>
 
 # Plain HTTP for ACME and HTTPS redirect
 <% for my $host (@$acme_hosts) { %>
+<%   for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 80
   location "/.well-known/acme-challenge/*" {
@@ -15,6 +15,7 @@ server "<%= $prefix.$host %>" {
     block return 302 "https://$HTTP_HOST$REQUEST_URI"
   }
 }
+<%   } %>
 <% } %>
 
 # Current server's FQDN (e.g. for mail server ACME cert requests)
@@ -25,12 +26,13 @@ server "<%= "$hostname.$domain" %>" {
     request strip 2
   }
   location * {
-    block return 302 "https://<%= $prefix %>buetow.org"
+    block return 302 "https://<%= $hostname.'.'.$domain %>"
   }
 }
 
 # Gemtexter hosts
-<% for my $host (qw/foo.zone paul.buetow.org/) { %>
+<% for my $host (qw/foo.zone paul.buetow.org snonux.foo/) { %>
+<%   for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * tls port 443
   tls {
@@ -45,23 +47,25 @@ server "<%= $prefix.$host %>" {
     directory auto index
   }
 }
+  <% } %>
 <% } %>
 
 # Redirect to paul.buetow.org
-<% for my $host (qw/snonux.foo/) { %>
-server "<%= $prefix.$host %>" {
+<% for my $prefix (@prefixes) { -%>
+server "<%= $prefix %>buetow.org" {
   listen on * tls port 443
   tls {
-    certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix.$host %>.key"
+    certificate "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
   }
   location * {
-    block return 302 "https://<%= $prefix %>paul.buetow.org$REQUEST_URI"
+    block return 302 "https://paul.buetow.org$REQUEST_URI"
   }
 }
-<% } %>
+<% } -%>
 
-# Redirec to to gitub.dtail.dev
+# Redirect to gitub.dtail.dev
+<% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dtail.dev" {
   listen on * tls port 443
   tls {
@@ -72,8 +76,10 @@ server "<%= $prefix %>dtail.dev" {
     block return 302 "https://github.dtail.dev$REQUEST_URI"
   }
 }
+<% } -%>
 
-# Irregular Ninja special host
+# Irregular Ninja special hosts
+<% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>irregular.ninja" {
   listen on * tls port 443
   tls {
@@ -85,8 +91,10 @@ server "<%= $prefix %>irregular.ninja" {
     directory auto index
   }
 }
+<% } -%>
 
 # Dory special host
+<% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dory.buetow.org" {
   listen on * tls port 443
   tls {
@@ -98,27 +106,9 @@ server "<%= $prefix %>dory.buetow.org" {
     directory auto index
   }
 }
+<% } -%>
 
-server "<%= $prefix %>tmp.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>tmp.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>tmp.buetow.org.key"
-  }
-  root "/htdocs/buetow.org/tmp"
-  directory auto index
-}
-
-server "<%= $prefix %>tmp.foo.zone" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>tmp.foo.zone.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>tmp.foo.zone.key"
-  }
-  root "/htdocs/buetow.org/tmp"
-  directory auto index
-}
-
+<% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>fotos.buetow.org" {
   listen on * tls port 443
   tls {
@@ -128,6 +118,7 @@ server "<%= $prefix %>fotos.buetow.org" {
   root "/htdocs/buetow.org/fotos"
   directory auto index
 }
+<% } -%>
 
 # Defaults
 server "default" {
