@@ -51,5 +51,7 @@ paul IN MX 10 mail.protonmail.ch.
 paul IN MX 20 mailsec.protonmail.ch.
 paul IN MX 42 blowfish
 paul IN MX 42 fishfinger
+paul 1800 IN A <%= $ips->{current_master}{ipv4} %>
+paul 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
 
-*            1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
+* 1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
