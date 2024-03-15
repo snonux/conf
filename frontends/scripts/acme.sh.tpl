@@ -9,6 +9,11 @@ function handle_cert {
         echo "Not serving $host, skipping..."
         return
     fi
+    grep -q "^server \"$host\"" /etc/httpd.conf
+    if [ $? -ne 0 ]; then
+        echo "Host $host not configured in httpd, skipping..."
+        return
+    fi
 
     # Create symlink, so that relayd also can read it.
     crt_path=/etc/ssl/$host
