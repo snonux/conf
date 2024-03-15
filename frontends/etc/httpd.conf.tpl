@@ -43,8 +43,12 @@ server "<%= $prefix.$host %>" {
     block return 302 "https://<%= $prefix.$host %>"
   }
   location * {
+    <% if ($prefix eq 'www.') { -%>
+    block return 302 "https://<%= $host %>$REQUEST_URI"
+    <% } else { -%>
     root "/htdocs/gemtexter/<%= $host %>"
     directory auto index
+    <% } -%>
   }
 }
   <% } %>

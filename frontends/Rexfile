@@ -518,25 +518,6 @@ task 'gorum', group => 'frontends',
       service 'gorum', ensure => 'started';
   };
 
-#desc 'Setup Wireguard server';
-#task 'wireguard_server', group => 'wgserver',
-#  sub {
-    # Following https://ianix.com/wireguard/openbsd-howto.html
-#    pkg 'wireguard-tools', ensure => present;
-
-#  concat_fragment 'ipforwarding',
-#    target => '/etc/sysctl.conf',
-#    content => 'net.inet.ip.forwarding=1';
-#
-#  concat_fragment 'ip6forwarding',
-#    target => '/etc/sysctl.conf',
-#    content => 'net.inet6.ip6.forwarding=1';
-#
-#  concat '/etc/sysctl.conf',
-#    ensure => 'present',
-#    on_change => sub { say "Changed" };
-#  };
-
 desc 'Setup IRC bouncer';
 task 'ircbouncer', group => 'ircbouncer',
   sub {
