@@ -53,5 +53,9 @@ paul IN MX 42 blowfish
 paul IN MX 42 fishfinger
 paul 1800 IN A <%= $ips->{current_master}{ipv4} %>
 paul 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
+dory 1800 IN A <%= $ips->{current_master}{ipv4} %>
+dory 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
+solarcat 1800 IN A <%= $ips->{current_master}{ipv4} %>
+solarcat 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
 
 * 1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
