@@ -12,7 +12,9 @@ $TTL 4h
          IN MX 10 fishfinger.buetow.org.
          IN MX 20 blowfish.buetow.org.
 
-         1800 IN A <%= $ips->{current_master}{ipv4} %> ; Enable master failover
-         1800 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable master failover
-*        1800 IN CNAME <%= $ips->{current_master}{fqdn} %>. ; Enable standby failover
-mirror   1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>. ; Enable standby failover
+        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover

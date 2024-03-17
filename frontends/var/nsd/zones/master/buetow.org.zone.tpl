@@ -9,8 +9,8 @@ $TTL 4h
          IN NS    blowfish.buetow.org.
          IN NS    fishfinger.buetow.org.
 
-	 IN A <%= $ips->{current_master}{ipv4} %>
-         IN AAAA <%= $ips->{current_master}{ipv6} %>
+	     IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+         IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 
          IN MX 10 fishfinger.buetow.org.
          IN MX 20 blowfish.buetow.org.
@@ -20,9 +20,33 @@ cool     IN NS ns-707.awsdns-24.net.
 cool     IN NS ns-1081.awsdns-07.org.
 cool     IN NS ns-1818.awsdns-35.co.uk.
 
-www.paul     1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
-www.dory     1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
-www.solarcat 1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
+paul         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+paul         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.paul     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.paul     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror.paul  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror.paul  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
+dory         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+dory         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.dory     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.dory     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror.dory  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror.dory  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
+solarcat        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+solarcat        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.solarcat    300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.solarcat    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror.solarcat 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror.solarcat 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
+fotos        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+fotos        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.fotos    300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.fotos    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror.fotos 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror.fotos 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
 blowfish   14400 IN A 23.88.35.144
 blowfish   14400 IN AAAA 2a01:4f8:c17:20f1::42
@@ -36,12 +60,6 @@ fishfinger       IN MX 20 blowfish.buetow.org.
 git1        1800 IN CNAME blowfish.buetow.org.
 git2        1800 IN CNAME fishfinger.buetow.org.
 
-mirror          1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
-mirror.paul     1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
-mirror.dory     1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
-mirror.solarcat 1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
-mirror.fotos    1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
-
 zapad.sofia    14400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2           14400 IN CNAME snonux.codeberg.page.
 	
@@ -53,15 +71,8 @@ paul IN TXT v=spf1 include:_spf.protonmail.ch mx ~all
 paul IN TXT v=DMARC1; p=none
 paul IN MX 10 mail.protonmail.ch.
 paul IN MX 20 mailsec.protonmail.ch.
-paul IN MX 42 blowfish
-paul IN MX 42 fishfinger
-paul 1800 IN A <%= $ips->{current_master}{ipv4} %>
-paul 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
-dory 1800 IN A <%= $ips->{current_master}{ipv4} %>
-dory 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
-solarcat 1800 IN A <%= $ips->{current_master}{ipv4} %>
-solarcat 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
-fotos 1800 IN A <%= $ips->{current_master}{ipv4} %>
-fotos 1800 IN AAAA <%= $ips->{current_master}{ipv6} %>
+paul IN MX 42 blowfish.buetow.org.
+paul IN MX 42 fishfinger.buetow.org.
 
-* 1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
+*    IN MX 10 fishfinger.buetow.org.
+*    IN MX 20 blowfish.buetow.org.
