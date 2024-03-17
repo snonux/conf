@@ -26,11 +26,15 @@ www.solarcat 1800 IN CNAME <%= $ips->{current_master}{fqdn} %>.
 
 blowfish   14400 IN A 23.88.35.144
 blowfish   14400 IN AAAA 2a01:4f8:c17:20f1::42
+blowfish         IN MX 10 fishfinger.buetow.org.
+blowfish         IN MX 20 blowfish.buetow.org.
 fishfinger 14400 IN A 46.23.94.99
 fishfinger 14400 IN AAAA 2a03:6000:6f67:624::99
+fishfinger       IN MX 10 fishfinger.buetow.org.
+fishfinger       IN MX 20 blowfish.buetow.org.
 
-git1        1800 IN CNAME blowfish
-git2        1800 IN CNAME fishfinger
+git1        1800 IN CNAME blowfish.buetow.org.
+git2        1800 IN CNAME fishfinger.buetow.org.
 
 mirror          1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
 mirror.paul     1800 IN CNAME <%= $ips->{current_standby}{fqdn} %>.
