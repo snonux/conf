@@ -76,7 +76,7 @@ our $fqdns = sub {
 our $secrets =  sub { read_file './secrets/' . shift };
 
 our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
-our @dns_zones_remove = qw/paul.cyou snonux.land/;
+our @dns_zones_remove = qw/paul.cyou ha.buetow.org/;
 our @acme_hosts = qw/buetow.org paul.buetow.org dory.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
 
 # UTILITY TASKS
