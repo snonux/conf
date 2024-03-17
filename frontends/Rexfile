@@ -15,12 +15,8 @@ use File::Slurp;
 # REX CONFIG SECTION
 
 group frontends => 'blowfish.buetow.org:2', 'fishfinger.buetow.org:2';
-group dnsmaster => 'blowfish.buetow.org:2';
-group dnsslaves => 'fishfinger.buetow.org:2';
 our $ircbouncer_server = 'fishfinger.buetow.org:2';
 group ircbouncer => $ircbouncer_server;
-group wgserver => 'fishfinger.buetow.org:2';
-group wgclient => 'blowfish.buetow.org:2';
 group openbsd_canary => 'blowfish.buetow.org:2';
 
 user 'rex';
@@ -296,8 +292,8 @@ task 'smtpd', group => 'frontends',
     service 'smtpd', ensure => 'started';
   };
 
-desc 'Setup DNS server';
-task 'nsd_master', group => 'dnsmaster',
+desc 'Setup DNS server(s)';
+task 'nsd_master', group => 'frontends',
   sub {
     my $restart = FALSE;
     append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
@@ -337,33 +333,6 @@ task 'nsd_master', group => 'dnsmaster',
       Rex::Logger::info("Dealing with DNS zone removal $zone");
       file "/var/nsd/zones/master/$zone.zone", ensure => 'absent';
     }
-
-    service 'nsd' => 'restart' if $restart;
-    service 'nsd', ensure => 'started';
-  };
-
-desc 'Setup DNS slaves';
-task 'nsd_slaves', group => 'dnsslaves',
-  sub {
-    my $restart = FALSE;
-
-    Rex::Logger::info('Dealing with slave DNS key');
-    file '/var/nsd/etc/key.conf',
-      content => template('./var/nsd/etc/key.conf.tpl',
-          nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
-      owner => 'root',
-      group => '_nsd',
-      mode => '640',
-      on_change => sub { $restart = TRUE };
-
-    Rex::Logger::info('Dealing with slave DNS config');
-    file '/var/nsd/etc/nsd.conf',
-      content => template('./var/nsd/etc/nsd.conf.slave.tpl',
-          dns_zones => \@dns_zones),
-      owner => 'root',
-      group => '_nsd',
-      mode => '640',
-      on_change => sub { $restart = TRUE };
 
     service 'nsd' => 'restart' if $restart;
     service 'nsd', ensure => 'started';
