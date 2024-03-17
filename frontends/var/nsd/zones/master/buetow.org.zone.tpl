@@ -75,6 +75,8 @@ zapad.sofia    14400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2           14400 IN CNAME snonux.codeberg.page.
 znc            1800 IN CNAME fishfinger.buetow.org.
 www.znc        1800 IN CNAME fishfinger.buetow.org.
+bnc            1800 IN CNAME fishfinger.buetow.org.
+www.bnc        1800 IN CNAME fishfinger.buetow.org.
 	
 protonmail._domainkey.paul  IN CNAME protonmail.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 protonmail2._domainkey.paul IN CNAME protonmail2.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
