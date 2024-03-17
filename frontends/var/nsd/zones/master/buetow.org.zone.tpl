@@ -11,6 +11,8 @@ $TTL 4h
 
 	     IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
          IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www      IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www      IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 
          IN MX 10 fishfinger.buetow.org.
          IN MX 20 blowfish.buetow.org.
@@ -20,12 +22,21 @@ cool     IN NS ns-707.awsdns-24.net.
 cool     IN NS ns-1081.awsdns-07.org.
 cool     IN NS ns-1818.awsdns-35.co.uk.
 
+master.ha IN CNAME fishfinger.buetow.org. ; Delete this line - no longer required
+
 paul         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 paul         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 www.paul     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 www.paul     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 mirror.paul  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 mirror.paul  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
+tmp          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+tmp          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.tmp      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.tmp      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror.tmp   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror.tmp   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
 dory         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 dory         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
@@ -62,6 +73,8 @@ git2        1800 IN CNAME fishfinger.buetow.org.
 
 zapad.sofia    14400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2           14400 IN CNAME snonux.codeberg.page.
+znc            1800 IN CNAME fishfinger.buetow.org.
+www.znc        1800 IN CNAME fishfinger.buetow.org.
 	
 protonmail._domainkey.paul  IN CNAME protonmail.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
 protonmail2._domainkey.paul IN CNAME protonmail2.domainkey.d4xua2siwqfhvecokhuacmyn5fyaxmjk6q3hu2omv2z43zzkl73yq.domains.proton.ch.
