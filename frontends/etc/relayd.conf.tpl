@@ -4,6 +4,9 @@ tcp protocol "gemini" {
     tls keypair foo.zone
     tls keypair snonux.foo
     tls keypair paul.buetow.org
+    tls keypair mirror.foo.zone
+    tls keypair mirror.snonux.foo
+    tls keypair mirror.paul.buetow.org
 }
 
 relay "gemini4" {
