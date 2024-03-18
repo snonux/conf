@@ -6,7 +6,7 @@ MASTER_AAAA=master_aaaa
 STANDBY_A=standby_a
 STANDBY_AAAA=standby_aaaa
 
-process_zone () {
+transform_zone () {
     sed -E '
         /IN A .*; Enable failover/ {
             /^mirror/! {
@@ -32,7 +32,10 @@ process_zone () {
 
 failover_zone () {
     zone=$1
-    cat $zone | process_zone
+    cat $zone | transform_zone > $zone.new && \
+        mv $zone $zone.bak && \
+        mv $zone.new $zone
+    nsd-checkconf checkzone $zone
 }
 
 for zone in $ZONES_DIR/snonux.foo.zone; do
