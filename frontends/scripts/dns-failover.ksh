@@ -19,10 +19,10 @@ determine_master_and_standby () {
     fi
 
     local -i health_ok=1
-    if ! ftp -4 -o - https://$master/index.txt | grep "Welcome to $master"; then
+    if ! ftp -4 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
         echo "https://$master IPv4 health check failed"
         health_ok=0
-    elif ! ftp -6 -o - https://$master/index.txt | grep "Welcome to $master"; then
+    elif ! ftp -6 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
         echo "https://$master IPv6 health check failed"
         health_ok=0
     fi
@@ -112,7 +112,12 @@ main () {
     determine_master_and_standby
     for zone_file in $ZONES_DIR/*.zone; do
         failover_zone $zone_file
-    done
+    done 
 }
 
-main
+main | tee /tmp/dns-failover-notification.tmp
+
+if grep -q 'Failover.*completed' /tmp/dns-failover-notification.tmp; then
+    cat /tmp/dns-failover-notification.tmp | mail -s 'DNS failover performed' root
+    rm /tmp/dns-failover-notification.tmp
+fi
