@@ -347,7 +347,7 @@ task 'nsd_failover', group => 'frontends',
         group => 'wheel',
         mode => '500';
 
-      append_if_no_such_line '/etc/rc.local', '/usr/local/bin/dns-failover.ksh';
+      append_if_no_such_line '/etc/daily.local', '/usr/local/bin/dns-failover.ksh';
   };
 
 desc 'Setup DTail';
