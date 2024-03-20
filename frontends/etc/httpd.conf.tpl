@@ -26,7 +26,19 @@ server "<%= "$hostname.$domain" %>" {
     request strip 2
   }
   location * {
-    block return 302 "https://<%= $hostname.'.'.$domain %>"
+    block return 302 "https://<%= "$hostname.$domain" %>"
+  }
+}
+
+server "<%= "$hostname.$domain" %>" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"
+    key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
+  }
+  location * {
+    root "/htdocs/buetow.org/self"
+    directory auto index
   }
 }
 
@@ -107,6 +119,20 @@ server "<%= $prefix %>dory.buetow.org" {
   }
   location * {
     root "/htdocs/joern/dory.buetow.org"
+    directory auto index
+  }
+}
+<% } -%>
+
+<% for my $prefix (@prefixes) { -%>
+server "<%= $prefix %>solarcat.buetow.org" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>solarcat.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>solarcat.buetow.org.key"
+  }
+  location * {
+    root "/htdocs/joern/solarcat.buetow.org"
     directory auto index
   }
 }

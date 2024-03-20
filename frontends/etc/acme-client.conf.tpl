@@ -33,7 +33,7 @@ domain <%= $prefix.$host %> {
 <%   } -%>
 <% } -%>
 
-# Mail server domains
+# For the server itself (e.g. TLS, or monitoring)
 domain <%= "$hostname.$domain" %> {
 	domain key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
 	domain full chain certificate "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"

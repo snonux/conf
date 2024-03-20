@@ -215,6 +215,14 @@ task 'httpd', group => 'frontends',
       mode => '644',
       on_change => sub { service 'httpd' => 'restart' };
 
+    file '/var/www/htdocs/buetow.org',
+      ensure => 'directory';
+    file '/var/www/htdocs/buetow.org/self',
+      ensure => 'directory';
+    file '/var/www/htdocs/buetow.org/self/index.txt',
+      ensure => 'file',
+      content => template('./var/www/htdocs/buetow.org/self/index.txt.tpl');
+  
     service 'httpd', ensure => 'started';
   };
 
