@@ -1,6 +1,6 @@
 $ORIGIN irregular.ninja.
 $TTL 4h
-@        IN  SOA  blowfish.buetow.org. hostmaster.buetow.org. (
+@        IN  SOA  fishfinger.buetow.org. hostmaster.buetow.org. (
                   <%= time() %>   ; serial
                   1h              ; refresh
                   30m             ; retry
