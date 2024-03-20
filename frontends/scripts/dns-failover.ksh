@@ -8,9 +8,7 @@ determine_master_and_standby () {
     local master=$DEFAULT_MASTER
     local standby=$DEFAULT_STANDBY
 
-    # Based on the week of the year, we swap the master/standby roles.
-    # This is so that we always have up-to-date Let's Encrypt TLS certificates
-    # renewed on either server.
+    # Weekly auto-failover for Let's Encrypt automation
     local -i week_of_the_year=$(date +%U)
     if [ $(( week_of_the_year % 2 )) -ne 0 ]; then
         local tmp=$master
@@ -20,10 +18,10 @@ determine_master_and_standby () {
 
     local -i health_ok=1
     if ! ftp -4 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
-        echo "https://$master IPv4 health check failed"
+        echo "https://$master/index.txt IPv4 health check failed"
         health_ok=0
     elif ! ftp -6 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
-        echo "https://$master IPv6 health check failed"
+        echo "https://$master/index.txt IPv6 health check failed"
         health_ok=0
     fi
 
@@ -60,7 +58,7 @@ transform () {
             }
         }
         / ; serial/ {
-            s/^( +) ([0-9]+) .*; (.*)/\1 '"$(date +%s)"' ; \3/;
+            s/^( +) ([0-9]+) .*; (.*)/\1 '$(date +%s)' ; \3/;
         }
     '
 }
@@ -68,22 +66,26 @@ transform () {
 zone_is_ok () {
     local zone=$1
     local domain=${zone%.zone}
-
-    echo "Testing zone $zone (if no NS output, then doesn't work)"
-    dig $domain @localhost | grep "$domain.*IN.*NS"
+    dig $domain @localhost | grep -q "$domain.*IN.*NS"
 }
 
 failover_zone () {
     local zone_file=$1
     local zone=$(basename $zone_file)
 
+    # Race condition (e.g. script execution abored in the middle previous run)
+    if [ -f $zone_file.bak ]; then
+        mv $zone_file.bak $zone_file
+    fi
+
     cat $zone_file | transform > $zone_file.new.tmp 
 
     grep -v ' ; serial' $zone_file.new.tmp > $zone_file.new.noserial.tmp
     grep -v ' ; serial' $zone_file > $zone_file.old.noserial.tmp
 
+    echo "Has zone $zone_file changed?"
     if diff $zone_file.new.noserial.tmp $zone_file.old.noserial.tmp; then
-        echo "zone $zone_file hasn't changed"
+        echo "The zone $zone_file hasn't changed"
         rm $zone_file.*.tmp
         return
     fi
@@ -93,19 +95,21 @@ failover_zone () {
     rm $zone_file.*.tmp
     nsd-control reload
 
-    if zone_is_ok $zone; then
-        if [ -f $zone_file.invalid ]; then
-            rm $zone_file.invalid
-        fi
-        echo "Failover of zone $zone completed"
-        return
+    if ! zone_is_ok $zone; then
+        echo "Rolling back $zone_file changes"
+        cp $zone_file $zone_file.invalid
+        mv $zone_file.bak $zone_file
+        nsd-control reload
+        zone_is_ok $zone
+        return 1
     fi
 
-    echo "Rolling back $zone_file changes"
-    cp $zone_file $zone_file.invalid
-    mv $zone_file.bak $zone_file
-    nsd-control reload
-    zone_is_ok $zone
+    for cleanup in invalid bak; do
+        if [ -f $zone_file.$cleanup ]; then
+            rm $zone_file.$cleanup
+        fi
+    done
+    echo "Failover of zone $zone to $MASTER completed"
 }
 
 main () {
