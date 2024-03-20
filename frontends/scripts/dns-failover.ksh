@@ -18,6 +18,21 @@ determine_master_and_standby () {
         standby=$tmp
     fi
 
+    local -i health_ok=1
+    if ! ftp -4 -o - https://$master/index.txt | grep "Welcome to $master"; then
+        echo "https://$master IPv4 health check failed"
+        health_ok=0
+    elif ! ftp -6 -o - https://$master/index.txt | grep "Welcome to $master"; then
+        echo "https://$master IPv6 health check failed"
+        health_ok=0
+    fi
+
+    if [ $health_ok -eq 0 ]; then
+        local tmp=$master
+        master=$standby
+        standby=$tmp
+    fi
+
     echo "Master is $master, standby is $standby"
 
     MASTER_A=$(host $master | awk '/has address/ { print $(NF) }')
