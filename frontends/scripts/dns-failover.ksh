@@ -4,13 +4,27 @@ ZONES_DIR=/var/nsd/zones/master/
 DEFAULT_MASTER=fishfinger.buetow.org
 DEFAULT_STANDBY=blowfish.buetow.org
 
-MASTER=$DEFAULT_MASTER
-STANDBY=$DEFAULT_STANDBY
+determine_master_and_standby () {
+    local master=$DEFAULT_MASTER
+    local standby=$DEFAULT_STANDBY
 
-MASTER_A=$(host $MASTER | awk '/has address/ { print $(NF) }')
-MASTER_AAAA=$(host $MASTER | awk '/has IPv6 address/ { print $(NF) }')
-STANDBY_A=$(host $STANDBY | awk '/has address/ { print $(NF) }')
-STANDBY_AAAA=$(host $STANDBY | awk '/has IPv6 address/ { print $(NF) }')
+    # Based on the week of the year, we swap the master/standby roles.
+    # This is so that we always have up-to-date Let's Encrypt TLS certificates
+    # renewed on either server.
+    local -i week_of_the_year=$(date +%U)
+    if [ $(( week_of_the_year % 2 )) -ne 0 ]; then
+        local tmp=$master
+        master=$standby
+        standby=$tmp
+    fi
+
+    echo "Master is $master, standby is $standby"
+
+    MASTER_A=$(host $master | awk '/has address/ { print $(NF) }')
+    MASTER_AAAA=$(host $master | awk '/has IPv6 address/ { print $(NF) }')
+    STANDBY_A=$(host $standby | awk '/has address/ { print $(NF) }')
+    STANDBY_AAAA=$(host $standby | awk '/has IPv6 address/ { print $(NF) }')
+}
 
 transform () {
     sed -E '
@@ -80,6 +94,7 @@ failover_zone () {
 }
 
 main () {
+    determine_master_and_standby
     for zone_file in $ZONES_DIR/*.zone; do
         failover_zone $zone_file
     done

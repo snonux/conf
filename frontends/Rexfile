@@ -341,11 +341,13 @@ task 'nsd', group => 'frontends',
 desc 'Setup DNS failover script(s)';
 task 'nsd_failover', group => 'frontends',
   sub {
-      file '/usr/local/bin/dns-failover.sh',
+      file '/usr/local/bin/dns-failover.ksh',
         source => './scripts/dns-failover.ksh',
         owner => 'root',
         group => 'wheel',
         mode => '500';
+
+      append_if_no_such_line '/etc/rc.local', '/usr/local/bin/dns-failover.ksh';
   };
 
 desc 'Setup DTail';
