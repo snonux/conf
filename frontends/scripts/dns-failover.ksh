@@ -9,7 +9,7 @@ determine_master_and_standby () {
     local standby=$DEFAULT_STANDBY
 
     # Weekly auto-failover for Let's Encrypt automation
-    local -i week_of_the_year=$(date +%U)
+    local -i -r week_of_the_year=$(date +%U)
     if [ $(( week_of_the_year % 2 )) -ne 0 ]; then
         local tmp=$master
         master=$standby
@@ -64,14 +64,14 @@ transform () {
 }
 
 zone_is_ok () {
-    local zone=$1
-    local domain=${zone%.zone}
+    local -r zone=$1
+    local -r domain=${zone%.zone}
     dig $domain @localhost | grep -q "$domain.*IN.*NS"
 }
 
 failover_zone () {
-    local zone_file=$1
-    local zone=$(basename $zone_file)
+    local -r zone_file=$1
+    local -r zone=$(basename $zone_file)
 
     # Race condition (e.g. script execution abored in the middle previous run)
     if [ -f $zone_file.bak ]; then
@@ -93,12 +93,14 @@ failover_zone () {
     cp $zone_file $zone_file.bak
     mv $zone_file.new.tmp $zone_file
     rm $zone_file.*.tmp
+    echo "Reloading nsd"
     nsd-control reload
 
     if ! zone_is_ok $zone; then
         echo "Rolling back $zone_file changes"
         cp $zone_file $zone_file.invalid
         mv $zone_file.bak $zone_file
+        echo "Reloading nsd"
         nsd-control reload
         zone_is_ok $zone
         return 1
@@ -113,15 +115,17 @@ failover_zone () {
 }
 
 main () {
-    determine_master_and_standby
+    local -r mail_tmp=$(mktemp)
+
+    determine_master_and_standby | tee $mail_tmp
     for zone_file in $ZONES_DIR/*.zone; do
         failover_zone $zone_file
-    done 
+    done | tee -a $mail_tmp
+
+    if grep -q 'Failover.*completed' $mail_tmp; then
+        cat $mail_tmp | mail -s 'DNS failover performed' root
+    fi
+    rm $mail_tmp
 }
 
-main | tee /tmp/dns-failover-notification.tmp
-
-if grep -q 'Failover.*completed' /tmp/dns-failover-notification.tmp; then
-    cat /tmp/dns-failover-notification.tmp | mail -s 'DNS failover performed' root
-    rm /tmp/dns-failover-notification.tmp
-fi
+main
