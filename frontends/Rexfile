@@ -1,6 +1,6 @@
 # How to use:
 #
-# rex commons nsd_master nsd_slaves
+# rex commons 
 #
 # Why use Rex to automate my servers? Because Rex is KISS, Puppet, SALT and Chef
 # are not. So, why not use Ansible then? To use Ansible correctly you should also
@@ -293,7 +293,7 @@ task 'smtpd', group => 'frontends',
   };
 
 desc 'Setup DNS server(s)';
-task 'nsd_master', group => 'frontends',
+task 'nsd', group => 'frontends',
   sub {
     my $restart = FALSE;
     append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
@@ -336,6 +336,16 @@ task 'nsd_master', group => 'frontends',
 
     service 'nsd' => 'restart' if $restart;
     service 'nsd', ensure => 'started';
+  };
+
+desc 'Setup DNS failover script(s)';
+task 'nsd_failover', group => 'frontends',
+  sub {
+      file '/usr/local/bin/dns-failover.sh',
+        source => './scripts/dns-failover.ksh',
+        owner => 'root',
+        group => 'wheel',
+        mode => '500';
   };
 
 desc 'Setup DTail';
@@ -501,6 +511,8 @@ task 'ircbouncer', group => 'ircbouncer',
 desc 'Common configs of all hosts';
 task 'commons', group => 'frontends', sub {
   run_task 'base';
+  run_task 'nsd';
+  run_task 'nsd_failover';
   run_task 'uptimed';
   run_task 'httpd';
   run_task 'gemtexter';
