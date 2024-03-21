@@ -103,7 +103,7 @@ failover_zone () {
         echo "Reloading nsd"
         nsd-control reload
         zone_is_ok $zone
-        return 1
+        exit 1
     fi
 
     for cleanup in invalid bak; do
@@ -111,7 +111,9 @@ failover_zone () {
             rm $zone_file.$cleanup
         fi
     done
+
     echo "Failover of zone $zone to $MASTER completed"
+    return 0
 }
 
 main () {

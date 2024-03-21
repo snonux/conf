@@ -356,6 +356,14 @@ task 'nsd_failover', group => 'frontends',
         mode => '500';
 
       append_if_no_such_line '/etc/daily.local', '/usr/local/bin/dns-failover.ksh';
+
+      file '/tmp/root.cron',
+        ensure => 'file',
+        content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/dns-failover.ksh",
+        mode => '600';
+
+      run '{ crontab -l -u root ; cat /tmp/root.cron; } | uniq | crontab -u root -';
+      run 'rm /tmp/root.cron';
   };
 
 desc 'Setup DTail';
