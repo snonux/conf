@@ -103,7 +103,7 @@ failover_zone () {
         echo "Reloading nsd"
         nsd-control reload
         zone_is_ok $zone
-        return 2
+        return 3
     fi
 
     for cleanup in invalid bak; do
@@ -117,17 +117,16 @@ failover_zone () {
 }
 
 main () {
+    determine_master_and_standby
+
     local -i ec=0
-    if ! determine_master_and_standby; then
-        ec=1
-    fi
     for zone_file in $ZONES_DIR/*.zone; do
         if ! failover_zone $zone_file; then
             ec=1
         fi
     done
 
-    # ec other than 0 will tell CRON to send out an email!
+    # ec other than 0: CRON will send out an E-Mail.
     exit $ec
 }
 
