@@ -33,28 +33,28 @@ determine_master_and_standby () {
 
     echo "Master is $master, standby is $standby"
 
-    MASTER_A=$(host $master | awk '/has address/ { print $(NF) }')
-    MASTER_AAAA=$(host $master | awk '/has IPv6 address/ { print $(NF) }')
-    STANDBY_A=$(host $standby | awk '/has address/ { print $(NF) }')
-    STANDBY_AAAA=$(host $standby | awk '/has IPv6 address/ { print $(NF) }')
+    host $master | awk '/has address/ { print $(NF) }' >/tmp/dns_master_a
+    host $master | awk '/has IPv6 address/ { print $(NF) }' >/tmp/dns_master_aaaa
+    host $standby | awk '/has address/ { print $(NF) }' >/tmp/dns_standby_a
+    host $standby | awk '/has IPv6 address/ { print $(NF) }' >/tmp/dns_standby_aaaa
 }
 
 transform () {
     sed -E '
         /IN A .*; Enable failover/ {
             /^mirror/! {
-                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$MASTER_A' ; \3/;
+                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /tmp/dns_master_a)' ; \3/;
             }
             /^mirror/ {
-                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$STANDBY_A' ; \3/;
+                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /tmp/dns_standby_a)' ; \3/;
             }
         }
         /IN AAAA .*; Enable failover/ {
             /^mirror/! {
-                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$MASTER_AAAA' ; \3/;
+                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /tmp/dns_master_aaaa)' ; \3/;
             }
             /^mirror/ {
-                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$STANDBY_AAAA' ; \3/;
+                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /tmp/dns_standby_aaaa)' ; \3/;
             }
         }
         / ; serial/ {
@@ -84,7 +84,7 @@ failover_zone () {
     grep -v ' ; serial' $zone_file > $zone_file.old.noserial.tmp
 
     echo "Has zone $zone_file changed?"
-    if diff $zone_file.new.noserial.tmp $zone_file.old.noserial.tmp; then
+    if diff -u $zone_file.old.noserial.tmp $zone_file.new.noserial.tmp; then
         echo "The zone $zone_file hasn't changed"
         rm $zone_file.*.tmp
         return
