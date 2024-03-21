@@ -33,28 +33,28 @@ determine_master_and_standby () {
 
     echo "Master is $master, standby is $standby"
 
-    host $master | awk '/has address/ { print $(NF) }' >/tmp/dns_master_a
-    host $master | awk '/has IPv6 address/ { print $(NF) }' >/tmp/dns_master_aaaa
-    host $standby | awk '/has address/ { print $(NF) }' >/tmp/dns_standby_a
-    host $standby | awk '/has IPv6 address/ { print $(NF) }' >/tmp/dns_standby_aaaa
+    host $master | awk '/has address/ { print $(NF) }' >/var/nsd/run/master_a
+    host $master | awk '/has IPv6 address/ { print $(NF) }' >/var/nsd/run/master_aaaa
+    host $standby | awk '/has address/ { print $(NF) }' >/var/nsd/run/standby_a
+    host $standby | awk '/has IPv6 address/ { print $(NF) }' >/var/nsd/run/standby_aaaa
 }
 
 transform () {
     sed -E '
         /IN A .*; Enable failover/ {
             /^mirror/! {
-                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /tmp/dns_master_a)' ; \3/;
+                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /var/nsd/run/master_a)' ; \3/;
             }
             /^mirror/ {
-                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /tmp/dns_standby_a)' ; \3/;
+                s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /var/nsd/run/standby_a)' ; \3/;
             }
         }
         /IN AAAA .*; Enable failover/ {
             /^mirror/! {
-                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /tmp/dns_master_aaaa)' ; \3/;
+                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /var/nsd/run/master_aaaa)' ; \3/;
             }
             /^mirror/ {
-                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /tmp/dns_standby_aaaa)' ; \3/;
+                s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /var/nsd/run/standby_aaaa)' ; \3/;
             }
         }
         / ; serial/ {
