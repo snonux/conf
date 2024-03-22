@@ -26,7 +26,7 @@
     "Check TLS Certificate <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "20" ],
-      "DependsOn": ["Check Ping4 <%= $host %>.buetow.org %>"]
+      "DependsOn": ["Check Ping4 <%= $host %>.buetow.org"]
     },
       <% } -%>
     <% } -%>

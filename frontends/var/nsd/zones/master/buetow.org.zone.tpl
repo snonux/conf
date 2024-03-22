@@ -13,6 +13,8 @@ $TTL 4h
          IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 www      IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 www      IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+mirror   IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+mirror   IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
          IN MX 10 fishfinger.buetow.org.
          IN MX 20 blowfish.buetow.org.
@@ -75,6 +77,7 @@ zapad.sofia    14400 IN CNAME 79-100-3-54.ip.btc-net.bg.
 www2           14400 IN CNAME snonux.codeberg.page.
 znc            1800 IN CNAME fishfinger.buetow.org.
 www.znc        1800 IN CNAME fishfinger.buetow.org.
+mirror.znc        1800 IN CNAME fishfinger.buetow.org.
 bnc            1800 IN CNAME fishfinger.buetow.org.
 www.bnc        1800 IN CNAME fishfinger.buetow.org.
 	
