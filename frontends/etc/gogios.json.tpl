@@ -34,14 +34,12 @@
       <% for my $prefix ('', 'mirror.', 'www.') { -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ],
-      "DependsOn": ["Check Ping4 <%= $prefix eq '' ? 'blowfish.buetow.org' : 'fishfinger.buetow.org' %>"]
+      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ]
     },
         <% for my $proto (4, 6) { -%>
     "Check HTTP IPv<%= $proto %> <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"],
-      "DependsOn": ["Check Ping<%= $proto %> <%= $prefix eq '' ? 'blowfish.buetow.org' : 'fishfinger.buetow.org' %>"]
+      "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"]
     },
         <% } -%>
       <% } -%>
