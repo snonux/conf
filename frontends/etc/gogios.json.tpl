@@ -1,6 +1,4 @@
-<%
-  our $plugin_dir = '/usr/local/libexec/nagios';
--%>
+<% our $plugin_dir = '/usr/local/libexec/nagios'; -%>
 {
   "EmailTo": "paul",
   "EmailFrom": "gogios@mx.buetow.org",
@@ -8,44 +6,44 @@
   "CheckConcurrency": 3,
   "StateDir": "/var/run/gogios",
   "Checks": {
-    <% for my $host (qw(fishfinger blowfish)) { %>
+    <% for my $host (qw(fishfinger blowfish)) { -%>
     "Check DTail <%= $host %>.buetow.org": {
       "Plugin": "/usr/local/bin/dtailhealth",
       "Args": ["--server", "<%= $host %>.buetow.org:2222"],
       "DependsOn": ["Check Ping4 <%= $host %>.buetow.org", "Check Ping6 <%= $host %>.buetow.org"]
     },
     <% } -%>
-    <% for my $host (qw(fishfinger blowfish)) { %>
-      <% for my $proto (4, 6) { -%>
+    <% for my $host (qw(fishfinger blowfish)) { -%>
+    <%   for my $proto (4, 6) { -%>
     "Check Ping<%= $proto %> <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
       "Retries": 3,
       "RetryInterval": 3
     },
+    <%   } -%>
     "Check TLS Certificate <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "20" ],
       "DependsOn": ["Check Ping4 <%= $host %>.buetow.org"]
     },
-      <% } -%>
     <% } -%>
     <% for my $host (@$acme_hosts) { -%>
-      <% for my $prefix ('', 'mirror.', 'www.') { -%>
+    <%   for my $prefix ('', 'mirror.', 'www.') { -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ]
     },
-        <% for my $proto (4, 6) { -%>
+    <%     for my $proto (4, 6) { -%>
     "Check HTTP IPv<%= $proto %> <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"]
     },
-        <% } -%>
-      <% } -%>
+    <%     } -%>
+    <%   } -%>
     <% } -%>
-    <% for my $host (qw(fishfinger blowfish)) { %>
-      <% for my $proto (4, 6) { -%>
+    <% for my $host (qw(fishfinger blowfish)) { -%>
+    <%   for my $proto (4, 6) { -%>
     "Check Dig <%= $host %>.buetow.org IPv<%= $proto %>": {
       "Plugin": "<%= $plugin_dir %>/check_dig",
       "Args": ["-H", "<%= $host %>.buetow.org", "-l", "buetow.org", "-<%= $proto %>"],
@@ -61,7 +59,7 @@
       "Args": ["-H", "<%= $host %>.buetow.org", "-p", "1965", "-<%= $proto %>"],
       "DependsOn": ["Check Ping<%= $proto %> <%= $host %>.buetow.org"]
     },
-      <% } -%>
+    <%   } -%>
     <% } -%>
     "Check Users <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_users",
