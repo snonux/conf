@@ -30,7 +30,7 @@
     },
     <% } -%>
     <% for my $host (@$acme_hosts) { -%>
-      <% for my $prefix ('', 'www.') { -%>
+      <% for my $prefix ('', 'mirror.', 'www.') { -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ],
