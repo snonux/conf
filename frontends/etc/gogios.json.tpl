@@ -16,18 +16,19 @@
     },
     <% } -%>
     <% for my $host (qw(fishfinger blowfish)) { %>
-    "Check Ping4 <%= $host %>.buetow.org": {
+      <% for my $proto (4, 6) { -%>
+    "Check Ping<%= $proto %> <%= $host %>.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-4", "-w", "100,10%", "-c", "200,15%"],
+      "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
       "Retries": 3,
       "RetryInterval": 3
     },
-    "Check Ping6 <%= $host %>.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $host %>.buetow.org", "-6", "-w", "100,10%", "-c", "200,15%"],
-      "Retries": 3,
-      "RetryInterval": 3
+    "Check TLS Certificate <%= $host %>.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "Args": ["--sni", "-H", "<%= $host %>.buetow.org", "-C", "20" ],
+      "DependsOn": ["Check Ping4 <%= $host %>.buetow.org %>"]
     },
+      <% } -%>
     <% } -%>
     <% for my $host (@$acme_hosts) { -%>
       <% for my $prefix ('', 'mirror.', 'www.') { -%>
