@@ -42,18 +42,18 @@ determine_master_and_standby () {
 transform () {
     sed -E '
         /IN A .*; Enable failover/ {
-            /^mirror/! {
+            /^standby/! {
                 s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /var/nsd/run/master_a)' ; \3/;
             }
-            /^mirror/ {
+            /^standby/ {
                 s/^(.*) 300 IN A (.*) ; (.*)/\1 300 IN A '$(cat /var/nsd/run/standby_a)' ; \3/;
             }
         }
         /IN AAAA .*; Enable failover/ {
-            /^mirror/! {
+            /^standby/! {
                 s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /var/nsd/run/master_aaaa)' ; \3/;
             }
-            /^mirror/ {
+            /^standby/ {
                 s/^(.*) 300 IN AAAA (.*) ; (.*)/\1 300 IN AAAA '$(cat /var/nsd/run/standby_aaaa)' ; \3/;
             }
         }

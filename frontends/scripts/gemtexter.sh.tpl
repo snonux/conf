@@ -19,8 +19,8 @@ function ensure_site {
         ln -s $basename www.$basename
     fi
 
-    if [ ! -e mirror.$basename ]; then
-        ln -s $basename mirror.$basename
+    if [ ! -e standby.$basename ]; then
+        ln -s $basename standby.$basename
     fi
 
     if [ ! -d $basename ]; then
@@ -48,8 +48,8 @@ function ensure_links {
         ln -s $basename www.$target
     fi
 
-    if [ ! -e mirror.$target ]; then
-        ln -s $basename mirror.$target
+    if [ ! -e standby.$target ]; then
+        ln -s $basename standby.$target
     fi
 }
 

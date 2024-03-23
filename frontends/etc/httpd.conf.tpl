@@ -1,5 +1,5 @@
 <%
-  our @prefixes = ('', 'www.', 'mirror.');
+  our @prefixes = ('', 'www.', 'standby.');
 %>
 
 # Plain HTTP for ACME and HTTPS redirect

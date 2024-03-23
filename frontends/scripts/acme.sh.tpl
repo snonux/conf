@@ -27,7 +27,7 @@ function handle_cert {
 
 has_update=no
 <% for my $host (@$acme_hosts) { -%>
-<%   for my $prefix ('', 'www.', 'mirror.') { -%>
+<%   for my $prefix ('', 'www.', 'standby.') { -%>
 handle_cert <%= $prefix.$host %>
 if [ $? -eq 0 ]; then
     has_update=yes

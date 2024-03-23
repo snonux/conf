@@ -6,6 +6,16 @@
   "CheckConcurrency": 3,
   "StateDir": "/var/run/gogios",
   "Checks": {
+    <% for my $host (qw(master standby)) { -%>
+    <%   for my $proto (4, 6) { -%>
+    "Check Ping<%= $proto %> <%= $host %>.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_ping",
+      "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
+      "Retries": 3,
+      "RetryInterval": 3
+    },
+    <%   } -%>
+    <% } -%>
     <% for my $host (qw(fishfinger blowfish)) { -%>
     "Check DTail <%= $host %>.buetow.org": {
       "Plugin": "/usr/local/bin/dtailhealth",
@@ -29,15 +39,18 @@
     },
     <% } -%>
     <% for my $host (@$acme_hosts) { -%>
-    <%   for my $prefix ('', 'mirror.', 'www.') { -%>
+    <%   for my $prefix ('', 'standby.', 'www.') { -%>
+    <%     my $depends_on = $prefix eq 'standby.' ? 'standby.buetow.org' : 'master.buetow.org'; -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ]
+      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ],
+      "DependsOn": ["Check Ping4 <%= $depends_on %>", "Check Ping6 <%= $depends_on %>"]
     },
     <%     for my $proto (4, 6) { -%>
     "Check HTTP IPv<%= $proto %> <%= $prefix . $host %>": {
       "Plugin": "<%= $plugin_dir %>/check_http",
-      "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"]
+      "Args": ["<%= $prefix . $host %>", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> <%= $depends_on %>"]
     },
     <%     } -%>
     <%   } -%>

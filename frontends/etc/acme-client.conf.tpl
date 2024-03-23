@@ -24,7 +24,7 @@ authority buypass-test {
 }
 
 <% for my $host (@$acme_hosts) { -%>
-<%   for my $prefix ('', 'www.', 'mirror.') { -%>
+<%   for my $prefix ('', 'www.', 'standby.') { -%>
 domain <%= $prefix.$host %> {
 	domain key "/etc/ssl/private/<%= $prefix.$host %>.key"
 	domain full chain certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
