@@ -10,7 +10,7 @@ determine_master_and_standby () {
 
     # Weekly auto-failover for Let's Encrypt automation
     local -i -r week_of_the_year=$(date +%U)
-    if [ $(( week_of_the_year % 2 )) -eq 0 ]; then
+    if [ $(( week_of_the_year % 2 )) -ne 0 ]; then
         local tmp=$master
         master=$standby
         standby=$tmp
