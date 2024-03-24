@@ -61,6 +61,13 @@ www.fotos    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.fotos 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.fotos 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
+git          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+git          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.git      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.git      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby.git   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+standby.git   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
 blowfish   14400 IN A 23.88.35.144
 blowfish   14400 IN AAAA 2a01:4f8:c17:20f1::42
 blowfish         IN MX 10 fishfinger.buetow.org.
