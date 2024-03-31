@@ -9,14 +9,14 @@ $TTL 4h
          IN NS    fishfinger.buetow.org.
          IN NS    blowfish.buetow.org.
 
-	     IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-         IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www      IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www      IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby  IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby  IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
-master   IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-master   IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+	     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+standby  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+master   300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+master   300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 
          IN MX 10 fishfinger.buetow.org.
          IN MX 20 blowfish.buetow.org.
