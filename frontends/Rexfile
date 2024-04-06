@@ -219,6 +219,8 @@ task 'httpd', group => 'frontends',
       ensure => 'directory';
     file '/var/www/htdocs/buetow.org/self',
       ensure => 'directory';
+
+    # For failover health-check.
     file '/var/www/htdocs/buetow.org/self/index.txt',
       ensure => 'file',
       content => template('./var/www/htdocs/buetow.org/self/index.txt.tpl');
