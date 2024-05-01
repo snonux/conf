@@ -109,6 +109,20 @@ server "<%= $prefix %>irregular.ninja" {
 }
 <% } -%>
 
+<% for my $prefix (@prefixes) { -%>
+server "<%= $prefix %>alt.irregular.ninja" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>alt.irregular.ninja.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>alt.irregular.ninja.key"
+  }
+  location * {
+    root "/htdocs/alt.irregular.ninja"
+    directory auto index
+  }
+}
+<% } -%>
+
 # Dory special host
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dory.buetow.org" {
