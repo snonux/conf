@@ -71,8 +71,8 @@ our $fqdns = sub {
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets =  sub { read_file './secrets/' . shift };
 
-our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
-our @dns_zones_remove = qw/paul.cyou/;
+our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo paul.cyou/;
+our @dns_zones_remove = qw//;
 our @acme_hosts = qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
 
 # UTILITY TASKS
