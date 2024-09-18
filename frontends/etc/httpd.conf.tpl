@@ -43,7 +43,7 @@ server "<%= "$hostname.$domain" %>" {
 }
 
 # Gemtexter hosts
-<% for my $host (qw/foo.zone paul.buetow.org/) { %>
+<% for my $host (qw/foo.zone/) { %>
 <%   for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * tls port 443
@@ -87,6 +87,17 @@ server "<%= $prefix %>snonux.foo" {
   }
   location * {
     block return 302 "https://foo.zone$REQUEST_URI"
+  }
+}
+
+server "<%= $prefix %>paul.buetow.org" {
+  listen on * tls port 443
+  tls {
+    certificate "/etc/ssl/<%= $prefix %>paul.buetow.org.fullchain.pem"
+    key "/etc/ssl/private/<%= $prefix %>paul.buetow.org.key"
+  }
+  location * {
+    block return 302 "https://foo.zone/about$REQUEST_URI"
   }
 }
 <% } -%>

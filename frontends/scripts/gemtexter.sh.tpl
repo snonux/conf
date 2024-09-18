@@ -53,7 +53,7 @@ function ensure_links {
     fi
 }
 
-for site in foo.zone paul.buetow.org snonux.foo; do
+for site in foo.zone; do
     ensure_site \
         /var/gemini/$site \
         https://codeberg.org/snonux/$site \
@@ -63,5 +63,3 @@ for site in foo.zone paul.buetow.org snonux.foo; do
         https://codeberg.org/snonux/$site \
         content-html
 done
-
-ensure_links /var/gemini/paul.buetow.org buetow.org
