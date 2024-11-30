@@ -31,11 +31,7 @@ server "<%= "$hostname.$domain" %>" {
 }
 
 server "<%= "$hostname.$domain" %>" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"
-    key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
-  }
+  listen on * port 8080
   location * {
     root "/htdocs/buetow.org/self"
     directory auto index
@@ -46,11 +42,7 @@ server "<%= "$hostname.$domain" %>" {
 <% for my $host (qw/foo.zone/) { %>
 <%   for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix.$host %>.key"
-  }
+  listen on * port 8080
   location "/.git*" {
     block return 302 "https://<%= $prefix.$host %>"
   }
@@ -69,33 +61,21 @@ server "<%= $prefix.$host %>" {
 # Redirect to paul.buetow.org
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>buetow.org.key"
-  }
+  listen on * port 8080
   location * {
     block return 302 "https://paul.buetow.org$REQUEST_URI"
   }
 }
 
 server "<%= $prefix %>snonux.foo" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>snonux.foo.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>snonux.foo.key"
-  }
+  listen on * port 8080
   location * {
     block return 302 "https://foo.zone$REQUEST_URI"
   }
 }
 
 server "<%= $prefix %>paul.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>paul.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>paul.buetow.org.key"
-  }
+  listen on * port 8080
   location * {
     block return 302 "https://foo.zone/about$REQUEST_URI"
   }
@@ -105,11 +85,7 @@ server "<%= $prefix %>paul.buetow.org" {
 # Redirect to gitub.dtail.dev
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dtail.dev" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>dtail.dev.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>dtail.dev.key"
-  }
+  listen on * port 8080
   location * {
     block return 302 "https://github.dtail.dev$REQUEST_URI"
   }
@@ -119,11 +95,7 @@ server "<%= $prefix %>dtail.dev" {
 # Irregular Ninja special hosts
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>irregular.ninja" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>irregular.ninja.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>irregular.ninja.key"
-  }
+  listen on * port 8080
   location * {
     root "/htdocs/irregular.ninja"
     directory auto index
@@ -133,11 +105,7 @@ server "<%= $prefix %>irregular.ninja" {
 
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>alt.irregular.ninja" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>alt.irregular.ninja.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>alt.irregular.ninja.key"
-  }
+  listen on * port 8080
   location * {
     root "/htdocs/alt.irregular.ninja"
     directory auto index
@@ -148,11 +116,7 @@ server "<%= $prefix %>alt.irregular.ninja" {
 # Dory special host
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dory.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>dory.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>dory.buetow.org.key"
-  }
+  listen on * port 8080
   location * {
     root "/htdocs/joern/dory.buetow.org"
     directory auto index
@@ -162,11 +126,7 @@ server "<%= $prefix %>dory.buetow.org" {
 
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>solarcat.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>solarcat.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>solarcat.buetow.org.key"
-  }
+  listen on * port 8080
   location * {
     root "/htdocs/joern/solarcat.buetow.org"
     directory auto index
@@ -176,11 +136,7 @@ server "<%= $prefix %>solarcat.buetow.org" {
 
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>fotos.buetow.org" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/<%= $prefix %>fotos.buetow.org.fullchain.pem"
-    key "/etc/ssl/private/<%= $prefix %>fotos.buetow.org.key"
-  }
+  listen on * port 8080
   root "/htdocs/buetow.org/fotos"
   directory auto index
 }
@@ -193,10 +149,6 @@ server "default" {
 }
 
 server "default" {
-  listen on * tls port 443
-  tls {
-    certificate "/etc/ssl/foo.zone.fullchain.pem"
-    key "/etc/ssl/private/foo.zone.key"
-  }
+  listen on * port 8080
   block return 302 "https://foo.zone$REQUEST_URI"
 }

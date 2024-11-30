@@ -17,7 +17,7 @@ use File::Slurp;
 group frontends => 'blowfish.buetow.org:2', 'fishfinger.buetow.org:2';
 our $ircbouncer_server = 'fishfinger.buetow.org:2';
 group ircbouncer => $ircbouncer_server;
-group openbsd_canary => 'blowfish.buetow.org:2';
+group openbsd_canary => 'fishfinger.buetow.org:2';
 
 user 'rex';
 sudo TRUE;
@@ -255,7 +255,8 @@ task 'relayd', group => 'frontends',
     append_if_no_such_line '/etc/rc.conf.local', 'relayd_flags=';
 
     file '/etc/relayd.conf',
-      content => template('./etc/relayd.conf.tpl', ipv6address => $ipv6address),
+      content => template('./etc/relayd.conf.tpl',
+       ipv6address => $ipv6address, acme_hosts => \@acme_hosts),
       owner => 'root',
       group => 'wheel',
       mode => '600',
