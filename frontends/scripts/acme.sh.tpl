@@ -43,7 +43,9 @@ fi
 
 # Pick up the new certs.
 if [ $has_update = yes ]; then
-    /usr/sbin/rcctl reload httpd
+    # TLS offloading fully moved to relayd now
+    # /usr/sbin/rcctl reload httpd
+
     /usr/sbin/rcctl reload relayd
     /usr/sbin/rcctl restart smtpd
 fi
