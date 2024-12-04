@@ -208,7 +208,6 @@ desc 'Setup httpd';
 task 'httpd', group => 'frontends',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'httpd_flags=';
-    #delete_lines_according_to qr{httpd_flags}, '/etc/rc.conf.local';
 
     file '/etc/httpd.conf',
       content => template('./etc/httpd.conf.tpl', acme_hosts => \@acme_hosts),
@@ -518,6 +517,30 @@ task 'gorum', group => 'frontends',
       service 'gorum', ensure => 'started';
   };
 
+desc 'Setup Foostats';
+task 'foostats', group => 'frontends',
+  sub {
+      use File::Copy;
+      my $git_script_path = $ENV{HOME}. '/git/foostats/foostats.pl';
+      copy($git_script_path, './scripts/foostats.pl') if -f $git_script_path;
+
+      file '/usr/local/bin/foostats.pl',
+        source => './scripts/foostats.pl',
+        owner => 'root',
+        group => 'wheel',
+        mode => '500';
+
+      append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs';
+
+      # For now, custom syslog config only required for foostats (to keep some logs for longer)
+      # Later, could move out to a separate task here in the Rexfile.
+      file '/etc/newsyslog.conf',
+        source => './etc/newsyslog.conf',
+        owner => 'root',
+        group => 'wheel',
+        mode => '644';
+  };
+
 desc 'Setup IRC bouncer';
 task 'ircbouncer', group => 'ircbouncer',
   sub {
@@ -546,6 +569,7 @@ task 'commons', group => 'frontends', sub {
   run_task 'rsync';
   run_task 'gogios';
   run_task 'gorum';
+  run_task 'foostats';
   # Requires installing the binaries first!
   #run_task 'dtail';
 };
