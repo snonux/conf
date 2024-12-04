@@ -3,6 +3,7 @@
 <% for my $host (@$acme_hosts) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 80
+  log style forwarded 
   location "/.well-known/acme-challenge/*" {
     root "/acme"
     request strip 2
@@ -16,6 +17,7 @@ server "<%= $prefix.$host %>" {
 # Current server's FQDN (e.g. for mail server ACME cert requests)
 server "<%= "$hostname.$domain" %>" {
   listen on * port 80
+  log style forwarded 
   location "/.well-known/acme-challenge/*" {
     root "/acme"
     request strip 2
@@ -149,6 +151,7 @@ server "<%= $prefix %>fotos.buetow.org" {
 # Defaults
 server "default" {
   listen on * port 80
+  log style forwarded 
   block return 302 "https://foo.zone$REQUEST_URI"
 }
 
