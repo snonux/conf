@@ -1,10 +1,6 @@
-<%
-  our @prefixes = ('', 'www.', 'standby.');
-%>
-
+<% our @prefixes = ('', 'www.', 'standby.'); -%>
 # Plain HTTP for ACME and HTTPS redirect
-<% for my $host (@$acme_hosts) { %>
-<%   for my $prefix (@prefixes) { -%>
+<% for my $host (@$acme_hosts) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 80
   location "/.well-known/acme-challenge/*" {
@@ -15,8 +11,7 @@ server "<%= $prefix.$host %>" {
     block return 302 "https://$HTTP_HOST$REQUEST_URI"
   }
 }
-<%   } %>
-<% } %>
+<% } } -%>
 
 # Current server's FQDN (e.g. for mail server ACME cert requests)
 server "<%= "$hostname.$domain" %>" {
@@ -32,6 +27,7 @@ server "<%= "$hostname.$domain" %>" {
 
 server "<%= "$hostname.$domain" %>" {
   listen on * port 8080
+  log style forwarded 
   location * {
     root "/htdocs/buetow.org/self"
     directory auto index
@@ -39,10 +35,10 @@ server "<%= "$hostname.$domain" %>" {
 }
 
 # Gemtexter hosts
-<% for my $host (qw/foo.zone/) { %>
-<%   for my $prefix (@prefixes) { -%>
+<% for my $host (qw/foo.zone/) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 8080
+  log style forwarded 
   location "/.git*" {
     block return 302 "https://<%= $prefix.$host %>"
   }
@@ -55,13 +51,13 @@ server "<%= $prefix.$host %>" {
     <% } -%>
   }
 }
-  <% } %>
-<% } %>
+<% } } -%>
 
 # Redirect to paul.buetow.org
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>buetow.org" {
   listen on * port 8080
+  log style forwarded 
   location * {
     block return 302 "https://paul.buetow.org$REQUEST_URI"
   }
@@ -69,6 +65,7 @@ server "<%= $prefix %>buetow.org" {
 
 server "<%= $prefix %>snonux.foo" {
   listen on * port 8080
+  log style forwarded 
   location * {
     block return 302 "https://foo.zone$REQUEST_URI"
   }
@@ -76,6 +73,7 @@ server "<%= $prefix %>snonux.foo" {
 
 server "<%= $prefix %>paul.buetow.org" {
   listen on * port 8080
+  log style forwarded 
   location * {
     block return 302 "https://foo.zone/about$REQUEST_URI"
   }
@@ -86,6 +84,7 @@ server "<%= $prefix %>paul.buetow.org" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dtail.dev" {
   listen on * port 8080
+  log style forwarded 
   location * {
     block return 302 "https://github.dtail.dev$REQUEST_URI"
   }
@@ -96,6 +95,7 @@ server "<%= $prefix %>dtail.dev" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>irregular.ninja" {
   listen on * port 8080
+  log style forwarded 
   location * {
     root "/htdocs/irregular.ninja"
     directory auto index
@@ -106,6 +106,7 @@ server "<%= $prefix %>irregular.ninja" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>alt.irregular.ninja" {
   listen on * port 8080
+  log style forwarded 
   location * {
     root "/htdocs/alt.irregular.ninja"
     directory auto index
@@ -117,6 +118,7 @@ server "<%= $prefix %>alt.irregular.ninja" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dory.buetow.org" {
   listen on * port 8080
+  log style forwarded 
   location * {
     root "/htdocs/joern/dory.buetow.org"
     directory auto index
@@ -127,6 +129,7 @@ server "<%= $prefix %>dory.buetow.org" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>solarcat.buetow.org" {
   listen on * port 8080
+  log style forwarded 
   location * {
     root "/htdocs/joern/solarcat.buetow.org"
     directory auto index
@@ -137,6 +140,7 @@ server "<%= $prefix %>solarcat.buetow.org" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>fotos.buetow.org" {
   listen on * port 8080
+  log style forwarded 
   root "/htdocs/buetow.org/fotos"
   directory auto index
 }
@@ -150,5 +154,6 @@ server "default" {
 
 server "default" {
   listen on * port 8080
+  log style forwarded 
   block return 302 "https://foo.zone$REQUEST_URI"
 }

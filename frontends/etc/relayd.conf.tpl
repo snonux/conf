@@ -1,8 +1,5 @@
+<% our @prefixes = ('', 'www.', 'standby.'); -%>
 log connection
-
-<%
-  our @prefixes = ('', 'www.', 'standby.');
-%>
 
 # Wireguard endpoints of the k3s cluster nodes running in FreeBSD bhyve Linux VMs
 table <f3s> {
@@ -16,18 +13,15 @@ table <localhost> {
 }
 
 http protocol "https" {
-<% for my $host (@$acme_hosts) { -%>
-<%   for my $prefix (@prefixes) { -%>
+    <% for my $host (@$acme_hosts) { for my $prefix (@prefixes) { -%>
     tls keypair <%= $prefix.$host -%>
-<%   } -%>
-<% } -%>
+    <% } } -%>
     tls keypair <%= $hostname.'.'.$domain -%>
 
-<% for my $host (@$f3s_hosts) { -%>
-<%   for my $prefix (@prefixes) { -%>
-    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
-<%   } -%>
-<% } -%>
+    match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
+    <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
+    match request quick header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
+    <% } } -%>
 }
 
 relay "https4" {
