@@ -532,7 +532,7 @@ task 'foostats', group => 'frontends',
 
       append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs';
 
-      my @deps = qw(p5-Digest-SHA3 p5-PerlIO-gzip p5-JSON p5-String-Util);
+      my @deps = qw(p5-Digest-SHA3 p5-PerlIO-gzip p5-JSON p5-String-Util p5-Compress-Bzip2);
       pkg $_, ensure => present for @deps;
 
       # For now, custom syslog config only required for foostats (to keep some logs for longer)
