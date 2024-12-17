@@ -18,8 +18,38 @@ no warnings qw(experimental::refaliasing);
 # TODO: Blog post about this script and the new Perl features used.
 # TODO NEXT:
 # 1) Implement replicator
-# 2) Also merge the results
-# 3) Write out a nice output from each merged file
+# 2) Write out a nice output from each merged file, also merge if multiple hosts results
+
+package FileHelper {
+  use JSON;
+
+  sub write ($path, $content) {
+    open my $fh, '>', "$path.tmp" or die "\nCannot open file: $!";
+    print $fh $content;
+    close $fh;
+
+    rename "$path.tmp", $path;
+  }
+
+  sub write_json_gz ($path, $data) {
+    my $json = encode_json $data;
+
+    say "Writing $path";
+    open my $fd, '>:gzip', "$path.tmp" or die "$path.tmp: $!";
+    print $fd $json;
+    close $fd;
+
+    rename "$path.tmp", $path or die "$path.tmp: $!";
+  }
+  
+  sub read_json_gz ($path) {
+    say "Reading $path";
+    open my $fd, '<:gzip', $path or die "$path: $!";
+    my $json = decode_json <$fd>;
+    close $fd;
+    return $json;
+  }
+}
 
 package Foostats::Logreader {
   use Digest::SHA3 'sha3_512_base64';
@@ -307,6 +337,7 @@ package Foostats::Outputter {
   sub new ($class, %args) {
     my $self = bless \%args, $class;
     mkdir $self->{stats_dir} or die $self->{stats_dir} . ": $!" unless -d $self->{stats_dir};
+
     return $self;
   }
 
@@ -314,30 +345,29 @@ package Foostats::Outputter {
     my $hostname = hostname();
     my @processed = glob $self->{stats_dir} . "/${proto}_????????.$hostname.json.gz";
     my ($date) = @processed ? ($processed[-1] =~ /_(\d{8})\.$hostname\.json.gz/) : 0;
+
     return int($date);
   }
 
-  sub write ($self) { $self->for_dates(\&write_json) }
-  sub for_dates ($self, $cb) { $cb->($self, $_, $self->{stats}{$_}) for sort keys $self->{stats}->%* }
-
-  sub write_json ($self, $date_key, $stats) {
-    my $hostname = hostname();
-    my $path = $self->{stats_dir} . "/${date_key}.$hostname.json.gz";
-    my $json = encode_json $stats;
-
-    say "Writing $path";
-    open my $fd, '>:gzip', "$path.tmp" or die "$path.tmp: $!";
-    print $fd $json;
-    close $fd;
-
-    rename "$path.tmp", $path or die "$path.tmp: $!";
-  } 
+  sub write ($self) {
+    $self->for_dates(sub ($self, $date_key, $stats) {
+      my $hostname = hostname();
+      my $path = $self->{stats_dir} . "/${date_key}.$hostname.json.gz";
+      FileHelper::write_json_gz $path, $stats;
+    });
+  }
+  
+  sub for_dates ($self, $cb) {
+    $cb->($self, $_, $self->{stats}{$_}) for sort keys $self->{stats}->%*;
+  }
 }
 
 package Foostats::Replicator {
+  use JSON;
   use File::Basename;
   use Time::Piece;
   use LWP::UserAgent;
+  use String::Util qw(endswith);
   
   sub new ($class, %args) { bless \%args, $class }
 
@@ -348,33 +378,30 @@ package Foostats::Replicator {
       my $count = 0;
 
       for my $date (_last_month_dates()) {
-        my $dest_file = "${proto}_${date}.$partner_node.json.gz";
+        my $file_base = "${proto}_${date}";
+        my $dest_path = "${file_base}.$partner_node.json.gz";
 
         $self->replicate_file(
-          "https://$partner_node/foostats/$dest_file", 
-          $self->{stats_dir} . '/' . $dest_file,
+          "https://$partner_node/foostats/$dest_path", 
+          $self->{stats_dir} . '/' . $dest_path,
           $count++ < 3, # Always replicate the newest 3 files.
-        )
+        );
       }
     }
   }
 
-  sub replicate_file ($self, $remote_url, $dest_file, $force) {
-    # $dest_file already exists, not replicating it
-    return if !$force && -f $dest_file;
+  sub replicate_file ($self, $remote_url, $dest_path, $force) {
+    # $dest_path already exists, not replicating it
+    return if !$force && -f $dest_path;
 
-    print "Replicating $remote_url to $dest_file (force:$force)... ";
+    say "Replicating $remote_url to $dest_path (force:$force)... ";
     my $response = LWP::UserAgent->new->get($remote_url);
     unless ($response->is_success) {
       say "\nFailed to fetch the file: " . $response->status_line;
       return;
     }
 
-    open my $fh, '>', "$dest_file.tmp" or die "\nCannot open file: $!";
-    print $fh $response->decoded_content;
-    close $fh;
-
-    rename "$dest_file.tmp", $dest_file;
+    FileHelper::write $dest_path, $response->decoded_content;
     say 'done';
   }
 
@@ -406,29 +433,24 @@ package main {
     $out->write;
   }
 
-  sub replicate ($stats_dir, $partner_node) {
-    unless (defined $partner_node) {
-      # Default values if partner node not set.
-      $partner_node = hostname eq 'fishfinger.buetow.org' 
-                    ? 'blowfish.buetow.org'
-                    : 'fishfinger.buetow.org';
-    }
+  my ($parse_logs, $replicate, $report, $all);
 
-    Foostats::Replicator->new(stats_dir => $stats_dir)->replicate($partner_node);
-  }
-
-  sub pretty_print () { say 'pretty_print not yet implemented' }
-
-  my ($parse_logs, $replicate, $pretty_print, $partner_node);
+  # With default values
   my $stats_dir = '/var/www/htdocs/buetow.org/self/foostats';
+  my $partner_node = hostname eq 'fishfinger.buetow.org' 
+                   ? 'blowfish.buetow.org' : 'fishfinger.buetow.org';
 
   GetOptions 'parse-logs'   => \$parse_logs,
              'replicate'    => \$replicate,
-             'pretty-print' => \$pretty_print,
+             'pretty-print' => \$report,
+             'all'          => \$all,
              'stats-dir'    => \$stats_dir,
              'partner-node' => \$partner_node;
 
-  parse_logs $stats_dir if $parse_logs;
-  replicate $stats_dir, $partner_node if $replicate;
-  pretty_print $stats_dir if $pretty_print;
+  parse_logs $stats_dir if $parse_logs or $all;
+
+  Foostats::Replicator->new(stats_dir => $stats_dir)->replicate($partner_node)
+    if $replicate or $all;
+
+  die 'report not yet implemented' if $report or $all;
 }
