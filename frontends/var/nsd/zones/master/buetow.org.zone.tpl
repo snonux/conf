@@ -33,6 +33,13 @@ www.paul     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.paul  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.paul  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
+blog         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+blog         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.blog     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.blog     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby.blog  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+standby.blog  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
 tmp          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 tmp          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 www.tmp      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover

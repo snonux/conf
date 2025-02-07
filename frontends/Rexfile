@@ -1,6 +1,6 @@
 # How to use:
 #
-# rex commons 
+# rex commons
 #
 # Why use Rex to automate my servers? Because Rex is KISS, Puppet, SALT and Chef
 # are not. So, why not use Ansible then? To use Ansible correctly you should also
@@ -8,7 +8,7 @@
 # Rex is programmed in Perl and there is already Perl in the base system of OpenBSD.
 # Also, I find Perl > Python (my personal opinion).
 
-use Rex -feature => ['1.14', 'exec_autodie'];
+use Rex -feature => [ '1.14', 'exec_autodie' ];
 use Rex::Logger;
 use File::Slurp;
 
@@ -16,7 +16,7 @@ use File::Slurp;
 
 group frontends => 'blowfish.buetow.org:2', 'fishfinger.buetow.org:2';
 our $ircbouncer_server = 'fishfinger.buetow.org:2';
-group ircbouncer => $ircbouncer_server;
+group ircbouncer     => $ircbouncer_server;
 group openbsd_canary => 'fishfinger.buetow.org:2';
 
 user 'rex';
@@ -29,15 +29,15 @@ parallelism 5;
 # Rex template variables too.
 
 our %ips = (
-  'fishfinger' => {
-    'ipv4' => '46.23.94.99',
-    'ipv6' => '2a03:6000:6f67:624::99',
-  },
-  'blowfish' => {
-    'ipv4' => '23.88.35.144',
-    'ipv6' => '2a01:4f8:c17:20f1::42',
-  },
-  'domain' => 'buetow.org',
+    'fishfinger' => {
+        'ipv4' => '46.23.94.99',
+        'ipv6' => '2a03:6000:6f67:624::99',
+    },
+    'blowfish' => {
+        'ipv4' => '23.88.35.144',
+        'ipv6' => '2a01:4f8:c17:20f1::42',
+    },
+    'domain' => 'buetow.org',
 );
 
 $ips{current_master} = $ips{fishfinger};
@@ -48,51 +48,53 @@ $ips{current_standby}{fqdn} = 'blowfish.' . $ips{domain};
 
 # Gather IPv6 addresses based on hostname.
 our $ipv6address = sub {
-  my $hostname = shift;
-  my $ip = $ips{$hostname}{ipv6};
-  unless (defined $ip) {
-    Rex::Logger::info("Unable to determine IPv6 address for $hostname", 'error');
-    return '::1';
-  }
-  return $ip;
+    my $hostname = shift;
+    my $ip       = $ips{$hostname}{ipv6};
+    unless ( defined $ip ) {
+        Rex::Logger::info( "Unable to determine IPv6 address for $hostname", 'error' );
+        return '::1';
+    }
+    return $ip;
 };
 
 # Bootstrapping the FQDN based on the server IP as the hostname and domain
 # facts aren't set yet due to the myname file in the first place.
 our $fqdns = sub {
-  my $ipv4 = shift;
-  while (my ($hostname, $ips) = each %ips) {
-    return "$hostname." . $ips{domain} if $ips->{ipv4} eq $ipv4;
-  }
-  Rex::Logger::info("Unable to determine hostname for $ipv4", 'error');
-  return 'HOSTNAME-UNKNOWN.' . $ips{domain};
+    my $ipv4 = shift;
+    while ( my ( $hostname, $ips ) = each %ips ) {
+        return "$hostname." . $ips{domain} if $ips->{ipv4} eq $ipv4;
+    }
+    Rex::Logger::info( "Unable to determine hostname for $ipv4", 'error' );
+    return 'HOSTNAME-UNKNOWN.' . $ips{domain};
 };
 
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
-our $secrets =  sub { read_file './secrets/' . shift };
+our $secrets = sub { read_file './secrets/' . shift };
 
-our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo paul.cyou/;
+our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo paul.cyou/;
 our @dns_zones_remove = qw//;
-our @f3s_hosts = qw/f3s.buetow.org/; # k3s cluster running on FreeBSD in my LAN
-our @acme_hosts = qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
+our @f3s_hosts        = qw/f3s.buetow.org/;    # k3s cluster running on FreeBSD in my LAN
+our @acme_hosts =
+  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org blog.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
 push @acme_hosts, @f3s_hosts;
 
 # UTILITY TASKS
 
-task 'id', group => 'frontends', sub { say run 'id' };
+task 'id',        group => 'frontends', sub { say run 'id' };
 task 'dump_info', group => 'frontends', sub { dump_system_information };
 
 # OPENBSD TASKS SECTION
 
 desc 'Install base stuff';
-task 'base', group => 'frontends',
+task 'base',
+  group => 'frontends',
   sub {
     pkg 'figlet', ensure => present;
-    pkg 'tig', ensure => present;
-    pkg 'vger', ensure => present;
-    pkg 'zsh', ensure => present;
-    pkg 'bash', ensure => present;
-    pkg 'helix', ensure => present;
+    pkg 'tig',    ensure => present;
+    pkg 'vger',   ensure => present;
+    pkg 'zsh',    ensure => present;
+    pkg 'bash',   ensure => present;
+    pkg 'helix',  ensure => present;
 
     my @pkg_scripts = qw/uptimed httpd dserver icinga2/;
     push @pkg_scripts, 'znc' if connection->server eq $ircbouncer_server;
@@ -101,249 +103,255 @@ task 'base', group => 'frontends',
     run 'touch /etc/rc.local';
 
     file '/etc/myname',
-      content => template('./etc/myname.tpl', fqdns => $fqdns),
-      owner => 'root',
-      group => 'wheel',
-      mode => '644';
+      content => template( './etc/myname.tpl', fqdns => $fqdns ),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '644';
   };
 
 desc 'Setup uptimed';
-task 'uptimed', group => 'frontends',
+task 'uptimed',
+  group => 'frontends',
   sub {
     pkg 'uptimed', ensure => present;
     service 'uptimed', ensure => 'started';
   };
 
 desc 'Setup rsync';
-task 'rsync', group => 'frontends',
+task 'rsync',
+  group => 'frontends',
   sub {
     pkg 'rsync', ensure => present;
 
     file '/etc/rsyncd.conf',
       content => template('./etc/rsyncd.conf.tpl'),
-      owner => 'root',
-      group => 'wheel',
-      mode => '644';
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '644';
 
     file '/usr/local/bin/rsync.sh',
       content => template('./scripts/rsync.sh.tpl'),
-      owner => 'root',
-      group => 'wheel',
-      mode => '755';
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '755';
 
-      append_if_no_such_line '/etc/daily.local', '/usr/local/bin/rsync.sh';
+    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/rsync.sh';
   };
 
 desc 'Configure the gemtexter sites';
-task 'gemtexter', group => 'frontends',
+task 'gemtexter',
+  group => 'frontends',
   sub {
     file '/usr/local/bin/gemtexter.sh',
       content => template('./scripts/gemtexter.sh.tpl'),
-      owner => 'root',
-      group => 'wheel',
-      mode => '744';
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '744';
 
     file '/etc/daily.local',
       ensure => 'present',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644';
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '644';
 
     append_if_no_such_line '/etc/daily.local', '/usr/local/bin/gemtexter.sh';
   };
 
 desc 'Configure taskwarrior reminder';
-task 'taskwarrior', group => 'frontends',
+task 'taskwarrior',
+  group => 'frontends',
   sub {
     pkg 'taskwarrior', ensure => present;
 
     file '/usr/local/bin/taskwarrior.sh',
       content => template('./scripts/taskwarrior.sh.tpl'),
-      owner => 'root',
-      group => 'wheel',
-      mode => '500';
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '500';
 
     file '/etc/taskrc',
-        content => template('./etc/taskrc.tpl'),
-        owner => 'root',
-        group => 'wheel',
-        mode => '600';
+      content => template('./etc/taskrc.tpl'),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '600';
 
     append_if_no_such_line '/etc/daily.local', '/usr/local/bin/taskwarrior.sh';
   };
 
 desc 'Configure ACME client';
-task 'acme', group => 'frontends',
+task 'acme',
+  group => 'frontends',
   sub {
-   file '/etc/acme-client.conf',
-     content => template('./etc/acme-client.conf.tpl',
-       acme_hosts => \@acme_hosts),
-     owner => 'root',
-     group => 'wheel',
-     mode => '644';
+    file '/etc/acme-client.conf',
+      content => template( './etc/acme-client.conf.tpl', acme_hosts => \@acme_hosts ),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '644';
 
-   file '/usr/local/bin/acme.sh',
-     content => template('./scripts/acme.sh.tpl',
-       acme_hosts => \@acme_hosts),
-     owner => 'root',
-     group => 'wheel',
-     mode => '744';
+    file '/usr/local/bin/acme.sh',
+      content => template( './scripts/acme.sh.tpl', acme_hosts => \@acme_hosts ),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '744';
 
     file '/etc/daily.local',
       ensure => 'present',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644';
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '644';
 
     append_if_no_such_line '/etc/daily.local', '/usr/local/bin/acme.sh';
   };
 
 desc 'Invoke ACME client';
-task 'acme_invoke', group => 'frontends',
+task 'acme_invoke',
+  group => 'frontends',
   sub {
     say run '/usr/local/bin/acme.sh';
   };
 
 desc 'Setup httpd';
-task 'httpd', group => 'frontends',
+task 'httpd',
+  group => 'frontends',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'httpd_flags=';
 
     file '/etc/httpd.conf',
-      content => template('./etc/httpd.conf.tpl', acme_hosts => \@acme_hosts),
-      owner => 'root',
-      group => 'wheel',
-      mode => '644',
+      content   => template( './etc/httpd.conf.tpl', acme_hosts => \@acme_hosts ),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub { service 'httpd' => 'restart' };
 
-    file '/var/www/htdocs/buetow.org',
-      ensure => 'directory';
-    file '/var/www/htdocs/buetow.org/self',
-      ensure => 'directory';
+    file '/var/www/htdocs/buetow.org',      ensure => 'directory';
+    file '/var/www/htdocs/buetow.org/self', ensure => 'directory';
 
     # For failover health-check.
     file '/var/www/htdocs/buetow.org/self/index.txt',
-      ensure => 'file',
+      ensure  => 'file',
       content => template('./var/www/htdocs/buetow.org/self/index.txt.tpl');
-  
+
     service 'httpd', ensure => 'started';
   };
 
 desc 'Setup inetd';
-task 'inetd', group => 'frontends',
+task 'inetd',
+  group => 'frontends',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'inetd_flags=';
 
     file '/etc/login.conf.d/inetd',
       source => './etc/login.conf.d/inetd',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644';
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '644';
 
     file '/etc/inetd.conf',
-      source => './etc/inetd.conf',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644',
+      source    => './etc/inetd.conf',
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub { service 'inetd' => 'restart' };
 
     service 'inetd', ensure => 'started';
   };
 
 desc 'Setup relayd';
-task 'relayd', group => 'frontends',
+task 'relayd',
+  group => 'frontends',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'relayd_flags=';
 
     file '/etc/relayd.conf',
-      content => template('./etc/relayd.conf.tpl',
-       ipv6address => $ipv6address, f3s_hosts => \@f3s_hosts, acme_hosts => \@acme_hosts),
-      owner => 'root',
-      group => 'wheel',
-      mode => '600',
+      content => template(
+        './etc/relayd.conf.tpl',
+        ipv6address => $ipv6address,
+        f3s_hosts   => \@f3s_hosts,
+        acme_hosts  => \@acme_hosts
+      ),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '600',
       on_change => sub { service 'relayd' => 'restart' };
 
     service 'relayd', ensure => 'started';
   };
 
 desc 'Setup OpenSMTPD';
-task 'smtpd', group => 'frontends',
+task 'smtpd',
+  group => 'frontends',
   sub {
     Rex::Logger::info('Dealing with mail aliases');
     file '/etc/mail/aliases',
-      source => './etc/mail/aliases',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644',
+      source    => './etc/mail/aliases',
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub { say run 'newaliases' };
 
     Rex::Logger::info('Dealing with mail virtual domains');
     file '/etc/mail/virtualdomains',
-      source => './etc/mail/virtualdomains',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644',
+      source    => './etc/mail/virtualdomains',
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub { service 'smtpd' => 'restart' };
 
     Rex::Logger::info('Dealing with mail virtual users');
     file '/etc/mail/virtualusers',
-      source => './etc/mail/virtualusers',
-      owner => 'root',
-      group => 'wheel',
-      mode => '644',
+      source    => './etc/mail/virtualusers',
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub { service 'smtpd' => 'restart' };
 
     Rex::Logger::info('Dealing with smtpd.conf');
     file '/etc/mail/smtpd.conf',
-      content => template('./etc/mail/smtpd.conf.tpl'),
-      owner => 'root',
-      group => 'wheel',
-      mode => '644',
+      content   => template('./etc/mail/smtpd.conf.tpl'),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub { service 'smtpd' => 'restart' };
 
     service 'smtpd', ensure => 'started';
   };
 
 desc 'Setup DNS server(s)';
-task 'nsd', group => 'frontends',
+task 'nsd',
+  group => 'frontends',
   sub {
     my $restart = FALSE;
     append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
 
     Rex::Logger::info('Dealing with master DNS key');
     file '/var/nsd/etc/key.conf',
-      content => template('./var/nsd/etc/key.conf.tpl',
-        nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt')),
-      owner => 'root',
-      group => '_nsd',
-      mode => '640',
+      content   => template( './var/nsd/etc/key.conf.tpl', nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt') ),
+      owner     => 'root',
+      group     => '_nsd',
+      mode      => '640',
       on_change => sub { $restart = TRUE };
 
     Rex::Logger::info('Dealing with master DNS config');
     file '/var/nsd/etc/nsd.conf',
-      content => template('./var/nsd/etc/nsd.conf.master.tpl',
-        dns_zones => \@dns_zones,
-      ),
-      owner => 'root',
-      group => '_nsd',
-      mode => '640',
+      content   => template( './var/nsd/etc/nsd.conf.master.tpl', dns_zones => \@dns_zones, ),
+      owner     => 'root',
+      group     => '_nsd',
+      mode      => '640',
       on_change => sub { $restart = TRUE };
 
     for my $zone (@dns_zones) {
-      Rex::Logger::info("Dealing with DNS zone $zone");
-      file "/var/nsd/zones/master/$zone.zone",
-        content => template("./var/nsd/zones/master/$zone.zone.tpl",
-          ips => \%ips,
-        ),
-        owner => 'root',
-        group => 'wheel',
-        mode => '644',
-        on_change => sub { $restart = TRUE };
-     }
+        Rex::Logger::info("Dealing with DNS zone $zone");
+        file "/var/nsd/zones/master/$zone.zone",
+          content   => template( "./var/nsd/zones/master/$zone.zone.tpl", ips => \%ips, ),
+          owner     => 'root',
+          group     => 'wheel',
+          mode      => '644',
+          on_change => sub { $restart = TRUE };
+    }
 
     for my $zone (@dns_zones_remove) {
-      Rex::Logger::info("Dealing with DNS zone removal $zone");
-      file "/var/nsd/zones/master/$zone.zone", ensure => 'absent';
+        Rex::Logger::info("Dealing with DNS zone removal $zone");
+        file "/var/nsd/zones/master/$zone.zone", ensure => 'absent';
     }
 
     service 'nsd' => 'restart' if $restart;
@@ -351,203 +359,214 @@ task 'nsd', group => 'frontends',
   };
 
 desc 'Setup DNS failover script(s)';
-task 'nsd_failover', group => 'frontends',
+task 'nsd_failover',
+  group => 'frontends',
   sub {
-      file '/usr/local/bin/dns-failover.ksh',
-        source => './scripts/dns-failover.ksh',
-        owner => 'root',
-        group => 'wheel',
-        mode => '500';
+    file '/usr/local/bin/dns-failover.ksh',
+      source => './scripts/dns-failover.ksh',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '500';
 
-      file '/tmp/root.cron',
-        ensure => 'file',
-        content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/dns-failover.ksh",
-        mode => '600';
+    file '/tmp/root.cron',
+      ensure  => 'file',
+      content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/dns-failover.ksh",
+      mode    => '600';
 
-      run '{ crontab -l -u root ; cat /tmp/root.cron; } | uniq | crontab -u root -';
-      run 'rm /tmp/root.cron';
+    run '{ crontab -l -u root ; cat /tmp/root.cron; } | uniq | crontab -u root -';
+    run 'rm /tmp/root.cron';
   };
 
 desc 'Setup DTail';
-task 'dtail', group => 'frontends',
-   sub {
-      my $restart = FALSE;
+task 'dtail',
+  group => 'frontends',
+  sub {
+    my $restart = FALSE;
 
-      run 'adduser -class nologin -group _dserver -batch _dserver', unless => 'id _dserver';
-      run 'usermod -d /var/run/dserver _dserver';
+    run 'adduser -class nologin -group _dserver -batch _dserver', unless => 'id _dserver';
+    run 'usermod -d /var/run/dserver _dserver';
 
-      file '/etc/rc.d/dserver',
-        content => template('./etc/rc.d/dserver.tpl'),
-        owner => 'root',
-        group => 'wheel',
-        mode => '755',
-        on_change => sub { $restart = TRUE };
+    file '/etc/rc.d/dserver',
+      content   => template('./etc/rc.d/dserver.tpl'),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '755',
+      on_change => sub { $restart = TRUE };
 
-      file '/etc/dserver',
-        ensure => 'directory',
-        owner => 'root',
-        group => 'wheel',
-        mode => '755';
+    file '/etc/dserver',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '755';
 
-      file '/etc/dserver/dtail.json',
-        content => template('./etc/dserver/dtail.json.tpl'),
-        owner => 'root',
-        group => 'wheel',
-        mode => '755',
-        on_change => sub { $restart = TRUE };
+    file '/etc/dserver/dtail.json',
+      content   => template('./etc/dserver/dtail.json.tpl'),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '755',
+      on_change => sub { $restart = TRUE };
 
-      file '/usr/local/bin/dserver-update-key-cache.sh',
-        content => template('./scripts/dserver-update-key-cache.sh.tpl'),
-        owner => 'root',
-        group => 'wheel',
-        mode => '500';
+    file '/usr/local/bin/dserver-update-key-cache.sh',
+      content => template('./scripts/dserver-update-key-cache.sh.tpl'),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '500';
 
-      append_if_no_such_line '/etc/daily.local', '/usr/local/bin/dserver-update-key-cache.sh';
+    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/dserver-update-key-cache.sh';
 
-      service 'dserver' => 'restart' if $restart;
-      service 'dserver', ensure => 'started';
-   };
+    service 'dserver' => 'restart' if $restart;
+    service 'dserver', ensure => 'started';
+  };
 
 desc 'Installing Gogios binary';
-task 'gogios_install', group => 'frontends',
+task 'gogios_install',
+  group => 'frontends',
   sub {
-      file '/usr/local/bin/gogios',
-        source => 'usr/local/bin/gogios',
-        mode => '0755';
-        owner => 'root',
-        group => 'root';
+    file '/usr/local/bin/gogios',
+      source => 'usr/local/bin/gogios',
+      mode   => '0755';
+    owner   => 'root',
+      group => 'root';
   };
 
 desc 'Setup Gogios monitoring system';
-task 'gogios', group => 'frontends',
+task 'gogios',
+  group => 'frontends',
   sub {
-      pkg 'monitoring-plugins', ensure => present;
-      pkg 'nrpe', ensure => present;
+    pkg 'monitoring-plugins', ensure => present;
+    pkg 'nrpe',               ensure => present;
 
-      my $gogios_path = '/usr/local/bin/gogios';
+    my $gogios_path = '/usr/local/bin/gogios';
 
-      unless (is_file($gogios_path)) {
-        Rex::Logger::info("Gogios not installed to $gogios_path! Run task 'gogios_install'", 'error');
-      }
+    unless ( is_file($gogios_path) ) {
+        Rex::Logger::info( "Gogios not installed to $gogios_path! Run task 'gogios_install'", 'error' );
+    }
 
-      run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
-      run 'usermod -d /var/run/gogios _gogios';
+    run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
+    run 'usermod -d /var/run/gogios _gogios';
 
-      file '/etc/gogios.json',
-        content => template('./etc/gogios.json.tpl',
-          acme_hosts => \@acme_hosts),
-        owner => 'root',
-        group => 'wheel',
-        mode => '744';
+    file '/etc/gogios.json',
+      content => template( './etc/gogios.json.tpl', acme_hosts => \@acme_hosts ),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '744';
 
-      file '/var/run/gogios',
-        ensure => 'directory',
-        owner => '_gogios',
-        group => '_gogios',
-        mode => '755';
+    file '/var/run/gogios',
+      ensure => 'directory',
+      owner  => '_gogios',
+      group  => '_gogios',
+      mode   => '755';
 
-      file '/tmp/gogios.cron',
-        ensure => 'file',
-        content => template('./etc/gogios.cron.tpl',
-            gogios_path => $gogios_path),
-        mode => '600';
+    file '/tmp/gogios.cron',
+      ensure  => 'file',
+      content => template( './etc/gogios.cron.tpl', gogios_path => $gogios_path ),
+      mode    => '600';
 
-      run 'cat /tmp/gogios.cron | crontab -u _gogios -';
-      run 'rm /tmp/gogios.cron';
+    run 'cat /tmp/gogios.cron | crontab -u _gogios -';
+    run 'rm /tmp/gogios.cron';
 
-      append_if_no_such_line '/etc/rc.local', 'if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi';
-      append_if_no_such_line '/etc/rc.local', 'chown _gogios /var/run/gogios';
+    append_if_no_such_line '/etc/rc.local', 'if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi';
+    append_if_no_such_line '/etc/rc.local', 'chown _gogios /var/run/gogios';
   };
 
 use Rex::Commands::Cron;
 
 desc 'Cron test';
-task 'cron_test', group => 'openbsd_canary', sub {
-  cron add => '_gogios', {
-    minute => '5',
-    hour => '*',
-    command => '/bin/ls',
+task 'cron_test',
+  group => 'openbsd_canary',
+  sub {
+    cron
+      add => '_gogios',
+      {
+        minute  => '5',
+        hour    => '*',
+        command => '/bin/ls',
+      };
   };
-};
 
 desc 'Installing Gorum binary';
-task 'gorum_install', group => 'frontends',
+task 'gorum_install',
+  group => 'frontends',
   sub {
-      file '/usr/local/bin/gorum',
-        source => 'usr/local/bin/gorum',
-        mode => '0755';
-        owner => 'root',
-        group => 'root';
+    file '/usr/local/bin/gorum',
+      source => 'usr/local/bin/gorum',
+      mode   => '0755';
+    owner   => 'root',
+      group => 'root';
   };
 
 desc 'Setup Gorum quorum system';
-task 'gorum', group => 'frontends',
+task 'gorum',
+  group => 'frontends',
   sub {
-      my $restart = FALSE;
-      my $gorum_path = '/usr/local/bin/gorum';
+    my $restart    = FALSE;
+    my $gorum_path = '/usr/local/bin/gorum';
 
-      unless (is_file($gorum_path)) {
-        Rex::Logger::info("gorum not installed to $gorum_path! Run task 'gorum_install'", 'error');
-      }
+    unless ( is_file($gorum_path) ) {
+        Rex::Logger::info( "gorum not installed to $gorum_path! Run task 'gorum_install'", 'error' );
+    }
 
-      run 'adduser -class nologin -group _gorum -batch _gorum', unless => 'id _gorum';
-      run 'usermod -d /var/run/gorum _gorum';
+    run 'adduser -class nologin -group _gorum -batch _gorum', unless => 'id _gorum';
+    run 'usermod -d /var/run/gorum _gorum';
 
-      file '/etc/gorum.json',
-        content => template('./etc/gorum.json.tpl'),
-        owner => 'root',
-        group => 'wheel',
-        mode => '744',
-        on_change => sub { $restart = TRUE };
+    file '/etc/gorum.json',
+      content   => template('./etc/gorum.json.tpl'),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '744',
+      on_change => sub { $restart = TRUE };
 
-      file '/var/run/gorum',
-        ensure => 'directory',
-        owner => '_gorum',
-        group => '_gorum',
-        mode => '755';
+    file '/var/run/gorum',
+      ensure => 'directory',
+      owner  => '_gorum',
+      group  => '_gorum',
+      mode   => '755';
 
-      file '/etc/rc.d/gorum',
-        content => template('./etc/rc.d/gorum.tpl'),
-        owner => 'root',
-        group => 'wheel',
-        mode => '755',
-        on_change => sub { $restart = TRUE };
+    file '/etc/rc.d/gorum',
+      content   => template('./etc/rc.d/gorum.tpl'),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '755',
+      on_change => sub { $restart = TRUE };
 
-      service 'gorum' => 'restart' if $restart;
-      service 'gorum', ensure => 'started';
+    service 'gorum' => 'restart' if $restart;
+    service 'gorum', ensure => 'started';
   };
 
 desc 'Setup Foostats';
-task 'foostats', group => 'frontends',
+task 'foostats',
+  group => 'frontends',
   sub {
-      use File::Copy;
-      my $git_script_path = $ENV{HOME}. '/git/foostats/foostats.pl';
-      copy($git_script_path, './scripts/foostats.pl') if -f $git_script_path;
+    use File::Copy;
+    my $git_script_path = $ENV{HOME} . '/git/foostats/foostats.pl';
+    copy( $git_script_path, './scripts/foostats.pl' ) if -f $git_script_path;
 
-      file '/usr/local/bin/foostats.pl',
-        source => './scripts/foostats.pl',
-        owner => 'root',
-        group => 'wheel',
-        mode => '500';
+    file '/usr/local/bin/foostats.pl',
+      source => './scripts/foostats.pl',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '500';
 
-      append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs --replicate';
+    append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs --replicate';
 
-      my @deps = qw(p5-Digest-SHA3 p5-PerlIO-gzip p5-JSON p5-String-Util p5-LWP-Protocol-https);
-      pkg $_, ensure => present for @deps;
+    my @deps = qw(p5-Digest-SHA3 p5-PerlIO-gzip p5-JSON p5-String-Util p5-LWP-Protocol-https);
+    pkg $_, ensure => present for @deps;
 
-      # For now, custom syslog config only required for foostats (to keep some logs for longer)
-      # Later, could move out to a separate task here in the Rexfile.
-      file '/etc/newsyslog.conf',
-        source => './etc/newsyslog.conf',
-        owner => 'root',
-        group => 'wheel',
-        mode => '644';
+    # For now, custom syslog config only required for foostats (to keep some logs for longer)
+    # Later, could move out to a separate task here in the Rexfile.
+    file '/etc/newsyslog.conf',
+      source => './etc/newsyslog.conf',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '644';
   };
 
 desc 'Setup IRC bouncer';
-task 'ircbouncer', group => 'ircbouncer',
+task 'ircbouncer',
+  group => 'ircbouncer',
   sub {
     pkg 'znc', ensure => present;
+
     # Requires runtime config in /var/znc before it can start.
     # => geheim search znc.conf
     service 'znc', ensure => 'started';
@@ -556,26 +575,30 @@ task 'ircbouncer', group => 'ircbouncer',
 # COMBINED TASKS SECTION
 
 desc 'Common configs of all hosts';
-task 'commons', group => 'frontends', sub {
-  run_task 'base';
-  run_task 'nsd';
-  run_task 'nsd_failover';
-  run_task 'uptimed';
-  run_task 'httpd';
-  run_task 'gemtexter';
-  run_task 'taskwarrior';
-  run_task 'acme';
-  run_task 'acme_invoke';
-  run_task 'inetd';
-  run_task 'relayd';
-  run_task 'smtpd';
-  run_task 'rsync';
-  run_task 'gogios';
-  # run_task 'gorum';
-  run_task 'foostats';
-  # Requires installing the binaries first!
-  #run_task 'dtail';
-};
+task 'commons',
+  group => 'frontends',
+  sub {
+    run_task 'base';
+    run_task 'nsd';
+    run_task 'nsd_failover';
+    run_task 'uptimed';
+    run_task 'httpd';
+    run_task 'gemtexter';
+    run_task 'taskwarrior';
+    run_task 'acme';
+    run_task 'acme_invoke';
+    run_task 'inetd';
+    run_task 'relayd';
+    run_task 'smtpd';
+    run_task 'rsync';
+    run_task 'gogios';
+
+    # run_task 'gorum';
+    run_task 'foostats';
+
+    # Requires installing the binaries first!
+    #run_task 'dtail';
+  };
 
 1;
 
