@@ -66,7 +66,6 @@ server "<%= $prefix %>buetow.org" {
 }
 
 # Redirect blog to foo.zone
-<% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>blog.buetow.org" {
   listen on * port 8080
   log style forwarded 
