@@ -538,10 +538,11 @@ task 'foostats',
   group => 'frontends',
   sub {
     use File::Copy;
-    my $git_script_path = $ENV{HOME} . '/git/foostats/foostats.pl';
-    copy( $git_script_path, './scripts/foostats.pl' ) if -f $git_script_path;
-    my $git_odds_path = $ENV{HOME} . '/git/foostats/odds.txt';
-    copy( $git_odds_path, './scripts/odds.txt' ) if -f $git_odds_path;
+    for my $file (qw/foostats.pl fooodds.txt/) {
+        Rex::Logger::info("Dealing with $file");
+        my $git_script_path = $ENV{HOME} . '/git/foostats/' . $file;
+        copy( $git_script_path, './scripts/' . $file ) if -f $git_script_path;
+    }
 
     file '/usr/local/bin/foostats.pl',
       source => './scripts/foostats.pl',
@@ -549,8 +550,8 @@ task 'foostats',
       group  => 'wheel',
       mode   => '500';
 
-    file '/var/www/htdocs/buetow.org/self/foostats/odds.txt',
-      source => './scripts/odds.txt',
+    file '/var/www/htdocs/buetow.org/self/foostats/fooodds.txt',
+      source => './scripts/fooodds.txt',
       owner  => 'root',
       group  => 'wheel',
       mode   => '440';
