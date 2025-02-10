@@ -249,8 +249,8 @@ package Foostats::Logreader {
         };
     }
 
-    sub parse_logs ( $last_web_date, $last_gemini_date, $odds_file ) {
-        my $agg = Foostats::Aggregator->new($odds_file);
+    sub parse_logs ( $last_web_date, $last_gemini_date, $odds_file, $filter_log ) {
+        my $agg = Foostats::Aggregator->new( $odds_file, $filter_log );
 
         say "Last web date: $last_web_date";
         say "Last gemini date: $last_gemini_date";
@@ -270,11 +270,10 @@ package Foostats::Logreader {
 package Foostats::Filter {
     use String::Util qw(contains startswith endswith);
 
-    sub new ( $class, $odds_file, $log_path = '/var/log/foostats-filter.log' ) {
+    sub new ( $class, $odds_file, $log_path ) {
         say "Logging filter to $log_path";
         my @odds = FileHelper::read_lines($odds_file);
-        unlink $log_path
-          if -f $log_path;
+
         bless {
             odds     => \@odds,
             log_path => $log_path
@@ -359,9 +358,9 @@ package Foostats::Aggregator {
         GEMFEED_URI_2 => '/gemfeed/',
     };
 
-    sub new ( $class, $odds_file ) {
+    sub new ( $class, $odds_file, $filter_log ) {
         bless {
-            filter => Foostats::Filter->new($odds_file),
+            filter => Foostats::Filter->new( $odds_file, $filter_log ),
             stats  => {}
           },
           $class;
@@ -690,11 +689,14 @@ package main {
     use Getopt::Long;
     use Sys::Hostname;
 
-    sub parse_logs ( $stats_dir, $odds_file ) {
+    sub parse_logs ( $stats_dir, $odds_file, $filter_log ) {
         my $out = Foostats::FileOutputter->new( stats_dir => $stats_dir );
 
-        $out->{stats} = Foostats::Logreader::parse_logs( $out->last_processed_date('web'),
-            $out->last_processed_date('gemini'), $odds_file, );
+        $out->{stats} = Foostats::Logreader::parse_logs(
+            $out->last_processed_date('web'),
+            $out->last_processed_date('gemini'),
+            $odds_file, $filter_log
+        );
 
         $out->write;
     }
@@ -702,8 +704,9 @@ package main {
     my ( $parse_logs, $replicate, $report, $all );
 
     # With default values
-    my $stats_dir = '/var/www/htdocs/buetow.org/self/foostats';
-    my $odds_file = $stats_dir . '/odds.txt';
+    my $stats_dir  = '/var/www/htdocs/buetow.org/self/foostats';
+    my $odds_file  = $stats_dir . '/odds.txt';
+    my $filter_log = '/var/log/foofilter';
     my $partner_node =
       hostname eq 'fishfinger.buetow.org'
       ? 'blowfish.buetow.org'
@@ -712,6 +715,7 @@ package main {
     # TODO: Add help output
     GetOptions
       'parse-logs!'    => \$parse_logs,
+      'filter-log=s'   => \$filter_log,
       'odds-file=s'    => \$odds_file,
       'replicate!'     => \$replicate,
       'report!'        => \$report,
@@ -719,7 +723,7 @@ package main {
       'stats-dir=s'    => \$stats_dir,
       'partner-node=s' => \$partner_node;
 
-    parse_logs( $stats_dir, $odds_file )
+    parse_logs( $stats_dir, $odds_file, $filter_log )
       if $parse_logs
       or $all;
 
