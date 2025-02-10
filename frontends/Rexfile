@@ -540,12 +540,20 @@ task 'foostats',
     use File::Copy;
     my $git_script_path = $ENV{HOME} . '/git/foostats/foostats.pl';
     copy( $git_script_path, './scripts/foostats.pl' ) if -f $git_script_path;
+    my $git_odds_path = $ENV{HOME} . '/git/foostats/odds.txt';
+    copy( $git_odds_path, './scripts/odds.txt' ) if -f $git_odds_path;
 
     file '/usr/local/bin/foostats.pl',
       source => './scripts/foostats.pl',
       owner  => 'root',
       group  => 'wheel',
       mode   => '500';
+
+    file '/var/www/htdocs/buetow.org/self/foostats/odds.txt',
+      source => './scripts/odds.txt',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '440';
 
     append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs --replicate';
 
