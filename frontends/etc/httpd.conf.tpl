@@ -78,7 +78,7 @@ server "<%= $prefix %>snonux.foo" {
   listen on * port 8080
   log style forwarded 
   location * {
-    block return 302 "https:/codeberg.org/snonux$REQUEST_URI"
+    block return 302 "https://codeberg.org/snonux$REQUEST_URI"
   }
 }
 
