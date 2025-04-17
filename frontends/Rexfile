@@ -275,6 +275,7 @@ task 'relayd',
       on_change => sub { service 'relayd' => 'restart' };
 
     service 'relayd', ensure => 'started';
+    append_if_no_such_line '/etc/daily.local', '/usr/sbin/rcctl start relayd';
   };
 
 desc 'Setup OpenSMTPD';
