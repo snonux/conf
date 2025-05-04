@@ -1,9 +1,11 @@
 <% our @prefixes = ('', 'www.', 'standby.'); -%>
 log connection
 
-# Wireguard endpoints of the k3s cluster nodes running in FreeBSD bhyve Linux VMs
+# Wireguard endpoints of the k3s cluster nodes running in FreeBSD bhyve Linux VMs via Wireguard tunnels
 table <f3s> {
-  192.168.2.110
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
 }
 
 # Local OpenBSD httpd
