@@ -187,7 +187,8 @@ package Foostats::Logreader {
     sub parse_gemini_logs ( $last_processed_date, $cb ) {
         my sub parse_date ( $year, @line ) {
             my $timestr = "$line[0] $line[1]";
-            return Time::Piece->strptime( $timestr, '%b %d' )->strftime("$year%m%d");
+            return Time::Piece->strptime( $timestr, '%b %d' )
+              ->strftime("$year%m%d");
         }
 
         my sub parse_vger_line ( $year, @line ) {
@@ -222,8 +223,8 @@ package Foostats::Logreader {
             };
         }
 
-        # Expect one vger and one relayd log line per event! So collect
-        # both events (one from one log line each) and then merge the result hash!
+      # Expect one vger and one relayd log line per event! So collect
+      # both events (one from one log line each) and then merge the result hash!
         my ( $vger, $relayd );
         read_lines GEMINI_LOGS_GLOB, sub ( $year, @line ) {
             if ( $line[4] eq 'vger:' ) {
@@ -249,7 +250,8 @@ package Foostats::Logreader {
         };
     }
 
-    sub parse_logs ( $last_web_date, $last_gemini_date, $odds_file, $odds_log ) {
+    sub parse_logs ( $last_web_date, $last_gemini_date, $odds_file, $odds_log )
+    {
         my $agg = Foostats::Aggregator->new( $odds_file, $odds_log );
 
         say "Last web date: $last_web_date";
@@ -304,7 +306,8 @@ package Foostats::Filter {
             next
               unless contains( $uri_path, $_ );
 
-            $self->log( 'WARN', $uri_path, "contains $_ and is odd and will therefore be blocked!" );
+            $self->log( 'WARN', $uri_path,
+                "contains $_ and is odd and will therefore be blocked!" );
             return true;
         }
 
@@ -341,7 +344,8 @@ package Foostats::Filter {
 
         # IP requested site more than once within the same second!?
         if ( 1 < ++( $count{$ip_hash} //= 0 ) ) {
-            $self->log( 'WARN', $ip_hash, "blocked due to excessive requesting..." );
+            $self->log( 'WARN', $ip_hash,
+                "blocked due to excessive requesting..." );
             return true;
         }
 
@@ -455,8 +459,9 @@ package Foostats::FileOutputter {
     }
 
     sub last_processed_date ( $self, $proto ) {
-        my $hostname  = hostname();
-        my @processed = glob $self->{stats_dir} . "/${proto}_????????.$hostname.json.gz";
+        my $hostname = hostname();
+        my @processed =
+          glob $self->{stats_dir} . "/${proto}_????????.$hostname.json.gz";
         my ($date) =
           @processed
           ? ( $processed[-1] =~ /_(\d{8})\.$hostname\.json.gz/ )
@@ -469,7 +474,8 @@ package Foostats::FileOutputter {
         $self->for_dates(
             sub ( $self, $date_key, $stats ) {
                 my $hostname = hostname();
-                my $path     = $self->{stats_dir} . "/${date_key}.$hostname.json.gz";
+                my $path =
+                  $self->{stats_dir} . "/${date_key}.$hostname.json.gz";
                 FileHelper::write_json_gz
                   $path,
                   $stats;
@@ -537,7 +543,8 @@ package Foostats::Merger {
 
     sub merge ($stats_dir) {
         my %merge;
-        $merge{$_} = merge_for_date( $stats_dir, $_ ) for DateHelper::last_month_dates;
+        $merge{$_} = merge_for_date( $stats_dir, $_ )
+          for DateHelper::last_month_dates;
         return %merge;
     }
 
@@ -583,7 +590,7 @@ package Foostats::Merger {
             }
             else {
                 die
-                  "Not merging tkey '%s' (ref:%s): '%s' (ref:%s) with '%s' (ref:%s)\n",
+"Not merging tkey '%s' (ref:%s): '%s' (ref:%s) with '%s' (ref:%s)\n",
                   $key,
                   ref($key), $a->{$key},
                   ref( $a->{$key} ),
@@ -653,7 +660,8 @@ package Foostats::Merger {
             ) for @stats;
 
             # Keep only uniq IP count
-            $merge{$key}->{$_} = scalar keys $merge{$key}->{$_}->%* for keys $merge{$key}->%*;
+            $merge{$key}->{$_} = scalar keys $merge{$key}->{$_}->%*
+              for keys $merge{$key}->%*;
         }
 
         return \%merge;
@@ -682,44 +690,44 @@ package Foostats::Reporter {
     use Time::Piece;
 
     sub truncate_url {
-        my ($url, $max_length) = @_;
-        $max_length //= 100;  # Default to 100 characters
-        
+        my ( $url, $max_length ) = @_;
+        $max_length //= 100;    # Default to 100 characters
+
         return $url if length($url) <= $max_length;
-        
+
         # Calculate how many characters we need to remove
-        my $ellipsis = '...';
-        my $ellipsis_length = length($ellipsis);
+        my $ellipsis         = '...';
+        my $ellipsis_length  = length($ellipsis);
         my $available_length = $max_length - $ellipsis_length;
-        
+
         # Split available length between start and end, favoring the end
-        my $keep_start = int($available_length * 0.4);  # 40% for start
-        my $keep_end = $available_length - $keep_start;  # 60% for end
-        
-        my $start = substr($url, 0, $keep_start);
-        my $end = substr($url, -$keep_end);
-        
+        my $keep_start = int( $available_length * 0.4 );     # 40% for start
+        my $keep_end   = $available_length - $keep_start;    # 60% for end
+
+        my $start = substr( $url, 0, $keep_start );
+        my $end   = substr( $url, -$keep_end );
+
         return $start . $ellipsis . $end;
     }
 
     sub truncate_urls_for_table {
-        my ($url_rows, $count_column_header) = @_;
-        
+        my ( $url_rows, $count_column_header ) = @_;
+
         # Calculate the maximum width needed for the count column
         my $max_count_width = length($count_column_header);
         for my $row (@$url_rows) {
-            my $count_width = length($row->[1]);
+            my $count_width = length( $row->[1] );
             $max_count_width = $count_width if $count_width > $max_count_width;
         }
-        
+
         # Row format: "| URL... | count |" with padding
         # Calculate: "| " (2) + URL + " | " (3) + count_with_padding + " |" (2)
         my $max_url_length = 100 - 7 - $max_count_width;
-        $max_url_length = 70 if $max_url_length > 70;  # Cap at reasonable length
-        
+        $max_url_length = 70 if $max_url_length > 70; # Cap at reasonable length
+
         # Truncate URLs in place
         for my $row (@$url_rows) {
-            $row->[0] = truncate_url($row->[0], $max_url_length);
+            $row->[0] = truncate_url( $row->[0], $max_url_length );
         }
     }
 
@@ -745,7 +753,7 @@ package Foostats::Reporter {
         }
 
         my @table_lines;
-        push @table_lines, $separator_line;  # Add top terminator
+        push @table_lines, $separator_line;    # Add top terminator
         push @table_lines, $header_line;
         push @table_lines, $separator_line;
 
@@ -756,8 +764,8 @@ package Foostats::Reporter {
             }
             push @table_lines, $row_line;
         }
-        
-        push @table_lines, $separator_line;  # Add bottom terminator
+
+        push @table_lines, $separator_line;    # Add bottom terminator
 
         return join( "
 ", @table_lines );
@@ -774,25 +782,38 @@ package Foostats::Reporter {
             # Check if .gmi file exists and its age based on date in filename
             my $gemtext_dir = "$stats_dir/gemtext";
             my $report_path = "$gemtext_dir/$date.gmi";
-            
+
             # Calculate age of the data based on date in filename
-            my $today = Time::Piece->new();
-            my $file_date = Time::Piece->strptime($date, '%Y%m%d');
-            my $age_days = ($today - $file_date) / (24 * 60 * 60);
-            
-            if (-e $report_path) {
+            my $today     = Time::Piece->new();
+            my $file_date = Time::Piece->strptime( $date, '%Y%m%d' );
+            my $age_days  = ( $today - $file_date ) / ( 24 * 60 * 60 );
+
+            if ( -e $report_path ) {
+
                 # File exists
-                if ($age_days <= 3) {
+                if ( $age_days <= 3 ) {
+
                     # Data is recent (within 3 days), regenerate it
-                    say "Regenerating daily report for $year-$month-$day (data age: " . sprintf("%.1f", $age_days) . " days)";
-                } else {
+                    say
+"Regenerating daily report for $year-$month-$day (data age: "
+                      . sprintf( "%.1f", $age_days )
+                      . " days)";
+                }
+                else {
                     # Data is old (older than 3 days), skip if file exists
-                    say "Skipping daily report for $year-$month-$day (file exists, data age: " . sprintf("%.1f", $age_days) . " days)";
+                    say
+"Skipping daily report for $year-$month-$day (file exists, data age: "
+                      . sprintf( "%.1f", $age_days )
+                      . " days)";
                     next;
                 }
-            } else {
+            }
+            else {
                 # File doesn't exist, generate it
-                say "Generating new daily report for $year-$month-$day (file doesn't exist, data age: " . sprintf("%.1f", $age_days) . " days)";
+                say
+"Generating new daily report for $year-$month-$day (file doesn't exist, data age: "
+                  . sprintf( "%.1f", $age_days )
+                  . " days)";
             }
 
             my $report_content = "";
@@ -831,14 +852,19 @@ package Foostats::Reporter {
 
 ";
             my @feed_rows;
-            push @feed_rows, [ 'Total',          $stats->{feed_ips}{'Total'}          // 0 ];
-            push @feed_rows, [ 'Gemini Gemfeed', $stats->{feed_ips}{'Gemini Gemfeed'} // 0 ];
-            push @feed_rows, [ 'Gemini Atom',    $stats->{feed_ips}{'Gemini Atom'}    // 0 ];
-            push @feed_rows, [ 'Web Gemfeed',    $stats->{feed_ips}{'Web Gemfeed'}    // 0 ];
-            push @feed_rows, [ 'Web Atom',       $stats->{feed_ips}{'Web Atom'}       // 0 ];
+            push @feed_rows, [ 'Total', $stats->{feed_ips}{'Total'} // 0 ];
+            push @feed_rows,
+              [ 'Gemini Gemfeed', $stats->{feed_ips}{'Gemini Gemfeed'} // 0 ];
+            push @feed_rows,
+              [ 'Gemini Atom', $stats->{feed_ips}{'Gemini Atom'} // 0 ];
+            push @feed_rows,
+              [ 'Web Gemfeed', $stats->{feed_ips}{'Web Gemfeed'} // 0 ];
+            push @feed_rows,
+              [ 'Web Atom', $stats->{feed_ips}{'Web Atom'} // 0 ];
             $report_content .= "```
 ";
-            $report_content .= format_table( [ 'Feed Type', 'Count' ], \@feed_rows );
+            $report_content .=
+              format_table( [ 'Feed Type', 'Count' ], \@feed_rows );
             $report_content .= "
 ```
 
@@ -862,7 +888,8 @@ package Foostats::Reporter {
             }
             $report_content .= "```
 ";
-            $report_content .= format_table( [ 'Host', 'Unique Visitors' ], \@host_rows );
+            $report_content .=
+              format_table( [ 'Host', 'Unique Visitors' ], \@host_rows );
             $report_content .= "
 ```
 ";
@@ -889,12 +916,13 @@ package Foostats::Reporter {
             for my $url (@sorted_urls) {
                 push @url_rows, [ $url, $urls->{$url} // 0 ];
             }
-            
+
             # Truncate URLs to fit within 100-character rows
-            truncate_urls_for_table(\@url_rows, 'Unique Visitors');
+            truncate_urls_for_table( \@url_rows, 'Unique Visitors' );
             $report_content .= "```
 ";
-            $report_content .= format_table( [ 'URL', 'Unique Visitors' ], \@url_rows );
+            $report_content .=
+              format_table( [ 'URL', 'Unique Visitors' ], \@url_rows );
             $report_content .= "
 ```
 ";
@@ -910,7 +938,8 @@ package Foostats::Reporter {
             $report_content .= "## Related Reports\n\n";
             my $today         = localtime;
             my $current_month = $today->strftime('%Y%m%d');
-            $report_content .= "=> ./30day_summary_$current_month.gmi 30-Day Summary Report\n\n";
+            $report_content .=
+              "=> ./30day_summary_$current_month.gmi 30-Day Summary Report\n\n";
 
             # Ensure gemtext directory exists
             mkdir $gemtext_dir unless -d $gemtext_dir;
@@ -940,7 +969,8 @@ package Foostats::Reporter {
         $report_content .= build_feed_statistics_section( \@dates, \%merged );
 
         # Aggregate and add top lists
-        my ( $all_hosts, $all_urls ) = aggregate_hosts_and_urls( \@dates, \%merged );
+        my ( $all_hosts, $all_urls ) =
+          aggregate_hosts_and_urls( \@dates, \%merged );
         $report_content .= build_top_hosts_section($all_hosts);
         $report_content .= build_top_urls_section($all_urls);
 
@@ -978,7 +1008,9 @@ package Foostats::Reporter {
             push @summary_rows, build_daily_summary_row( $date, $stats );
         }
 
-        $content .= format_table( [ 'Date', 'Total', 'Filtered', 'Gemini', 'Web', 'IPv4', 'IPv6' ], \@summary_rows );
+        $content .= format_table(
+            [ 'Date', 'Total', 'Filtered', 'Gemini', 'Web', 'IPv4', 'IPv6' ],
+            \@summary_rows );
         $content .= "\n```\n\n";
 
         return $content;
@@ -998,7 +1030,11 @@ package Foostats::Reporter {
         my $ipv4     = $stats->{count}{IPv4}     // 0;
         my $ipv6     = $stats->{count}{IPv6}     // 0;
 
-        return [ $formatted_date, $total_requests, $filtered, $gemini, $web, $ipv4, $ipv6 ];
+        return [
+            $formatted_date, $total_requests, $filtered,
+            $gemini,         $web,            $ipv4,
+            $ipv6
+        ];
     }
 
     sub build_feed_statistics_section {
@@ -1014,7 +1050,10 @@ package Foostats::Reporter {
             push @feed_rows, build_feed_statistics_row( $date, $stats );
         }
 
-        $content .= format_table( [ 'Date', 'Total', 'Gem Feed', 'Gem Atom', 'Web Feed', 'Web Atom' ], \@feed_rows );
+        $content .= format_table(
+            [ 'Date', 'Total', 'Gem Feed', 'Gem Atom', 'Web Feed', 'Web Atom' ],
+            \@feed_rows
+        );
         $content .= "\n```\n\n";
 
         return $content;
@@ -1047,7 +1086,8 @@ package Foostats::Reporter {
             next unless $stats->{page_ips};
 
             # Aggregate hosts
-            while ( my ( $host, $count ) = each %{ $stats->{page_ips}{hosts} } ) {
+            while ( my ( $host, $count ) = each %{ $stats->{page_ips}{hosts} } )
+            {
                 $all_hosts{$host} //= 0;
                 $all_hosts{$host} += $count;
             }
@@ -1095,9 +1135,9 @@ package Foostats::Reporter {
         for my $url (@sorted_urls) {
             push @url_rows, [ $url, $all_urls->{$url} ];
         }
-        
+
         # Truncate URLs to fit within 100-character rows
-        truncate_urls_for_table(\@url_rows, 'Visitors');
+        truncate_urls_for_table( \@url_rows, 'Visitors' );
 
         $content .= format_table( [ 'URL', 'Visitors' ], \@url_rows );
         $content .= "\n```\n\n";
@@ -1193,7 +1233,8 @@ package main {
       if $replicate
       or $all;
 
-    Foostats::Reporter::report( $stats_dir, Foostats::Merger::merge($stats_dir) )
+    Foostats::Reporter::report( $stats_dir,
+        Foostats::Merger::merge($stats_dir) )
       if $report
       or $all;
 }

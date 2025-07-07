@@ -75,7 +75,7 @@ our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.
 our @dns_zones_remove = qw//;
 our @f3s_hosts        = qw/f3s.buetow.org/;    # k3s cluster running on FreeBSD in my LAN
 our @acme_hosts =
-  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org blog.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
+  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org blog.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
 push @acme_hosts, @f3s_hosts;
 
 # UTILITY TASKS
@@ -556,6 +556,18 @@ task 'foostats',
       owner  => 'root',
       group  => 'wheel',
       mode   => '440';
+
+    file '/var/www/htdocs/gemtexter/stats.foo.zone',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '755';
+
+    file '/var/gemini/stats.foo.zone',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '755';
 
     append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs --replicate --report';
 

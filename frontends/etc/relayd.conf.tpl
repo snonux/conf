@@ -42,9 +42,11 @@ relay "https6" {
 
 tcp protocol "gemini" {
     tls keypair foo.zone
+    tls keypair stats.foo.zone
     tls keypair snonux.foo
     tls keypair paul.buetow.org
     tls keypair standby.foo.zone
+    tls keypair standby.stats.foo.zone
     tls keypair standby.snonux.foo
     tls keypair standby.paul.buetow.org
 }

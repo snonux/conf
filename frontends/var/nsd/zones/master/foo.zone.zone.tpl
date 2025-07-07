@@ -19,9 +19,14 @@ www     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
-f3s          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-f3s          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.f3s      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.f3s      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+f3s           300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+f3s           300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.f3s       300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.f3s       300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.f3s   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.f3s   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+
+stats         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+stats         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby.stats 300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+standby.stats 300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover

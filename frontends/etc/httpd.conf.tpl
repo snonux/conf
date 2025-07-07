@@ -37,7 +37,7 @@ server "<%= "$hostname.$domain" %>" {
 }
 
 # Gemtexter hosts
-<% for my $host (qw/foo.zone/) { for my $prefix (@prefixes) { -%>
+<% for my $host (qw/foo.zone stats.foo.zone/) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 8080
   log style forwarded 
