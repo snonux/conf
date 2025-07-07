@@ -557,7 +557,7 @@ task 'foostats',
       group  => 'wheel',
       mode   => '440';
 
-    append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs --replicate';
+    append_if_no_such_line '/etc/daily.local', 'perl /usr/local/bin/foostats.pl --parse-logs --replicate --report';
 
     my @deps = qw(p5-Digest-SHA3 p5-PerlIO-gzip p5-JSON p5-String-Util p5-LWP-Protocol-https);
     pkg $_, ensure => present for @deps;

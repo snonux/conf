@@ -435,7 +435,8 @@ package Foostats::Aggregator {
           && !endswith( $e->{uri_path}, '.gmi' );
 
         ( $p->{hosts}->{ $e->{host} }->{ $e->{ip_hash} } //= 0 )++;
-        ( $p->{urls}->{ $e->{host} . $e->{uri_path} }->{ $e->{ip_hash} } //= 0 )++;
+        ( $p->{urls}->{ $e->{host} . $e->{uri_path} }->{ $e->{ip_hash} } //=
+              0 )++;
     }
 }
 
@@ -678,16 +679,475 @@ package Foostats::Merger {
 }
 
 package Foostats::Reporter {
-    use Data::Dumper;
+    use Time::Piece;
 
-    sub report (%merged) {
-        print Dumper %merged;
+    sub truncate_url {
+        my ($url, $max_length) = @_;
+        $max_length //= 100;  # Default to 100 characters
+        
+        return $url if length($url) <= $max_length;
+        
+        # Calculate how many characters we need to remove
+        my $ellipsis = '...';
+        my $ellipsis_length = length($ellipsis);
+        my $available_length = $max_length - $ellipsis_length;
+        
+        # Split available length between start and end, favoring the end
+        my $keep_start = int($available_length * 0.4);  # 40% for start
+        my $keep_end = $available_length - $keep_start;  # 60% for end
+        
+        my $start = substr($url, 0, $keep_start);
+        my $end = substr($url, -$keep_end);
+        
+        return $start . $ellipsis . $end;
+    }
+
+    sub truncate_urls_for_table {
+        my ($url_rows, $count_column_header) = @_;
+        
+        # Calculate the maximum width needed for the count column
+        my $max_count_width = length($count_column_header);
+        for my $row (@$url_rows) {
+            my $count_width = length($row->[1]);
+            $max_count_width = $count_width if $count_width > $max_count_width;
+        }
+        
+        # Row format: "| URL... | count |" with padding
+        # Calculate: "| " (2) + URL + " | " (3) + count_with_padding + " |" (2)
+        my $max_url_length = 100 - 7 - $max_count_width;
+        $max_url_length = 70 if $max_url_length > 70;  # Cap at reasonable length
+        
+        # Truncate URLs in place
+        for my $row (@$url_rows) {
+            $row->[0] = truncate_url($row->[0], $max_url_length);
+        }
+    }
+
+    sub format_table {
+        my ( $headers, $rows ) = @_;
+
+        my @widths;
+        for my $col ( 0 .. $#{$headers} ) {
+            my $max_width = length( $headers->[$col] );
+            for my $row (@$rows) {
+                my $len = length( $row->[$col] );
+                $max_width = $len if $len > $max_width;
+            }
+            push @widths, $max_width;
+        }
+
+        my $header_line    = '|';
+        my $separator_line = '|';
+        for my $col ( 0 .. $#{$headers} ) {
+            $header_line .=
+              sprintf( " %-*s |", $widths[$col], $headers->[$col] );
+            $separator_line .= '-' x ( $widths[$col] + 2 ) . '|';
+        }
+
+        my @table_lines;
+        push @table_lines, $separator_line;  # Add top terminator
+        push @table_lines, $header_line;
+        push @table_lines, $separator_line;
+
+        for my $row (@$rows) {
+            my $row_line = '|';
+            for my $col ( 0 .. $#{$row} ) {
+                $row_line .= sprintf( " %-*s |", $widths[$col], $row->[$col] );
+            }
+            push @table_lines, $row_line;
+        }
+        
+        push @table_lines, $separator_line;  # Add bottom terminator
+
+        return join( "
+", @table_lines );
+    }
+
+    sub report {
+        my ( $stats_dir, %merged ) = @_;
+        for my $date ( sort { $b cmp $a } keys %merged ) {
+            my $stats = $merged{$date};
+            next unless $stats->{count};
+
+            my ( $year, $month, $day ) = $date =~ /(\d{4})(\d{2})(\d{2})/;
+
+            # Check if .gmi file exists and its age based on date in filename
+            my $gemtext_dir = "$stats_dir/gemtext";
+            my $report_path = "$gemtext_dir/$date.gmi";
+            
+            # Calculate age of the data based on date in filename
+            my $today = Time::Piece->new();
+            my $file_date = Time::Piece->strptime($date, '%Y%m%d');
+            my $age_days = ($today - $file_date) / (24 * 60 * 60);
+            
+            if (-e $report_path) {
+                # File exists
+                if ($age_days <= 3) {
+                    # Data is recent (within 3 days), regenerate it
+                    say "Regenerating daily report for $year-$month-$day (data age: " . sprintf("%.1f", $age_days) . " days)";
+                } else {
+                    # Data is old (older than 3 days), skip if file exists
+                    say "Skipping daily report for $year-$month-$day (file exists, data age: " . sprintf("%.1f", $age_days) . " days)";
+                    next;
+                }
+            } else {
+                # File doesn't exist, generate it
+                say "Generating new daily report for $year-$month-$day (file doesn't exist, data age: " . sprintf("%.1f", $age_days) . " days)";
+            }
+
+            my $report_content = "";
+
+            $report_content .= "## Stats for $year-$month-$day
+
+";
+
+            # Summary
+            $report_content .= "### Summary
+
+";
+            my $total_requests =
+              ( $stats->{count}{gemini} // 0 ) + ( $stats->{count}{web} // 0 );
+            $report_content .= "* Total requests: $total_requests
+";
+            $report_content .=
+              "* Filtered requests: " . ( $stats->{count}{filtered} // 0 ) . "
+";
+            $report_content .=
+              "* Gemini requests: " . ( $stats->{count}{gemini} // 0 ) . "
+";
+            $report_content .=
+              "* Web requests: " . ( $stats->{count}{web} // 0 ) . "
+";
+            $report_content .=
+              "* IPv4 requests: " . ( $stats->{count}{IPv4} // 0 ) . "
+";
+            $report_content .=
+              "* IPv6 requests: " . ( $stats->{count}{IPv6} // 0 ) . "
+
+";
+
+            # Feed IPs
+            $report_content .= "### Feed Statistics
+
+";
+            my @feed_rows;
+            push @feed_rows, [ 'Total',          $stats->{feed_ips}{'Total'}          // 0 ];
+            push @feed_rows, [ 'Gemini Gemfeed', $stats->{feed_ips}{'Gemini Gemfeed'} // 0 ];
+            push @feed_rows, [ 'Gemini Atom',    $stats->{feed_ips}{'Gemini Atom'}    // 0 ];
+            push @feed_rows, [ 'Web Gemfeed',    $stats->{feed_ips}{'Web Gemfeed'}    // 0 ];
+            push @feed_rows, [ 'Web Atom',       $stats->{feed_ips}{'Web Atom'}       // 0 ];
+            $report_content .= "```
+";
+            $report_content .= format_table( [ 'Feed Type', 'Count' ], \@feed_rows );
+            $report_content .= "
+```
+
+";
+
+            # Page IPs (Hosts)
+            $report_content .= "### Page Statistics (by Host)
+
+";
+            my @host_rows;
+            my $hosts = $stats->{page_ips}{hosts};
+            my @sorted_hosts =
+              sort { ( $hosts->{$b} // 0 ) <=> ( $hosts->{$a} // 0 ) }
+              keys %$hosts;
+
+            my $truncated = @sorted_hosts > 50;
+            @sorted_hosts = @sorted_hosts[ 0 .. 49 ] if $truncated;
+
+            for my $host (@sorted_hosts) {
+                push @host_rows, [ $host, $hosts->{$host} // 0 ];
+            }
+            $report_content .= "```
+";
+            $report_content .= format_table( [ 'Host', 'Unique Visitors' ], \@host_rows );
+            $report_content .= "
+```
+";
+            if ($truncated) {
+                $report_content .= "
+... and more (truncated to 50 entries).
+";
+            }
+            $report_content .= "
+";
+
+            # Page IPs (URLs)
+            $report_content .= "### Page Statistics (by URL)
+
+";
+            my @url_rows;
+            my $urls = $stats->{page_ips}{urls};
+            my @sorted_urls =
+              sort { ( $urls->{$b} // 0 ) <=> ( $urls->{$a} // 0 ) }
+              keys %$urls;
+            $truncated   = @sorted_urls > 50;
+            @sorted_urls = @sorted_urls[ 0 .. 49 ] if $truncated;
+
+            for my $url (@sorted_urls) {
+                push @url_rows, [ $url, $urls->{$url} // 0 ];
+            }
+            
+            # Truncate URLs to fit within 100-character rows
+            truncate_urls_for_table(\@url_rows, 'Unique Visitors');
+            $report_content .= "```
+";
+            $report_content .= format_table( [ 'URL', 'Unique Visitors' ], \@url_rows );
+            $report_content .= "
+```
+";
+            if ($truncated) {
+                $report_content .= "
+... and more (truncated to 50 entries).
+";
+            }
+            $report_content .= "
+";
+
+            # Add link to monthly report
+            $report_content .= "## Related Reports\n\n";
+            my $today         = localtime;
+            my $current_month = $today->strftime('%Y%m%d');
+            $report_content .= "=> ./30day_summary_$current_month.gmi 30-Day Summary Report\n\n";
+
+            # Ensure gemtext directory exists
+            mkdir $gemtext_dir unless -d $gemtext_dir;
+
+            # $report_path already defined above
+            say "Writing report to $report_path";
+            FileHelper::write( $report_path, $report_content );
+        }
+
+        # Generate 30-day summary report
+        generate_30day_report( $stats_dir, %merged );
+    }
+
+    sub generate_30day_report {
+        my ( $stats_dir, %merged ) = @_;
+
+        # Get the last 30 days of dates
+        my @dates = sort { $b cmp $a } keys %merged;
+        @dates = @dates[ 0 .. 29 ] if @dates > 30;
+
+        my $today       = localtime;
+        my $report_date = $today->strftime('%Y%m%d');
+
+        # Build report content
+        my $report_content = build_report_header($today);
+        $report_content .= build_daily_summary_section( \@dates, \%merged );
+        $report_content .= build_feed_statistics_section( \@dates, \%merged );
+
+        # Aggregate and add top lists
+        my ( $all_hosts, $all_urls ) = aggregate_hosts_and_urls( \@dates, \%merged );
+        $report_content .= build_top_hosts_section($all_hosts);
+        $report_content .= build_top_urls_section($all_urls);
+
+        # Add daily report links
+        $report_content .= build_daily_reports_links( \@dates, \%merged );
+
+        # Ensure gemtext directory exists and write the 30-day report
+        my $gemtext_dir = "$stats_dir/gemtext";
+        mkdir $gemtext_dir unless -d $gemtext_dir;
+
+        my $report_path = "$gemtext_dir/30day_summary_$report_date.gmi";
+        say "Writing 30-day summary report to $report_path";
+        FileHelper::write( $report_path, $report_content );
+    }
+
+    sub build_report_header {
+        my ($today) = @_;
+
+        my $content = "# 30-Day Summary Report\n\n";
+        $content .= "Generated on " . $today->strftime('%Y-%m-%d') . "\n\n";
+        return $content;
+    }
+
+    sub build_daily_summary_section {
+        my ( $dates, $merged ) = @_;
+
+        my $content = "## Daily Summary Evolution (Last 30 Days)\n\n";
+        $content .= "### Total Requests by Day\n\n```\n";
+
+        my @summary_rows;
+        for my $date ( reverse @$dates ) {
+            my $stats = $merged->{$date};
+            next unless $stats->{count};
+
+            push @summary_rows, build_daily_summary_row( $date, $stats );
+        }
+
+        $content .= format_table( [ 'Date', 'Total', 'Filtered', 'Gemini', 'Web', 'IPv4', 'IPv6' ], \@summary_rows );
+        $content .= "\n```\n\n";
+
+        return $content;
+    }
+
+    sub build_daily_summary_row {
+        my ( $date, $stats ) = @_;
+
+        my ( $year, $month, $day ) = $date =~ /(\d{4})(\d{2})(\d{2})/;
+        my $formatted_date = "$year-$month-$day";
+
+        my $total_requests =
+          ( $stats->{count}{gemini} // 0 ) + ( $stats->{count}{web} // 0 );
+        my $filtered = $stats->{count}{filtered} // 0;
+        my $gemini   = $stats->{count}{gemini}   // 0;
+        my $web      = $stats->{count}{web}      // 0;
+        my $ipv4     = $stats->{count}{IPv4}     // 0;
+        my $ipv6     = $stats->{count}{IPv6}     // 0;
+
+        return [ $formatted_date, $total_requests, $filtered, $gemini, $web, $ipv4, $ipv6 ];
+    }
+
+    sub build_feed_statistics_section {
+        my ( $dates, $merged ) = @_;
+
+        my $content = "### Feed Statistics Evolution\n\n```\n";
+
+        my @feed_rows;
+        for my $date ( reverse @$dates ) {
+            my $stats = $merged->{$date};
+            next unless $stats->{feed_ips};
+
+            push @feed_rows, build_feed_statistics_row( $date, $stats );
+        }
+
+        $content .= format_table( [ 'Date', 'Total', 'Gem Feed', 'Gem Atom', 'Web Feed', 'Web Atom' ], \@feed_rows );
+        $content .= "\n```\n\n";
+
+        return $content;
+    }
+
+    sub build_feed_statistics_row {
+        my ( $date, $stats ) = @_;
+
+        my ( $year, $month, $day ) = $date =~ /(\d{4})(\d{2})(\d{2})/;
+        my $formatted_date = "$year-$month-$day";
+
+        return [
+            $formatted_date,
+            $stats->{feed_ips}{'Total'}          // 0,
+            $stats->{feed_ips}{'Gemini Gemfeed'} // 0,
+            $stats->{feed_ips}{'Gemini Atom'}    // 0,
+            $stats->{feed_ips}{'Web Gemfeed'}    // 0,
+            $stats->{feed_ips}{'Web Atom'}       // 0
+        ];
+    }
+
+    sub aggregate_hosts_and_urls {
+        my ( $dates, $merged ) = @_;
+
+        my %all_hosts;
+        my %all_urls;
+
+        for my $date (@$dates) {
+            my $stats = $merged->{$date};
+            next unless $stats->{page_ips};
+
+            # Aggregate hosts
+            while ( my ( $host, $count ) = each %{ $stats->{page_ips}{hosts} } ) {
+                $all_hosts{$host} //= 0;
+                $all_hosts{$host} += $count;
+            }
+
+            # Aggregate URLs
+            while ( my ( $url, $count ) = each %{ $stats->{page_ips}{urls} } ) {
+                $all_urls{$url} //= 0;
+                $all_urls{$url} += $count;
+            }
+        }
+
+        return ( \%all_hosts, \%all_urls );
+    }
+
+    sub build_top_hosts_section {
+        my ($all_hosts) = @_;
+
+        my $content = "## Top 50 Hosts (30-Day Total)\n\n```\n";
+
+        my @host_rows;
+        my @sorted_hosts =
+          sort { $all_hosts->{$b} <=> $all_hosts->{$a} } keys %$all_hosts;
+        @sorted_hosts = @sorted_hosts[ 0 .. 49 ] if @sorted_hosts > 50;
+
+        for my $host (@sorted_hosts) {
+            push @host_rows, [ $host, $all_hosts->{$host} ];
+        }
+
+        $content .= format_table( [ 'Host', 'Visitors' ], \@host_rows );
+        $content .= "\n```\n\n";
+
+        return $content;
+    }
+
+    sub build_top_urls_section {
+        my ($all_urls) = @_;
+
+        my $content = "## Top 50 URLs (30-Day Total)\n\n```\n";
+
+        my @url_rows;
+        my @sorted_urls =
+          sort { $all_urls->{$b} <=> $all_urls->{$a} } keys %$all_urls;
+        @sorted_urls = @sorted_urls[ 0 .. 49 ] if @sorted_urls > 50;
+
+        for my $url (@sorted_urls) {
+            push @url_rows, [ $url, $all_urls->{$url} ];
+        }
+        
+        # Truncate URLs to fit within 100-character rows
+        truncate_urls_for_table(\@url_rows, 'Visitors');
+
+        $content .= format_table( [ 'URL', 'Visitors' ], \@url_rows );
+        $content .= "\n```\n\n";
+
+        return $content;
+    }
+
+    sub build_daily_reports_links {
+        my ( $dates, $merged ) = @_;
+
+        my $content = "## Daily Reports\n\n";
+
+        for my $date (@$dates) {
+            next unless exists $merged->{$date} && $merged->{$date}->{count};
+
+            my ( $year, $month, $day ) = $date =~ /(\d{4})(\d{2})(\d{2})/;
+            my $formatted_date = "$year-$month-$day";
+
+            $content .= "=> ./$date.gmi $formatted_date Daily Report\n";
+        }
+
+        return $content;
     }
 }
 
 package main {
     use Getopt::Long;
     use Sys::Hostname;
+
+    sub usage {
+        print <<~"USAGE";
+        Usage: $0 [options]
+
+        Options:
+          --parse-logs              Parse web and gemini logs.
+          --replicate               Replicate stats from partner node.
+          --report                  Generate a report from the stats.
+          --all                     Perform all of the above actions (parse, replicate, report).
+          --stats-dir <path>        Directory to store stats files.
+                                    Default: /var/www/htdocs/buetow.org/self/foostats
+          --odds-file <path>        File with odd URI patterns to filter.
+                                    Default: <stats-dir>/fooodds.txt
+          --filter-log <path>       Log file for filtered requests.
+                                    Default: /var/log/fooodds
+          --partner-node <hostname> Hostname of the partner node for replication.
+                                    Default: fishfinger.buetow.org or blowfish.buetow.org
+          --help                    Show this help message.
+        USAGE
+        exit 0;
+    }
 
     sub parse_logs ( $stats_dir, $odds_file, $odds_log ) {
         my $out = Foostats::FileOutputter->new( stats_dir => $stats_dir );
@@ -701,7 +1161,7 @@ package main {
         $out->write;
     }
 
-    my ( $parse_logs, $replicate, $report, $all );
+    my ( $parse_logs, $replicate, $report, $all, $help );
 
     # With default values
     my $stats_dir = '/var/www/htdocs/buetow.org/self/foostats';
@@ -712,7 +1172,6 @@ package main {
       ? 'blowfish.buetow.org'
       : 'fishfinger.buetow.org';
 
-    # TODO: Add help output
     GetOptions
       'parse-logs!'    => \$parse_logs,
       'filter-log=s'   => \$odds_log,
@@ -721,7 +1180,10 @@ package main {
       'report!'        => \$report,
       'all!'           => \$all,
       'stats-dir=s'    => \$stats_dir,
-      'partner-node=s' => \$partner_node;
+      'partner-node=s' => \$partner_node,
+      'help|?'         => \$help;
+
+    usage() if $help;
 
     parse_logs( $stats_dir, $odds_file, $odds_log )
       if $parse_logs
@@ -731,7 +1193,7 @@ package main {
       if $replicate
       or $all;
 
-    Foostats::Reporter::report( Foostats::Merger::merge($stats_dir) )
+    Foostats::Reporter::report( $stats_dir, Foostats::Merger::merge($stats_dir) )
       if $report
       or $all;
 }
