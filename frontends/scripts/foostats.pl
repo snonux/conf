@@ -772,7 +772,7 @@ package Foostats::Reporter {
     }
 
     sub report {
-        my ( $stats_dir, %merged ) = @_;
+        my ( $stats_dir, $output_dir, %merged ) = @_;
         for my $date ( sort { $b cmp $a } keys %merged ) {
             my $stats = $merged{$date};
             next unless $stats->{count};
@@ -780,8 +780,7 @@ package Foostats::Reporter {
             my ( $year, $month, $day ) = $date =~ /(\d{4})(\d{2})(\d{2})/;
 
             # Check if .gmi file exists and its age based on date in filename
-            my $gemtext_dir = "$stats_dir/gemtext";
-            my $report_path = "$gemtext_dir/$date.gmi";
+            my $report_path = "$output_dir/$date.gmi";
 
             # Calculate age of the data based on date in filename
             my $today     = Time::Piece->new();
@@ -936,13 +935,13 @@ package Foostats::Reporter {
 
             # Add link to monthly report
             $report_content .= "## Related Reports\n\n";
-            my $today         = localtime;
-            my $current_month = $today->strftime('%Y%m%d');
+            my $now           = localtime;
+            my $current_month = $now->strftime('%Y%m%d');
             $report_content .=
               "=> ./30day_summary_$current_month.gmi 30-Day Summary Report\n\n";
 
-            # Ensure gemtext directory exists
-            mkdir $gemtext_dir unless -d $gemtext_dir;
+            # Ensure output directory exists
+            mkdir $output_dir unless -d $output_dir;
 
             # $report_path already defined above
             say "Writing report to $report_path";
@@ -950,11 +949,14 @@ package Foostats::Reporter {
         }
 
         # Generate 30-day summary report
-        generate_30day_report( $stats_dir, %merged );
+        generate_30day_report( $stats_dir, $output_dir, %merged );
+        
+        # Generate index.gmi
+        generate_index( $output_dir );
     }
 
     sub generate_30day_report {
-        my ( $stats_dir, %merged ) = @_;
+        my ( $stats_dir, $output_dir, %merged ) = @_;
 
         # Get the last 30 days of dates
         my @dates = sort { $b cmp $a } keys %merged;
@@ -977,11 +979,10 @@ package Foostats::Reporter {
         # Add daily report links
         $report_content .= build_daily_reports_links( \@dates, \%merged );
 
-        # Ensure gemtext directory exists and write the 30-day report
-        my $gemtext_dir = "$stats_dir/gemtext";
-        mkdir $gemtext_dir unless -d $gemtext_dir;
+        # Ensure output directory exists and write the 30-day report
+        mkdir $output_dir unless -d $output_dir;
 
-        my $report_path = "$gemtext_dir/30day_summary_$report_date.gmi";
+        my $report_path = "$output_dir/30day_summary_$report_date.gmi";
         say "Writing 30-day summary report to $report_path";
         FileHelper::write( $report_path, $report_content );
     }
@@ -1161,6 +1162,57 @@ package Foostats::Reporter {
 
         return $content;
     }
+    
+    sub generate_index {
+        my ($output_dir) = @_;
+        
+        # Get all .gmi files in the output directory
+        opendir(my $dh, $output_dir) or die "Cannot open directory $output_dir: $!";
+        my @gmi_files = grep { /\.gmi$/ && $_ ne 'index.gmi' } readdir($dh);
+        closedir($dh);
+        
+        # Sort files: 30-day summaries first, then daily reports by date (newest first)
+        my @summaries = sort { $b cmp $a } grep { /^30day_summary_/ } @gmi_files;
+        my @daily = sort { $b cmp $a } grep { /^\d{8}\.gmi$/ } @gmi_files;
+        
+        # Build index content
+        my $content = "# Foostats Reports Index\n\n";
+        $content .= "Generated on " . localtime->strftime('%Y-%m-%d %H:%M:%S') . "\n\n";
+        
+        if (@summaries) {
+            $content .= "## 30-Day Summary Reports\n\n";
+            for my $summary (@summaries) {
+                my ($date) = $summary =~ /30day_summary_(\d{8})\.gmi/;
+                if ($date) {
+                    my ($year, $month, $day) = $date =~ /(\d{4})(\d{2})(\d{2})/;
+                    $content .= "=> ./$summary 30-Day Summary ($year-$month-$day)\n";
+                }
+            }
+            $content .= "\n";
+        }
+        
+        if (@daily) {
+            $content .= "## Daily Reports\n\n";
+            my $count = 0;
+            for my $daily_file (@daily) {
+                last if ++$count > 90;  # Show only last 90 days
+                my ($date) = $daily_file =~ /(\d{8})\.gmi/;
+                if ($date) {
+                    my ($year, $month, $day) = $date =~ /(\d{4})(\d{2})(\d{2})/;
+                    $content .= "=> ./$daily_file $year-$month-$day\n";
+                }
+            }
+            if (@daily > 90) {
+                $content .= "\n(Showing most recent 90 daily reports)\n";
+            }
+            $content .= "\n";
+        }
+        
+        # Write index file
+        my $index_path = "$output_dir/index.gmi";
+        say "Writing index to $index_path";
+        FileHelper::write($index_path, $content);
+    }
 }
 
 package main {
@@ -1178,6 +1230,8 @@ package main {
           --all                     Perform all of the above actions (parse, replicate, report).
           --stats-dir <path>        Directory to store stats files.
                                     Default: /var/www/htdocs/buetow.org/self/foostats
+          --output-dir <path>       Directory to write .gmi report files.
+                                    Default: /var/gemini/stats.foo.zone
           --odds-file <path>        File with odd URI patterns to filter.
                                     Default: <stats-dir>/fooodds.txt
           --filter-log <path>       Log file for filtered requests.
@@ -1207,6 +1261,7 @@ package main {
     my $stats_dir = '/var/www/htdocs/buetow.org/self/foostats';
     my $odds_file = $stats_dir . '/fooodds.txt';
     my $odds_log  = '/var/log/fooodds';
+    my $output_dir;  # Will default to $stats_dir/gemtext if not specified
     my $partner_node =
       hostname eq 'fishfinger.buetow.org'
       ? 'blowfish.buetow.org'
@@ -1220,6 +1275,7 @@ package main {
       'report!'        => \$report,
       'all!'           => \$all,
       'stats-dir=s'    => \$stats_dir,
+      'output-dir=s'   => \$output_dir,
       'partner-node=s' => \$partner_node,
       'help|?'         => \$help;
 
@@ -1233,7 +1289,10 @@ package main {
       if $replicate
       or $all;
 
-    Foostats::Reporter::report( $stats_dir,
+    # Set default output directory if not specified
+    $output_dir //= '/var/gemini/stats.foo.zone';
+    
+    Foostats::Reporter::report( $stats_dir, $output_dir,
         Foostats::Merger::merge($stats_dir) )
       if $report
       or $all;
