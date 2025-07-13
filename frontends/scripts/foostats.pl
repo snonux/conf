@@ -15,6 +15,8 @@ no warnings qw(experimental::refaliasing);
 # TODO: UNDO
 use diagnostics;
 
+use constant VERSION => 'v0.1.0';
+
 # TODO: Blog post about this script and the new Perl features used.
 # TODO NEXT:
 # * Write out a nice output from each merged file, also merge if multiple hosts results
@@ -1513,6 +1515,7 @@ package main {
                                     Default: /var/log/fooodds
           --partner-node <hostname> Hostname of the partner node for replication.
                                     Default: fishfinger.buetow.org or blowfish.buetow.org
+          --version                 Show version information.
           --help                    Show this help message.
         USAGE
         exit 0;
@@ -1530,7 +1533,7 @@ package main {
         $out->write;
     }
 
-    my ( $parse_logs, $replicate, $report, $all, $help );
+    my ( $parse_logs, $replicate, $report, $all, $help, $version );
 
     # With default values
     my $stats_dir = '/var/www/htdocs/buetow.org/self/foostats';
@@ -1554,7 +1557,13 @@ package main {
       'output-dir=s'   => \$output_dir,
       'html-output-dir=s' => \$html_output_dir,
       'partner-node=s' => \$partner_node,
+      'version'        => \$version,
       'help|?'         => \$help;
+
+    if ($version) {
+        print "foostats " . VERSION . "\n";
+        exit 0;
+    }
 
     usage() if $help;
 
