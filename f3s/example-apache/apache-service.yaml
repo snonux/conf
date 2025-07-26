@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: apache
+  name: apache-service
+spec:
+  ports:
+    - name: web
+      port: 80
+      protocol: TCP
+      # Expose port 80 on the service
+      targetPort: 80
+  selector:
+  # Link this service to pods with the label app=apache
+    app: apache

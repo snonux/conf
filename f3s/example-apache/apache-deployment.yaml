@@ -1,0 +1,21 @@
+# Apache HTTP Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: apache
+        image: httpd:latest
+        ports:
+        # Container port where Apache listens
+        - containerPort: 80
