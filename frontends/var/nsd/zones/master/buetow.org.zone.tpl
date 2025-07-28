@@ -47,12 +47,14 @@ www.tmp      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.tmp   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.tmp   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
-f3s          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-f3s          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.f3s      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.f3s      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.f3s   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.f3s   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+<% for my $host (@$f3s_hosts) { -%>
+<%= $host %>.         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+<%= $host %>.         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.<%= $host %>.     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.<%= $host %>.     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby.<%= $host %>. 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+standby.<%= $host %>. 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+<% } -%>
 
 dory         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 dory         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
