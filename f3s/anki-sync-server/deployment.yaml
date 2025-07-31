@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anki-sync-server-deployment
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anki-sync-server
+  template:
+    metadata:
+      labels:
+        app: anki-sync-server
+    spec:
+      containers:
+      - name: anki-sync-server
+        image: registry.lan.buetow.org:30001/anki-sync-server:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ANKISYNCD_PORT
+          value: "8080"
+        volumeMounts:
+        - name: anki-sync-server-data
+          mountPath: /data
+      volumes:
+      - name: anki-sync-server-data
+        persistentVolumeClaim:
+          claimName: anki-sync-server-pvc
