@@ -50,10 +50,22 @@ And afterwards I could push the anky-sync-server image.
 
 ## K3s Configuration
 
-To use the private registry from within the k3s cluster, you need to configure each k3s node to trust the insecure registry. This is done by creating a `registries.yaml` file in `/etc/rancher/k3s/` on each node.
+To use the private registry from within the k3s cluster, you need to configure each k3s node.
 
-The following command will create the file and restart the k3s service:
+### 1. Update /etc/hosts
+On each k3s node, you must ensure that `registry.lan.buetow.org` resolves to the node's loopback address. You can do this by adding an entry to the `/etc/hosts` file.
+
+Run the following command, which will add the entry to `r0`, `r1`, and `r2`:
+```bash
+for node in r0 r1 r2; do ssh root@$node "echo '127.0.0.1 registry.lan.buetow.org' >> /etc/hosts"; done
+```
+
+### 2. Configure K3s to trust the insecure registry
+You need to configure each k3s node to trust the insecure registry. This is done by creating a `registries.yaml` file in `/etc/rancher/k3s/` on each node.
+
+The following command will create the file and restart the k3s service. You will need to run this for each node (`r0`, `r1`, `r2`):
 
 ```bash
 ssh root@<node> "echo -e 'mirrors:\n  "registry.lan.buetow.org:30001":\n    endpoint:\n      - "http://localhost:30001"' > /etc/rancher/k3s/registries.yaml && systemctl restart k3s"
 ```
+
