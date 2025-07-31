@@ -2,16 +2,33 @@
 
 MY_IP=`ifconfig vio0 | awk '$1 == "inet" { print $2 }'`
 
-function handle_cert {
+# New hosts may not have a cert, just copy foo.zone as a
+# placeholder, so that services can at least start proprely.
+# cert will be updated with next acme-client runs!
+ensure_placeholder_cert () {
+    host=$1
+    copy_from=foo.zone
+
+    if [ ! -f /etc/ssl/$host.crt ]; then
+        cp -v /etc/ssl/$copy_from.crt /etc/ssl/$host.crt
+        cp -v /etc/ssl/$copy_from.fullchain.pem /etc/ssl/$host.fullchain.pem
+        cp -v /etc/ssl/private/$copy_from.key /etc/ssl/private/$host.key
+    fi
+}
+
+handle_cert () {
     host=$1
     host_ip=`host $host | awk '/has address/ { print $(NF) }'`
-    if [ "$MY_IP" != "$host_ip" ]; then
-        echo "Not serving $host, skipping..."
-        return
-    fi
+
     grep -q "^server \"$host\"" /etc/httpd.conf
     if [ $? -ne 0 ]; then
         echo "Host $host not configured in httpd, skipping..."
+        return
+    fi
+    ensure_placeholder_cert "$host"
+
+    if [ "$MY_IP" != "$host_ip" ]; then
+        echo "Not serving $host, skipping..."
         return
     fi
 
