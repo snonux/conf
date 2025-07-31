@@ -35,3 +35,25 @@ This document describes how to push Docker images to the private registry deploy
 ## Communication
 
 The Docker registry is exposed via a static NodePort (`30001`) and uses plain HTTP. It is not configured for TLS.
+
+
+  First, run this command to create or update the configuration file. This command will overwrite the file if it exists.
+
+   1 sudo bash -c 'echo "{ \\"insecure-registries\\": [\\"r0.lan.buetow.org:30001\\",\\"r1.lan.buetow.org:30001\\",\\"r2.lan.buetow.org:30001\\"] }" > /etc/docker/daemon.json'
+
+  After running that command, you need to restart your Docker daemon for the changes to take effect.
+
+   1 sudo systemctl restart docker
+
+
+And afterwards I could push the anky-sync-server image.
+
+## K3s Configuration
+
+To use the private registry from within the k3s cluster, you need to configure each k3s node to trust the insecure registry. This is done by creating a `registries.yaml` file in `/etc/rancher/k3s/` on each node.
+
+The following command will create the file and restart the k3s service:
+
+```bash
+ssh root@<node> "echo -e 'mirrors:\n  "registry.lan.buetow.org:30001":\n    endpoint:\n      - "http://localhost:30001"' > /etc/rancher/k3s/registries.yaml && systemctl restart k3s"
+```
