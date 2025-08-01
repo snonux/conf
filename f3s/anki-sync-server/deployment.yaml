@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: anki-sync-server-deployment
+  name: anki-sync-server
   namespace: services
 spec:
   replicas: 1
