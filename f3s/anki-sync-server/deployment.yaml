@@ -15,16 +15,21 @@ spec:
     spec:
       containers:
       - name: anki-sync-server
-        image: registry.lan.buetow.org:30001/anki-sync-server:latest
+        image: registry.lan.buetow.org:30001/anki-sync-server:25.07.5b
         ports:
         - containerPort: 8080
         env:
-        - name: ANKISYNCD_PORT
+        - name: SYNC_PORT
           value: "8080"
+        - name: SYNC_USER1
+          valueFrom:
+            secretKeyRef:
+              name: anki-sync-server-secret
+              key: SYNC_USER1
         volumeMounts:
-        - name: anki-sync-server-data
-          mountPath: /data
+        - name: anki-data
+          mountPath: /anki_data
       volumes:
-      - name: anki-sync-server-data
+      - name: anki-data
         persistentVolumeClaim:
-          claimName: anki-sync-server-pvc
+          claimName: anki-data-pvc
