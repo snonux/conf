@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: syncthing
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: syncthing
+  template:
+    metadata:
+      labels:
+        app: syncthing
+    spec:
+      containers:
+      - name: syncthing
+        image: lscr.io/linuxserver/syncthing:latest
+        ports:
+        - containerPort: 8384
+        - containerPort: 22000
+        volumeMounts:
+        - name: syncthing-config
+          mountPath: /config
+        - name: syncthing-data
+          mountPath: /data
+      volumes:
+      - name: syncthing-config
+        persistentVolumeClaim:
+          claimName: syncthing-config-pvc
+      - name: syncthing-data
+        persistentVolumeClaim:
+          claimName: syncthing-data-pvc
