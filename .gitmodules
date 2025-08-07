@@ -1,3 +1,0 @@
-[submodule "f3s/wallabag/docker-image/docker"]
-	path = f3s/wallabag/docker-image/docker
-	url = https://github.com/wallabag/docker
