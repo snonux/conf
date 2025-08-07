@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: audiobookshelf-config-pv
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/audiobookshelf/config
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-config-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: audiobookshelf-audiobooks-pv
+spec:
+  capacity:
+    storage: 300Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/audiobookshelf/audiobooks
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-audiobooks-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 300Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: audiobookshelf-podcasts-pv
+spec:
+  capacity:
+    storage: 50Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/audiobookshelf/podcasts
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-podcasts-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
