@@ -4,8 +4,6 @@ This document describes how to push Docker images to the private registry deploy
 
 ## Prerequisites
 
-*   The `infra` namespace must exist in your cluster. If it doesn't, create it with `kubectl create namespace infra`.
-
 *   A running Kubernetes cluster.
 *   `kubectl` configured to connect to your cluster.
 *   Docker installed and running on your local machine.
