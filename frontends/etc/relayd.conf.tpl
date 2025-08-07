@@ -21,6 +21,16 @@ http protocol "https" {
     tls keypair <%= $hostname.'.'.$domain -%>
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
+    match request header set "X-Forwarded-Proto" value "https"
+    
+    # WebSocket support for audiobookshelf
+    pass header "Connection"
+    pass header "Upgrade"
+    pass header "Sec-WebSocket-Key"
+    pass header "Sec-WebSocket-Version"
+    pass header "Sec-WebSocket-Extensions"
+    pass header "Sec-WebSocket-Protocol"
+    
     <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
     match request quick header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
     <% } } -%>
