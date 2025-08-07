@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallabag
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wallabag
+  template:
+    metadata:
+      labels:
+        app: wallabag
+    spec:
+      containers:
+      - name: wallabag
+        image: wallabag/wallabag
+        ports:
+        - containerPort: 80
+        env:
+        - name: SYMFONY__ENV__DOMAIN_NAME
+          value: "https://bag.f3s.buetow.org"
+        volumeMounts:
+        - name: wallabag-data
+          mountPath: /var/www/wallabag/data
+        - name: wallabag-images
+          mountPath: /var/www/wallabag/web/assets/images
+      volumes:
+      - name: wallabag-data
+        persistentVolumeClaim:
+          claimName: wallabag-data-pvc
+      - name: wallabag-images
+        persistentVolumeClaim:
+          claimName: wallabag-images-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wallabag
+  name: wallabag-service
+  namespace: services
+spec:
+  ports:
+    - name: web
+      port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: wallabag
