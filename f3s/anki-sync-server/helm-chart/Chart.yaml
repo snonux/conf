@@ -1,0 +1,5 @@
+apiVersion: v2
+name: anki-sync-server
+description: A Helm chart for deploying the Anki Sync Server.
+version: 0.1.0
+appVersion: "25.07.5b"
