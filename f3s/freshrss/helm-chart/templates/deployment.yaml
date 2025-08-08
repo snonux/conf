@@ -13,14 +13,19 @@ spec:
       labels:
         app: freshrss
     spec:
+      securityContext:
+        runAsUser: 65534        # nobody
+        runAsGroup: 65534       # nobody / nogroup
+        fsGroup: 65534          # ensure mounted volumes are group-writable
+        runAsNonRoot: true
       containers:
       - name: freshrss
         image: freshrss/freshrss:latest
         ports:
-        - containerPort: 80
+          - containerPort: 80
         volumeMounts:
-        - name: freshrss-data
-          mountPath: /var/www/FreshRSS/data
+          - name: freshrss-data
+            mountPath: /var/www/FreshRSS/data
       volumes:
       - name: freshrss-data
         persistentVolumeClaim:
@@ -41,4 +46,3 @@ spec:
       targetPort: 80
   selector:
     app: freshrss
-

@@ -60,7 +60,7 @@ spec:
     spec:
       containers:
         - name: miniflux-postgres
-          image: registry.lan.buetow.org:30001/postgres:17f
+          image: postgres:17
           ports:
             - containerPort: 5432
           env:
