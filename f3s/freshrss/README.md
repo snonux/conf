@@ -12,8 +12,8 @@ Example commands:
 
 ```bash
 sudo mkdir -p /data/nfs/k3svolumes/freshrss/data
-# Optional: ensure write permissions for the container user (often UID/GID 33)
-sudo chown -R 33:33 /data/nfs/k3svolumes/freshrss/data
+# Ensure write permissions for the runtime user/group (nobody:nogroup = 65534:65534)
+sudo chown -R 65534:65534 /data/nfs/k3svolumes/freshrss/data
 ```
 
 ## Installing the Chart
