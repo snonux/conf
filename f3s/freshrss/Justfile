@@ -1,0 +1,6 @@
+apply:
+    helm install freshrss ./helm-chart --namespace services --create-namespace
+
+delete:
+    helm uninstall freshrss --namespace services
+
