@@ -8,5 +8,5 @@ install:
 upgrade:
     helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
 
-uninstall:
+delete:
     helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
