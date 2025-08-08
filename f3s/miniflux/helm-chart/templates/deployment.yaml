@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: miniflux
+  labels:
+    app: miniflux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: miniflux
+  template:
+    metadata:
+      labels:
+        app: miniflux
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          command: ["sh", "-c"]
+          args:
+            - |
+              for i in $(seq 1 10); do
+                pg_isready -h miniflux-postgres -p 5432 && exit 0
+                echo "Waiting for Postgres... attempt $i/10"
+                sleep 3
+              done
+              echo "Postgres is not ready after 10 attempts"
+              exit 1
+      containers:
+        - name: miniflux
+          image: miniflux/miniflux:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CREATE_ADMIN
+              value: "1"
+            - name: ADMIN_USERNAME
+              value: "admin"
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-admin-password
+                  key: admin_password
+            - name: RUN_MIGRATIONS
+              value: "1"
+            - name: POLLING_FREQUENCY
+              value: "10"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-db-password
+                  key: fluxdb_password
+          command: ["/bin/sh", "-c"]
+          args:
+            - export DATABASE_URL="postgres://miniflux:${POSTGRES_PASSWORD}@miniflux-postgres:5432/miniflux?sslmode=disable"; exec /usr/bin/miniflux
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: miniflux-postgres
+  labels:
+    app: miniflux-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: miniflux-postgres
+  template:
+    metadata:
+      labels:
+        app: miniflux-postgres
+    spec:
+      containers:
+        - name: miniflux-postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "miniflux"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-db-password
+                  key: fluxdb_password
+          volumeMounts:
+            - name: miniflux-postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: miniflux-postgres-data
+          persistentVolumeClaim:
+            claimName: miniflux-postgres-pvc

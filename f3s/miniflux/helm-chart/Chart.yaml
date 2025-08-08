@@ -1,0 +1,5 @@
+apiVersion: v2
+name: miniflux
+description: A Helm chart for deploying Miniflux.
+version: 0.1.0
+appVersion: "latest"
