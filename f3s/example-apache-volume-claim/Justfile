@@ -1,5 +1,12 @@
-apply:
-    helm install example-apache-volume-claim ./helm-chart --namespace test --create-namespace
+NAMESPACE := "test"
+RELEASE_NAME := "example-apache-volume-claim"
+CHART_PATH := "./helm-chart"
+
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
 
 delete:
-    helm uninstall example-apache-volume-claim --namespace test
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}

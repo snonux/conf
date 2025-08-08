@@ -1,5 +1,12 @@
-apply:
-    helm install registry ./helm-chart --namespace infra --create-namespace
+NAMESPACE := "infra"
+RELEASE_NAME := "registry"
+CHART_PATH := "./helm-chart"
+
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
 
 delete:
-    helm uninstall registry --namespace infra
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}

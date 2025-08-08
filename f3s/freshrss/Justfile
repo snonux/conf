@@ -1,6 +1,12 @@
-apply:
-    helm install freshrss ./helm-chart --namespace services --create-namespace
+NAMESPACE := "services"
+RELEASE_NAME := "freshrss"
+CHART_PATH := "./helm-chart"
+
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
 
 delete:
-    helm uninstall freshrss --namespace services
-
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
