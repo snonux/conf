@@ -8,7 +8,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
-    - host: freshrss.f3s.lan.buetow.org
+    - host: freshrss.f3s.buetow.org
       http:
         paths:
           - path: /
