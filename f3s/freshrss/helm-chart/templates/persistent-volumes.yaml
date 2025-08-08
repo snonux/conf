@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: miniflux-postgres-pv
+  name: freshrss-data-pv
 spec:
   capacity:
     storage: 1Gi
@@ -10,13 +10,13 @@ spec:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   hostPath:
-    path: /data/nfs/k3svolumes/miniflux/data
+    path: /data/nfs/k3svolumes/freshrss/data
     type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: miniflux-postgres-pvc
+  name: freshrss-data-pvc
   namespace: services
 spec:
   storageClassName: ""
@@ -25,3 +25,4 @@ spec:
   resources:
     requests:
       storage: 1Gi
+

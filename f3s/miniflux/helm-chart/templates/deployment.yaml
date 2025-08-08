@@ -14,19 +14,6 @@ spec:
       labels:
         app: miniflux
     spec:
-      initContainers:
-        - name: wait-for-postgres
-          image: postgres:15
-          command: ["sh", "-c"]
-          args:
-            - |
-              for i in $(seq 1 10); do
-                pg_isready -h miniflux-postgres -p 5432 && exit 0
-                echo "Waiting for Postgres... attempt $i/10"
-                sleep 3
-              done
-              echo "Postgres is not ready after 10 attempts"
-              exit 1
       containers:
         - name: miniflux
           image: miniflux/miniflux:latest
@@ -73,7 +60,7 @@ spec:
     spec:
       containers:
         - name: miniflux-postgres
-          image: postgres:15
+          image: registry.lan.buetow.org:30001/postgres:17f
           ports:
             - containerPort: 5432
           env:
