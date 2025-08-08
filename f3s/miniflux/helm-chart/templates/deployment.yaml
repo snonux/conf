@@ -1,19 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: miniflux
+  name: miniflux-server
   labels:
-    app: miniflux
+    app: miniflux-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: miniflux
+      app: miniflux-server
   template:
     metadata:
       labels:
-        app: miniflux
+        app: miniflux-server
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:17
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for Postgres at miniflux-postgres:5432...";
+              until pg_isready -h miniflux-postgres -p 5432 -U miniflux; do
+                echo "Postgres not ready, sleeping...";
+                sleep 2;
+              done;
+              echo "Postgres is ready."
       containers:
         - name: miniflux
           image: miniflux/miniflux:latest
