@@ -16,6 +16,7 @@ function aimodels
     set -l COPILOT_CHAT_DIR "$NVIM_DIR/pack/copilotchat/start/CopilotChat.nvim/lua/CopilotChat"
 
     printf "gpt-4o
+gpt-5
 gpt-o3
 gpt-4.1
 claude-3.7-sonnet
