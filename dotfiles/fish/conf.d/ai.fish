@@ -6,7 +6,7 @@ abbr -a aic 'aichat -e'
 
 # helix-gpt env vars used
 # set -gx COPILOT_MODEL gpt-4.1 # can be changed with aimodels function
-set -gx COPILOT_MODEL o3 # can be changed with aimodels function
+set -gx COPILOT_MODEL gpt-5 # can be changed with aimodels function
 set -gx HANDLER copilot
 
 # TODO: also reconfigure aichat tool using this function
