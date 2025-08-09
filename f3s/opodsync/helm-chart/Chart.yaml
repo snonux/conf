@@ -1,0 +1,5 @@
+apiVersion: v2
+name: opodsync
+description: A Helm chart for deploying the opodsync.
+version: 0.1.0
+appVersion: "latest"

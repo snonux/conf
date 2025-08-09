@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opodsync
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opodsync
+  template:
+    metadata:
+      labels:
+        app: opodsync
+    spec:
+      containers:
+      - name: opodsync
+        image: ganeshlab/opodsync
+        env:
+        - name: GPODDER_BASE_URL
+          value: "https://gpodder.f3s.buetow.org/gpodder"
+        - name: GPODDER_ALLOW_REGISTRATIONS
+          value: "true"
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: opodsync-data
+          mountPath: /var/www/server/data
+      - name: nginx-proxy
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 8081
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+      volumes:
+      - name: opodsync-data
+        persistentVolumeClaim:
+          claimName: opodsync-data-pvc
+      - name: nginx-config
+        configMap:
+          name: opodsync-nginx-config
