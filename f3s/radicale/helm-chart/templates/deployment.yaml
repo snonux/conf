@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: radicale
-        image: registry.lan.buetow.org:30001/radicale-server:latest
+        image: registry.lan.buetow.org:30001/radicale:latest
         ports:
         - containerPort: 5232
         volumeMounts:
