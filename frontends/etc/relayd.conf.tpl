@@ -8,6 +8,13 @@ table <f3s> {
   192.168.2.122
 }
 
+# Same backends, separate table for registry service on port 30001
+table <f3s_registry> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+
 # Local OpenBSD httpd
 table <localhost> {
   127.0.0.1
@@ -32,14 +39,18 @@ http protocol "https" {
     pass header "Sec-WebSocket-Protocol"
     
     <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
+    <% if ($host eq 'registry.f3s.buetow.org') { -%>
+    match request quick header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
+    <% } else { -%>
     match request quick header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
-    <% } } -%>
+    <% } } } -%>
 }
 
 relay "https4" {
     listen on <%= $vio0_ip %> port 443 tls
     protocol "https"
     forward to <localhost> port 8080
+    forward to <f3s_registry> port 30001 check tcp
     forward to <f3s> port 80 check tcp
 }
 
@@ -47,6 +58,7 @@ relay "https6" {
     listen on <%= $ipv6address->($hostname) %> port 443 tls
     protocol "https"
     forward to <localhost> port 8080
+    forward to <f3s_registry> port 30001 check tcp
     forward to <f3s> port 80 check tcp
 }
 
