@@ -17,7 +17,7 @@ spec:
       - name: radicale
         image: registry.lan.buetow.org:30001/radicale:latest
         ports:
-        - containerPort: 5232
+        - containerPort: 8080
         volumeMounts:
         - name: radicale-collections
           mountPath: /var/lib/radicale/collections
@@ -41,8 +41,8 @@ metadata:
 spec:
   ports:
     - name: web
-      port: 5232
+      port: 80
       protocol: TCP
-      targetPort: 5232
+      targetPort: 8080
   selector:
     app: radicale
