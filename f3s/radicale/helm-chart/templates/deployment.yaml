@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radicale
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radicale
+  template:
+    metadata:
+      labels:
+        app: radicale
+    spec:
+      containers:
+      - name: radicale
+        image: registry.lan.buetow.org:30001/radicale-server:latest
+        ports:
+        - containerPort: 5232
+        volumeMounts:
+        - name: radicale-collections
+          mountPath: /var/lib/radicale/collections
+        - name: radicale-auth
+          mountPath: /etc/radicale/users
+      volumes:
+      - name: radicale-collections
+        persistentVolumeClaim:
+          claimName: radicale-collections-pvc
+      - name: radicale-auth
+        persistentVolumeClaim:
+          claimName: radicale-auth-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: radicale
+  name: radicale-service
+  namespace: services
+spec:
+  ports:
+    - name: web
+      port: 5232
+      protocol: TCP
+      targetPort: 5232
+  selector:
+    app: radicale
