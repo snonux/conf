@@ -13,6 +13,24 @@ spec:
       labels:
         app: radicale
     spec:
+      initContainers:
+      - name: debug-auth-and-mounts
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -eu
+          echo "=== /proc/mounts ===" && cat /proc/mounts || true
+          echo "=== df -h ===" && df -h || true
+          echo "=== ls -lna / ===" && ls -lna / || true
+          echo "=== ls -lna /auth ===" && ls -lna /auth || true
+          echo "=== ls -lna /collections ===" && ls -lna /collections || true
+          echo "=== find /auth (maxdepth 2) ===" && find /auth -maxdepth 2 -ls || true
+        volumeMounts:
+        - name: radicale-collections
+          mountPath: /collections
+        - name: radicale-auth
+          mountPath: /auth
       containers:
       - name: radicale
         image: registry.lan.buetow.org:30001/radicale:latest
