@@ -17,4 +17,4 @@ spec:
               service:
                 name: radicale-service
                 port:
-                  number: 5232
+                  number: 80
