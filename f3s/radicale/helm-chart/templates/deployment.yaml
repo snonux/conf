@@ -20,9 +20,9 @@ spec:
         - containerPort: 8080
         volumeMounts:
         - name: radicale-collections
-          mountPath: /var/lib/radicale/collections
+          mountPath: /collections
         - name: radicale-auth
-          mountPath: /etc/radicale/users
+          mountPath: /auth
       volumes:
       - name: radicale-collections
         persistentVolumeClaim:
