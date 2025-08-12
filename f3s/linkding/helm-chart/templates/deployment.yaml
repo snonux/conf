@@ -18,6 +18,9 @@ spec:
         image: sissbruecker/linkding:latest
         ports:
         - containerPort: 9090
+        env:
+        - name: LD_CSRF_TRUSTED_ORIGINS
+          value: "https://linkding.f3s.buetow.org"
         volumeMounts:
         - name: linkding-data
           mountPath: /etc/linkding/data
