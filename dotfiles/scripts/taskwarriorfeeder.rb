@@ -8,7 +8,7 @@ require 'set'
 PERSONAL_TIMESPAN_D = 30
 WORK_TIMESPAN_D = 14
 WORKTIME_DIR = "#{ENV['HOME']}/git/worktime".freeze
-GOS_DIR = "#{ENV['HOME']}/GosDir".freeze
+GOS_DIR = "#{ENV['HOME']}/.gosdir".freeze
 MAX_PENDING_RANDOM_TASKS = 11
 
 def maybe?
