@@ -5,7 +5,7 @@ function update::tools
     go install golang.org/x/tools/cmd/goimports@latest
 
     set pids
-    for prog in tasksamurai timr
+    for prog in tasksamurai timr hexai
         echo "Installing/updating $prog from codeberg.org/snonux/$prog/cmd/$prog@latest"
         go install codeberg.org/snonux/$prog/cmd/$prog@latest &
         set -a pids $last_pid
