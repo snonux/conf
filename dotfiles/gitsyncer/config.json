@@ -14,6 +14,11 @@
     }
   ],
   "repositories": [],
+  "skip_releases": {
+    "fapi": [
+      "0.0.1"
+    ]
+  },
   "exclude_from_showcase": [
     "bratwurstmitsenf",
     "Adv360-Pro-ZMK",
