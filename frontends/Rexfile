@@ -68,6 +68,7 @@ our $fqdns = sub {
     return 'HOSTNAME-UNKNOWN.' . $ips{domain};
 };
 
+# TODO: Rename rexfilesecrets.txt to confsecrets.txt?! Or wait for RCM migration.
 # The secret store. Note to myself: "geheim cat rexfilesecrets.txt"
 our $secrets = sub { read_file './secrets/' . shift };
 
