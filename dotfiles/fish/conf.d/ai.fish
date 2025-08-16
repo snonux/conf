@@ -9,6 +9,9 @@ abbr -a aic 'aichat -e'
 set -gx COPILOT_MODEL gpt-5 # can be changed with aimodels function
 set -gx HANDLER copilot
 
+# Used for Hexai
+set -gx OPENAI_MODEL $COPILOT_MODEL
+
 # TODO: also reconfigure aichat tool using this function
 function aimodels
     # nvim for the ai tool wrapper so i can use Copilot Chat from the command line.
@@ -25,6 +28,7 @@ claude-4.0-sonnet
 gemini-2.5-pro" >~/.aimodels
 
     set -gx COPILOT_MODEL (cat ~/.aimodels | fzf)
+    set -gx OPENAI_MODEL $COPILOT_MODEL
 
     if test -d $COPILOT_CHAT_DIR
         set -l model_config "$COPILOT_CHAT_DIR/config-$COPILOT_MODEL.lua"
