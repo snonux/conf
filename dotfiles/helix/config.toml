@@ -50,7 +50,7 @@ C-v = { b = "paste_clipboard_before", a = "paste_clipboard_after", r = ":clipboa
 A-c = "toggle_comments" # Was originally C-c, so mapped to ALT now
 
 # Helix related helpers
-C-h = { c = ":config-open", r = ":config-reload", C = ":run-shell-command cp -v ~/.config/helix/*.toml ~/git/rexfiles/dotfiles/helix/", l = ":open ~/.config/helix/languages.toml", h = ":open ~/git/worktime/HelixCheat.md", L = ":log-open", d = ":theme default" }
+C-h = { c = ":config-open", r = ":config-reload", C = ":run-shell-command cp -v ~/.config/helix/*.toml ~/git/conf/dotfiles/helix/", l = ":open ~/.config/helix/languages.toml", h = ":open ~/git/worktime/HelixCheat.md", L = ":log-open", d = ":theme default" }
 
 C-r = [ ":config-reload", ":reload-all" ]
 

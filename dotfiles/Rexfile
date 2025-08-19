@@ -4,10 +4,10 @@ use Rex::Logger;
 our $HOME = $ENV{HOME};
 
 # In a public Git rapository.
-our $DOT = "$HOME/git/rexfiles/dotfiles";
+our $DOT = "$HOME/git/conf/dotfiles";
 
 # In a private Git repository.
-our $DOT_PRIVATE = "$HOME/git/rexfiles_private/dotfiles";
+our $DOT_PRIVATE = "$HOME/git/conf_private/dotfiles";
 
 sub ensure_dir {
     my ( $src_glob, $dst_dir, $file_mode ) = @_;

@@ -1,5 +1,7 @@
-if command -q -v kubectl >/dev/null
-    kubectl completion fish | source
+function kcompletions
+    if command -q -v kubectl >/dev/null
+        kubectl completion fish | source
+    end
 end
 
 # Check if the directory $HOME/.krew exists and update PATH

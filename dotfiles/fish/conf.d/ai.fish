@@ -1,7 +1,7 @@
 abbr -a gpt chatgpt
 abbr -a gpti "chatgpt --interactive"
-abbr -a suggest 'gh copilot suggest'
-abbr -a explain 'gh copilot explain'
+abbr -a suggest hexai
+abbr -a explain 'hexai explain'
 abbr -a aic 'aichat -e'
 
 # helix-gpt env vars used
@@ -25,6 +25,7 @@ claude-4.0-sonnet
 gemini-2.5-pro" >~/.aimodels
 
     set -gx COPILOT_MODEL (cat ~/.aimodels | fzf)
+    set -gx OPENAI_MODEL $COPILOT_MODEL
 
     if test -d $COPILOT_CHAT_DIR
         set -l model_config "$COPILOT_CHAT_DIR/config-$COPILOT_MODEL.lua"
