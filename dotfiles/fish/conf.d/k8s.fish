@@ -39,6 +39,13 @@ function kbash
     kubectl exec -it $POD -- /bin/bash
 end
 
+function kshell
+    if test -z "$POD" -o -n "$argv[1]"
+        kpod $argv
+    end
+    kubectl exec -it $POD -- /bin/sh
+end
+
 function kdesc
     if test -z "$POD" -o -n "$argv[1]"
         kpod $argv

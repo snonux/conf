@@ -28,7 +28,15 @@ file_store = { }
 
 [language-server.lsp-ai.config.models.model1]
 type = "ollama"
-model =  "qwen2.5-coder"
+model =  "qwen3-coder:30b-a3b-q4_K_M"
+
+[language-server.lsp-ai.config.models.model2]
+type = "ollama"
+model =  "mistral-nemo:latest"
+
+[language-server.lsp-ai.config.models.model3]
+type = "ollama"
+model = "deepseek-r1:14b"
 
 [language-server.lsp-ai.config.completion]
 model = "model1"
