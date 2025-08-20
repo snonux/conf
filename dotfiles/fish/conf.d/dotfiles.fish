@@ -44,3 +44,5 @@ abbr -a .ug 'dotfiles::update::git'
 abbr -a .e 'dotfiles::fuzzy::edit'
 abbr -a .rex 'dotfiles::rexify'
 abbr -a .re 'dotfiles::random::edit'
+abbr -a cdconf "cd $HOME/git/conf"
+abbr -a cdotfiles "cd $HOME/git/conf/dotfiles"

@@ -1,4 +1,4 @@
-theme = "tokyonight_moon"
+theme = "default"
 
 [editor]
 bufferline = "always"

@@ -7,7 +7,7 @@ file-types = ["hcl", "tf", "nomad"]
 comment-token = "#"
 block-comment-tokens = { start = "/*", end = "*/" }
 indent = { tab-width = 2, unit = "  " }
-language-servers = [ "terraform-ls", "lsp-ai", "gpt" ]
+language-servers = [ "terraform-ls", "hexai-lsp", "gpt" ]
 auto-format = true
 
 [[language]]
@@ -15,7 +15,10 @@ name = "go"
 auto-format= true
 diagnostic-severity = "hint"
 formatter = { command = "goimports" }
-language-servers = [ "gopls", "golangci-lint-lsp", "lsp-ai", "gpt" ]
+language-servers = [ "gopls", "golangci-lint-lsp", "hexai-lsp" ]
+# language-servers = [ "gopls", "golangci-lint-lsp", "lsp-ai", "gpt", "hexai-lsp" ]
+[language-server.hexai-lsp]
+command = "hexai-lsp"
 
 [language-server.lsp-ai]
 command = "lsp-ai"
@@ -116,7 +119,7 @@ scope = "source.c"
 injection-regex = "c"
 file-types = ["c", "h"]
 comment-token = "//"
-language-servers = [ "clangd", "lsp-ai", "gpt" ]
+language-servers = [ "clangd", "hexai-lsp", "gpt" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
@@ -134,7 +137,7 @@ scope = "source.perl"
 file-types = ["pl", "pm", "t", "psgi", "raku", "rakumod", "rakutest", "rakudoc", "nqp", "p6", "pl6", "pm6", { glob = "Rexfile" }]
 shebangs = ["perl"]
 comment-token = "#"
-language-servers = [ "perlnavigator", "lsp-ai", "gpt" ]
+language-servers = [ "perlnavigator", "hexai-lsp", "gpt" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
@@ -167,7 +170,7 @@ file-types = [
 ]
 shebangs = ["ruby"]
 comment-token = "#"
-language-servers = [ "ruby-lsp", "solargraph", "rubocop", "lsp-ai", "gpt" ]
+language-servers = [ "ruby-lsp", "solargraph", "rubocop", "hexai-lsp" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
@@ -201,7 +204,7 @@ file-types = [
 ]
 shebangs = ["sh", "bash", "dash", "zsh"]
 comment-token = "#"
-language-servers = [ "bash-language-server", "lsp-ai", "gpt" ]
+language-servers = [ "bash-language-server", "hexai-lsp", "gpt" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[language]]
@@ -213,7 +216,7 @@ name = "fish"
 # ]
 # shebangs = ["fish" ]
 # comment-token = "#"
-language-servers = [ "fish-lsp", "lsp-ai", "gpt" ]
+language-servers = [ "fish-lsp", "hexai-lsp", "gpt" ]
 # indent =dth = 4, unit = "  " }
 
 [[grammar]]
@@ -232,7 +235,7 @@ scope = "source.md"
 injection-regex = "md|markdown"
 file-types = ["md", "markdown", "mkd", "mdwn", "mdown", "markdn", "mdtxt", "mdtext", "workbook", "gmi", "tpl", "txt" ]
 roots = [".marksman.toml"]
-language-servers = [ "marksman", "markdown-oxide", "vale-ls", "lsp-ai", "gpt"]
+language-servers = [ "marksman", "markdown-oxide", "vale-ls", "hexai-lsp"]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
@@ -265,7 +268,7 @@ scope = "source.java"
 injection-regex = "java"
 file-types = ["java", "jav", "pde"]
 roots = ["pom.xml", "build.gradle", "build.gradle.kts"]
-language-servers = [ "jdtls", "lsp-ai", "gpt" ]
+language-servers = [ "jdtls", "hexai-lsp", "gpt" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
