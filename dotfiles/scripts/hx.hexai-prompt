@@ -1,0 +1,9 @@
+#!/usr/bin/env zsh
+
+declare -xr INSTRUCTIONS='Answer only. If it is code, code only without code-block at the beginning and the end.'
+ 
+if [[ $# -eq 0 ]]; then
+  hexai "$(hx.prompt). $INSTRUCTIONS"
+else
+  hexai "$@. $INSTRUCTIONS"
+fi
