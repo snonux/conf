@@ -7,7 +7,7 @@ file-types = ["hcl", "tf", "nomad"]
 comment-token = "#"
 block-comment-tokens = { start = "/*", end = "*/" }
 indent = { tab-width = 2, unit = "  " }
-language-servers = [ "terraform-ls", "hexai-lsp", "gpt" ]
+language-servers = [ "terraform-ls", "hexai-lsp" ]
 auto-format = true
 
 [[language]]
@@ -16,7 +16,7 @@ auto-format= true
 diagnostic-severity = "hint"
 formatter = { command = "goimports" }
 language-servers = [ "gopls", "golangci-lint-lsp", "hexai-lsp" ]
-# language-servers = [ "gopls", "golangci-lint-lsp", "lsp-ai", "gpt", "hexai-lsp" ]
+# language-servers = [ "gopls", "golangci-lint-lsp", "lsp-ai", "hexai-lsp" ]
 [language-server.hexai-lsp]
 command = "hexai-lsp"
 
@@ -127,7 +127,7 @@ scope = "source.c"
 injection-regex = "c"
 file-types = ["c", "h"]
 comment-token = "//"
-language-servers = [ "clangd", "hexai-lsp", "gpt" ]
+language-servers = [ "clangd", "hexai-lsp" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
@@ -145,7 +145,7 @@ scope = "source.perl"
 file-types = ["pl", "pm", "t", "psgi", "raku", "rakumod", "rakutest", "rakudoc", "nqp", "p6", "pl6", "pm6", { glob = "Rexfile" }]
 shebangs = ["perl"]
 comment-token = "#"
-language-servers = [ "perlnavigator", "hexai-lsp", "gpt" ]
+language-servers = [ "perlnavigator", "hexai-lsp" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
@@ -212,7 +212,7 @@ file-types = [
 ]
 shebangs = ["sh", "bash", "dash", "zsh"]
 comment-token = "#"
-language-servers = [ "bash-language-server", "hexai-lsp", "gpt" ]
+language-servers = [ "bash-language-server", "hexai-lsp" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[language]]
@@ -224,7 +224,7 @@ name = "fish"
 # ]
 # shebangs = ["fish" ]
 # comment-token = "#"
-language-servers = [ "fish-lsp", "hexai-lsp", "gpt" ]
+language-servers = [ "fish-lsp", "hexai-lsp" ]
 # indent =dth = 4, unit = "  " }
 
 [[grammar]]
@@ -276,7 +276,7 @@ scope = "source.java"
 injection-regex = "java"
 file-types = ["java", "jav", "pde"]
 roots = ["pom.xml", "build.gradle", "build.gradle.kts"]
-language-servers = [ "jdtls", "hexai-lsp", "gpt" ]
+language-servers = [ "jdtls", "hexai-lsp" ]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
