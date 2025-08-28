@@ -1,6 +1,10 @@
 function update::tools
     set pids
 
+    echo "Installing/updating mage"
+    go install github.com/magefile/mage@latest
+    set -a pids $last_pid
+
     echo "Installing/updating golangci-lint"
     go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
     set -a pids $last_pid
