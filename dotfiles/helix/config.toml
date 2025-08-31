@@ -1,4 +1,4 @@
-theme = "default"
+theme = "adwaita-dark"
 
 [editor]
 bufferline = "always"
@@ -81,5 +81,5 @@ Q = [ ":cd ~/QuickEdit",  "file_picker_in_current_directory" ]
 [keys.select]
 "{" = "goto_prev_paragraph"
 "}" = "goto_next_paragraph"
-# n = ["extend_search_next", "merge_selections"]
-# N = ["extend_search_prev", "merge_selections"]
+n = ["extend_search_next", "merge_selections"]
+N = ["extend_search_prev", "merge_selections"]
