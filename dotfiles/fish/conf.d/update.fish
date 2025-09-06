@@ -1,6 +1,11 @@
 function update::tools
     set pids
 
+    // Cange
+    echo "Installing/updating mage"
+    go install github.com/magefile/mage@latest &
+    set -a pids $last_pid
+
     echo "Installing/updating mage"
     go install github.com/magefile/mage@latest &
     set -a pids $last_pid
