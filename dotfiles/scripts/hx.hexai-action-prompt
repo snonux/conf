@@ -1,0 +1,17 @@
+#!/usr/bin/env zsh
+
+declare -r INPUT_FILE=~/.hx-action-input
+declare -r REPLY_FILE=~/.hx-action-reply
+if [ -f "$REPLY_FILE" ]; then
+  rm "$REPLY_FILE"
+fi
+
+cat > $INPUT_FILE
+
+tmux split-window -v "echo hello;set -x;touch $REPLY_FILE.tmp; hexai-action -infile $INPUT_FILE -outfile $REPLY_FILE.tmp; mv $REPLY_FILE.tmp $REPLY_FILE"
+
+while [ ! -f "$REPLY_FILE" ]; do
+  sleep 0.2
+done
+
+cat "$REPLY_FILE"
