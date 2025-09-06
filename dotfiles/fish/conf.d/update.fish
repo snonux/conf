@@ -1,9 +1,8 @@
 function update::tools
     set pids
 
-    // Cange
-    echo "Installing/updating mage"
-    go install github.com/magefile/mage@latest &
+    echo "Installing/updating gofumpt"
+    go install mvdan.cc/gofumpt@latest &
     set -a pids $last_pid
 
     echo "Installing/updating mage"
