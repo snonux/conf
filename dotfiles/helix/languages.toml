@@ -14,9 +14,8 @@ auto-format = true
 name = "go"
 auto-format= true
 diagnostic-severity = "hint"
-formatter = { command = "goimports" }
+formatter = { command = "hx.goformatter" }
 language-servers = [ "gopls", "golangci-lint-lsp", "hexai-lsp" ]
-# language-servers = [ "gopls", "golangci-lint-lsp", "lsp-ai", "hexai-lsp" ]
 [language-server.hexai-lsp]
 command = "hexai-lsp"
 
