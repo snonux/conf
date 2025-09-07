@@ -1,8 +1,6 @@
 #!/usr/bin/env zsh
 
-if [ $1 = hexai-action ]; then
-    exec hx.hexai-action-prompt
-elif [ $(uname) = Darwin ]; then
+if [ $(uname) = Darwin ]; then
     exec hx.nvim-copilot-prompt "$@"
 else
     exec hx.hexai-prompt "$@"
