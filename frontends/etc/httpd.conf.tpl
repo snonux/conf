@@ -138,11 +138,11 @@ server "<%= $prefix %>dory.buetow.org" {
 <% } -%>
 
 <% for my $prefix (@prefixes) { -%>
-server "<%= $prefix %>solarcat.buetow.org" {
+server "<%= $prefix %>ecat.buetow.org" {
   listen on * port 8080
   log style forwarded 
   location * {
-    root "/htdocs/joern/solarcat.buetow.org"
+    root "/htdocs/joern/ecat.buetow.org"
     directory auto index
   }
 }

@@ -63,12 +63,12 @@ www.dory     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.dory  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.dory  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
-solarcat        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-solarcat        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.solarcat    300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.solarcat    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.solarcat 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.solarcat 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+ecat        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+ecat        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.ecat    300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+www.ecat    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby.ecat 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+standby.ecat 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
 fotos        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 fotos        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
