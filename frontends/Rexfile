@@ -83,7 +83,7 @@ our @f3s_hosts =
 # push @f3s_hosts, 'registry.f3s.buetow.org';
 
 our @acme_hosts =
-  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org ecat.buetow.org blog.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
+  qw/buetow.org git.buetow.org paul.buetow.org joern.buetow.org dory.buetow.org ecat.buetow.org blog.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
 push @acme_hosts, @f3s_hosts;
 
 # UTILITY TASKS
@@ -131,6 +131,9 @@ task 'rsync',
   sub {
     pkg 'rsync', ensure => present;
 
+    # Not required, as we use rsyncd via inetd
+    # append_if_no_such_line '/etc/rc.conf.local', 'rsyncd_flags=';
+
     file '/etc/rsyncd.conf',
       content => template('./etc/rsyncd.conf.tpl'),
       owner   => 'root',
@@ -143,7 +146,13 @@ task 'rsync',
       group   => 'wheel',
       mode    => '755';
 
-    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/rsync.sh';
+    file '/tmp/rsync.cron',
+      ensure  => 'file',
+      content => "*/5\t*\t*\t*\t*\t-ns /usr/local/bin/rsync.sh",
+      mode    => '600';
+
+    run '{ crontab -l -u root ; cat /tmp/rsync.cron; } | uniq | crontab -u root -';
+    run 'rm /tmp/rsync.cron';
   };
 
 desc 'Configure the gemtexter sites';
