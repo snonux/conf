@@ -125,6 +125,18 @@ server "<%= $prefix %>alt.irregular.ninja" {
 }
 <% } -%>
 
+# joern special host
+<% for my $prefix (@prefixes) { -%>
+server "<%= $prefix %>joern.buetow.org" {
+  listen on * port 8080
+  log style forwarded 
+  location * {
+    root "/htdocs/joern/"
+    directory auto index
+  }
+}
+<% } -%>
+
 # Dory special host
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dory.buetow.org" {
@@ -137,6 +149,7 @@ server "<%= $prefix %>dory.buetow.org" {
 }
 <% } -%>
 
+# ecat special host
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>ecat.buetow.org" {
   listen on * port 8080
