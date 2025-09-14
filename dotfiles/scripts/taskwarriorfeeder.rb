@@ -26,7 +26,7 @@ end
 def notes(notes_dirs, prefix, dry)
   notes_dirs.each do |notes_dir|
     Dir["#{notes_dir}/#{prefix}-*"].each do |notes_file|
-      match = File.read(notes_file).strip.match(/(?<due>\d+)? *(?<tag>[A-Z]?[a-z,-:]+) *(?<body>.*)/m)
+      match = File.read(notes_file).strip.match(/(?<due[A-Z]?[a-z,-:]+) *(?<body>.*)/m)
       next unless match
 
       tags = match[:tag].downcase.split(',') + [prefix]
@@ -126,8 +126,15 @@ def task_add!(tags, quote, due, dry)
   if tags.include?('task')
     run! "task #{quote}", dry
   else
+    project = tags.find { |t| t =~ /^[A-Z]/ }
+    project = if project.nil?
+                ''
+              else
+                tags.delete!(project)
+                " project:#{project.downcase}"
+              end
     priority = tags.include?('high') ? 'H' : ''
-    run! "task add due:#{due} priority:#{priority} +#{tags.join(' +')} '#{quote.gsub("'", '"')}'", dry
+    run! "task add due:#{due} priority:#{priority}#{project} +#{tags.join(' +')} '#{quote.gsub("'", '"')}'", dry
   end
 end
 
