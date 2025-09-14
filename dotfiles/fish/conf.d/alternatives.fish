@@ -12,3 +12,6 @@ end
 if type -q procs
     alias p='procs'
 end
+if type -q carl
+    alias cal='carl'
+end
