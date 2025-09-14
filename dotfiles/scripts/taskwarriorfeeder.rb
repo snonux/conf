@@ -26,7 +26,7 @@ end
 def notes(notes_dirs, prefix, dry)
   notes_dirs.each do |notes_dir|
     Dir["#{notes_dir}/#{prefix}-*"].each do |notes_file|
-      match = File.read(notes_file).strip.match(/(?<due[A-Z]?[a-z,-:]+) *(?<body>.*)/m)
+      match = File.read(notes_file).strip.match(/(?<due[A-Z]?[A-Za-z,-:]+) *(?<body>.*)/m)
       next unless match
 
       tags = match[:tag].downcase.split(',') + [prefix]
