@@ -130,7 +130,7 @@ def task_add!(tags, quote, due, dry)
     project = if project.nil?
                 ''
               else
-                tags.delete!(project)
+                tags.delete(project)
                 " project:#{project.downcase}"
               end
     priority = tags.include?('high') ? 'H' : ''
