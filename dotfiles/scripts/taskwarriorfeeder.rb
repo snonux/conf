@@ -29,7 +29,7 @@ def notes(notes_dirs, prefix, dry)
       match = File.read(notes_file).strip.match(/(?<due>\d+)? *(?<tag>[A-Z]?[a-z,-:]+) *(?<body>.*)/m)
       next unless match
 
-      tags = match[:tag].downcase.split(',') + [prefix]
+      tags = match[:tag].split(',') + [prefix]
       due = if match[:due].nil?
               tags.include?('track') ? '1year' : "#{rand(0..PERSONAL_TIMESPAN_D)}d"
             else
