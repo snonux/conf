@@ -29,16 +29,17 @@ function update::tools
         set -a pids $last_pid
     end
 
-    for pid in $pids
-        wait $pid
-    end
-
     if test (uname) = Darwin
         echo 'Updating cursor-agent on macOS'
         cursor-agent update
     end
+    set -a pids $last_pid
 
     if test (uname) = Linux
+        eco "Installing/updating tgpt"
+        go install github.com/aandrew-me/tgpt/v2@latest &
+        set -a pids $last_pid
+
         for prog in gos gitsyncer
             echo "Installing/updating $prog from codeberg.org/snonux/$prog/cmd/$prog@latest"
             go install codeberg.org/snonux/$prog/cmd/$prog@latest
@@ -66,5 +67,9 @@ function update::tools
         echo "Installing/updating opencode-ai globally via npm"
         doas npm uninstall -g opencode-ai
         doas npm install -g opencode-ai
+    end
+
+    for pid in $pids
+        wait $pid
     end
 end
