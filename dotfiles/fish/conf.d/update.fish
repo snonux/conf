@@ -36,7 +36,7 @@ function update::tools
     set -a pids $last_pid
 
     if test (uname) = Linux
-        eco "Installing/updating tgpt"
+        echo "Installing/updating tgpt"
         go install github.com/aandrew-me/tgpt/v2@latest &
         set -a pids $last_pid
 
