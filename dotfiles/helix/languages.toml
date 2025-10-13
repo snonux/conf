@@ -34,6 +34,9 @@ rangeVariableTypes = true
 [language-server.golangci-lint-lsp]
 command = "golangci-lint-langserver"
 
+[language-server.ltex-ls]
+command = "/home/paul/java/ltex-ls/bin/ltex-ls"
+
 # golangci-lint-langserver depepds/calls golangci-lint 
 # go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 [language-server.golangci-lint-lsp.config]
@@ -162,7 +165,7 @@ scope = "source.md"
 injection-regex = "md|markdown"
 file-types = ["md", "markdown", "mkd", "mdwn", "mdown", "markdn", "mdtxt", "mdtext", "workbook", "gmi", "tpl", "txt" ]
 roots = [".marksman.toml"]
-language-servers = [ "marksman", "markdown-oxide", "vale-ls", "hexai-lsp"]
+language-servers = [ "marksman", "markdown-oxide", "vale-ls", "hexai-lsp", "ltex-ls"]
 indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
