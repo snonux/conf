@@ -83,6 +83,7 @@ abbr -a e quickedit
 abbr -a scratch quickedit::scratchpad
 abbr -a S quickedit::scratchpad
 abbr -a quicknote quickedit::quicknote
+abbr -a perf quickedit::performance
 abbr -a performance quickedit::performance
 abbr -a goals quickedit::performance
 abbr -a er "ranger $QUICKEDIT_DIR"
