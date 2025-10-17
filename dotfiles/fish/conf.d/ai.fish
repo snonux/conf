@@ -8,6 +8,7 @@ abbr -a aic 'aichat -e'
 # set -gx COPILOT_MODEL gpt-4.1 # can be changed with aimodels function
 set -gx COPILOT_MODEL gpt-4o # can be changed with aimodels function
 set -gx HANDLER copilot
+# set -gx HEXAI_PROVIDER copilot
 
 # TODO: also reconfigure aichat tool using this function
 function aimodels

@@ -112,3 +112,5 @@ function supersync::is_it_time_to_sync
     end
     read -P "It's time to run supersync! Run it? (y/n) " answer; and test "$answer" = y; and supersync
 end
+
+abbr -a supersynct 'supersync; track'
