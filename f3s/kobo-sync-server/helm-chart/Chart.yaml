@@ -1,0 +1,5 @@
+apiVersion: v2
+name: koreader-sync-server
+description: A Helm chart for deploying a koreader-sync-server
+version: 0.1.0
+appVersion: "latest"
