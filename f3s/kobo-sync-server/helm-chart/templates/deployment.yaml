@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: koreader-sync-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: koreader-sync-server
+  template:
+    metadata:
+      labels:
+        app: koreader-sync-server
+    spec:
+      containers:
+        - name: koreader-sync-server
+          image: koreader/kosync:latest
+          ports:
+            - containerPort: 17200
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redis
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: koreader-sync-server-data
