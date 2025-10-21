@@ -67,6 +67,11 @@ function quickedit::direct
     cd -
 end
 
+function quickedit::bytag
+    set -l tag $argv[1]
+    quickedit::direct ~/Notes bytag/$tag.md
+end
+
 function quickedit::scratchpad
     quickedit::direct ~/Notes Scratchpad.md
 end
@@ -85,6 +90,7 @@ abbr -a S quickedit::scratchpad
 abbr -a quicknote quickedit::quicknote
 abbr -a perf quickedit::performance
 abbr -a performance quickedit::performance
+abbr -a bytag quickedit::bytag
 abbr -a goals quickedit::performance
 abbr -a er "ranger $QUICKEDIT_DIR"
 abbr -a cdquickedit "cd $QUICKEDIT_DIR"
