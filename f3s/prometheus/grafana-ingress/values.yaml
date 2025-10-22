@@ -1,0 +1,10 @@
+ingress:
+  enabled: true
+  host: grafana.f3s.buetow.org
+  namespace: monitoring
+  service:
+    name: prometheus-grafana
+    port: 80
+  annotations:
+    "spec.ingressClassName": traefik
+    "traefik.ingress.kubernetes.io/router.entrypoints": web
