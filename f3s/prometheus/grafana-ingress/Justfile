@@ -1,0 +1,12 @@
+NAMESPACE := "monitoring"
+RELEASE_NAME := "grafana-ingress"
+CHART_PATH := "."
+
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+
+delete:
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
