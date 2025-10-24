@@ -1,0 +1,9 @@
+install:
+    kubectl apply -f persistent-volumes.yaml
+    helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
+    just -f grafana-ingress/Justfile install
+
+uninstall:
+    just -f grafana-ingress/Justfile delete
+    helm uninstall prometheus --namespace monitoring
+    kubectl delete -f persistent-volumes.yaml
