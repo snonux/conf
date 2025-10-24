@@ -1,46 +1,41 @@
 # Prometheus installation
 
-## Prometheus stack installation
+This directory contains the configuration to deploy the kube-prometheus-stack, with persistent storage for Prometheus and Grafana, and a Grafana ingress.
 
-First, install the Prometheus Helm chart using the following commands:
+## Prerequisites
 
-```sh
-kubectl greate ns monitoring
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-```
+1.  Create the monitoring namespace:
 
-Followed by the actual installation into the monitoring namespace:
-  
-```sh
-helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring
+    ```sh
+    kubectl create ns monitoring
+    ```
 
-NAME: prometheus
-LAST DEPLOYED: Wed Oct 22 09:22:00 2025
-NAMESPACE: monitoring
-STATUS: deployed
-REVISION: 1
-NOTES:
-kube-prometheus-stack has been installed. Check its status by running:
-  kubectl --namespace monitoring get pods -l "release=prometheus"
+2.  Add the Prometheus Helm chart repository:
 
-Get Grafana 'admin' user password by running:
+    ```sh
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    helm repo update
+    ```
 
-  kubectl --namespace monitoring get secrets prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+3.  Create the directories on your NFS server:
 
-Access Grafana local instance:
+    ```sh
+    mkdir -p /data/nfs/k3svolumes/prometheus/data
+    mkdir -p /data/nfs/k3svolumes/grafana/data
+    ```
 
-  export POD_NAME=$(kubectl --namespace monitoring get pod -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=prometheus" -oname)
-  kubectl --namespace monitoring port-forward $POD_NAME 3000
+## Automation with Justfile
 
-Visit https://github.com/prometheus-operator/kube-prometheus for instructions on how to create & configure Alertmanager and Prometheus instances using the Operator.
+A `Justfile` is provided to automate the installation and uninstallation process.
 
-```
+-   To install everything, run:
 
-## Grafana Ingress
+    ```sh
+    just install
+    ```
 
-After this, deploy Grafana Ingress:
+-   To uninstall everything, run:
 
-```
-helm install grafana-ingress ./grafana-ingress
-```
+    ```sh
+    just uninstall
+    ```

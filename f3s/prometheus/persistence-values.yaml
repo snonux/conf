@@ -1,0 +1,31 @@
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ""
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+          selector:
+            matchLabels:
+              type: local
+              app: prometheus
+
+grafana:
+  persistence:
+    enabled: true
+    type: pvc
+    existingClaim: "grafana-data-pvc"
+
+  # Disable the init container that chowns the data directory.
+  # This is necessary when using NFS volumes, as the chown operation will fail.
+  initChownData: false
+
+  # Set the security context for the grafana pod.
+  # The fsGroup should match the group that owns the data directory on the NFS server.
+  podSecurityContext:
+    fsGroup: 911
+    runAsUser: 911
+    runAsGroup: 911
