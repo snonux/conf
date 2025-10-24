@@ -97,7 +97,7 @@ function worktime::status
         echo "You are logged in"
         set -l num_worklog (ls $WORKTIME_DIR | grep wl- | wc -l)
         if test $num_worklog -gt 0
-            echo "$num_worklog entries in the worklog"
+            echo "$num_worklog entries in the worklog in $WORKTIME_DIR/wl-*"
         end
     else
         echo "You are not logged in"
