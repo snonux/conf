@@ -19,12 +19,9 @@ grafana:
     type: pvc
     existingClaim: "grafana-data-pvc"
 
-  # Disable the init container that chowns the data directory.
-  # This is necessary when using NFS volumes, as the chown operation will fail.
-  initChownData: false
+  initChownData:
+    enabled: false
 
-  # Set the security context for the grafana pod.
-  # The fsGroup should match the group that owns the data directory on the NFS server.
   podSecurityContext:
     fsGroup: 911
     runAsUser: 911
