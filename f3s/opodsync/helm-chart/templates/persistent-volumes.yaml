@@ -11,7 +11,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   hostPath:
     path: /data/nfs/k3svolumes/opodsync/data
-    type: DirectoryOrCreate
+    type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
