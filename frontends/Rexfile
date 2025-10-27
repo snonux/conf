@@ -447,8 +447,6 @@ task 'gogios_install',
     file '/usr/local/bin/gogios',
       source => 'usr/local/bin/gogios',
       mode   => '0755';
-    owner   => 'root',
-      group => 'root';
   };
 
 desc 'Setup Gogios monitoring system';
