@@ -91,11 +91,12 @@ function supersync
     supersync::taskwarrior
     supersync::worktime no_sync_quotes
     supersync::uprecords
-    supersync::gitsyncer
 
     if test -f ~/.gos_enable
         gos
     end
+
+    supersync::gitsyncer
 
     date +%s >$SUPERSYNC_STAMP_FILE.tmp
     mv $SUPERSYNC_STAMP_FILE.tmp $SUPERSYNC_STAMP_FILE
