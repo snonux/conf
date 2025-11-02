@@ -129,7 +129,7 @@ function checkcert
     openssl s_client \
         -connect $host:$port \
         -servername $host \
-        -showcerts </dev/null 2>/dev/null | openssl x509 -noout -dates -subjectend
+        -showcerts </dev/null 2>/dev/null | openssl x509 -noout -dates -subject
 end
 
 abbr typing 'touchtype::quote'
