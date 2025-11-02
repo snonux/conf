@@ -131,7 +131,7 @@ def task_add!(tags, quote, due, dry)
                 ''
               else
                 tags.delete(project)
-                " project:#{project}"
+                " project:#{project.downcase}"
               end
     priority = tags.include?('high') ? 'H' : ''
     run! "task add due:#{due} priority:#{priority}#{project} +#{tags.join(' +')} '#{quote.gsub("'", '"')}'", dry
