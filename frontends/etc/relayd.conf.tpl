@@ -22,9 +22,10 @@ table <localhost> {
 }
 
 http protocol "https" {
-    <% for my $host (@$acme_hosts) { for my $prefix (@prefixes) { -%>
-    tls keypair <%= $prefix.$host -%>
-    <% } } -%>
+    <% for my $host (@$acme_hosts) { -%>
+    tls keypair <%= $host %>
+    tls keypair standby.<%= $host %>
+    <% } -%>
     tls keypair <%= $hostname.'.'.$domain -%>
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
