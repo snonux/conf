@@ -44,12 +44,14 @@ handle_cert () {
 
 has_update=no
 <% for my $host (@$acme_hosts) { -%>
-<%   for my $prefix ('', 'www.', 'standby.') { -%>
-handle_cert <%= $prefix.$host %>
+handle_cert <%= $host %>
 if [ $? -eq 0 ]; then
     has_update=yes
 fi
-<%   } -%>
+handle_cert standby.<%= $host %>
+if [ $? -eq 0 ]; then
+    has_update=yes
+fi
 <% } -%>
 
 # Current server's FQDN (e.g. for mail server certs)

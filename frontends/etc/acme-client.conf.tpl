@@ -24,13 +24,17 @@ authority buypass-test {
 }
 
 <% for my $host (@$acme_hosts) { -%>
-<%   for my $prefix ('', 'www.', 'standby.') { -%>
-domain <%= $prefix.$host %> {
-	domain key "/etc/ssl/private/<%= $prefix.$host %>.key"
-	domain full chain certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
+domain <%= $host %> {
+	alternative names { www.<%= $host %> }
+	domain key "/etc/ssl/private/<%= $host %>.key"
+	domain full chain certificate "/etc/ssl/<%= $host %>.fullchain.pem"
 	sign with letsencrypt
 }
-<%   } -%>
+domain standby.<%= $host %> {
+	domain key "/etc/ssl/private/standby.<%= $host %>.key"
+	domain full chain certificate "/etc/ssl/standby.<%= $host %>.fullchain.pem"
+	sign with letsencrypt
+}
 <% } -%>
 
 # For the server itself (e.g. TLS, or monitoring)
