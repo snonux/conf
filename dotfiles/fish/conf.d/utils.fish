@@ -123,6 +123,15 @@ function touchtype::quote
     end
 end
 
+function checkcert
+    set host $argv[1]
+    set port $argv[2]
+    openssl s_client \
+        -connect $host:$port \
+        -servername $host \
+        -showcerts </dev/null 2>/dev/null | openssl x509 -noout -dates -subjectend
+end
+
 abbr typing 'touchtype::quote'
 
 function sway_config_view
