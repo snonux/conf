@@ -35,10 +35,6 @@ function update::tools
     end
     set -a pids $last_pid
 
-    echo "Installing/updating @anthropic-ai/claude-code globally via npm"
-    doas npm uninstall -g @anthropic-ai/claude-code
-    doas npm install -g @anthropic-ai/claude-code
-
     if test (uname) = Linux
         echo "Installing/updating tgpt"
         go install github.com/aandrew-me/tgpt/v2@latest &
@@ -51,6 +47,10 @@ function update::tools
 
         # doas npm uninstall -g @qwen-code/qwen-code@latest
         # doas npm install -g @qwen-code/qwen-code@latest
+
+        echo "Installing/updating @anthropic-ai/claude-code globally via npm"
+        doas npm uninstall -g @anthropic-ai/claude-code
+        doas npm install -g @anthropic-ai/claude-code
 
         echo "Installing/updating @openai/codex globally via npm"
         doas npm uninstall -g @openai/codex
