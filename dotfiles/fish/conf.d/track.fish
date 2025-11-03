@@ -48,7 +48,7 @@ function track::add_record
     set -l epoch (date +%s)
     set -l year_week (date +%Y-%V)
     set -l current_date (date +%Y-%m-%d)
-    set -l csv_file ~/Notes/track-(hostname).csv
+    set -l csv_file ~/git/worktime/track-(hostname).csv
 
     echo "$name,$value,$unit,$kind,$epoch,$year_week,$current_date,$description" >>$csv_file
     echo "Added: $name, $value $unit, $kind, $year_week,$description"
@@ -75,7 +75,7 @@ function track::report
         set -l obstacle_minutes 0
         set -l obstacle_effort 0
 
-        for csv_file in ~/Notes/track-*.csv
+        for csv_file in ~/git/worktime/track-*.csv
             if test -f $csv_file
                 while read -l line
                     set -l fields (string split ',' $line)
@@ -134,7 +134,7 @@ end
 function track::today
     set -l today (date +%Y-%m-%d)
     echo "Entries for $today:"
-    for csv_file in ~/Notes/track-*.csv
+    for csv_file in ~/git/worktime/track-*.csv
         if test -f $csv_file
             while read -l line
                 set -l fields (string split ',' $line)
@@ -158,7 +158,7 @@ function track::today
 end
 
 function track::edit
-    set -l csv_file ~/Notes/track-(hostname).csv
+    set -l csv_file ~/git/worktime/track-(hostname).csv
     $EDITOR $csv_file
 end
 
