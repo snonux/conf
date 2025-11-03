@@ -26,6 +26,7 @@ function supersync::worktime
 
     find . -name '*.txt' -exec git add {} \;
     find . -name '*.json' -exec git add {} \;
+    find . -name '*.csv' -exec git add {} \;
     git commit -a -m sync
 
     git pull origin master
