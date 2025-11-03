@@ -31,8 +31,12 @@ function update::tools
 
     if test (uname) = Darwin
         echo 'Updating cursor-agent on macOS'
-        cursor-agent update
+        cursor-agent update &
     end
+    set -a pids $last_pid
+
+    echo 'Updating claude'
+    claude update &
     set -a pids $last_pid
 
     if test (uname) = Linux
@@ -45,12 +49,12 @@ function update::tools
             go install codeberg.org/snonux/$prog/cmd/$prog@latest
         end
 
-        echo "Installing/updating @anthropic-ai/claude-code globally via npm"
-        doas npm uninstall -g @anthropic-ai/claude-code
-        doas npm install -g @anthropic-ai/claude-code
-
         # doas npm uninstall -g @qwen-code/qwen-code@latest
         # doas npm install -g @qwen-code/qwen-code@latest
+
+        # echo "Installing/updating @anthropic-ai/claude-code globally via npm"
+        # doas npm uninstall -g @anthropic-ai/claude-code
+        # doas npm install -g @anthropic-ai/claude-code
 
         echo "Installing/updating @openai/codex globally via npm"
         doas npm uninstall -g @openai/codex
