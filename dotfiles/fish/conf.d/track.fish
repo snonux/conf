@@ -157,6 +157,70 @@ function track::today
     end
 end
 
+function track::weekly
+    set -l now (date +%s)
+    set -l day_of_week (date +%u)
+    
+    set -l days_since_saturday (math "($day_of_week + 1) % 7")
+    set -l week_start (math "$now - $days_since_saturday * 24 * 3600")
+    set -l week_end (math "$week_start + 6 * 24 * 3600 + 86399")
+    
+    set -l start_date (date -d @$week_start +%Y-%m-%d)
+    set -l end_date (date -d @$week_end +%Y-%m-%d)
+    
+    echo "Current Week: $start_date to $end_date"
+    echo ""
+    
+    set -l activities
+    
+    for csv_file in ~/git/worktime/track-*.csv
+        if test -f $csv_file
+            while read -l line
+                set -l fields (string split ',' $line)
+                set -l name $fields[1]
+                set -l value $fields[2]
+                set -l unit $fields[3]
+                set -l kind $fields[4]
+                set -l epoch $fields[5]
+                
+                if test $epoch -ge $week_start -a $epoch -le $week_end
+                    set -l found 0
+                    
+                    for i in (seq 1 (count $activities))
+                        set -l activity $activities[$i]
+                        set -l activity_fields (string split '|' $activity)
+                        if test "$name" = "$activity_fields[1]"
+                            set -l new_value (math $activity_fields[2] + $value)
+                            set activities[$i] "$name|$new_value|$unit|$kind"
+                            set found 1
+                            break
+                        end
+                    end
+                    
+                    if test $found -eq 0
+                        set -a activities "$name|$value|$unit|$kind"
+                    end
+                end
+            end <$csv_file
+        end
+    end
+    
+    for activity in $activities
+        set -l fields (string split '|' $activity)
+        set -l name $fields[1]
+        set -l value $fields[2]
+        set -l unit $fields[3]
+        set -l kind $fields[4]
+        
+        if test "$unit" = minutes
+            set -l hours (math $value / 60)
+            printf "%-35s %8.2f hours (%6.0f min) [%s]\n" $name $hours $value $kind
+        else
+            printf "%-35s %8.2f %s [%s]\n" $name $value $unit $kind
+        end
+    end
+end
+
 function track::edit
     set -l csv_file ~/git/worktime/track-(hostname).csv
     $EDITOR $csv_file
@@ -166,3 +230,4 @@ abbr -a tra track::add_record
 abbr -a treport track::report
 abbr -a troday track::today
 abbr -a tredit track::edit
+abbr -a treekly track::weekly
