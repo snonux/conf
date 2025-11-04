@@ -161,15 +161,6 @@ server "<%= $prefix %>ecat.buetow.org" {
 }
 <% } -%>
 
-<% for my $prefix (@prefixes) { -%>
-server "<%= $prefix %>fotos.buetow.org" {
-  listen on * port 8080
-  log style forwarded 
-  root "/htdocs/buetow.org/fotos"
-  directory auto index
-}
-<% } -%>
-
 # Defaults
 server "default" {
   listen on * port 80

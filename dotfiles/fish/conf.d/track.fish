@@ -205,18 +205,37 @@ function track::weekly
         end
     end
     
-    for activity in $activities
-        set -l fields (string split '|' $activity)
-        set -l name $fields[1]
-        set -l value $fields[2]
-        set -l unit $fields[3]
-        set -l kind $fields[4]
+    for kind in mental health obstacle
+        set -l kind_activities
+        for activity in $activities
+            set -l fields (string split '|' $activity)
+            if test "$fields[4]" = "$kind"
+                set -a kind_activities $activity
+            end
+        end
         
-        if test "$unit" = minutes
-            set -l hours (math $value / 60)
-            printf "%-35s %8.2f hours (%6.0f min) [%s]\n" $name $hours $value $kind
-        else
-            printf "%-35s %8.2f %s [%s]\n" $name $value $unit $kind
+        if test (count $kind_activities) -gt 0
+            echo "=== $kind ==="
+            
+            set -l sorted (printf '%s\n' $kind_activities | while read -l activity
+                set -l fields (string split '|' $activity)
+                printf "%010.2f|%s\n" $fields[2] $activity
+            end | sort -rn | string replace -r '^[^|]+\|' '')
+            
+            for activity in $sorted
+                set -l fields (string split '|' $activity)
+                set -l name $fields[1]
+                set -l value $fields[2]
+                set -l unit $fields[3]
+                
+                if test "$unit" = minutes
+                    set -l hours (math $value / 60)
+                    printf "  %-35s %8.2f hours (%6.0f min)\n" $name $hours $value
+                else
+                    printf "  %-35s %8.2f %s\n" $name $value $unit
+                end
+            end
+            echo ""
         end
     end
 end
