@@ -88,6 +88,11 @@ function supersync::gitsyncer
 end
 
 function supersync
+    if test -f ~/.supersync_disable
+        echo Supersync is disabled
+        return
+    end
+
     supersync::worktime sync_quotes
     supersync::taskwarrior
     supersync::worktime no_sync_quotes
