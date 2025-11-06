@@ -72,11 +72,12 @@ function supersync::gitsyncer
 
     if not test -f $enable_file
         echo $now >$enable_file
-    else
-        set last_run (cat $enable_file)
-        if test (math $now - $last_run) -lt $weekly_interval
-            return
-        end
+        echo Gitsyncer is not enabled
+    end
+
+    set last_run (cat $enable_file)
+    if test (math $now - $last_run) -lt $weekly_interval
+        return
     end
 
     if test -f ~/go/bin/gitsyncer
