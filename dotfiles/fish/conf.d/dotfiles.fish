@@ -1,4 +1,4 @@
-set -gx DOTFILES_DIR ~/git/rexfiles/dotfiles
+set -gx DOTFILES_DIR ~/git/conf/dotfiles
 
 function dotfiles::update
     set -l prev_pwd (pwd)
