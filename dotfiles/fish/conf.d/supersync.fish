@@ -71,9 +71,11 @@ function supersync::gitsyncer
     set weekly_interval (math 7 \* 24 \* 60 \* 60)
 
     if not test -f $enable_file
-        echo $now >$enable_file
         echo Gitsyncer is not enabled
+        return
     end
+
+    echo $now >$enable_file
 
     set last_run (cat $enable_file)
     if test (math $now - $last_run) -lt $weekly_interval
