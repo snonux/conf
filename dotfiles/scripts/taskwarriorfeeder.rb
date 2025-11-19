@@ -31,7 +31,7 @@ def notes(notes_dirs, prefix, dry)
 
       tags = match[:tag].split(',') + [prefix]
       due = if match[:due].nil?
-              tags.include?('track') ? '1year' : "#{rand(0..PERSONAL_TIMESPAN_D)}d"
+              tags.include?('track') ? 'eow' : "#{rand(0..PERSONAL_TIMESPAN_D)}d"
             else
               "#{match[:due]}d"
             end
@@ -142,9 +142,8 @@ def task_schedule!(id, due, dry)
   run! "timeout 5s task modify #{id} due:#{due}", dry
 end
 
-# Randomly schedule all unscheduled tasks but the ones with the +unsched tag
-def unscheduled_tasks
-  lines = `task -lowhigh -unsched -nosched -notes -note -meeting -track due: 2>/dev/null`.split("\n").drop(1)
+def filter_tasks(filter)
+  lines = `task #{filter} 2>/dev/null`.split("\n").drop(1)
   lines.pop
   lines.map { |foo| foo.split.first }.each do |id|
     yield id if id.to_i.positive?
@@ -215,7 +214,13 @@ begin
     end
   end
 
-  unscheduled_tasks do |id|
+  # Schedule track tasks to end of week
+  filter_tasks('+track due:') do |id|
+    task_schedule!(id, 'eow', opts[:dry_run])
+  end
+
+  # Randomly schedule other unscheduled tasks
+  filter_tasks('-unsched -nosched -meeting -track due:') do |id|
     task_schedule!(id, "#{rand(0..PERSONAL_TIMESPAN_D)}d", opts[:dry_run])
   end
 end
