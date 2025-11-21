@@ -23,7 +23,6 @@ The deployment requires three persistent volumes. Create the directories on the 
 mkdir -p /data/nfs/k3svolumes/filerise/uploads
 mkdir -p /data/nfs/k3svolumes/filerise/users
 mkdir -p /data/nfs/k3svolumes/filerise/metadata
-mkdir -p /data/nfs/k3svolumes/filerise/config
 chown -R 1000:1000 /data/nfs/k3svolumes/filerise/
 chmod -R 775 /data/nfs/k3svolumes/filerise/
 ```
@@ -56,11 +55,12 @@ On first launch, you'll be guided through creating the initial admin user.
 
 ## Storage
 
-The deployment uses four persistent volumes:
+The deployment uses three persistent volumes on NFS:
 - **uploads** (50Gi): Stores uploaded files
 - **users** (1Gi): Stores user data and configurations
 - **metadata** (5Gi): Stores file metadata and database
-- **config** (1Gi): Stores application configuration files
+
+Sessions are stored in an ephemeral emptyDir volume (pod-local).
 
 ## Justfile Commands
 

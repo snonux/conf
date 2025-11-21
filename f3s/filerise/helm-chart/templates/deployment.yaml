@@ -25,16 +25,13 @@ spec:
           mkdir -p /var/www/metadata/log
           mkdir -p /var/www/uploads
           mkdir -p /var/www/users
-          mkdir -p /var/www/config
           mkdir -p /var/www/sessions
           touch /var/www/metadata/log/error.log
           touch /var/www/metadata/log/access.log
-          touch /var/www/users/users.txt
           echo "[]" > /var/www/metadata/createdTags.json
-          chown -R 1000:1000 /var/www/metadata /var/www/uploads /var/www/users /var/www/config /var/www/sessions
-          chmod -R 775 /var/www/metadata /var/www/uploads /var/www/users /var/www/config
+          chown -R 1000:1000 /var/www/metadata /var/www/uploads /var/www/users /var/www/sessions
+          chmod -R 775 /var/www/metadata /var/www/uploads /var/www/users
           chmod 700 /var/www/sessions
-          chmod 664 /var/www/users/users.txt
           chmod 664 /var/www/metadata/createdTags.json
         volumeMounts:
         - name: filerise-uploads
@@ -43,8 +40,6 @@ spec:
           mountPath: /var/www/users
         - name: filerise-metadata
           mountPath: /var/www/metadata
-        - name: filerise-config
-          mountPath: /var/www/config
         - name: filerise-sessions
           mountPath: /var/www/sessions
       containers:
@@ -82,8 +77,8 @@ spec:
           mountPath: /var/www/users
         - name: filerise-metadata
           mountPath: /var/www/metadata
-        - name: filerise-config
-          mountPath: /var/www/config
+        - name: filerise-logs
+          mountPath: /var/www/metadata/log
         - name: filerise-sessions
           mountPath: /var/www/sessions
         - name: start-script
@@ -99,12 +94,11 @@ spec:
       - name: filerise-metadata
         persistentVolumeClaim:
           claimName: filerise-metadata-pvc
-      - name: filerise-config
-        persistentVolumeClaim:
-          claimName: filerise-config-pvc
       - name: start-script
         configMap:
           name: filerise-start-script
           defaultMode: 0755
       - name: filerise-sessions
+        emptyDir: {}
+      - name: filerise-logs
         emptyDir: {}

@@ -10,5 +10,7 @@ upgrade:
 
 delete:
     helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+    kubectl delete pvc filerise-uploads-pvc filerise-users-pvc filerise-metadata-pvc -n {{NAMESPACE}} --ignore-not-found
+    kubectl delete pv filerise-uploads-pv filerise-users-pv filerise-metadata-pv --ignore-not-found
 
 deinstall: delete
