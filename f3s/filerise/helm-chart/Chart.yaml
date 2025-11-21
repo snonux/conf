@@ -1,0 +1,5 @@
+apiVersion: v2
+name: filerise
+description: A Helm chart for deploying FileRise file manager.
+version: 0.1.0
+appVersion: "latest"
