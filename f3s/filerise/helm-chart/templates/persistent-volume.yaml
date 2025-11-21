@@ -44,21 +44,6 @@ spec:
     type: Directory
 ---
 apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: filerise-config-pv
-spec:
-  capacity:
-    storage: 1Gi
-  volumeMode: Filesystem
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  hostPath:
-    path: /data/nfs/k3svolumes/filerise/config
-    type: Directory
----
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: filerise-uploads-pvc
@@ -96,16 +81,4 @@ spec:
   resources:
     requests:
       storage: 5Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: filerise-config-pvc
-  namespace: services
-spec:
-  storageClassName: ""
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+
