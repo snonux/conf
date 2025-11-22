@@ -1,9 +1,9 @@
-function fullest_h
-    df -h | sort -n -k 5
-end
-
 function fullest_i
     df -i | sort -n -k 5
+end
+
+function fullest_h
+    df -h | sort -n -k 5
 end
 
 function usortn
