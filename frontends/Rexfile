@@ -77,7 +77,7 @@ our @dns_zones_remove = qw//;
 
 # k3s cluster running on FreeBSD in my LAN
 our @f3s_hosts =
-  qw/f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org vault.f3s.buetow.org syncthing.f3s.buetow.org uprecords.f3s.buetow.org koreader.f3s.buetow.org filerise.f3s.buetow.org/;
+  qw/f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org vault.f3s.buetow.org syncthing.f3s.buetow.org uprecords.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org/;
 
 # optionally, only enable manually for temp time, as no password protection yet
 # push @f3s_hosts, 'registry.f3s.buetow.org';

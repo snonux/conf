@@ -1,0 +1,16 @@
+NAMESPACE := "services"
+RELEASE_NAME := "filebrowser"
+CHART_PATH := "./helm-chart"
+
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+
+delete:
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+    kubectl delete pvc filebrowser-data-pvc filebrowser-database-pvc filebrowser-config-pvc -n {{NAMESPACE}} --ignore-not-found
+    kubectl delete pv filebrowser-data-pv filebrowser-database-pv filebrowser-config-pv --ignore-not-found
+
+deinstall: delete
