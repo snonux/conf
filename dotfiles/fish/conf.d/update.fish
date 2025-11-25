@@ -23,7 +23,7 @@ function update::tools
         set -a pids $last_pid
     end
 
-    for prog in tasksamurai timr
+    for prog in tasksamurai timr perc
         echo "Installing/updating $prog from codeberg.org/snonux/$prog/cmd/$prog@latest"
         go install codeberg.org/snonux/$prog/cmd/$prog@latest &
         set -a pids $last_pid
