@@ -161,6 +161,18 @@ server "<%= $prefix %>ecat.buetow.org" {
 }
 <% } -%>
 
+# Fallback for f3s hosts
+<% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
+server "<%= $prefix.$host %>" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    root "/htdocs/f3s_fallback"
+    directory auto index
+  }
+}
+<% } } -%>
+
 # Defaults
 server "default" {
   listen on * port 80
