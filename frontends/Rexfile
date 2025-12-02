@@ -234,7 +234,11 @@ task 'httpd',
     append_if_no_such_line '/etc/rc.conf.local', 'httpd_flags=';
 
     file '/etc/httpd.conf',
-      content   => template( './etc/httpd.conf.tpl', acme_hosts => \@acme_hosts ),
+      content   => template(
+        './etc/httpd.conf.tpl',
+        acme_hosts => \@acme_hosts,
+        f3s_hosts  => \@f3s_hosts
+      ),
       owner     => 'root',
       group     => 'wheel',
       mode      => '644',
@@ -242,6 +246,13 @@ task 'httpd',
 
     file '/var/www/htdocs/buetow.org',      ensure => 'directory';
     file '/var/www/htdocs/buetow.org/self', ensure => 'directory';
+
+    file '/var/www/htdocs/f3s_fallback', ensure => 'directory';
+    file '/var/www/htdocs/f3s_fallback/index.html',
+      source => './var/www/htdocs/f3s_fallback/index.html',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '644';
 
     # For failover health-check.
     file '/var/www/htdocs/buetow.org/self/index.txt',
