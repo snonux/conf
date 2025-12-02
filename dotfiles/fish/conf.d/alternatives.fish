@@ -15,3 +15,6 @@ end
 if type -q carl
     alias cal='carl'
 end
+
+# To change my habits
+alias tig=lazygit
