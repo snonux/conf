@@ -67,7 +67,7 @@ end
 function quickedit::snippets
     set -l prev_dir (pwd)
 
-    cd $QUICKEDIT_DIR/snippets
+    cd $QUICKEDIT_DIR/notes/snippets
     if test (count $argv) -gt 0
         set grep_pattern $argv[1]
         quickedit::current_dir $argv[1]
