@@ -40,10 +40,12 @@ http protocol "https" {
     pass header "Sec-WebSocket-Protocol"
     
     <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
+    # Fallback to localhost
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <localhost>
     <% if ($host eq 'registry.f3s.buetow.org') { -%>
-    match request quick header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
     <% } else { -%>
-    match request quick header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
     <% } } } -%>
 }
 
