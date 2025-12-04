@@ -1,6 +1,15 @@
 set -gx TMPUTILS_DIR ~/data/tmp
 set -gx TMPUTILS_TMPFILE ~/.tmpfile
 
+function tmpdir
+    set -l name $argv[1]
+    set -l dir "$TMPUTILS_DIR/$name"
+    if not test -d $dir
+        mkdir -p $dir
+    end
+    cd $dir
+end
+
 function tmpls
     if not test -d $TMPUTILS_DIR
         return
