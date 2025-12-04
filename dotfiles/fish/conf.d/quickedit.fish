@@ -53,27 +53,28 @@ end
 
 function quickedit
     set -l prev_dir (pwd)
-    set -l grep_pattern .
-
-    if test (count $argv) -gt 0
-        set grep_pattern $argv[1]
-    end
 
     cd $QUICKEDIT_DIR
-    quickedit::current_dir
+    if test (count $argv) -gt 0
+        quickedit::current_dir $argv[1]
+    else
+        quickedit::current_dir
+    end
+
     cd $prev_dir
 end
 
 function quickedit::snippets
     set -l prev_dir (pwd)
-    set -l grep_pattern .
-
-    if test (count $argv) -gt 0
-        set grep_pattern $argv[1]
-    end
 
     cd $QUICKEDIT_DIR/snippets
-    quickedit::current_dir
+    if test (count $argv) -gt 0
+        set grep_pattern $argv[1]
+        quickedit::current_dir $argv[1]
+    else
+        quickedit::current_dir
+    end
+
     cd $prev_dir
 end
 
