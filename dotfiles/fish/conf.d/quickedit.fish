@@ -27,15 +27,13 @@ function quickedit::postaction
     end
 end
 
-function quickedit
-    set -l prev_dir (pwd)
+function quickedit::current_dir
     set -l grep_pattern .
 
     if test (count $argv) -gt 0
         set grep_pattern $argv[1]
     end
 
-    cd $QUICKEDIT_DIR
     set files (find -L . -type f -not -path '*/.*' | grep -E "$grep_pattern")
 
     switch (count $files)
@@ -51,7 +49,31 @@ function quickedit
     if editor::helix::open_with_lock $file_path
         quickedit::postaction $file_path
     end
+end
 
+function quickedit
+    set -l prev_dir (pwd)
+    set -l grep_pattern .
+
+    if test (count $argv) -gt 0
+        set grep_pattern $argv[1]
+    end
+
+    cd $QUICKEDIT_DIR
+    quickedit::current_dir
+    cd $prev_dir
+end
+
+function quickedit::snippets
+    set -l prev_dir (pwd)
+    set -l grep_pattern .
+
+    if test (count $argv) -gt 0
+        set grep_pattern $argv[1]
+    end
+
+    cd $QUICKEDIT_DIR/snippets
+    quickedit::current_dir
     cd $prev_dir
 end
 
@@ -65,11 +87,6 @@ function quickedit::direct
     end
 
     cd -
-end
-
-function quickedit::bytag
-    set -l tag $argv[1]
-    quickedit::direct ~/Notes bytag/$tag.md
 end
 
 function quickedit::scratchpad
@@ -90,7 +107,6 @@ abbr -a S quickedit::scratchpad
 abbr -a quicknote quickedit::quicknote
 abbr -a perf quickedit::performance
 abbr -a performance quickedit::performance
-abbr -a bytag quickedit::bytag
 abbr -a goals quickedit::performance
 abbr -a er "ranger $QUICKEDIT_DIR"
 abbr -a cdquickedit "cd $QUICKEDIT_DIR"
@@ -98,3 +114,4 @@ abbr -a cdnotes 'cd ~/Notes'
 abbr -a cdfish 'cd ~/.config/fish/conf.d'
 abbr -a cddocs 'cd ~/Documents'
 abbr -a cdocs 'cd ~/Documents'
+abbr -a snippets quickedit::snippets
