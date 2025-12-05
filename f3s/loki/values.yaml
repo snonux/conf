@@ -18,9 +18,15 @@ loki:
 
 singleBinary:
   replicas: 1
+  extraVolumes:
+    - name: loki-data
+      persistentVolumeClaim:
+        claimName: loki-data-pvc
+  extraVolumeMounts:
+    - name: loki-data
+      mountPath: /var/loki
   persistence:
-    enabled: true
-    existingClaim: loki-data-pvc
+    enabled: false
 
 read:
   replicas: 0
