@@ -21,4 +21,4 @@ just install
 
 Add Loki as a data source in Grafana:
 - Type: Loki
-- URL: `http://loki-gateway.monitoring.svc.cluster.local`
+- URL: `http://loki.monitoring.svc.cluster.local:3100`
