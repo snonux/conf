@@ -1,0 +1,12 @@
+install:
+    helm repo add grafana https://grafana.github.io/helm-charts || true
+    helm repo update
+    kubectl apply -f persistent-volumes.yaml
+    helm install loki grafana/loki --namespace monitoring -f values.yaml
+
+uninstall:
+    helm uninstall loki --namespace monitoring
+    kubectl delete -f persistent-volumes.yaml
+
+upgrade:
+    helm upgrade loki grafana/loki --namespace monitoring -f values.yaml
