@@ -3,10 +3,13 @@ install:
     helm repo update
     kubectl apply -f persistent-volumes.yaml
     helm install loki grafana/loki --namespace monitoring -f values.yaml
+    helm install alloy grafana/alloy --namespace monitoring -f alloy-values.yaml
 
 uninstall:
+    helm uninstall alloy --namespace monitoring
     helm uninstall loki --namespace monitoring
     kubectl delete -f persistent-volumes.yaml
 
 upgrade:
     helm upgrade loki grafana/loki --namespace monitoring -f values.yaml
+    helm upgrade alloy grafana/alloy --namespace monitoring -f alloy-values.yaml

@@ -2,6 +2,8 @@
 
 Log aggregation system for your k3s cluster.
 
+Includes Grafana Alloy as a DaemonSet to collect logs from all containers in all namespaces.
+
 ## Prerequisites
 
 Create the data directory on your host:
