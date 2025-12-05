@@ -1,0 +1,16 @@
+NAMESPACE := "services"
+RELEASE_NAME := "keybr"
+CHART_PATH := "./helm-chart"
+
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+
+delete:
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+    kubectl delete pvc keybr-data-pvc -n {{NAMESPACE}} --ignore-not-found
+    kubectl delete pv keybr-data-pv --ignore-not-found
+
+deinstall: delete

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: keybr
+description: A Helm chart for deploying keybr.com typing tutor.
+version: 0.1.0
+appVersion: "latest"
