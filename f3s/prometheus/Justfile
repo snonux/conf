@@ -3,12 +3,14 @@ install:
     kubectl create secret generic additional-scrape-configs --from-file=additional-scrape-configs.yaml -n monitoring --dry-run=client -o yaml | kubectl apply -f -
     helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
     kubectl apply -f freebsd-recording-rules.yaml
+    kubectl apply -f openbsd-recording-rules.yaml
     just -f grafana-ingress/Justfile install
 
 upgrade:
     kubectl create secret generic additional-scrape-configs --from-file=additional-scrape-configs.yaml -n monitoring --dry-run=client -o yaml | kubectl apply -f -
     helm upgrade prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
     kubectl apply -f freebsd-recording-rules.yaml
+    kubectl apply -f openbsd-recording-rules.yaml
 
 uninstall:
     just -f grafana-ingress/Justfile delete

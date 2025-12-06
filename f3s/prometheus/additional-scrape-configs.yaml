@@ -6,3 +6,8 @@
       - '192.168.2.132:9100'  # f2 via WireGuard
       labels:
         os: freebsd
+    - targets:
+      - '192.168.2.110:9100'  # blowfish via WireGuard
+      - '192.168.2.111:9100'  # fishfinger via WireGuard
+      labels:
+        os: openbsd
