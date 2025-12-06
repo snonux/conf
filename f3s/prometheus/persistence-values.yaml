@@ -1,5 +1,9 @@
 prometheus:
   prometheusSpec:
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: additional-scrape-configs
+      key: additional-scrape-configs.yaml
     storageSpec:
       volumeClaimTemplate:
         spec:
