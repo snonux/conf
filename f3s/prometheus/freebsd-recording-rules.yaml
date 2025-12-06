@@ -1,0 +1,42 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freebsd-memory-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # FreeBSD memory metrics mapped to Linux-compatible names
+    - name: freebsd-memory
+      rules:
+        # Synthetic MemTotal for FreeBSD (maps to size_bytes)
+        - record: node_memory_MemTotal_bytes
+          expr: node_memory_size_bytes{os="freebsd"}
+          labels:
+            os: freebsd
+
+        # Synthetic MemAvailable for FreeBSD
+        # Available = free + inactive + cache (approximation)
+        - record: node_memory_MemAvailable_bytes
+          expr: node_memory_free_bytes{os="freebsd"} + node_memory_inactive_bytes{os="freebsd"} + node_memory_cache_bytes{os="freebsd"}
+          labels:
+            os: freebsd
+
+        # Synthetic MemFree for FreeBSD
+        - record: node_memory_MemFree_bytes
+          expr: node_memory_free_bytes{os="freebsd"}
+          labels:
+            os: freebsd
+
+        # Synthetic Buffers for FreeBSD
+        - record: node_memory_Buffers_bytes
+          expr: node_memory_buffer_bytes{os="freebsd"}
+          labels:
+            os: freebsd
+
+        # Synthetic Cached for FreeBSD
+        - record: node_memory_Cached_bytes
+          expr: node_memory_cache_bytes{os="freebsd"}
+          labels:
+            os: freebsd

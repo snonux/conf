@@ -1,0 +1,8 @@
+- job_name: 'node-exporter'
+  static_configs:
+    - targets:
+      - '192.168.2.130:9100'  # f0 via WireGuard
+      - '192.168.2.131:9100'  # f1 via WireGuard
+      - '192.168.2.132:9100'  # f2 via WireGuard
+      labels:
+        os: freebsd
