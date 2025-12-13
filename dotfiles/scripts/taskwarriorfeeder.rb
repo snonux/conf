@@ -152,7 +152,7 @@ end
 
 begin
   opts = {
-    quotes_dir: "#{ENV['HOME']}/Notes/HabitsAndQuotes",
+    quotes_dir: "#{ENV['HOME']}/Notes/random",
     notes_dirs: "#{ENV['HOME']}/Notes,#{ENV['HOME']}/Notes/Quicklogger,#{ENV['HOME']}/git/worktime",
     dry_run: false,
     no_random: false
