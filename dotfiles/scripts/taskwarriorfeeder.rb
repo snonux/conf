@@ -152,7 +152,7 @@ end
 
 begin
   opts = {
-    quotes_dir: "#{ENV['HOME']}/Notes/random",
+    random_dir: "#{ENV['HOME']}/Notes/random",
     notes_dirs: "#{ENV['HOME']}/Notes,#{ENV['HOME']}/Notes/Quicklogger,#{ENV['HOME']}/git/worktime",
     dry_run: false,
     no_random: false
@@ -160,7 +160,7 @@ begin
 
   opt_parser = OptionParser.new do |o|
     o.banner = 'Usage: ruby taskwarriorfeeder.rb [options]'
-    o.on('-d', '--quotes-dir DIR', 'The quotes directory') { |v| opts[:quotes_dir] = v }
+    o.on('-d', '--random-dir DIR', 'The random quotes directory') { |v| opts[:random_dir] = v }
     o.on('-n', '--notes-dirs DIR1,DIR2,...', 'The notes directories') { |v| opts[:notes_dirs] = v }
     o.on('-D', '--dry-run', 'Dry run mode') { opts[:dry_run] = true }
     o.on('-R', '--no-randoms', 'No random entries') { opts[:no_random] = true }
@@ -168,7 +168,7 @@ begin
   end
 
   opt_parser.parse!(ARGV)
-  core_habits_md_file = "#{opts[:quotes_dir]}/CoreHabits.md"
+  core_habits_md_file = "#{opts[:random_dir]}/CoreHabits.md"
 
   (run_from_personal_device? ? %w[ql pl] : %w[wl]).each do |prefix|
     notes(opts[:notes_dirs].split(','), prefix, opts[:dry_run]) do |tags, note, due|
@@ -192,7 +192,7 @@ begin
     end
     count = random_count
 
-    Dir["#{opts[:quotes_dir]}/*.md"].shuffle.each do |md_file|
+    Dir["#{opts[:random_dir]}/*.md"].shuffle.each do |md_file|
       next unless maybe?
       break if count <= 0
 
