@@ -75,8 +75,6 @@ function supersync::gitsyncer
         return
     end
 
-    echo $now >$enable_file
-
     set last_run (cat $enable_file)
     if test (math $now - $last_run) -lt $weekly_interval
         return
@@ -86,7 +84,7 @@ function supersync::gitsyncer
         ~/go/bin/gitsyncer sync bidirectional && ~/go/bin/gitsyncer showcase
     end
     if test $status -eq 0
-        date +%s >$enable_file
+        echo $now >$enable_file
     end
 end
 
