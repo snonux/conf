@@ -42,7 +42,8 @@ newline = "none"
 
 [keys.normal]
 D = ["ensure_selections_forward", "extend_to_line_end"]
-S = ["ensure_selections_forward", "extend_to_line_start"]
+#S conflicts with split_selection, for now comment out
+#S = ["ensure_selections_forward", "extend_to_line_start"]
 0 = ["select_mode", "extend_to_file_start"]
 G = ["ensure_selections_forward", "extend_to_file_end"]
 "^" = ["move_prev_word_start", "move_next_word_end", "search_selection", "global_search"]
