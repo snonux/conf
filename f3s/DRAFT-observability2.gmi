@@ -1,0 +1,254 @@
+# f3s: Kubernetes with FreeBSD - Part 9: Observability Improvements
+
+## Introduction
+
+This post covers improvements to the observability stack set up in Part 8. The main focus is making the Grafana dashboards more readable by displaying hostnames instead of IP addresses, and enabling etcd metrics monitoring for the k3s cluster.
+
+=> ./2025-12-07-f3s-kubernetes-with-freebsd-part-8.html Part 8: Observability
+
+## Displaying hostnames instead of IP addresses
+
+The "Node Exporter / USE Method / Node" dashboard originally showed IP addresses for all instances. This made it difficult to quickly identify which host was which. The fix involves adding relabel configurations to Prometheus.
+
+### Relabeling external hosts (FreeBSD and OpenBSD)
+
+For the external FreeBSD and OpenBSD hosts scraped via the additional-scrape-configs.yaml, I added relabel_configs to map IP addresses to hostnames:
+
+```
+- job_name: 'node-exporter'
+  static_configs:
+    - targets:
+      - '192.168.2.130:9100'  # f0 via WireGuard
+      - '192.168.2.131:9100'  # f1 via WireGuard
+      - '192.168.2.132:9100'  # f2 via WireGuard
+      labels:
+        os: freebsd
+    - targets:
+      - '192.168.2.110:9100'  # blowfish via WireGuard
+      - '192.168.2.111:9100'  # fishfinger via WireGuard
+      labels:
+        os: openbsd
+  relabel_configs:
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.130:9100'
+      target_label: instance
+      replacement: 'f0.lan.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.131:9100'
+      target_label: instance
+      replacement: 'f1.lan.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.132:9100'
+      target_label: instance
+      replacement: 'f2.lan.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.110:9100'
+      target_label: instance
+      replacement: 'blowfish.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.111:9100'
+      target_label: instance
+      replacement: 'fishfinger.buetow.org'
+```
+
+The relabel_configs section matches each IP:port combination and replaces the instance label with the corresponding hostname.
+
+### Relabeling Rocky Linux nodes
+
+The Rocky Linux k3s nodes (r0, r1, r2) are scraped via the kube-prometheus-stack's built-in node-exporter DaemonSet. To display hostnames for these, I added a relabeling configuration to the Helm values in persistence-values.yaml:
+
+```
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: instance
+```
+
+This uses the Kubernetes node name metadata (__meta_kubernetes_pod_node_name) to set the instance label, which automatically gives us r0.lan.buetow.org, r1.lan.buetow.org, and r2.lan.buetow.org.
+
+### Applying the changes
+
+After updating the configuration files, I recreated the secret and upgraded Prometheus:
+
+```
+just upgrade
+```
+
+### Purging old metrics
+
+To avoid having both old IP-based and new hostname-based metrics in Prometheus, I purged all historical data by uninstalling and reinstalling Prometheus:
+
+```
+just uninstall
+# On NFS server (f0 or f1):
+rm -rf /data/nfs/k3svolumes/prometheus/data/*
+just install
+```
+
+This gives a clean start with only hostname-based instance labels.
+
+## Enabling etcd metrics monitoring
+
+The etcd dashboard in Grafana initially showed no data because k3s uses an embedded etcd that doesn't expose metrics by default.
+
+### Enabling etcd metrics in k3s
+
+On each control-plane node (r0, r1, r2), create or edit /etc/rancher/k3s/config.yaml:
+
+```
+etcd-expose-metrics: true
+```
+
+Then restart k3s on each node:
+
+```
+systemctl restart k3s
+```
+
+After restarting, etcd metrics are available on port 2381:
+
+```
+curl http://127.0.0.1:2381/metrics | grep etcd
+```
+
+### Configuring Prometheus to scrape etcd
+
+In persistence-values.yaml, enable kubeEtcd with the node IP addresses and relabeling for hostnames:
+
+```
+kubeEtcd:
+  enabled: true
+  endpoints:
+    - 192.168.1.120
+    - 192.168.1.121
+    - 192.168.1.122
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    relabelings:
+      - sourceLabels: [__address__]
+        regex: '192\.168\.1\.120:2381'
+        targetLabel: instance
+        replacement: 'r0.lan.buetow.org'
+      - sourceLabels: [__address__]
+        regex: '192\.168\.1\.121:2381'
+        targetLabel: instance
+        replacement: 'r1.lan.buetow.org'
+      - sourceLabels: [__address__]
+        regex: '192\.168\.1\.122:2381'
+        targetLabel: instance
+        replacement: 'r2.lan.buetow.org'
+```
+
+Apply the changes:
+
+```
+just upgrade
+```
+
+### Verifying etcd metrics
+
+After the changes, all etcd targets show hostnames and are being scraped:
+
+```
+kubectl exec -n monitoring prometheus-prometheus-kube-prometheus-prometheus-0 \
+  -c prometheus -- wget -qO- 'http://localhost:9090/api/v1/targets' | \
+  jq -r '.data.activeTargets[] | select(.labels.job | test("etcd")) | 
+    "\(.labels.job): \(.labels.instance) - \(.health)"'
+```
+
+Output:
+
+```
+kube-etcd: r0.lan.buetow.org - up
+kube-etcd: r1.lan.buetow.org - up
+kube-etcd: r2.lan.buetow.org - up
+```
+
+The etcd dashboard in Grafana now displays metrics for all three control-plane nodes.
+
+## Updated persistence-values.yaml
+
+The complete updated persistence-values.yaml:
+
+```
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: instance
+
+kubeEtcd:
+  enabled: true
+  endpoints:
+    - 192.168.1.120
+    - 192.168.1.121
+    - 192.168.1.122
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    relabelings:
+      - sourceLabels: [__address__]
+        regex: '192\.168\.1\.120:2381'
+        targetLabel: instance
+        replacement: 'r0.lan.buetow.org'
+      - sourceLabels: [__address__]
+        regex: '192\.168\.1\.121:2381'
+        targetLabel: instance
+        replacement: 'r1.lan.buetow.org'
+      - sourceLabels: [__address__]
+        regex: '192\.168\.1\.122:2381'
+        targetLabel: instance
+        replacement: 'r2.lan.buetow.org'
+
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: additional-scrape-configs
+      key: additional-scrape-configs.yaml
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ""
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+          selector:
+            matchLabels:
+              type: local
+              app: prometheus
+
+grafana:
+  persistence:
+    enabled: true
+    type: pvc
+    existingClaim: "grafana-data-pvc"
+
+  initChownData:
+    enabled: false
+
+  podSecurityContext:
+    fsGroup: 911
+    runAsUser: 911
+    runAsGroup: 911
+```
+
+## Summary
+
+Two improvements were made to the observability stack:
+
+* Instance labels now show hostnames (e.g., f0.lan.buetow.org) instead of IP addresses
+* Enabled etcd metrics monitoring for the k3s embedded etcd
+
+These changes make the dashboards more readable and provide visibility into etcd cluster health.
+
+=> https://codeberg.org/snonux/conf/src/branch/master/f3s/prometheus prometheus configuration on Codeberg
