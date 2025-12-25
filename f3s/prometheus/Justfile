@@ -16,4 +16,4 @@ uninstall:
     just -f grafana-ingress/Justfile delete
     helm uninstall prometheus --namespace monitoring
     kubectl delete secret additional-scrape-configs -n monitoring || true
-    kubectl delete -f persistent-volumes.yaml
+    kubectl delete -f persistent-volumes.yaml     
