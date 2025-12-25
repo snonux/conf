@@ -11,3 +11,24 @@
       - '192.168.2.111:9100'  # fishfinger via WireGuard
       labels:
         os: openbsd
+  relabel_configs:
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.130:9100'
+      target_label: instance
+      replacement: 'f0.lan.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.131:9100'
+      target_label: instance
+      replacement: 'f1.lan.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.132:9100'
+      target_label: instance
+      replacement: 'f2.lan.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.110:9100'
+      target_label: instance
+      replacement: 'blowfish.buetow.org'
+    - source_labels: [__address__]
+      regex: '192\.168\.2\.111:9100'
+      target_label: instance
+      replacement: 'fishfinger.buetow.org'
