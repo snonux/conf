@@ -1,21 +1,3 @@
-prometheus-node-exporter:
-  prometheus:
-    monitor:
-      relabelings:
-        - sourceLabels: [__meta_kubernetes_pod_node_name]
-          targetLabel: instance
-
-kubeEtcd:
-  enabled: true
-  endpoints:
-    - 192.168.1.120
-    - 192.168.1.121
-    - 192.168.1.122
-  service:
-    enabled: true
-    port: 2381
-    targetPort: 2381
-
 prometheus:
   prometheusSpec:
     additionalScrapeConfigsSecret:
