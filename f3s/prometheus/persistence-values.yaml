@@ -15,20 +15,6 @@ kubeEtcd:
     enabled: true
     port: 2381
     targetPort: 2381
-  serviceMonitor:
-    relabelings:
-      - sourceLabels: [__address__]
-        regex: '192\.168\.1\.120:2381'
-        targetLabel: instance
-        replacement: 'r0.lan.buetow.org'
-      - sourceLabels: [__address__]
-        regex: '192\.168\.1\.121:2381'
-        targetLabel: instance
-        replacement: 'r1.lan.buetow.org'
-      - sourceLabels: [__address__]
-        regex: '192\.168\.1\.122:2381'
-        targetLabel: instance
-        replacement: 'r2.lan.buetow.org'
 
 prometheus:
   prometheusSpec:
