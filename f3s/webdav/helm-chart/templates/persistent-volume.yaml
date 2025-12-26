@@ -1,0 +1,2 @@
+# WebDAV reuses the filebrowser-data-pvc which is already created by the filebrowser chart.
+# No additional PV/PVC needed since we share the same data directory.

@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webdav
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webdav
+  template:
+    metadata:
+      labels:
+        app: webdav
+    spec:
+      securityContext:
+        fsGroup: 65534
+        seLinuxOptions:
+          type: spc_t
+      initContainers:
+      - name: setup
+        image: httpd:2.4
+        command:
+        - /bin/bash
+        - -c
+        - |
+          cp -r /usr/local/apache2/conf/* /apache-conf/
+          cp -r /usr/local/apache2/logs /apache-logs-init/
+          echo "Include conf/extra/httpd-dav.conf" >> /apache-conf/httpd.conf
+          sed -i 's/Listen 80/Listen 8080/' /apache-conf/httpd.conf
+          sed -i 's/User daemon/User #65534/' /apache-conf/httpd.conf
+          sed -i 's/Group daemon/Group #65534/' /apache-conf/httpd.conf
+          mkdir -p /lock-dir/apache2
+          chown -R 65534:65534 /apache-conf /apache-logs-init /lock-dir
+        volumeMounts:
+        - name: apache-conf
+          mountPath: /apache-conf
+        - name: apache-logs
+          mountPath: /apache-logs-init
+        - name: webdav-lock
+          mountPath: /lock-dir
+      containers:
+      - name: webdav
+        image: httpd:2.4
+        securityContext:
+          runAsUser: 65534
+          runAsGroup: 65534
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: webdav-data
+          mountPath: /var/www/webdav
+        - name: webdav-config
+          mountPath: /usr/local/apache2/conf/extra/httpd-dav.conf
+          subPath: httpd-dav.conf
+        - name: webdav-htpasswd
+          mountPath: /etc/apache2/webdav.htpasswd
+          subPath: webdav.htpasswd
+        - name: webdav-lock
+          mountPath: /var/lock
+        - name: apache-conf
+          mountPath: /usr/local/apache2/conf
+        - name: apache-logs
+          mountPath: /usr/local/apache2/logs
+      volumes:
+      - name: webdav-data
+        persistentVolumeClaim:
+          claimName: filebrowser-data-pvc
+      - name: webdav-config
+        configMap:
+          name: webdav-config
+      - name: webdav-htpasswd
+        secret:
+          secretName: webdav-htpasswd
+      - name: webdav-lock
+        emptyDir: {}
+      - name: apache-conf
+        emptyDir: {}
+      - name: apache-logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webdav-config
+  namespace: services
+data:
+  httpd-dav.conf: |
+    LoadModule dav_module modules/mod_dav.so
+    LoadModule dav_fs_module modules/mod_dav_fs.so
+    LoadModule auth_basic_module modules/mod_auth_basic.so
+    LoadModule authn_file_module modules/mod_authn_file.so
+    LoadModule authz_user_module modules/mod_authz_user.so
+
+    DavLockDB /var/lock/apache2/DavLock
+    DocumentRoot "/var/www/webdav"
+
+    <Directory "/var/www/webdav">
+        Dav On
+        Options Indexes FollowSymLinks
+
+        AuthType Basic
+        AuthName "WebDAV"
+        AuthUserFile /etc/apache2/webdav.htpasswd
+        Require valid-user
+    </Directory>
