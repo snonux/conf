@@ -14,7 +14,9 @@ spec:
         app: filebrowser
     spec:
       securityContext:
-        fsGroup: 1000
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
       containers:
       - name: filebrowser
         image: filebrowser/filebrowser:latest
@@ -22,9 +24,9 @@ spec:
         - containerPort: 80
         env:
         - name: PUID
-          value: "1000"
+          value: "65534"
         - name: PGID
-          value: "1000"
+          value: "65534"
         volumeMounts:
         - name: filebrowser-data
           mountPath: /srv
