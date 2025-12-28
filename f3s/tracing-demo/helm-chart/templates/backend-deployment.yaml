@@ -1,0 +1,51 @@
+# Backend Service Deployment
+# Returns data (simulates database queries)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracing-demo-backend
+  namespace: services
+  labels:
+    app: tracing-demo-backend
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tracing-demo-backend
+  template:
+    metadata:
+      labels:
+        app: tracing-demo-backend
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: registry.lan.buetow.org:30001/tracing-demo-backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5002
+          name: http
+          protocol: TCP
+        env:
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://alloy.monitoring.svc.cluster.local:4317"
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 5
+          periodSeconds: 5

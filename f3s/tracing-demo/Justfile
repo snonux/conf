@@ -1,0 +1,93 @@
+# Tracing Demo Application deployment automation
+# Three-tier Python application demonstrating distributed tracing
+
+NAMESPACE := "services"
+RELEASE_NAME := "tracing-demo"
+CHART_PATH := "./helm-chart"
+
+# Build all Docker images (use docker-image-Justfile for build/push to registry)
+build:
+    just -f docker-image-Justfile build
+
+# Push images to private registry
+push:
+    just -f docker-image-Justfile push
+
+# Build and push images
+build-push: build push
+
+# Install Helm chart
+install:
+    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+
+# Upgrade Helm chart
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+
+# Delete Helm release
+delete:
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+
+# Rebuild images, import, and upgrade deployment
+rebuild: build import upgrade
+
+# Check deployment status
+status:
+    kubectl get pods -n {{NAMESPACE}} | grep tracing-demo
+    kubectl get svc -n {{NAMESPACE}} | grep -E '(frontend|middleware|backend)-service'
+    kubectl get ingress -n {{NAMESPACE}} tracing-demo-ingress
+
+# View logs from all services
+logs:
+    @echo "=== Frontend logs ==="
+    kubectl logs -n {{NAMESPACE}} -l app=tracing-demo-frontend --tail=20
+    @echo ""
+    @echo "=== Middleware logs ==="
+    kubectl logs -n {{NAMESPACE}} -l app=tracing-demo-middleware --tail=20
+    @echo ""
+    @echo "=== Backend logs ==="
+    kubectl logs -n {{NAMESPACE}} -l app=tracing-demo-backend --tail=20
+
+# Follow logs from frontend
+logs-frontend:
+    kubectl logs -n {{NAMESPACE}} -l app=tracing-demo-frontend -f
+
+# Follow logs from middleware
+logs-middleware:
+    kubectl logs -n {{NAMESPACE}} -l app=tracing-demo-middleware -f
+
+# Follow logs from backend
+logs-backend:
+    kubectl logs -n {{NAMESPACE}} -l app=tracing-demo-backend -f
+
+# Test the application
+test:
+    @echo "Testing frontend health endpoint..."
+    curl http://tracing-demo.f3s.buetow.org/
+    @echo ""
+    @echo "Testing API process endpoint..."
+    curl http://tracing-demo.f3s.buetow.org/api/process
+
+# Load test - generate multiple traces
+load-test:
+    @echo "Generating 50 requests with 0.5s delay..."
+    @for i in {1..50}; do \
+        curl -s http://tracing-demo.f3s.buetow.org/api/process >/dev/null && echo "Request $$i complete"; \
+        sleep 0.5; \
+    done
+    @echo "Load test complete!"
+
+# Port forward to services for local testing
+port-forward-frontend:
+    kubectl port-forward -n {{NAMESPACE}} svc/frontend-service 5000:5000
+
+port-forward-middleware:
+    kubectl port-forward -n {{NAMESPACE}} svc/middleware-service 5001:5001
+
+port-forward-backend:
+    kubectl port-forward -n {{NAMESPACE}} svc/backend-service 5002:5002
+
+# Check if traces are being generated
+check-traces:
+    @echo "Check Grafana Tempo for traces with:"
+    @echo "  { resource.service.namespace = \"tracing-demo\" }"

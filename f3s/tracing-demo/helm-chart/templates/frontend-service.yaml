@@ -1,0 +1,17 @@
+# Frontend Service
+# Exposes the frontend deployment within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: services
+  labels:
+    app: tracing-demo-frontend
+spec:
+  ports:
+    - name: http
+      port: 5000
+      protocol: TCP
+      targetPort: 5000
+  selector:
+    app: tracing-demo-frontend

@@ -1,0 +1,31 @@
+# Persistent Volume and Claim for Grafana Tempo trace storage
+# Following the pattern from Loki deployment
+# Storage: 10Gi at /data/nfs/k3svolumes/tempo/data
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tempo-data-pv
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/tempo/data
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tempo-data-pvc
+  namespace: monitoring
+spec:
+  storageClassName: ""  # Empty for manual binding to PV
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

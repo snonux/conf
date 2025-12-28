@@ -1,0 +1,38 @@
+# Docker image build and push automation for tracing demo
+# Similar to anki-sync-server pattern
+
+REGISTRY := "r0.lan.buetow.org:30001"
+
+# Build all images
+build:
+    docker build -t tracing-demo-frontend:latest ./docker/frontend
+    docker build -t tracing-demo-middleware:latest ./docker/middleware
+    docker build -t tracing-demo-backend:latest ./docker/backend
+
+# Tag and push all images to private registry
+push:
+    docker tag tracing-demo-frontend:latest {{REGISTRY}}/tracing-demo-frontend:latest
+    docker tag tracing-demo-middleware:latest {{REGISTRY}}/tracing-demo-middleware:latest
+    docker tag tracing-demo-backend:latest {{REGISTRY}}/tracing-demo-backend:latest
+    docker push {{REGISTRY}}/tracing-demo-frontend:latest
+    docker push {{REGISTRY}}/tracing-demo-middleware:latest
+    docker push {{REGISTRY}}/tracing-demo-backend:latest
+
+# Build and push in one command
+all: build push
+
+# Build and push specific service
+frontend:
+    docker build -t tracing-demo-frontend:latest ./docker/frontend
+    docker tag tracing-demo-frontend:latest {{REGISTRY}}/tracing-demo-frontend:latest
+    docker push {{REGISTRY}}/tracing-demo-frontend:latest
+
+middleware:
+    docker build -t tracing-demo-middleware:latest ./docker/middleware
+    docker tag tracing-demo-middleware:latest {{REGISTRY}}/tracing-demo-middleware:latest
+    docker push {{REGISTRY}}/tracing-demo-middleware:latest
+
+backend:
+    docker build -t tracing-demo-backend:latest ./docker/backend
+    docker tag tracing-demo-backend:latest {{REGISTRY}}/tracing-demo-backend:latest
+    docker push {{REGISTRY}}/tracing-demo-backend:latest
