@@ -1,0 +1,33 @@
+# Grafana Tempo deployment automation
+# Following the pattern from Loki Justfile
+
+install:
+    helm repo add grafana https://grafana.github.io/helm-charts || true
+    helm repo update
+    kubectl apply -f persistent-volumes.yaml
+    helm install tempo grafana/tempo --namespace monitoring -f values.yaml
+    kubectl apply -f datasource-configmap.yaml
+
+uninstall:
+    kubectl delete -f datasource-configmap.yaml || true
+    helm uninstall tempo --namespace monitoring || true
+    kubectl delete -f persistent-volumes.yaml || true
+
+upgrade:
+    helm upgrade tempo grafana/tempo --namespace monitoring -f values.yaml
+    kubectl apply -f datasource-configmap.yaml
+
+status:
+    kubectl get pods -n monitoring -l app.kubernetes.io/name=tempo
+    kubectl get svc -n monitoring -l app.kubernetes.io/name=tempo
+    kubectl get pvc -n monitoring tempo-data-pvc
+
+logs:
+    kubectl logs -n monitoring -l app.kubernetes.io/name=tempo --tail=100 -f
+
+check:
+    @echo "Checking Tempo readiness..."
+    kubectl exec -n monitoring $(kubectl get pod -n monitoring -l app.kubernetes.io/name=tempo -o jsonpath='{.items[0].metadata.name}') -- wget -qO- http://localhost:3200/ready
+    @echo ""
+    @echo "Checking OTLP ports..."
+    kubectl exec -n monitoring $(kubectl get pod -n monitoring -l app.kubernetes.io/name=tempo -o jsonpath='{.items[0].metadata.name}') -- netstat -ln | grep -E ':(4317|4318|3200)'

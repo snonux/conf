@@ -1,0 +1,17 @@
+# Backend Service
+# Exposes the backend deployment within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: services
+  labels:
+    app: tracing-demo-backend
+spec:
+  ports:
+    - name: http
+      port: 5002
+      protocol: TCP
+      targetPort: 5002
+  selector:
+    app: tracing-demo-backend

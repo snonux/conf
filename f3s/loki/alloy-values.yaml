@@ -1,4 +1,17 @@
 alloy:
+  service:
+    ports:
+      otlp-grpc:
+        enabled: true
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+      otlp-http:
+        enabled: true
+        port: 4318
+        targetPort: 4318
+        protocol: TCP
+
   configMap:
     content: |
       discovery.kubernetes "pods" {
@@ -37,5 +50,59 @@ alloy:
       loki.write "default" {
         endpoint {
           url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // ========================================
+      // TRACES COLLECTION
+      // ========================================
+
+      // OTLP receiver for traces via gRPC and HTTP
+      // Accepts traces from applications instrumented with OpenTelemetry
+      otelcol.receiver.otlp "default" {
+        // Accept OTLP over gRPC on port 4317 (standard OTLP port)
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+
+        // Accept OTLP over HTTP on port 4318 (standard OTLP HTTP port)
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+
+        output {
+          traces = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      // Batch processor for efficient trace forwarding to Tempo
+      // Reduces network calls by batching spans before sending
+      otelcol.processor.batch "default" {
+        // Send batch every 5 seconds
+        timeout = "5s"
+
+        // Or when 100 spans have accumulated
+        send_batch_size = 100
+
+        // Maximum batch size as safety limit
+        send_batch_max_size = 200
+
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      // OTLP exporter to send traces to Tempo
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.monitoring.svc.cluster.local:4317"
+
+          // Tempo doesn't use TLS for internal cluster communication
+          tls {
+            insecure = true
+          }
+
+          // Enable compression for efficiency
+          compression = "gzip"
         }
       }

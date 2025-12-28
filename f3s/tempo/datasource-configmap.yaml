@@ -1,0 +1,47 @@
+# Grafana Datasource ConfigMap for Tempo
+# Auto-discovered by Grafana sidecar via label grafana_datasource: "1"
+# Enables traces-to-logs and traces-to-metrics correlation
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-grafana-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"  # Must be string "1" for auto-discovery
+data:
+  tempo-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+    - name: "Tempo"
+      type: tempo
+      uid: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
+      editable: true
+      jsonData:
+        httpMethod: GET
+        # Enable traces-to-logs correlation with Loki
+        tracesToLogsV2:
+          datasourceUid: 'loki'
+          spanStartTimeShift: '-1h'
+          spanEndTimeShift: '1h'
+          filterByTraceID: false
+          filterBySpanID: false
+          tags: ['cluster', 'namespace', 'pod', 'app']
+        # Enable traces-to-metrics correlation with Prometheus
+        tracesToMetrics:
+          datasourceUid: 'prometheus'
+        # Enable service graph visualization
+        serviceMap:
+          datasourceUid: 'prometheus'
+        # Enable node graph for visualization
+        nodeGraph:
+          enabled: true
+        # Enable search
+        search:
+          hide: false
+        # Enable Loki search integration
+        lokiSearch:
+          datasourceUid: 'loki'

@@ -1,0 +1,53 @@
+# Frontend Service Deployment
+# Receives HTTP requests and forwards to middleware
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracing-demo-frontend
+  namespace: services
+  labels:
+    app: tracing-demo-frontend
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tracing-demo-frontend
+  template:
+    metadata:
+      labels:
+        app: tracing-demo-frontend
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: registry.lan.buetow.org:30001/tracing-demo-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        env:
+        - name: MIDDLEWARE_URL
+          value: "http://middleware-service.services.svc.cluster.local:5001"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://alloy.monitoring.svc.cluster.local:4317"
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5

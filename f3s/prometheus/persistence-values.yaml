@@ -56,3 +56,31 @@ grafana:
     fsGroup: 911
     runAsUser: 911
     runAsGroup: 911
+
+  additionalDataSources:
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
+      editable: true
+      jsonData:
+        httpMethod: GET
+        tracesToLogsV2:
+          datasourceUid: 'loki'
+          spanStartTimeShift: '-1h'
+          spanEndTimeShift: '1h'
+          filterByTraceID: false
+          filterBySpanID: false
+          tags: ['cluster', 'namespace', 'pod', 'app']
+        tracesToMetrics:
+          datasourceUid: 'prometheus'
+        serviceMap:
+          datasourceUid: 'prometheus'
+        nodeGraph:
+          enabled: true
+        search:
+          hide: false
+        lokiSearch:
+          datasourceUid: 'loki'

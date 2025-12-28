@@ -1,0 +1,17 @@
+# Middleware Service
+# Exposes the middleware deployment within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: middleware-service
+  namespace: services
+  labels:
+    app: tracing-demo-middleware
+spec:
+  ports:
+    - name: http
+      port: 5001
+      protocol: TCP
+      targetPort: 5001
+  selector:
+    app: tracing-demo-middleware

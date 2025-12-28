@@ -1,0 +1,76 @@
+# Grafana Tempo - Monolithic Mode Configuration
+# Following the pattern from Loki SingleBinary deployment
+
+tempo:
+  # Retention policy for traces (7 days)
+  retention: 168h
+
+  # Storage configuration - Local filesystem backend
+  # This is required for monolithic mode
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+  # Distributor configuration with OTLP receivers
+  # Bind to 0.0.0.0 to avoid Tempo 2.7+ localhost-only binding issue
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  # Query frontend configuration
+  # Enabled by default in monolithic mode
+
+# Persistence configuration using hostPath PV
+# Matches the pattern from Loki deployment
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClassName: ""  # Empty string for manual PV binding
+  accessModes:
+    - ReadWriteOnce
+
+# Service configuration
+# Expose OTLP ports and query endpoint
+service:
+  type: ClusterIP
+
+# Resource limits to prevent runaway resource usage
+# Adjusted for monolithic deployment
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# Security context following best practices
+# Using non-root user
+securityContext:
+  fsGroup: 10001
+  runAsUser: 10001
+  runAsGroup: 10001
+  runAsNonRoot: true
+
+# Disable components not needed in monolithic mode
+gateway:
+  enabled: false
+
+# Monitoring integration with Prometheus
+# Enables ServiceMonitor for automatic scraping
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+# Test pod disabled to reduce overhead
+test:
+  enabled: false

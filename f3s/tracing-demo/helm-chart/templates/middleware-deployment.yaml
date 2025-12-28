@@ -1,0 +1,53 @@
+# Middleware Service Deployment
+# Transforms data and calls backend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracing-demo-middleware
+  namespace: services
+  labels:
+    app: tracing-demo-middleware
+    component: middleware
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tracing-demo-middleware
+  template:
+    metadata:
+      labels:
+        app: tracing-demo-middleware
+        component: middleware
+    spec:
+      containers:
+      - name: middleware
+        image: registry.lan.buetow.org:30001/tracing-demo-middleware:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+          name: http
+          protocol: TCP
+        env:
+        - name: BACKEND_URL
+          value: "http://backend-service.services.svc.cluster.local:5002"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://alloy.monitoring.svc.cluster.local:4317"
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 5
+          periodSeconds: 5
