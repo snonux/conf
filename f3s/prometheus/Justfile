@@ -4,6 +4,7 @@ install:
     helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
     kubectl apply -f freebsd-recording-rules.yaml
     kubectl apply -f openbsd-recording-rules.yaml
+    kubectl apply -f zfs-recording-rules.yaml
     just -f grafana-ingress/Justfile install
 
 upgrade:
@@ -11,6 +12,7 @@ upgrade:
     helm upgrade prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
     kubectl apply -f freebsd-recording-rules.yaml
     kubectl apply -f openbsd-recording-rules.yaml
+    kubectl apply -f zfs-recording-rules.yaml
 
 uninstall:
     just -f grafana-ingress/Justfile delete

@@ -1,0 +1,106 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freebsd-zfs-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # FreeBSD ZFS ARC metrics - calculated values for easier dashboard consumption
+    - name: freebsd-zfs-arc
+      interval: 30s
+      rules:
+        # ARC Hit Rate (percentage)
+        # Rate of hits divided by total requests (hits + misses)
+        - record: node_zfs_arc_hit_rate_percent
+          expr: |
+            100 * (
+              rate(node_zfs_arcstats_hits_total{os="freebsd"}[5m]) /
+              (rate(node_zfs_arcstats_hits_total{os="freebsd"}[5m]) +
+               rate(node_zfs_arcstats_misses_total{os="freebsd"}[5m]))
+            )
+          labels:
+            os: freebsd
+
+        # ARC Memory Usage Percentage (current size vs maximum)
+        - record: node_zfs_arc_memory_usage_percent
+          expr: |
+            100 * (
+              node_zfs_arcstats_size_bytes{os="freebsd"} /
+              node_zfs_arcstats_c_max_bytes{os="freebsd"}
+            )
+          labels:
+            os: freebsd
+
+        # ARC Target vs Max Ratio (how close to maximum target is)
+        - record: node_zfs_arc_target_percent
+          expr: |
+            100 * (
+              node_zfs_arcstats_c_bytes{os="freebsd"} /
+              node_zfs_arcstats_c_max_bytes{os="freebsd"}
+            )
+          labels:
+            os: freebsd
+
+        # ARC Metadata Percentage (metadata vs total ARC size)
+        - record: node_zfs_arc_metadata_percent
+          expr: |
+            100 * (
+              node_zfs_arcstats_meta_bytes{os="freebsd"} /
+              node_zfs_arcstats_size_bytes{os="freebsd"}
+            )
+          labels:
+            os: freebsd
+
+        # ARC Data Percentage (data vs total ARC size)
+        - record: node_zfs_arc_data_percent
+          expr: |
+            100 * (
+              node_zfs_arcstats_data_bytes{os="freebsd"} /
+              node_zfs_arcstats_size_bytes{os="freebsd"}
+            )
+          labels:
+            os: freebsd
+
+        # MFU Percentage (Most Frequently Used vs total ARC)
+        - record: node_zfs_arc_mfu_percent
+          expr: |
+            100 * (
+              node_zfs_arcstats_mfu_bytes{os="freebsd"} /
+              node_zfs_arcstats_size_bytes{os="freebsd"}
+            )
+          labels:
+            os: freebsd
+
+        # MRU Percentage (Most Recently Used vs total ARC)
+        - record: node_zfs_arc_mru_percent
+          expr: |
+            100 * (
+              node_zfs_arcstats_mru_bytes{os="freebsd"} /
+              node_zfs_arcstats_size_bytes{os="freebsd"}
+            )
+          labels:
+            os: freebsd
+
+        # Demand Data Hit Rate (percentage)
+        - record: node_zfs_arc_demand_data_hit_rate_percent
+          expr: |
+            100 * (
+              rate(node_zfs_arcstats_demand_data_hits_total{os="freebsd"}[5m]) /
+              (rate(node_zfs_arcstats_demand_data_hits_total{os="freebsd"}[5m]) +
+               rate(node_zfs_arcstats_demand_data_misses_total{os="freebsd"}[5m]))
+            )
+          labels:
+            os: freebsd
+
+        # Demand Metadata Hit Rate (percentage)
+        - record: node_zfs_arc_demand_metadata_hit_rate_percent
+          expr: |
+            100 * (
+              rate(node_zfs_arcstats_demand_metadata_hits_total{os="freebsd"}[5m]) /
+              (rate(node_zfs_arcstats_demand_metadata_hits_total{os="freebsd"}[5m]) +
+               rate(node_zfs_arcstats_demand_metadata_misses_total{os="freebsd"}[5m]))
+            )
+          labels:
+            os: freebsd
