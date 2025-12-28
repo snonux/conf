@@ -13,7 +13,7 @@ data:
   tempo-datasource.yaml: |-
     apiVersion: 1
     datasources:
-    - name: "Tempo"
+    - name: Tempo
       type: tempo
       uid: tempo
       url: http://tempo.monitoring.svc.cluster.local:3200
@@ -22,26 +22,24 @@ data:
       editable: true
       jsonData:
         httpMethod: GET
-        # Enable traces-to-logs correlation with Loki
         tracesToLogsV2:
-          datasourceUid: 'loki'
-          spanStartTimeShift: '-1h'
-          spanEndTimeShift: '1h'
+          datasourceUid: loki
+          spanStartTimeShift: -1h
+          spanEndTimeShift: 1h
           filterByTraceID: false
           filterBySpanID: false
-          tags: ['cluster', 'namespace', 'pod', 'app']
-        # Enable traces-to-metrics correlation with Prometheus
+          tags:
+            - cluster
+            - namespace
+            - pod
+            - app
         tracesToMetrics:
-          datasourceUid: 'prometheus'
-        # Enable service graph visualization
+          datasourceUid: prometheus
         serviceMap:
-          datasourceUid: 'prometheus'
-        # Enable node graph for visualization
+          datasourceUid: prometheus
         nodeGraph:
           enabled: true
-        # Enable search
         search:
           hide: false
-        # Enable Loki search integration
         lokiSearch:
-          datasourceUid: 'loki'
+          datasourceUid: loki
