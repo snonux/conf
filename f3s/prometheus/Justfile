@@ -1,18 +1,26 @@
 install:
     kubectl apply -f persistent-volumes.yaml
     kubectl create secret generic additional-scrape-configs --from-file=additional-scrape-configs.yaml -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+    kubectl apply -f grafana-datasources-all.yaml
     helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
     kubectl apply -f freebsd-recording-rules.yaml
     kubectl apply -f openbsd-recording-rules.yaml
     kubectl apply -f zfs-recording-rules.yaml
     just -f grafana-ingress/Justfile install
+    @echo "Waiting for Grafana to be ready..."
+    @sleep 10
+    @echo "Restarting Grafana to load datasources..."
+    kubectl delete pod -n monitoring -l app.kubernetes.io/name=grafana
 
 upgrade:
     kubectl create secret generic additional-scrape-configs --from-file=additional-scrape-configs.yaml -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+    kubectl apply -f grafana-datasources-all.yaml
     helm upgrade prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
     kubectl apply -f freebsd-recording-rules.yaml
     kubectl apply -f openbsd-recording-rules.yaml
     kubectl apply -f zfs-recording-rules.yaml
+    @echo "Restarting Grafana to load datasources..."
+    kubectl delete pod -n monitoring -l app.kubernetes.io/name=grafana
 
 uninstall:
     just -f grafana-ingress/Justfile delete

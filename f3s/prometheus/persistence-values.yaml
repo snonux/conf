@@ -57,30 +57,20 @@ grafana:
     runAsUser: 911
     runAsGroup: 911
 
-  additionalDataSources:
-    - name: Tempo
-      type: tempo
-      uid: tempo
-      url: http://tempo.monitoring.svc.cluster.local:3200
-      access: proxy
-      isDefault: false
-      editable: true
-      jsonData:
-        httpMethod: GET
-        tracesToLogsV2:
-          datasourceUid: 'loki'
-          spanStartTimeShift: '-1h'
-          spanEndTimeShift: '1h'
-          filterByTraceID: false
-          filterBySpanID: false
-          tags: ['cluster', 'namespace', 'pod', 'app']
-        tracesToMetrics:
-          datasourceUid: 'prometheus'
-        serviceMap:
-          datasourceUid: 'prometheus'
-        nodeGraph:
-          enabled: true
-        search:
-          hide: false
-        lokiSearch:
-          datasourceUid: 'loki'
+  # Disable sidecar-based datasource provisioning
+  # Use direct ConfigMap mounting instead (following x-rag pattern)
+  sidecar:
+    datasources:
+      enabled: false
+
+  # Mount datasources ConfigMap directly to provisioning directory
+  # This ensures Grafana reads datasources on startup without sidecar complexity
+  extraVolumes:
+    - name: datasources-volume
+      configMap:
+        name: grafana-datasources-all
+
+  extraVolumeMounts:
+    - name: datasources-volume
+      mountPath: /etc/grafana/provisioning/datasources
+      readOnly: true
