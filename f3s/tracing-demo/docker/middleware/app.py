@@ -53,7 +53,9 @@ tracer = trace.get_tracer(__name__)
 app = Flask(__name__)
 
 # Auto-instrument Flask and requests library
-FlaskInstrumentor().instrument_app(app)
+# Auto-instrument Flask to create spans for HTTP requests
+# Exclude health check endpoint to reduce tracing noise
+FlaskInstrumentor().instrument_app(app, excluded_urls="/health")
 RequestsInstrumentor().instrument()
 
 # Configuration for downstream services
