@@ -1,41 +1,25 @@
-# Prometheus installation
+# Prometheus Stack Configuration
 
-This directory contains the configuration to deploy the kube-prometheus-stack, with persistent storage for Prometheus and Grafana, and a Grafana ingress.
+## Deploying
 
-## Prerequisites
+```bash
+just install  # First time
+just upgrade  # Updates
+```
 
-1.  Create the monitoring namespace:
+**IMPORTANT**: After upgrading, Grafana will automatically restart to load new configurations.
 
-    ```sh
-    kubectl create ns monitoring
-    ```
+## Datasources
 
-2.  Add the Prometheus Helm chart repository:
+All Grafana datasources are provisioned via a single unified ConfigMap:
+- `grafana-datasources-all.yaml` - Contains Prometheus, Alertmanager, Loki, and Tempo
 
-    ```sh
-    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-    helm repo update
-    ```
+This ConfigMap is directly mounted to `/etc/grafana/provisioning/datasources/` in the Grafana pod, ensuring datasources are automatically loaded on startup.
 
-3.  Create the directories on your NFS server:
+**Provisioned Datasources:**
+- ✅ **Prometheus** (uid=prometheus) - Default datasource for metrics
+- ✅ **Alertmanager** (uid=alertmanager) - Alert management
+- ✅ **Loki** (uid=loki) - Log aggregation
+- ✅ **Tempo** (uid=tempo) - Distributed tracing with traces-to-logs and traces-to-metrics correlation
 
-    ```sh
-    mkdir -p /data/nfs/k3svolumes/prometheus/data
-    mkdir -p /data/nfs/k3svolumes/grafana/data
-    ```
-
-## Automation with Justfile
-
-A `Justfile` is provided to automate the installation and uninstallation process.
-
--   To install everything, run:
-
-    ```sh
-    just install
-    ```
-
--   To uninstall everything, run:
-
-    ```sh
-    just uninstall
-    ```
+**Note:** The sidecar-based provisioning is disabled in favor of direct ConfigMap mounting (following the pattern from /home/paul/git/x-rag/infra/k8s/monitoring/). See `problem.md` for the complete debugging journey and resolution.
