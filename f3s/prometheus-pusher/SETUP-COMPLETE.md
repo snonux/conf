@@ -28,7 +28,7 @@ prometheus-pusher/
 ├── main.go              # Main entry point with mode selection
 ├── realtime.go          # Original Pushgateway functionality
 ├── historic.go          # NEW: Remote Write with timestamps
-├── prometheus-pusher-historic  # NEW: Binary with all modes
+├── prometheus-pusher  # NEW: Binary with all modes
 └── HISTORIC.md          # Complete documentation
 ```
 
@@ -93,7 +93,7 @@ cd /home/paul/git/conf/f3s/prometheus-pusher
 kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090 &
 
 # Push data from 24 hours ago
-./prometheus-pusher-historic \
+./prometheus-pusher \
   -mode=historic \
   -hours-ago=24 \
   -prometheus=http://localhost:9090/api/v1/write
@@ -116,7 +116,7 @@ curl -s 'http://localhost:9090/api/v1/query?query=app_requests_total{job="histor
 
 ```bash
 # Backfill last 48 hours with 2-hour intervals
-./prometheus-pusher-historic \
+./prometheus-pusher \
   -mode=backfill \
   -start-hours=48 \
   -end-hours=0 \
@@ -179,13 +179,13 @@ Now you can:
 ### Realtime Mode
 ```bash
 # Single push (original behavior)
-./prometheus-pusher-historic -mode=realtime
+./prometheus-pusher -mode=realtime
 
 # Continuous pushing every 15s
-./prometheus-pusher-historic -mode=realtime -continuous
+./prometheus-pusher -mode=realtime -continuous
 
 # Custom Pushgateway URL
-./prometheus-pusher-historic \
+./prometheus-pusher \
   -mode=realtime \
   -pushgateway=http://custom-pushgateway:9091 \
   -job=my_app
@@ -194,16 +194,16 @@ Now you can:
 ### Historic Mode
 ```bash
 # Yesterday's data
-./prometheus-pusher-historic -mode=historic -hours-ago=24
+./prometheus-pusher -mode=historic -hours-ago=24
 
 # 3 hours ago
-./prometheus-pusher-historic -mode=historic -hours-ago=3
+./prometheus-pusher -mode=historic -hours-ago=3
 
 # Last week
-./prometheus-pusher-historic -mode=historic -hours-ago=168
+./prometheus-pusher -mode=historic -hours-ago=168
 
 # Custom Prometheus URL
-./prometheus-pusher-historic \
+./prometheus-pusher \
   -mode=historic \
   -hours-ago=24 \
   -prometheus=http://custom-prometheus:9090/api/v1/write
@@ -212,13 +212,13 @@ Now you can:
 ### Backfill Mode
 ```bash
 # Last 24 hours, hourly
-./prometheus-pusher-historic -mode=backfill -start-hours=24 -end-hours=0 -interval=1
+./prometheus-pusher -mode=backfill -start-hours=24 -end-hours=0 -interval=1
 
 # Last week, every 6 hours
-./prometheus-pusher-historic -mode=backfill -start-hours=168 -end-hours=0 -interval=6
+./prometheus-pusher -mode=backfill -start-hours=168 -end-hours=0 -interval=6
 
 # Specific range (48h ago to 24h ago, every 2h)
-./prometheus-pusher-historic -mode=backfill -start-hours=48 -end-hours=24 -interval=2
+./prometheus-pusher -mode=backfill -start-hours=48 -end-hours=24 -interval=2
 ```
 
 ## 📚 Documentation

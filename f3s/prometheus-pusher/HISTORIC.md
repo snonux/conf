@@ -42,14 +42,14 @@ You should see: `msg="Experimental features enabled" features=[remote-write-rece
 
 ## Usage
 
-The `prometheus-pusher-historic` binary supports three modes:
+The `prometheus-pusher` binary supports three modes:
 
 ### Mode 1: Realtime (Default)
 
 Push current metrics to Pushgateway (same as before):
 
 ```bash
-./prometheus-pusher-historic -mode=realtime -continuous
+./prometheus-pusher -mode=realtime -continuous
 ```
 
 Options:
@@ -66,13 +66,13 @@ Push a single datapoint from X hours ago:
 kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090 &
 
 # Push data from 24 hours ago
-./prometheus-pusher-historic -mode=historic -hours-ago=24
+./prometheus-pusher -mode=historic -hours-ago=24
 
 # Push data from 3 hours ago
-./prometheus-pusher-historic -mode=historic -hours-ago=3
+./prometheus-pusher -mode=historic -hours-ago=3
 
 # Push data from yesterday (48 hours ago)
-./prometheus-pusher-historic -mode=historic -hours-ago=48
+./prometheus-pusher -mode=historic -hours-ago=48
 ```
 
 Options:
@@ -85,13 +85,13 @@ Backfill a range of historic data:
 
 ```bash
 # Backfill last 48 hours with 1-hour intervals
-./prometheus-pusher-historic -mode=backfill -start-hours=48 -end-hours=0 -interval=1
+./prometheus-pusher -mode=backfill -start-hours=48 -end-hours=0 -interval=1
 
 # Backfill last week with 6-hour intervals
-./prometheus-pusher-historic -mode=backfill -start-hours=168 -end-hours=0 -interval=6
+./prometheus-pusher -mode=backfill -start-hours=168 -end-hours=0 -interval=6
 
 # Backfill specific range (24h ago to 12h ago, every 2 hours)
-./prometheus-pusher-historic -mode=backfill -start-hours=24 -end-hours=12 -interval=2
+./prometheus-pusher -mode=backfill -start-hours=24 -end-hours=12 -interval=2
 ```
 
 Options:
@@ -138,7 +138,7 @@ sleep 2
 
 # 2. Backfill data for every hour in the last 24 hours
 cd /home/paul/git/conf/f3s/prometheus-pusher
-./prometheus-pusher-historic \
+./prometheus-pusher \
   -mode=backfill \
   -prometheus=http://localhost:9090/api/v1/write \
   -start-hours=24 \
@@ -222,7 +222,7 @@ For very large historic datasets, you can use `promtool` to create TSDB blocks:
 
 ```bash
 # 1. Generate OpenMetrics format file
-./prometheus-pusher-historic -mode=export -output=metrics.txt
+./prometheus-pusher -mode=export -output=metrics.txt
 
 # 2. Create blocks from the file
 promtool tsdb create-blocks-from openmetrics metrics.txt /path/to/prometheus/data

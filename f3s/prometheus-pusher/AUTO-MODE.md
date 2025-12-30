@@ -32,20 +32,20 @@ Now you can:
 
 ```bash
 # CSV format
-./prometheus-pusher-auto -mode=auto -file=metrics.csv -format=csv
+./prometheus-pusher -mode=auto -file=metrics.csv -format=csv
 
 # JSON format
-./prometheus-pusher-auto -mode=auto -file=metrics.json -format=json
+./prometheus-pusher -mode=auto -file=metrics.json -format=json
 ```
 
 ### From Stdin
 
 ```bash
 # Pipe CSV data
-cat metrics.csv | ./prometheus-pusher-auto -mode=auto -format=csv
+cat metrics.csv | ./prometheus-pusher -mode=auto -format=csv
 
 # Interactive input
-./prometheus-pusher-auto -mode=auto -format=csv
+./prometheus-pusher -mode=auto -format=csv
 # (then paste data and press Ctrl+D)
 ```
 
@@ -132,7 +132,7 @@ kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 909
 kubectl port-forward -n monitoring svc/pushgateway 9091:9091 &
 
 # 4. Auto-import all data
-./prometheus-pusher-auto \
+./prometheus-pusher \
   -mode=auto \
   -file=test-all-ages.csv \
   -format=csv \
@@ -259,13 +259,13 @@ For very old data (> few months), consider:
 ./generate-test-data.sh
 
 # Import yesterday's backup
-./prometheus-pusher-auto -mode=auto -file=backup_yesterday.csv
+./prometheus-pusher -mode=auto -file=backup_yesterday.csv
 
 # Import last week's logs
-./prometheus-pusher-auto -mode=auto -file=logs_lastweek.json -format=json
+./prometheus-pusher -mode=auto -file=logs_lastweek.json -format=json
 
 # Import current metrics
-./prometheus-pusher-auto -mode=auto -file=current_metrics.csv
+./prometheus-pusher -mode=auto -file=current_metrics.csv
 ```
 
 All data is automatically routed to the correct ingestion method!

@@ -14,12 +14,12 @@ PF_PID=$!
 # Wait for port-forward to be ready
 sleep 2
 
-echo "Step 2: Running prometheus-pusher binary..."
+echo "Step 2: Running prometheus-pusher binary (realtime mode)..."
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Run the binary and capture its exit status
-./prometheus-pusher
+# Run the binary in realtime mode and capture its exit status
+./prometheus-pusher -mode=realtime -continuous
 EXIT_CODE=$?
 
 # Clean up port-forward
