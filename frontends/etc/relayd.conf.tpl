@@ -38,31 +38,41 @@ http protocol "https" {
     pass header "Sec-WebSocket-Version"
     pass header "Sec-WebSocket-Extensions"
     pass header "Sec-WebSocket-Protocol"
-    
-    <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
-    # Fallback to localhost
+
+    # Explicitly route non-f3s hosts to localhost to prevent them from trying f3s backends
+    <% for my $host (@$acme_hosts) {
+         next if grep { $_ eq $host } @$f3s_hosts;
+         for my $prefix (@prefixes) { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <localhost>
-    <% if ($host eq 'registry.f3s.buetow.org') { -%>
+    <%   } } -%>
+
+    # For f3s hosts: use relay-level failover (f3s -> localhost backup)
+    # Registry is special: needs explicit routing to port 30001
+    <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) {
+         if ($host eq 'registry.f3s.buetow.org') { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
-    <% } else { -%>
-    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
-    <% } } } -%>
+    <%   }
+       } } -%>
 }
 
 relay "https4" {
     listen on <%= $vio0_ip %> port 443 tls
     protocol "https"
-    forward to <localhost> port 8080
-    forward to <f3s_registry> port 30001 check tcp
+    # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
+    forward to <localhost> port 8080
+    # Registry uses separate port and table
+    forward to <f3s_registry> port 30001 check tcp
 }
 
 relay "https6" {
     listen on <%= $ipv6address->($hostname) %> port 443 tls
     protocol "https"
-    forward to <localhost> port 8080
-    forward to <f3s_registry> port 30001 check tcp
+    # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
+    forward to <localhost> port 8080
+    # Registry uses separate port and table
+    forward to <f3s_registry> port 30001 check tcp
 }
 
 tcp protocol "gemini" {
