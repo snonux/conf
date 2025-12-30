@@ -164,9 +164,9 @@ func generateHistoricTimeSeries(timestamp time.Time) []prompb.TimeSeries {
 		{Name: "job", Value: "historic_data"},
 	}
 
-	timeSeries = append(timeSeries, createCounterSeries("app_requests_total", baseLabels, float64(rand.Intn(100)+1), timestampMs))
-	timeSeries = append(timeSeries, createGaugeSeries("app_active_connections", baseLabels, float64(rand.Intn(100)), timestampMs))
-	timeSeries = append(timeSeries, createGaugeSeries("app_temperature_celsius", baseLabels, 15+rand.Float64()*20, timestampMs))
+	timeSeries = append(timeSeries, createCounterSeries("prometheus_pusher_test_requests_total", baseLabels, float64(rand.Intn(100)+1), timestampMs))
+	timeSeries = append(timeSeries, createGaugeSeries("prometheus_pusher_test_active_connections", baseLabels, float64(rand.Intn(100)), timestampMs))
+	timeSeries = append(timeSeries, createGaugeSeries("prometheus_pusher_test_temperature_celsius", baseLabels, 15+rand.Float64()*20, timestampMs))
 
 	timeSeries = append(timeSeries, generateHistogramSeries(baseLabels, timestampMs)...)
 	timeSeries = append(timeSeries, generateLabeledCounterSeries(baseLabels, timestampMs)...)
@@ -199,7 +199,7 @@ func generateHistogramSeries(baseLabels []prompb.Label, timestamp int64) []promp
 	for _, bucket := range buckets {
 		cumulativeCount += rand.Intn(5)
 		labels := []prompb.Label{
-			{Name: "__name__", Value: "app_request_duration_seconds_bucket"},
+			{Name: "__name__", Value: "prometheus_pusher_test_request_duration_seconds_bucket"},
 			{Name: "le", Value: fmt.Sprintf("%g", bucket)},
 		}
 		labels = append(labels, baseLabels...)
@@ -211,7 +211,7 @@ func generateHistogramSeries(baseLabels []prompb.Label, timestamp int64) []promp
 	}
 
 	infLabels := []prompb.Label{
-		{Name: "__name__", Value: "app_request_duration_seconds_bucket"},
+		{Name: "__name__", Value: "prometheus_pusher_test_request_duration_seconds_bucket"},
 		{Name: "le", Value: "+Inf"},
 	}
 	infLabels = append(infLabels, baseLabels...)
@@ -220,8 +220,8 @@ func generateHistogramSeries(baseLabels []prompb.Label, timestamp int64) []promp
 		Samples: []prompb.Sample{{Value: float64(cumulativeCount), Timestamp: timestamp}},
 	})
 
-	series = append(series, createCounterSeries("app_request_duration_seconds_sum", baseLabels, rand.Float64()*100, timestamp))
-	series = append(series, createCounterSeries("app_request_duration_seconds_count", baseLabels, float64(cumulativeCount), timestamp))
+	series = append(series, createCounterSeries("prometheus_pusher_test_request_duration_seconds_sum", baseLabels, rand.Float64()*100, timestamp))
+	series = append(series, createCounterSeries("prometheus_pusher_test_request_duration_seconds_count", baseLabels, float64(cumulativeCount), timestamp))
 
 	return series
 }
@@ -235,7 +235,7 @@ func generateLabeledCounterSeries(baseLabels []prompb.Label, timestamp int64) []
 	for _, jobType := range jobTypes {
 		for _, status := range statuses {
 			labels := []prompb.Label{
-				{Name: "__name__", Value: "app_jobs_processed_total"},
+				{Name: "__name__", Value: "prometheus_pusher_test_jobs_processed_total"},
 				{Name: "job_type", Value: jobType},
 				{Name: "status", Value: status},
 			}

@@ -1,0 +1,274 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "prometheus-pusher-test",
+    "title": "Prometheus Pusher Test Metrics",
+    "tags": ["prometheus-pusher", "test", "demo"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "Request Rate",
+        "targets": [
+          {
+            "expr": "rate(prometheus_pusher_test_requests_total[5m])",
+            "legendFormat": "Requests/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests per Second"},
+          {"format": "short"}
+        ],
+        "xaxis": {"mode": "time"},
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 5,
+        "tooltip": {"shared": true}
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "stat",
+        "title": "Total Requests",
+        "targets": [
+          {
+            "expr": "prometheus_pusher_test_requests_total",
+            "legendFormat": "Total",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "gauge",
+        "title": "Active Connections",
+        "targets": [
+          {
+            "expr": "prometheus_pusher_test_active_connections",
+            "legendFormat": "Connections",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 50, "color": "yellow"},
+                {"value": 80, "color": "red"}
+              ]
+            },
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "gauge",
+        "title": "Temperature (°C)",
+        "targets": [
+          {
+            "expr": "prometheus_pusher_test_temperature_celsius",
+            "legendFormat": "°C",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 50,
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "blue"},
+                {"value": 20, "color": "green"},
+                {"value": 30, "color": "yellow"},
+                {"value": 35, "color": "red"}
+              ]
+            },
+            "unit": "celsius"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "type": "graph",
+        "title": "Request Duration Histogram",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(prometheus_pusher_test_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.90, rate(prometheus_pusher_test_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p90",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(prometheus_pusher_test_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ],
+        "xaxis": {"mode": "time"},
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "tooltip": {"shared": true}
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "type": "stat",
+        "title": "Average Request Duration",
+        "targets": [
+          {
+            "expr": "rate(prometheus_pusher_test_request_duration_seconds_sum[5m]) / rate(prometheus_pusher_test_request_duration_seconds_count[5m])",
+            "legendFormat": "Avg Duration",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "s",
+            "decimals": 3
+          }
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "type": "bargauge",
+        "title": "Jobs Processed by Type",
+        "targets": [
+          {
+            "expr": "sum by (job_type) (prometheus_pusher_test_jobs_processed_total)",
+            "legendFormat": "{{job_type}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "type": "table",
+        "title": "Jobs Status Breakdown",
+        "targets": [
+          {
+            "expr": "prometheus_pusher_test_jobs_processed_total",
+            "legendFormat": "",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "options": {
+          "showHeader": true
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "instance": true,
+                "job": true
+              },
+              "indexByName": {},
+              "renameByName": {
+                "job_type": "Job Type",
+                "status": "Status",
+                "Value": "Count"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "time": {"from": "now-15m", "to": "now"},
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+    },
+    "templating": {"list": []},
+    "annotations": {"list": []},
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "links": [],
+    "liveNow": false,
+    "style": "dark"
+  },
+  "overwrite": true,
+  "folderUid": "",
+  "message": "Prometheus Pusher Test Metrics Dashboard - Auto-generated"
+}

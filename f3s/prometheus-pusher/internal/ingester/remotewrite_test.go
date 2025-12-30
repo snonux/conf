@@ -83,10 +83,10 @@ func TestGenerateHistoricTimeSeries(t *testing.T) {
 	}
 
 	expectedMetrics := []string{
-		"app_requests_total",
-		"app_active_connections",
-		"app_temperature_celsius",
-		"app_jobs_processed_total",
+		"prometheus_pusher_test_requests_total",
+		"prometheus_pusher_test_active_connections",
+		"prometheus_pusher_test_temperature_celsius",
+		"prometheus_pusher_test_jobs_processed_total",
 	}
 
 	for _, expected := range expectedMetrics {
@@ -159,13 +159,13 @@ func TestGenerateHistogramSeries(t *testing.T) {
 		}
 	}
 
-	if metricTypes["app_request_duration_seconds_bucket"] == 0 {
+	if metricTypes["prometheus_pusher_test_request_duration_seconds_bucket"] == 0 {
 		t.Error("Expected histogram buckets")
 	}
-	if metricTypes["app_request_duration_seconds_sum"] != 1 {
+	if metricTypes["prometheus_pusher_test_request_duration_seconds_sum"] != 1 {
 		t.Error("Expected histogram sum")
 	}
-	if metricTypes["app_request_duration_seconds_count"] != 1 {
+	if metricTypes["prometheus_pusher_test_request_duration_seconds_count"] != 1 {
 		t.Error("Expected histogram count")
 	}
 }
