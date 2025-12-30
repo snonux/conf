@@ -1,0 +1,43 @@
+# ArgoCD deployment automation
+# Deploys ArgoCD to the 'cicd' namespace following f3s cluster patterns
+
+NAMESPACE := "cicd"
+RELEASE_NAME := "argocd"
+
+install:
+    helm repo add argo https://argoproj.github.io/argo-helm || true
+    helm repo update
+    kubectl create namespace {{NAMESPACE}} || true
+    kubectl apply -f persistent-volumes.yaml
+    helm install {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
+    @echo "Waiting for ArgoCD to be ready..."
+    @sleep 10
+    kubectl apply -f ingress.yaml
+    @echo ""
+    @echo "ArgoCD deployed successfully!"
+    @echo "Access UI at: http://argocd.f3s.buetow.org"
+    @echo ""
+    @echo "Get initial admin password with:"
+    @echo "kubectl -n {{NAMESPACE}} get secret argocd-initial-admin-secret -o jsonpath=\"{.data.password}\" | base64 -d"
+
+upgrade:
+    helm upgrade {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
+    kubectl apply -f ingress.yaml
+
+uninstall:
+    kubectl delete -f ingress.yaml || true
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}} || true
+    kubectl delete -f persistent-volumes.yaml || true
+
+status:
+    kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
+    kubectl get svc -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
+    kubectl get ingress -n {{NAMESPACE}} argocd-server-ingress
+    kubectl get pvc -n {{NAMESPACE}} argocd-repo-server-pvc
+
+logs:
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server --tail=100 -f
+
+get-password:
+    @kubectl -n {{NAMESPACE}} get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+    @echo ""

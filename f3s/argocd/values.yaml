@@ -1,0 +1,92 @@
+# ArgoCD Helm Chart Values Override
+# Following f3s cluster patterns: non-HA, single instance deployment
+
+global:
+  domain: argocd.f3s.buetow.org
+
+# Disable HA mode - following cluster pattern
+redis-ha:
+  enabled: false
+
+# Use standard Redis with authentication
+redis:
+  enabled: true
+
+# Controller configuration (manages k8s resources)
+controller:
+  replicas: 1
+  # Enable metrics for Prometheus integration
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: cicd
+      additionalLabels:
+        release: prometheus
+
+# Server configuration (API/Web UI)
+server:
+  replicas: 1
+  # Run in insecure mode - TLS termination at ingress
+  insecure: true
+  # Disable built-in ingress - using separate manifest
+  ingress:
+    enabled: false
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  # Enable metrics for Prometheus integration
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: cicd
+      additionalLabels:
+        release: prometheus
+
+# Repo Server configuration (clones repos, generates manifests)
+repoServer:
+  replicas: 1
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  # Enable metrics for Prometheus integration
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: cicd
+      additionalLabels:
+        release: prometheus
+
+# ApplicationSet controller (multi-app management)
+applicationSet:
+  replicas: 1
+
+# Notifications controller - disabled
+notifications:
+  enabled: false
+
+# Dex (SSO/OAuth) - disabled for simplicity
+dex:
+  enabled: false
+
+# CRD installation
+crds:
+  install: true
+  keep: true
+
+# Server configuration parameters - run in insecure mode
+configs:
+  params:
+    server.insecure: true
