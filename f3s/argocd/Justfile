@@ -17,12 +17,10 @@ install:
     @echo "ArgoCD deployed successfully!"
     @echo "Access UI at: https://argocd.f3s.buetow.org"
     @echo ""
-    @echo "Default admin credentials:"
-    @echo "  Username: admin"
-    @echo "  Password: argocd-admin-default"
+    @echo "Get initial admin password with:"
+    @echo "  just get-password"
     @echo ""
-    @echo "NOTE: Password is fixed in values.yaml (not randomly generated)"
-    @echo "      You can change it via UI, but helm upgrade will reset it"
+    @echo "NOTE: Password changes via UI are preserved on helm upgrade"
 
 upgrade:
     helm upgrade {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
