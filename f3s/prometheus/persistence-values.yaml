@@ -29,8 +29,7 @@ prometheus:
     # Enable remote write receiver for accepting historic data with custom timestamps
     # Pass as additional argument to Prometheus binary
     additionalArgs:
-      - name: web.enable-remote-write-receiver
-        value: "true"
+      - --web.enable-remote-write-receiver
     additionalScrapeConfigsSecret:
       enabled: true
       name: additional-scrape-configs

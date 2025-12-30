@@ -9,7 +9,7 @@ import (
 
 func main() {
 	// Command-line flags
-	mode := flag.String("mode", "realtime", "Mode: realtime (push to pushgateway) or historic (backfill via remote write)")
+	mode := flag.String("mode", "realtime", "Mode: realtime, historic, backfill, or auto")
 	pushgatewayURL := flag.String("pushgateway", "http://localhost:9091", "Pushgateway URL for realtime mode")
 	prometheusURL := flag.String("prometheus", "http://localhost:9090/api/v1/write", "Prometheus remote write URL for historic mode")
 	hoursAgo := flag.Int("hours-ago", 24, "For historic mode: how many hours ago (single datapoint)")
@@ -17,7 +17,11 @@ func main() {
 	endHours := flag.Int("end-hours", 0, "For backfill: end time in hours ago")
 	interval := flag.Int("interval", 1, "For backfill: interval between datapoints in hours")
 	continuous := flag.Bool("continuous", false, "For realtime mode: push continuously every 15s")
-	jobName := flag.String("job", "example_metrics_pusher", "Job name for realtime mode")
+	jobName := flag.String("job", "example_metrics_pusher", "Job name for metrics")
+
+	// Auto mode flags
+	inputFile := flag.String("file", "", "For auto mode: input file with metrics")
+	inputFormat := flag.String("format", "csv", "For auto mode: input format (csv or json)")
 
 	flag.Parse()
 
@@ -38,8 +42,20 @@ func main() {
 			log.Fatalf("Failed to backfill data: %v", err)
 		}
 
+	case "auto":
+		log.Printf("🤖 AUTO mode: Automatically detecting timestamp age and choosing ingestion method\n")
+		var err error
+		if *inputFile != "" {
+			err = AutoIngestFromFile(*inputFile, *inputFormat, *pushgatewayURL, *prometheusURL, *jobName)
+		} else {
+			err = AutoIngestFromStdin(*inputFormat, *pushgatewayURL, *prometheusURL, *jobName)
+		}
+		if err != nil {
+			log.Fatalf("Failed to auto-ingest: %v", err)
+		}
+
 	default:
-		log.Fatalf("Unknown mode: %s (use realtime, historic, or backfill)", *mode)
+		log.Fatalf("Unknown mode: %s (use realtime, historic, backfill, or auto)", *mode)
 	}
 }
 
