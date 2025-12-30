@@ -19,7 +19,7 @@ You had to:
 ### After (AUTO Mode) 🤖
 You just:
 1. Provide data with timestamps
-2. Run: `./prometheus-pusher-auto -mode=auto -file=yourdata.csv`
+2. Run: `./prometheus-pusher -mode=auto -file=yourdata.csv`
 3. **Done!** The tool automatically detects ages and routes correctly
 
 ## Demonstration
@@ -71,7 +71,7 @@ kubectl port-forward -n monitoring svc/pushgateway 9091:9091 &
 kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090 &
 
 # 2. Import ALL time ranges in one command!
-./prometheus-pusher-auto \
+./prometheus-pusher \
   -mode=auto \
   -file=test-all-ages.csv \
   -pushgateway=http://localhost:9091 \
@@ -188,7 +188,7 @@ And it does this **automatically** - you don't need to think about it! 🎉
 
 Just run:
 ```bash
-./prometheus-pusher-auto -mode=auto -file=your-data.csv
+./prometheus-pusher -mode=auto -file=your-data.csv
 ```
 
 The tool will:
