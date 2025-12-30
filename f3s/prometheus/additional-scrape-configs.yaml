@@ -11,3 +11,9 @@
       - '192.168.2.111:9100'  # fishfinger via WireGuard
       labels:
         os: openbsd
+
+- job_name: 'pushgateway'
+  honor_labels: true
+  static_configs:
+    - targets:
+      - 'pushgateway.monitoring.svc.cluster.local:9091'
