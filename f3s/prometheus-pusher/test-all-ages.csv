@@ -1,0 +1,27 @@
+# Prometheus metrics in CSV format demonstrating all time ranges
+# Format: metric_name,labels,value,timestamp_ms
+
+# CURRENT data (< 5min old - will use Pushgateway/Realtime)
+app_requests_total,instance=current;env=prod,100,1767125148000
+app_temperature_celsius,instance=current;zone=us-east,22.5,1767125148000
+app_active_connections,instance=current;env=prod,50,1767125148000
+
+# 1 HOUR OLD data (will use Remote Write/Historic)
+app_requests_total,instance=1h_ago;env=prod,95,1767121548000
+app_active_connections,instance=1h_ago;env=prod,45,1767121548000
+app_temperature_celsius,instance=1h_ago;zone=us-east,21.8,1767121548000
+
+# 1 DAY OLD data (will use Remote Write/Historic)
+app_requests_total,instance=1d_ago;env=prod,150,1767038748000
+app_temperature_celsius,instance=1d_ago;zone=eu-west,18.3,1767038748000
+app_active_connections,instance=1d_ago;env=prod,60,1767038748000
+
+# 1 WEEK OLD data (will use Remote Write/Historic)
+app_requests_total,instance=1w_ago;env=prod,200,1766520348000
+app_jobs_processed_total,instance=1w_ago;env=prod;job_type=email;status=success,75,1766520348000
+app_temperature_celsius,instance=1w_ago;zone=asia,25.2,1766520348000
+
+# 1 MONTH OLD data (will use Remote Write/Historic)
+app_requests_total,instance=1m_ago;env=prod,180,1764533148000
+app_active_connections,instance=1m_ago;env=prod,30,1764533148000
+app_temperature_celsius,instance=1m_ago;zone=africa,28.7,1764533148000
