@@ -52,6 +52,19 @@ server:
 # Repo Server configuration (clones repos, generates manifests)
 repoServer:
   replicas: 1
+  # Enable persistence for repo cache - mount PVC at /home/argocd/repo-cache
+  # This avoids conflict with default /tmp mount used by ArgoCD
+  volumes:
+    - name: repo-server-data
+      persistentVolumeClaim:
+        claimName: argocd-repo-server-pvc
+  volumeMounts:
+    - name: repo-server-data
+      mountPath: /home/argocd/repo-cache
+  # Configure repo-server to use the persistent cache directory
+  env:
+    - name: XDG_CACHE_HOME
+      value: /home/argocd/repo-cache
   # Resource limits
   resources:
     limits:
