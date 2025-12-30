@@ -161,14 +161,15 @@ server "<%= $prefix %>ecat.buetow.org" {
 }
 <% } -%>
 
-# Fallback for f3s hosts
+# Fallback for f3s hosts - serve fallback page for ALL paths
 <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 8080
   log style forwarded
   location * {
+    # Rewrite all requests to /index.html to show fallback page regardless of path
+    request rewrite "/index.html"
     root "/htdocs/f3s_fallback"
-    directory auto index
   }
 }
 <% } } -%>
