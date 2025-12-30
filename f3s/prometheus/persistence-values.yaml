@@ -27,9 +27,10 @@ kubeControllerManager:
 prometheus:
   prometheusSpec:
     # Enable remote write receiver for accepting historic data with custom timestamps
-    # Pass as additional argument to Prometheus binary
+    # In Prometheus 3.x, use web flag instead of feature flag
     additionalArgs:
-      - --web.enable-remote-write-receiver
+      - name: web.enable-remote-write-receiver
+        value: ""
     additionalScrapeConfigsSecret:
       enabled: true
       name: additional-scrape-configs
