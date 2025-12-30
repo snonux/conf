@@ -1,0 +1,57 @@
+# Example Metrics Output
+# This shows what the Prometheus pusher sends to the Pushgateway
+
+# COUNTER: Monotonically increasing value
+# Use for: Total requests, total errors, total events
+# -------------------------------------------------------
+# HELP app_requests_total Total number of requests processed
+# TYPE app_requests_total counter
+app_requests_total{instance="example-app",job="example_metrics_pusher"} 10
+
+# GAUGE: Value that can increase or decrease
+# Use for: Current connections, temperature, memory usage
+# -------------------------------------------------------
+# HELP app_active_connections Number of currently active connections
+# TYPE app_active_connections gauge
+app_active_connections{instance="example-app",job="example_metrics_pusher"} 58
+
+# HELP app_temperature_celsius Current temperature in Celsius
+# TYPE app_temperature_celsius gauge
+app_temperature_celsius{instance="example-app",job="example_metrics_pusher"} 23.456789
+
+# HISTOGRAM: Distribution of values
+# Use for: Request duration, response sizes
+# -------------------------------------------------------
+# HELP app_request_duration_seconds Histogram of request duration in seconds
+# TYPE app_request_duration_seconds histogram
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.005"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.01"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.025"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.05"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.1"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.25"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="0.5"} 0
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="1"} 2
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="2.5"} 6
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="5"} 6
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="10"} 6
+app_request_duration_seconds_bucket{instance="example-app",job="example_metrics_pusher",le="+Inf"} 6
+app_request_duration_seconds_sum{instance="example-app",job="example_metrics_pusher"} 4.123456
+app_request_duration_seconds_count{instance="example-app",job="example_metrics_pusher"} 6
+
+# COUNTER WITH LABELS: Categorized counting
+# Use for: Categorizing events by type, status, etc.
+# -------------------------------------------------------
+# HELP app_jobs_processed_total Total number of jobs processed by type
+# TYPE app_jobs_processed_total counter
+app_jobs_processed_total{instance="example-app",job="example_metrics_pusher",job_type="email",status="success"} 2
+app_jobs_processed_total{instance="example-app",job="example_metrics_pusher",job_type="email",status="failed"} 0
+app_jobs_processed_total{instance="example-app",job="example_metrics_pusher",job_type="report",status="success"} 4
+app_jobs_processed_total{instance="example-app",job="example_metrics_pusher",job_type="report",status="failed"} 0
+app_jobs_processed_total{instance="example-app",job="example_metrics_pusher",job_type="backup",status="success"} 0
+app_jobs_processed_total{instance="example-app",job="example_metrics_pusher",job_type="backup",status="failed"} 4
+
+# Pushgateway metadata
+# -------------------------------------------------------
+push_time_seconds{instance="example-app",job="example_metrics_pusher"} 1767121612.254
+push_failure_time_seconds{instance="example-app",job="example_metrics_pusher"} 0
