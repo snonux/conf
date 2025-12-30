@@ -103,9 +103,10 @@ crds:
 configs:
   params:
     server.insecure: true
-  # Secret configuration - don't let Helm manage the secret
-  # This preserves admin password changes across redeployments
+  # Secret configuration - use fixed admin password instead of random generation
+  # Password will be deleted on helm uninstall, recreated on helm install
   secret:
-    createSecret: false
-    # Note: argocd-secret must be created manually before first install
-    # See argocd-secret.yaml for the secret template
+    # Bcrypt hash of "argocd-admin-default"
+    # Generated with: htpasswd -nbBC 10 "" "argocd-admin-default" | tr -d ':\n' | sed 's/$2y/$2a/'
+    argocdServerAdminPassword: "$2a$10$8JvToynmoSSfC/2wYdlC7OQU6rQRcLrOONxZIegzhZeisHfvzDN52"
+    argocdServerAdminPasswordMtime: "2025-12-30T09:30:00Z"
