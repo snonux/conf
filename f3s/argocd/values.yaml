@@ -103,3 +103,9 @@ crds:
 configs:
   params:
     server.insecure: true
+  # Secret configuration - don't let Helm manage the secret
+  # This preserves admin password changes across redeployments
+  secret:
+    createSecret: false
+    # Note: argocd-secret must be created manually before first install
+    # See argocd-secret.yaml for the secret template
