@@ -9,16 +9,20 @@ install:
     helm repo update
     kubectl create namespace {{NAMESPACE}} || true
     kubectl apply -f persistent-volumes.yaml
+    kubectl apply -f argocd-secret.yaml
     helm install {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
     @echo "Waiting for ArgoCD to be ready..."
     @sleep 10
     kubectl apply -f ingress.yaml
     @echo ""
     @echo "ArgoCD deployed successfully!"
-    @echo "Access UI at: http://argocd.f3s.buetow.org"
+    @echo "Access UI at: https://argocd.f3s.buetow.org"
     @echo ""
-    @echo "Get initial admin password with:"
-    @echo "kubectl -n {{NAMESPACE}} get secret argocd-initial-admin-secret -o jsonpath=\"{.data.password}\" | base64 -d"
+    @echo "Default admin credentials:"
+    @echo "  Username: admin"
+    @echo "  Password: argocd-admin-default"
+    @echo ""
+    @echo "IMPORTANT: Change the password after first login!"
 
 upgrade:
     helm upgrade {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
@@ -27,7 +31,10 @@ upgrade:
 uninstall:
     kubectl delete -f ingress.yaml || true
     helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}} || true
-    kubectl delete -f persistent-volumes.yaml || true
+    @echo ""
+    @echo "NOTE: argocd-secret is preserved to keep your admin password"
+    @echo "      To fully remove: kubectl delete secret argocd-secret -n {{NAMESPACE}}"
+    @echo "      To remove PV: kubectl delete -f persistent-volumes.yaml"
 
 status:
     kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
