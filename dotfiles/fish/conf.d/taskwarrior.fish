@@ -68,8 +68,13 @@ end
 
 function taskwarrior::export::bd
     # Export bulgarian dumi
-    task +bd status:pending export | jq -r '.[].description' >~/Notes/Bulgarian/bd-(date +%s).txt
+    set -l outfile ~/Notes/Bulgarian/bd-(date +%s).txt
+    task +bd status:pending export | jq -r '.[].description' >$outfile
     yes | task +bd status:pending delete
+    # Delete it if it is empty
+    if test -f $outfile; and test ! -s $outfile
+        rm $outfile
+    end
 end
 
 function taskwarrior::export::gos
