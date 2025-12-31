@@ -81,7 +81,7 @@ function supersync::gitsyncer
     end
 
     if test -f ~/go/bin/gitsyncer
-        ~/go/bin/gitsyncer sync bidirectional && ~/go/bin/gitsyncer showcase
+        ~/go/bin/gitsyncer sync bidirectional --auto-create-releases --create-repos && ~/go/bin/gitsyncer showcase
     end
     if test $status -eq 0
         echo $now >$enable_file
