@@ -62,6 +62,8 @@ function supersync::taskwarrior
 
     taskwarrior::export
     taskwarrior::export::gos
+    taskwarrior:
+    export::bd
     taskwarrior::import
 end
 
