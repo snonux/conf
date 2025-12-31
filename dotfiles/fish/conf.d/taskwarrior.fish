@@ -66,6 +66,12 @@ function _taskwarrior::set_import_export_tags
     end
 end
 
+function taskwarrior::export::bd
+    # Export bulgarian dumi
+    task +bd status:pending export | jq -r '.[].description' >~/Notes/Bulgarian/bd-(date +%s).txt
+    yes | task +bd status:pending delete
+end
+
 function taskwarrior::export::gos
     task +share status:pending export >"$WORKTIME_DIR/tw-gos-export-$(date +%s).json"
     yes | task +share status:pending delete
