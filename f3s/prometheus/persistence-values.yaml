@@ -27,9 +27,12 @@ kubeControllerManager:
 prometheus:
   prometheusSpec:
     # Enable remote write receiver for accepting historic data with custom timestamps
+    # Enable admin API for data deletion and management
     # In Prometheus 3.x, use web flag instead of feature flag
     additionalArgs:
       - name: web.enable-remote-write-receiver
+        value: ""
+      - name: web.enable-admin-api
         value: ""
     # Enable out-of-order ingestion to allow backfilling historic data
     # even when newer data already exists for the same time series
