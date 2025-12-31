@@ -36,10 +36,10 @@ prometheus:
     enableFeatures:
       - exemplar-storage
       - otlp-write-receiver
-    # Set out-of-order time window to 30 days
+    # Set out-of-order time window to 31 days (provides 1-day buffer for 30-day backfills)
     additionalScrapeConfigs: []
     tsdb:
-      outOfOrderTimeWindow: 720h  # 30 days
+      outOfOrderTimeWindow: 744h  # 31 days
     additionalScrapeConfigsSecret:
       enabled: true
       name: additional-scrape-configs
