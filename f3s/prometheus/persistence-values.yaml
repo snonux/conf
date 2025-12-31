@@ -31,6 +31,15 @@ prometheus:
     additionalArgs:
       - name: web.enable-remote-write-receiver
         value: ""
+    # Enable out-of-order ingestion to allow backfilling historic data
+    # even when newer data already exists for the same time series
+    enableFeatures:
+      - exemplar-storage
+      - otlp-write-receiver
+    # Set out-of-order time window to 30 days
+    additionalScrapeConfigs: []
+    tsdb:
+      outOfOrderTimeWindow: 720h  # 30 days
     additionalScrapeConfigsSecret:
       enabled: true
       name: additional-scrape-configs
