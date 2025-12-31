@@ -35,9 +35,11 @@ The following features are enabled in `persistence-values.yaml`:
 ```yaml
 prometheus:
   prometheusSpec:
-    # Enable Remote Write receiver endpoint
+    # Enable Remote Write receiver endpoint and Admin API
     additionalArgs:
       - name: web.enable-remote-write-receiver
+        value: ""
+      - name: web.enable-admin-api
         value: ""
 
     # Enable out-of-order ingestion for backfilling
@@ -45,16 +47,17 @@ prometheus:
       - exemplar-storage
       - otlp-write-receiver
 
-    # Allow backfilling up to 30 days in the past
+    # Allow backfilling up to 31 days in the past (provides 1-day buffer for 30-day datasets)
     tsdb:
-      outOfOrderTimeWindow: 720h  # 30 days
+      outOfOrderTimeWindow: 744h  # 31 days
 ```
 
 ### What This Enables
 
 - **Remote Write API**: HTTP endpoint at `/api/v1/write` for ingesting metrics with custom timestamps
+- **Admin API**: HTTP endpoints at `/api/v1/admin/tsdb/*` for data deletion and management
 - **Out-of-Order Ingestion**: Allows writing data points older than existing data for the same time series
-- **30-Day Window**: Can backfill data up to 30 days in the past (configured via `outOfOrderTimeWindow`)
+- **31-Day Window**: Can backfill data up to 31 days in the past (configured via `outOfOrderTimeWindow`, provides 1-day buffer for 30-day datasets)
 
 ### Use Cases
 
@@ -64,6 +67,33 @@ This configuration is designed for:
 - **Troubleshooting**: Backfilling gaps in metric collection
 
 Example: The [Epimetheus](https://github.com/pbuetow/epimetheus) tool uses this to push test metrics with historic timestamps.
+
+### Data Deletion
+
+The Admin API enables selective deletion of time series data for cleanup after testing:
+
+**Delete specific metrics:**
+```bash
+curl -X POST 'http://localhost:9090/api/v1/admin/tsdb/delete_series?match[]=metric_name'
+```
+
+**Clean up tombstones** (free disk space):
+```bash
+curl -X POST 'http://localhost:9090/api/v1/admin/tsdb/clean_tombstones'
+```
+
+**Using the cleanup script:**
+
+The [Epimetheus repository](https://github.com/pbuetow/epimetheus) includes `cleanup-benchmark-data.sh` which automates deletion of all benchmark metrics:
+```bash
+# Requires port-forward to Prometheus
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+
+# Run cleanup
+./cleanup-benchmark-data.sh
+```
+
+The script deletes all `epimetheus_benchmark_*` metrics and cleans up tombstones automatically.
 
 ### Performance Considerations
 
