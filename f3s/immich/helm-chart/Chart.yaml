@@ -1,0 +1,5 @@
+apiVersion: v2
+name: immich-resources
+description: Custom resources for Immich deployment (PVs, PVCs, PostgreSQL, Middleware)
+version: 0.1.0
+appVersion: "2.0.0"

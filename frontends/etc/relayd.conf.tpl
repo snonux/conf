@@ -28,10 +28,13 @@ http protocol "https" {
     <% } -%>
     tls keypair <%= $hostname.'.'.$domain -%>
 
+    # Enable WebSocket support
+    http websockets
+
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
-    
-    # WebSocket support for audiobookshelf
+
+    # WebSocket headers - passed through for WebSocket connections
     pass header "Connection"
     pass header "Upgrade"
     pass header "Sec-WebSocket-Key"

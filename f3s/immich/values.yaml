@@ -1,0 +1,66 @@
+# Immich Helm Chart Configuration
+# Deploy to services namespace with persistent storage
+
+# Enable Valkey (Redis replacement) with persistent storage
+valkey:
+  enabled: true
+  persistence:
+    data:
+      enabled: true
+      type: persistentVolumeClaim
+      size: 1Gi
+      storageClass: ""
+      existingClaim: "immich-valkey-pvc"
+
+# Immich-specific configuration
+immich:
+  persistence:
+    # Main data store for all photos/videos shared between components
+    library:
+      existingClaim: "immich-library-pvc"
+
+# Server component with ingress
+server:
+  enabled: true
+  ingress:
+    main:
+      enabled: true
+      annotations:
+        spec.ingressClassName: traefik
+        traefik.ingress.kubernetes.io/router.entrypoints: web
+        # Remove body size limit for file uploads
+        traefik.ingress.kubernetes.io/router.middlewares: services-immich-body-size@kubernetescrd
+      hosts:
+        - host: immich.f3s.buetow.org
+          paths:
+            - path: "/"
+              service:
+                identifier: main
+                port: 2283
+
+# Machine Learning component with cache persistence
+machine-learning:
+  enabled: true
+  persistence:
+    cache:
+      enabled: true
+      type: persistentVolumeClaim
+      size: 10Gi
+      storageClass: ""
+      existingClaim: "immich-ml-cache-pvc"
+
+# PostgreSQL database configuration
+# Note: You'll need to configure database connection via environment variables
+controllers:
+  main:
+    containers:
+      main:
+        env:
+          DB_HOSTNAME: immich-postgres
+          DB_DATABASE_NAME: immich
+          DB_USERNAME: immich
+          DB_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: immich-db-secret
+                key: password

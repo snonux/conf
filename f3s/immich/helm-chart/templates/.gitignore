@@ -1,0 +1,4 @@
+# Do not commit secrets to the repository
+# Create secrets manually using kubectl as documented in README.md
+secret.yaml
+*-secret.yaml

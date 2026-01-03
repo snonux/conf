@@ -1,0 +1,31 @@
+NAMESPACE := "services"
+RELEASE_NAME := "immich"
+CHART_NAME := "immich/immich"
+VALUES_FILE := "./values.yaml"
+CHART_PATH := "./helm-chart"
+
+# Install the custom resources (PVs, PVCs, PostgreSQL, etc.)
+install-resources:
+    kubectl apply -f {{CHART_PATH}}/templates/ --namespace {{NAMESPACE}}
+
+# Install Immich using the official Helm chart with custom values
+install:
+    helm install {{RELEASE_NAME}} {{CHART_NAME}} -f {{VALUES_FILE}} --namespace {{NAMESPACE}} --create-namespace
+
+# Upgrade Immich deployment
+upgrade:
+    helm upgrade {{RELEASE_NAME}} {{CHART_NAME}} -f {{VALUES_FILE}} --namespace {{NAMESPACE}}
+
+# Delete Immich deployment (keeps PVs and data)
+delete:
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+
+# Delete all resources including PVs (WARNING: This will delete all data!)
+delete-all:
+    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+    kubectl delete -f {{CHART_PATH}}/templates/ --namespace {{NAMESPACE}}
+
+# Show current deployment status
+status:
+    kubectl get all -n {{NAMESPACE}} -l app.kubernetes.io/instance={{RELEASE_NAME}}
+    kubectl get pvc -n {{NAMESPACE}} | grep immich

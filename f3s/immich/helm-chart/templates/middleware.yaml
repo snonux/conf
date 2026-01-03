@@ -1,0 +1,9 @@
+# Traefik Middleware to remove body size limit for large photo/video uploads
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: immich-body-size
+  namespace: services
+spec:
+  buffering:
+    maxRequestBodyBytes: 0
