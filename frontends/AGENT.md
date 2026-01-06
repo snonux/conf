@@ -1,18 +1,6 @@
-# Agent Learning Notes: Debugging 404 Errors for blowfish/fishfinger URLs
+# Frontend Infrastructure Knowledge
 
-## Problem Summary
-
-URLs `https://blowfish.buetow.org/index.txt` and `https://fishfinger.buetow.org/index.txt` were returning 404 errors instead of serving the health check files.
-
-## Root Cause
-
-The hostnames `blowfish.buetow.org` and `fishfinger.buetow.org` were missing from the `@acme_hosts` array in the Rexfile. This caused:
-
-1. **No explicit routing rules in relayd**: Only hosts in `@acme_hosts` get explicit routing to `<localhost>` (httpd) in `relayd.conf.tpl:45-50`
-2. **Fall-through to f3s backends**: Without routing rules, requests fell through to the default f3s cluster backends
-3. **404 from f3s cluster**: The k3s cluster didn't know about these server hostnames, resulting in 404 errors
-
-## Architecture Understanding
+## Architecture Overview
 
 ### Request Flow
 ```
@@ -21,140 +9,204 @@ Internet → relayd (port 443) → routing decision → httpd (port 8080) or f3s
 
 ### Key Components
 
-1. **relayd.conf.tpl**: Reverse proxy that:
-   - Terminates TLS on port 443
-   - Routes requests based on Host header matching
-   - Has two backend pools: `<localhost>` (httpd) and `<f3s>` (k3s cluster)
-   - Falls back to f3s cluster when no explicit routing match
+**relayd** - Reverse proxy that:
+- Terminates TLS on port 443 (IPv4 and IPv6)
+- Routes requests based on Host header matching
+- Has two backend pools:
+  - `<localhost>` (127.0.0.1, ::1) - Routes to local httpd on port 8080
+  - `<f3s>` (192.168.2.120-122) - Routes to f3s k3s cluster on port 80
+- Falls back to f3s cluster when no explicit routing match exists
 
-2. **httpd.conf.tpl**: OpenBSD httpd that:
-   - Listens on port 8080 (behind relayd)
-   - Serves static content for various domains
-   - Has a dedicated "Current server's FQDN" block for each server's own hostname
+**httpd** - OpenBSD httpd that:
+- Listens on port 8080 (behind relayd)
+- Listens on port 80 for ACME challenges and HTTP→HTTPS redirects
+- Serves static content for various domains
+- Has server-specific blocks for each server's own hostname
 
-3. **Rexfile**: Configuration management using Rex (Perl):
-   - Defines `@acme_hosts` array controlling which hosts get ACME certs and routing rules
-   - Templates use this array to generate both httpd and relayd configs
-   - Deployed to both blowfish and fishfinger servers
+**Rexfile** - Configuration management using Rex (Perl):
+- Defines configuration arrays (`@acme_hosts`, `@f3s_hosts`, etc.)
+- Templates use these arrays to generate httpd and relayd configs
+- Deploys to both blowfish and fishfinger servers in parallel
+- Each server receives templates processed with its own `$hostname` value
 
-## Solution Implementation
+## Configuration Arrays
 
-### 1. Added Hostnames to @acme_hosts (Rexfile:86)
-```perl
-our @acme_hosts =
-  qw/.../gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
-```
+### @acme_hosts
+Controls which hosts get:
+- ACME certificate requests
+- HTTP port 80 server blocks for ACME challenges
+- Explicit routing rules in relayd to `<localhost>`
 
-This ensures both servers are included in routing rules.
+**Critical**: Hosts NOT in `@acme_hosts` will fall through to f3s cluster backends in relayd.
 
-### 2. Prevented Duplicate Server Blocks (httpd.conf.tpl:3-5)
-```perl
-<% for my $host (@$acme_hosts) {
-     # Skip current server's hostname - handled by dedicated block below
-     next if $host eq "$hostname.$domain";
-```
+### @f3s_hosts
+Hosts served by the f3s k3s cluster:
+- Get fallback page served by httpd
+- Special routing rules in relayd to f3s backends
 
-Each server has a dedicated block at lines 18-37 serving from `/htdocs/buetow.org/self`. Without this skip, adding them to `@acme_hosts` would create duplicate server blocks on port 80, causing httpd to fail.
+### @prefixes
+Array: `('', 'www.', 'standby.')`
 
-### 3. Prevented Missing TLS Certificates (relayd.conf.tpl:25-27)
-```perl
-<% for my $host (@$acme_hosts) {
-     # Skip server hostnames - each server only has its own cert
-     next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
-```
+Used in loops to create hostname variants:
+- `foo.zone`
+- `www.foo.zone`
+- `standby.foo.zone`
 
-**Critical insight**: When deploying to blowfish, the config tries to load TLS certs for ALL hosts in `@acme_hosts`. But blowfish only has `blowfish.buetow.org.crt`, not `fishfinger.buetow.org.crt`. Similarly, fishfinger only has its own cert. The dedicated line `tls keypair <%= $hostname.'.'.$domain -%>` at line 31 loads the correct cert for each server.
+## Template Processing
 
-## Debugging Methodology
-
-### 1. Test Actual Endpoints First
-```bash
-curl -s https://blowfish.buetow.org/index.txt  # Test reality
-```
-vs. relying on monitoring dashboards which may show cached/stale data.
-
-### 2. Check Configuration Syntax Before Deploy
-```bash
-ssh rex@server "doas httpd -n"   # Test httpd config
-ssh rex@server "doas relayd -n"  # Test relayd config
-```
-
-### 3. Understand Monitoring Intervals
-Gogios TLS checks have `RunInterval: 3600` (1 hour). After fixing issues, old failures may persist until:
-- Next scheduled check
-- Manual force run: `gogios -cfg /etc/gogios.json -force`
-
-However, `-force` only updates the report timestamp, it doesn't override individual check intervals. True verification requires manual testing or waiting for interval expiry.
-
-## Template Architecture Insights
-
-### Variable Scoping
-- `$hostname`: Current server being deployed to (blowfish or fishfinger)
-- `$domain`: Domain suffix (buetow.org)
-- `@acme_hosts`: Global list of all hosts needing ACME certs and routing
-- `@f3s_hosts`: Hosts served by f3s k3s cluster
-- `@prefixes`: ('', 'www.', 'standby.') for creating hostname variants
-
-### Template Processing
 Rex processes `.tpl` files using embedded Perl:
-- `<% ... -%>`: Perl code (suppress trailing newline with -)
-- `<%= $var %>`: Print variable
-- Templates are processed per-server with different `$hostname` values
 
-### Common Pitfall: Server-Specific vs. Shared Configuration
-When adding a hostname to a shared array like `@acme_hosts`, consider:
-1. Does each server have the required TLS certificates?
-2. Will this create duplicate server blocks?
-3. Is this hostname server-specific (like server FQDNs) or shared (like service domains)?
+```perl
+<% ... -%>        # Perl code (- suppresses trailing newline)
+<%= $var %>       # Print variable value
+```
 
-For server FQDNs (blowfish.buetow.org, fishfinger.buetow.org):
-- **Routing**: Needs to be in `@acme_hosts` for relayd routing rules
-- **Server blocks**: Skip in loops, use dedicated blocks instead
-- **TLS certs**: Skip in loops, use dedicated keypair line instead
+Templates are processed **per-server** with different values:
+- `$hostname` = "blowfish" or "fishfinger"
+- `$domain` = "buetow.org"
+- `$hostname.$domain` = "blowfish.buetow.org" or "fishfinger.buetow.org"
 
-## Key Learnings
+## Routing Configuration
 
-1. **Routing is explicit, not implicit**: Just because httpd has a server block doesn't mean relayd will route to it. Routing rules must be configured separately.
+### Explicit Routing Rules (relayd.conf.tpl:45-50)
 
-2. **Certificate management per server**: In a multi-server setup, each server only has its own certificate, not certificates for other servers in the pool.
+```perl
+<% for my $host (@$acme_hosts) {
+     next if grep { $_ eq $host } @$f3s_hosts;
+     for my $prefix (@prefixes) { -%>
+match request header "Host" value "<%= $prefix.$host -%>" forward to <localhost>
+```
 
-3. **Template loops need guards**: When iterating over shared arrays in templates that deploy to multiple servers, check if items need server-specific handling.
+- Only hosts in `@acme_hosts` get explicit routing to `<localhost>`
+- Excludes f3s hosts (they have separate routing)
+- Creates rules for all prefixes ('', 'www.', 'standby.')
 
-4. **Monitoring vs. reality**: Always verify fixes by testing actual endpoints. Monitoring systems may show stale data due to caching intervals.
+### Routing Logic
 
-5. **Configuration deployment is atomic**: Rex deploys templates and restarts services. Brief service interruptions during restarts can trigger monitoring alerts that resolve once services stabilize.
+**Routing is explicit, not implicit**: Just because httpd has a server block doesn't mean relayd will route to it. The routing decision happens in relayd based on:
 
-## Files Modified
+1. Explicit Host header match → route to specified backend
+2. No match → fall through to default relay backends (f3s cluster first, then localhost)
 
-1. `Rexfile` - Added blowfish/fishfinger to @acme_hosts
-2. `etc/httpd.conf.tpl` - Skip current hostname in @acme_hosts loop
-3. `etc/relayd.conf.tpl` - Skip server hostnames in TLS keypair loop
+## TLS Certificate Management
+
+### Certificate Loading (relayd.conf.tpl:24-31)
+
+```perl
+http protocol "https" {
+    <% for my $host (@$acme_hosts) { -%>
+    tls keypair <%= $host %>
+    tls keypair standby.<%= $host %>
+    <% } -%>
+    tls keypair <%= $hostname.'.'.$domain -%>
+```
+
+**Critical insight**: In multi-server deployments, each server only has its own TLS certificate.
+
+- blowfish has: `blowfish.buetow.org.crt` (NOT fishfinger's cert)
+- fishfinger has: `fishfinger.buetow.org.crt` (NOT blowfish's cert)
+
+When the template runs on blowfish, it tries to load certs for ALL hosts in `@acme_hosts`. If fishfinger.buetow.org is in the array, relayd will fail to start because that cert doesn't exist on blowfish.
+
+**Solution pattern**: Skip server-specific hostnames in the loop, use dedicated keypair line:
+```perl
+<% for my $host (@$acme_hosts) {
+     next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
+```
+
+The line `tls keypair <%= $hostname.'.'.$domain -%>` loads the correct cert for each server.
+
+## Server Block Management
+
+### httpd.conf.tpl Patterns
+
+**ACME and redirect blocks (port 80)**:
+```perl
+<% for my $host (@$acme_hosts) {
+     next if $host eq "$hostname.$domain";  # Skip current server
+     for my $prefix (@prefixes) { -%>
+server "<%= $prefix.$host %>" {
+  listen on * port 80
+```
+
+**Why skip current server**: Each server has a dedicated "Current server's FQDN" block:
+
+```perl
+server "<%= "$hostname.$domain" %>" {
+  listen on * port 80
+  ...
+}
+```
+
+Without the skip, adding server hostnames to `@acme_hosts` creates duplicate server blocks, causing httpd to fail with "server defined twice" error.
+
+### Content Serving Blocks (port 8080)
+
+Different patterns based on content type:
+- **Gemtexter sites**: Serve from `/htdocs/gemtexter/<host>`
+- **Server self**: Serve from `/htdocs/buetow.org/self`
+- **Special hosts**: Custom root paths (e.g., gogios, joern, dory)
+- **f3s fallback**: Rewrite all to `/index.html` for cluster-down message
+
+## Server-Specific vs. Shared Configuration
+
+### Shared Hosts (Service Domains)
+Examples: foo.zone, irregular.ninja, f3s.buetow.org
+
+- Same content/routing on both servers
+- Both servers have TLS certs
+- Include in `@acme_hosts` without guards
+- Create with prefix loops for www/standby variants
+
+### Server-Specific Hosts (Server FQDNs)
+Examples: blowfish.buetow.org, fishfinger.buetow.org
+
+- Different per server
+- Each server has ONLY its own cert
+- Include in `@acme_hosts` for routing
+- **Must skip in template loops**
+- Use dedicated server blocks and keypair lines
+
+### Pattern for Adding Server FQDNs
+
+1. **Routing**: Add to `@acme_hosts` (relayd needs routing rules)
+2. **ACME loop**: Skip with `next if $host eq "$hostname.$domain"`
+3. **TLS loop**: Skip with `next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'`
+4. **Server blocks**: Use existing dedicated "Current server's FQDN" block
 
 ## Deployment Process
 
 ```bash
-rex httpd relayd  # Deploy to both servers in parallel
+rex httpd relayd  # Deploy to both servers
 ```
 
-Rex connects to both blowfish and fishfinger, generates configs with server-specific `$hostname` values, deploys files, and restarts services.
+Process:
+1. Rex connects to both blowfish and fishfinger in parallel
+2. For each server, processes templates with server-specific `$hostname`
+3. Generates `/etc/httpd.conf` and `/etc/relayd.conf`
+4. Writes files and restarts services via `on_change` handlers
+5. Each server gets identical config structure but different hostname values
 
-## Verification
+## Monitoring System (Gogios)
 
+- Runs as user `_gogios`
+- Config: `/etc/gogios.json`
+- Output: `/var/www/htdocs/buetow.org/self/gogios/index.html`
+- Cron schedule: Every 5 minutes between 08:00-22:00
+- Check intervals: Independent from cron (e.g., TLS checks every 3600s)
+
+**Important**: Check intervals (`RunInterval`) are independent from cron schedule. A check with 3600s interval won't re-run just because cron triggered, it runs only when interval expires.
+
+## Configuration Testing
+
+Before deploying:
 ```bash
-# Test endpoints
-curl -s https://blowfish.buetow.org/index.txt   # Should return health check text
-curl -s https://fishfinger.buetow.org/index.txt # Should return health check text
-
-# Check service status
-ssh -p 2 rex@server "doas rcctl check httpd && doas rcctl check relayd"
+ssh rex@server "doas httpd -n"   # Test httpd config syntax
+ssh rex@server "doas relayd -n"  # Test relayd config syntax
 ```
 
-## Future Considerations
-
-When adding new server hostnames:
-1. Add to `@acme_hosts` for routing
-2. Add `next if $host eq "$hostname.$domain"` guards in template loops
-3. Ensure dedicated blocks exist for server-specific config
-4. Remember each server only has its own TLS certificate
-5. Test config syntax before deploying
-6. Verify endpoints after deployment, don't rely on monitoring
+After deploying:
+```bash
+ssh rex@server "doas rcctl check httpd"
+ssh rex@server "doas rcctl check relayd"
+```
