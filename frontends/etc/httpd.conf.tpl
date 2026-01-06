@@ -161,6 +161,18 @@ server "<%= $prefix %>ecat.buetow.org" {
 }
 <% } -%>
 
+# gogios special host
+<% for my $prefix (@prefixes) { -%>
+server "<%= $prefix %>gogios.buetow.org" {
+  listen on * port 8080
+  log style forwarded 
+  location * {
+    root "/htdocs/buetow.org/self/gogios"
+    directory auto index
+  }
+}
+<% } -%>
+
 # Fallback for f3s hosts - serve fallback page for ALL paths
 <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
