@@ -1,9 +1,12 @@
 <% our @prefixes = ('', 'www.', 'standby.'); -%>
 # Plain HTTP for ACME and HTTPS redirect
-<% for my $host (@$acme_hosts) { for my $prefix (@prefixes) { -%>
+<% for my $host (@$acme_hosts) {
+     # Skip current server's hostname - handled by dedicated block below
+     next if $host eq "$hostname.$domain";
+     for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
   listen on * port 80
-  log style forwarded 
+  log style forwarded
   location "/.well-known/acme-challenge/*" {
     root "/acme"
     request strip 2
@@ -165,7 +168,7 @@ server "<%= $prefix %>ecat.buetow.org" {
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>gogios.buetow.org" {
   listen on * port 8080
-  log style forwarded 
+  log style forwarded
   location * {
     root "/htdocs/buetow.org/self/gogios"
     directory auto index

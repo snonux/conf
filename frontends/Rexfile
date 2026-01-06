@@ -83,7 +83,7 @@ our @f3s_hosts =
 # push @f3s_hosts, 'registry.f3s.buetow.org';
 
 our @acme_hosts =
-  qw/foo.zone dtail.dev buetow.org git.buetow.org paul.buetow.org joern.buetow.org dory.buetow.org ecat.buetow.org blog.buetow.org znc.buetow.org stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org/;
+  qw/foo.zone dtail.dev buetow.org git.buetow.org paul.buetow.org joern.buetow.org dory.buetow.org ecat.buetow.org blog.buetow.org znc.buetow.org stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
 push @acme_hosts, @f3s_hosts;
 
 # UTILITY TASKS

@@ -22,7 +22,9 @@ table <localhost> {
 }
 
 http protocol "https" {
-    <% for my $host (@$acme_hosts) { -%>
+    <% for my $host (@$acme_hosts) {
+         # Skip server hostnames - each server only has its own cert, handled by dedicated keypair below
+         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
     tls keypair <%= $host %>
     tls keypair standby.<%= $host %>
     <% } -%>
