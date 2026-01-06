@@ -1,0 +1,1 @@
+This looks great. But just to be absolutely sure, can you check the last steps to see if the intended outcome was achieved? It's better to spot any mistakes right away so they can be fixed, so be analytical and critical of what you've just changed.
