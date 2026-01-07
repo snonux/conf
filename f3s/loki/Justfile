@@ -1,15 +1,54 @@
-install:
-    helm repo add grafana https://grafana.github.io/helm-charts || true
-    helm repo update
-    kubectl apply -f persistent-volumes.yaml
-    helm install loki grafana/loki --namespace monitoring -f values.yaml
-    helm install alloy grafana/alloy --namespace monitoring -f alloy-values.yaml
+NAMESPACE := "monitoring"
 
-uninstall:
-    helm uninstall alloy --namespace monitoring
-    helm uninstall loki --namespace monitoring
-    kubectl delete -f persistent-volumes.yaml
+status:
+    @echo "=== Loki Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=loki
+    @echo ""
+    @echo "=== Alloy Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=alloy
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} | grep -E '(loki|alloy)'
+    @echo ""
+    @echo "=== PVC ==="
+    @kubectl get pvc -n {{NAMESPACE}} loki-data-pvc
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application loki -n cicd -o jsonpath='Loki - Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
+    @kubectl get application alloy -n cicd -o jsonpath='Alloy - Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-upgrade:
-    helm upgrade loki grafana/loki --namespace monitoring -f values.yaml
-    helm upgrade alloy grafana/alloy --namespace monitoring -f alloy-values.yaml
+logs-loki lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=loki --tail={{lines}} -f
+
+logs-alloy lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=alloy --tail={{lines}} -f
+
+port-forward-loki port="3100":
+    @echo "Forwarding Loki to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/loki {{port}}:3100
+
+sync:
+    @echo "Triggering ArgoCD sync for Loki..."
+    @kubectl annotate application loki -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @echo "Triggering ArgoCD sync for Alloy..."
+    @kubectl annotate application alloy -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application loki -n cicd -o jsonpath='Loki - Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+    @kubectl get application alloy -n cicd -o jsonpath='Alloy - Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    @echo "=== Loki ==="
+    @argocd app get loki --core
+    @echo ""
+    @echo "=== Alloy ==="
+    @argocd app get alloy --core
+
+restart-loki:
+    @echo "Restarting Loki..."
+    kubectl rollout restart -n {{NAMESPACE}} statefulset/loki
+
+restart-alloy:
+    @echo "Restarting Alloy..."
+    kubectl rollout restart -n {{NAMESPACE}} daemonset/alloy
+
+restart: restart-loki restart-alloy

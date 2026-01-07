@@ -1,0 +1,130 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: cicd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: alloy
+    targetRevision: 0.3.2
+    helm:
+      releaseName: alloy
+      valuesObject:
+        alloy:
+          service:
+            ports:
+              otlp-grpc:
+                enabled: true
+                port: 4317
+                targetPort: 4317
+                protocol: TCP
+              otlp-http:
+                enabled: true
+                port: 4318
+                targetPort: 4318
+                protocol: TCP
+
+          configMap:
+            content: |
+              discovery.kubernetes "pods" {
+                role = "pod"
+              }
+
+              discovery.relabel "pods" {
+                targets = discovery.kubernetes.pods.targets
+
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  target_label  = "namespace"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  target_label  = "pod"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_container_name"]
+                  target_label  = "container"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app"]
+                  target_label  = "app"
+                }
+              }
+
+              loki.source.kubernetes "pods" {
+                targets    = discovery.relabel.pods.output
+                forward_to = [loki.write.default.receiver]
+              }
+
+              loki.write "default" {
+                endpoint {
+                  url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+                }
+              }
+
+              // ========================================
+              // TRACES COLLECTION
+              // ========================================
+
+              // OTLP receiver for traces via gRPC and HTTP
+              otelcol.receiver.otlp "default" {
+                grpc {
+                  endpoint = "0.0.0.0:4317"
+                }
+
+                http {
+                  endpoint = "0.0.0.0:4318"
+                }
+
+                output {
+                  traces = [otelcol.processor.batch.default.input]
+                }
+              }
+
+              // Batch processor for efficient trace forwarding
+              otelcol.processor.batch "default" {
+                timeout = "5s"
+                send_batch_size = 100
+                send_batch_max_size = 200
+
+                output {
+                  traces = [otelcol.exporter.otlp.tempo.input]
+                }
+              }
+
+              // OTLP exporter to send traces to Tempo
+              otelcol.exporter.otlp "tempo" {
+                client {
+                  endpoint = "tempo.monitoring.svc.cluster.local:4317"
+
+                  tls {
+                    insecure = true
+                  }
+
+                  compression = "gzip"
+                }
+              }
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
