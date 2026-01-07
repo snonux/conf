@@ -1,0 +1,38 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: openbsd-memory-rules
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # OpenBSD memory metrics mapped to Linux-compatible names
+    - name: openbsd-memory
+      rules:
+        # Synthetic MemTotal for OpenBSD (maps to size_bytes)
+        - record: node_memory_MemTotal_bytes
+          expr: node_memory_size_bytes{os="openbsd"}
+          labels:
+            os: openbsd
+
+        # Synthetic MemAvailable for OpenBSD
+        # Available = free + inactive + cache (approximation)
+        - record: node_memory_MemAvailable_bytes
+          expr: node_memory_free_bytes{os="openbsd"} + node_memory_inactive_bytes{os="openbsd"} + node_memory_cache_bytes{os="openbsd"}
+          labels:
+            os: openbsd
+
+        # Synthetic MemFree for OpenBSD
+        - record: node_memory_MemFree_bytes
+          expr: node_memory_free_bytes{os="openbsd"}
+          labels:
+            os: openbsd
+
+        # Synthetic Cached for OpenBSD
+        - record: node_memory_Cached_bytes
+          expr: node_memory_cache_bytes{os="openbsd"}
+          labels:
+            os: openbsd

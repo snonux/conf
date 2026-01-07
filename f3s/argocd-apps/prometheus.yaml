@@ -1,0 +1,126 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: cicd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  sources:
+    # Source 1: Upstream Helm chart from prometheus-community
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 55.5.0
+      helm:
+        releaseName: prometheus
+        valuesObject:
+          kubeEtcd:
+            enabled: true
+            endpoints:
+              - 192.168.2.120
+              - 192.168.2.121
+              - 192.168.2.122
+            service:
+              enabled: true
+              port: 2381
+              targetPort: 2381
+
+          kubeControllerManager:
+            enabled: true
+            endpoints:
+              - 192.168.2.120
+              - 192.168.2.121
+              - 192.168.2.122
+            service:
+              enabled: true
+              port: 10257
+              targetPort: 10257
+            serviceMonitor:
+              enabled: true
+              https: true
+              insecureSkipVerify: true
+
+          prometheus:
+            prometheusSpec:
+              additionalArgs:
+                - name: web.enable-remote-write-receiver
+                  value: ""
+                - name: web.enable-admin-api
+                  value: ""
+              enableFeatures:
+                - exemplar-storage
+                - otlp-write-receiver
+              additionalScrapeConfigs: []
+              tsdb:
+                outOfOrderTimeWindow: 744h  # 31 days
+              additionalScrapeConfigsSecret:
+                enabled: true
+                name: additional-scrape-configs
+                key: additional-scrape-configs.yaml
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: ""
+                    accessModes: ["ReadWriteOnce"]
+                    resources:
+                      requests:
+                        storage: 10Gi
+                    selector:
+                      matchLabels:
+                        type: local
+                        app: prometheus
+
+          grafana:
+            persistence:
+              enabled: true
+              type: pvc
+              existingClaim: "grafana-data-pvc"
+
+            initChownData:
+              enabled: false
+
+            podSecurityContext:
+              fsGroup: 911
+              runAsUser: 911
+              runAsGroup: 911
+
+            # Disable sidecar-based datasource provisioning
+            sidecar:
+              datasources:
+                enabled: false
+
+            # Mount datasources ConfigMap directly to provisioning directory
+            extraVolumes:
+              - name: datasources-volume
+                configMap:
+                  name: grafana-datasources-all
+
+            extraVolumeMounts:
+              - name: datasources-volume
+                mountPath: /etc/grafana/provisioning/datasources
+                readOnly: true
+
+    # Source 2: Additional manifests from Git repository
+    - repoURL: https://codeberg.org/snonux/conf.git
+      targetRevision: master
+      path: f3s/prometheus/manifests
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: false  # Manual pruning for safety on complex stack
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
