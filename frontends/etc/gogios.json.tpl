@@ -44,7 +44,9 @@
       "DependsOn": ["Check Ping4 <%= $host %>.buetow.org", "Check Ping6 <%= $host %>.buetow.org"]
     },
     <% } -%>
-    <% for my $host (@$acme_hosts) { -%>
+    <% for my $host (@$acme_hosts) {
+         # Skip server hostnames - they have dedicated checks above without www/standby variants
+         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
     <%   for my $prefix ('', 'standby.', 'www.') { -%>
     <%     my $depends_on = $prefix eq 'standby.' ? 'standby.buetow.org' : 'master.buetow.org'; -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
