@@ -1,31 +1,61 @@
 NAMESPACE := "services"
-RELEASE_NAME := "immich"
-CHART_NAME := "immich/immich"
-VALUES_FILE := "./values.yaml"
-CHART_PATH := "./helm-chart"
+APP_NAME := "immich"
 
-# Install the custom resources (PVs, PVCs, PostgreSQL, etc.)
-install-resources:
-    kubectl apply -f {{CHART_PATH}}/templates/ --namespace {{NAMESPACE}}
-
-# Install Immich using the official Helm chart with custom values
-install:
-    helm install {{RELEASE_NAME}} {{CHART_NAME}} -f {{VALUES_FILE}} --namespace {{NAMESPACE}} --create-namespace
-
-# Upgrade Immich deployment
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_NAME}} -f {{VALUES_FILE}} --namespace {{NAMESPACE}}
-
-# Delete Immich deployment (keeps PVs and data)
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
-
-# Delete all resources including PVs (WARNING: This will delete all data!)
-delete-all:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
-    kubectl delete -f {{CHART_PATH}}/templates/ --namespace {{NAMESPACE}}
-
-# Show current deployment status
 status:
-    kubectl get all -n {{NAMESPACE}} -l app.kubernetes.io/instance={{RELEASE_NAME}}
-    kubectl get pvc -n {{NAMESPACE}} | grep immich
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep immich
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} | grep immich
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} immich-ingress
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep immich
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
+
+logs-server lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=immich-server --tail={{lines}} -f
+
+logs-ml lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=immich-machine-learning --tail={{lines}} -f
+
+logs-postgres lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=immich-postgres --tail={{lines}} -f
+
+logs-valkey lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=immich-valkey --tail={{lines}} -f
+
+port-forward port="2283":
+    @echo "Forwarding immich server to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/immich-server {{port}}:2283
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart-server:
+    @echo "Restarting immich server..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/immich-server
+
+restart-ml:
+    @echo "Restarting immich machine learning..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/immich-machine-learning
+
+restart-postgres:
+    @echo "Restarting immich postgres..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/immich-postgres
+
+restart-valkey:
+    @echo "Restarting immich valkey..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/immich-valkey
+
+restart: restart-server restart-ml

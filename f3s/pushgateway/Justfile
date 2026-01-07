@@ -1,25 +1,22 @@
-NAMESPACE := "infra"
-APP_NAME := "registry"
+NAMESPACE := "monitoring"
+APP_NAME := "pushgateway"
 
 status:
     @echo "=== Pods ==="
-    @kubectl get pods -n {{NAMESPACE}} | grep registry
+    @kubectl get pods -n {{NAMESPACE}} | grep pushgateway
     @echo ""
     @echo "=== Service ==="
-    @kubectl get svc -n {{NAMESPACE}} docker-registry-service
-    @echo ""
-    @echo "=== PVC ==="
-    @kubectl get pvc -n {{NAMESPACE}} docker-registry-pvc
+    @kubectl get svc -n {{NAMESPACE}} pushgateway
     @echo ""
     @echo "=== ArgoCD Status ==="
     @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
 logs lines="100":
-    kubectl logs -n {{NAMESPACE}} -l app=docker-registry --tail={{lines}} -f
+    kubectl logs -n {{NAMESPACE}} -l app=pushgateway --tail={{lines}} -f
 
-port-forward port="5000":
-    @echo "Forwarding docker registry to localhost:{{port}}"
-    kubectl port-forward -n {{NAMESPACE}} svc/docker-registry-service {{port}}:5000
+port-forward port="9091":
+    @echo "Forwarding pushgateway to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/pushgateway {{port}}:9091
 
 sync:
     @echo "Triggering ArgoCD sync..."
@@ -31,5 +28,5 @@ argocd-status:
     argocd app get {{APP_NAME}} --core
 
 restart:
-    @echo "Restarting docker registry..."
-    kubectl rollout restart -n {{NAMESPACE}} deployment/docker-registry
+    @echo "Restarting pushgateway..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/pushgateway
