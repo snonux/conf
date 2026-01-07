@@ -1,0 +1,97 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: cicd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: tempo
+    targetRevision: 1.24.1
+    helm:
+      releaseName: tempo
+      valuesObject:
+        # Grafana Tempo - Monolithic Mode Configuration
+        tempo:
+          # Retention policy for traces (7 days)
+          retention: 168h
+
+          # Storage configuration - Local filesystem backend
+          storage:
+            trace:
+              backend: local
+              local:
+                path: /var/tempo/traces
+              wal:
+                path: /var/tempo/wal
+
+          # Distributor configuration with OTLP receivers
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: 0.0.0.0:4317
+                http:
+                  endpoint: 0.0.0.0:4318
+
+        # Persistence configuration using hostPath PV
+        persistence:
+          enabled: true
+          size: 10Gi
+          storageClassName: ""  # Empty string for manual PV binding
+          accessModes:
+            - ReadWriteOnce
+
+        # Service configuration
+        service:
+          type: ClusterIP
+
+        # Resource limits
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+
+        # Security context
+        securityContext:
+          fsGroup: 10001
+          runAsUser: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+
+        # Disable components not needed in monolithic mode
+        gateway:
+          enabled: false
+
+        # Monitoring integration with Prometheus
+        serviceMonitor:
+          enabled: true
+          labels:
+            release: prometheus
+
+        # Test pod disabled
+        test:
+          enabled: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

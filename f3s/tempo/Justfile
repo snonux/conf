@@ -1,33 +1,50 @@
-# Grafana Tempo deployment automation
-# Following the pattern from Loki Justfile
-
-install:
-    helm repo add grafana https://grafana.github.io/helm-charts || true
-    helm repo update
-    kubectl apply -f persistent-volumes.yaml
-    helm install tempo grafana/tempo --namespace monitoring -f values.yaml
-    kubectl apply -f datasource-configmap.yaml
-
-uninstall:
-    kubectl delete -f datasource-configmap.yaml || true
-    helm uninstall tempo --namespace monitoring || true
-    kubectl delete -f persistent-volumes.yaml || true
-
-upgrade:
-    helm upgrade tempo grafana/tempo --namespace monitoring -f values.yaml
-    kubectl apply -f datasource-configmap.yaml
+NAMESPACE := "monitoring"
+APP_NAME := "tempo"
 
 status:
-    kubectl get pods -n monitoring -l app.kubernetes.io/name=tempo
-    kubectl get svc -n monitoring -l app.kubernetes.io/name=tempo
-    kubectl get pvc -n monitoring tempo-data-pvc
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=tempo
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} tempo
+    @echo ""
+    @echo "=== PVC ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep tempo
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-logs:
-    kubectl logs -n monitoring -l app.kubernetes.io/name=tempo --tail=100 -f
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=tempo --tail={{lines}} -f
+
+port-forward port="3200":
+    @echo "Forwarding Tempo to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/tempo {{port}}:3200
+
+port-forward-otlp-grpc port="4317":
+    @echo "Forwarding Tempo OTLP gRPC to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/tempo {{port}}:4317
+
+port-forward-otlp-http port="4318":
+    @echo "Forwarding Tempo OTLP HTTP to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/tempo {{port}}:4318
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart:
+    @echo "Restarting Tempo..."
+    kubectl rollout restart -n {{NAMESPACE}} statefulset/tempo
 
 check:
     @echo "Checking Tempo readiness..."
-    kubectl exec -n monitoring $(kubectl get pod -n monitoring -l app.kubernetes.io/name=tempo -o jsonpath='{.items[0].metadata.name}') -- wget -qO- http://localhost:3200/ready
+    @kubectl exec -n {{NAMESPACE}} tempo-0 -- wget -qO- http://localhost:3200/ready
     @echo ""
-    @echo "Checking OTLP ports..."
-    kubectl exec -n monitoring $(kubectl get pod -n monitoring -l app.kubernetes.io/name=tempo -o jsonpath='{.items[0].metadata.name}') -- netstat -ln | grep -E ':(4317|4318|3200)'
+    @echo "Testing OTLP endpoint with tracing-demo:"
+    @echo "  curl https://tracing-demo.f3s.buetow.org/api/process"
