@@ -16,26 +16,39 @@ push:
 # Build and push images
 build-push: build push
 
-# Install Helm chart
-install:
-    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+# Trigger ArgoCD sync
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{RELEASE_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{RELEASE_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
 
-# Upgrade Helm chart
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
-
-# Delete Helm release
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
-
-# Rebuild images, import, and upgrade deployment
-rebuild: build import upgrade
+# Show ArgoCD application details
+argocd-status:
+    argocd app get {{RELEASE_NAME}} --core
 
 # Check deployment status
 status:
-    kubectl get pods -n {{NAMESPACE}} | grep tracing-demo
-    kubectl get svc -n {{NAMESPACE}} | grep -E '(frontend|middleware|backend)-service'
-    kubectl get ingress -n {{NAMESPACE}} tracing-demo-ingress
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep tracing-demo
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} | grep -E '(frontend|middleware|backend)-service'
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} tracing-demo-ingress
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{RELEASE_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
+
+# Restart all pods
+restart:
+    @echo "Restarting frontend..."
+    @kubectl rollout restart -n {{NAMESPACE}} deployment/tracing-demo-frontend
+    @echo "Restarting middleware..."
+    @kubectl rollout restart -n {{NAMESPACE}} deployment/tracing-demo-middleware
+    @echo "Restarting backend..."
+    @kubectl rollout restart -n {{NAMESPACE}} deployment/tracing-demo-backend
 
 # View logs from all services
 logs:

@@ -1,16 +1,38 @@
 NAMESPACE := "services"
-RELEASE_NAME := "filebrowser"
-CHART_PATH := "./helm-chart"
+APP_NAME := "filebrowser"
 
-install:
-    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep filebrowser
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} filebrowser-service
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} filebrowser-ingress
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep filebrowser
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=filebrowser --tail={{lines}} -f
 
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
-    kubectl delete pvc filebrowser-data-pvc filebrowser-database-pvc filebrowser-config-pvc -n {{NAMESPACE}} --ignore-not-found
-    kubectl delete pv filebrowser-data-pv filebrowser-database-pv filebrowser-config-pv --ignore-not-found
+port-forward port="8080":
+    @echo "Forwarding filebrowser to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/filebrowser-service {{port}}:8080
 
-deinstall: delete
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart:
+    @echo "Restarting filebrowser..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/filebrowser

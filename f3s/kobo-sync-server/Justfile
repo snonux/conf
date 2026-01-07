@@ -1,12 +1,38 @@
 NAMESPACE := "services"
-RELEASE_NAME := "koreader-sync-server"
-CHART_PATH := "./helm-chart"
+APP_NAME := "kobo-sync-server"
 
-install:
-    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep kobo
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} kobo-sync-server-service
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} kobo-sync-server-ingress
+    @echo ""
+    @echo "=== PVC ==="
+    @kubectl get pvc -n {{NAMESPACE}} kobo-data-pvc
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=kobo-sync-server --tail={{lines}} -f
 
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+port-forward port="8080":
+    @echo "Forwarding kobo-sync-server to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/kobo-sync-server-service {{port}}:8080
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart:
+    @echo "Restarting kobo-sync-server..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/kobo-sync-server

@@ -1,2 +1,1 @@
-Read /home/paul/Notes/snippets/f3s/f3s.md
-
+@/home/paul/Notes/snippets/f3s/f3s.md

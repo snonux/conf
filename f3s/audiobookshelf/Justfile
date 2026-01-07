@@ -1,12 +1,38 @@
 NAMESPACE := "services"
-RELEASE_NAME := "audiobookshelf"
-CHART_PATH := "./helm-chart"
+APP_NAME := "audiobookshelf"
 
-install:
-    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep audiobookshelf
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} audiobookshelf-service
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} audiobookshelf-ingress
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep audiobookshelf
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=audiobookshelf --tail={{lines}} -f
 
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+port-forward port="8000":
+    @echo "Forwarding audiobookshelf to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/audiobookshelf-service {{port}}:8000
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart:
+    @echo "Restarting audiobookshelf..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/audiobookshelf

@@ -1,12 +1,63 @@
 NAMESPACE := "services"
-RELEASE_NAME := "miniflux"
-CHART_PATH := "./helm-chart"
+APP_NAME := "miniflux"
 
-install:
-    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+# Show deployment status
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app=miniflux-server
+    @kubectl get pods -n {{NAMESPACE}} -l app=miniflux-postgres
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} | grep miniflux
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} miniflux-ingress
+    @echo ""
+    @echo "=== PVC ==="
+    @kubectl get pvc -n {{NAMESPACE}} miniflux-postgres-pvc
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
 
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+# View logs from miniflux server (default 100 lines)
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=miniflux-server --tail={{lines}} -f
 
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+# View logs from postgres
+logs-postgres lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=miniflux-postgres --tail={{lines}} -f
+
+# Port forward to miniflux web UI
+port-forward port="8080":
+    @echo "Forwarding miniflux to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/miniflux {{port}}:8080
+
+# Port forward to postgres
+port-forward-postgres port="5432":
+    @echo "Forwarding postgres to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/miniflux-postgres {{port}}:5432
+
+# Trigger ArgoCD sync
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+# Show ArgoCD application details
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+# Restart miniflux server
+restart:
+    @echo "Restarting miniflux server..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/miniflux-server
+
+# Restart postgres
+restart-postgres:
+    @echo "Restarting postgres..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/miniflux-postgres
+
+# Execute psql in postgres pod
+psql:
+    kubectl exec -it -n {{NAMESPACE}} deployment/miniflux-postgres -- psql -U miniflux
