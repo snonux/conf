@@ -189,13 +189,54 @@ Process:
 
 ## Monitoring System (Gogios)
 
+### Configuration
 - Runs as user `_gogios`
-- Config: `/etc/gogios.json`
+- Config: `/etc/gogios.json` (generated from `etc/gogios.json.tpl`)
 - Output: `/var/www/htdocs/buetow.org/self/gogios/index.html`
+- State: `/var/run/gogios/state.json`
 - Cron schedule: Every 5 minutes between 08:00-22:00
 - Check intervals: Independent from cron (e.g., TLS checks every 3600s)
 
 **Important**: Check intervals (`RunInterval`) are independent from cron schedule. A check with 3600s interval won't re-run just because cron triggered, it runs only when interval expires.
+
+### Template Pattern (gogios.json.tpl)
+
+**Dedicated server checks (lines 29-46)**: Bare hostnames only
+```perl
+<% for my $host (qw(fishfinger blowfish)) { -%>
+"Check TLS Certificate <%= $host %>.buetow.org": { ... }
+```
+
+Creates checks for:
+- `fishfinger.buetow.org` (bare hostname)
+- `blowfish.buetow.org` (bare hostname)
+
+**Service domain checks (lines 47-66)**: All prefix variants
+```perl
+<% for my $host (@$acme_hosts) {
+     # Skip server hostnames - they have dedicated checks above without www/standby variants
+     next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
+<%   for my $prefix ('', 'standby.', 'www.') { -%>
+```
+
+Creates checks for:
+- `foo.zone`, `standby.foo.zone`, `www.foo.zone` (all variants)
+- **NOT** `www.blowfish.buetow.org`, `standby.blowfish.buetow.org` (no DNS records)
+
+### Why Skip Server Hostnames
+
+Server FQDNs like blowfish.buetow.org and fishfinger.buetow.org:
+- Don't have DNS records for www/standby prefixes
+- Already monitored via dedicated checks without prefixes
+- Including them in `@acme_hosts` loop creates false alerts
+
+Without the skip, gogios generates checks for non-existent:
+- `www.blowfish.buetow.org` → DNS failure
+- `standby.blowfish.buetow.org` → DNS failure
+- `www.fishfinger.buetow.org` → DNS failure
+- `standby.fishfinger.buetow.org` → DNS failure
+
+Result: 12 false CRITICAL alerts (3 checks × 4 hostnames)
 
 ## Configuration Testing
 
