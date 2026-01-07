@@ -1,12 +1,22 @@
 NAMESPACE := "monitoring"
-RELEASE_NAME := "grafana-ingress"
-CHART_PATH := "."
+APP_NAME := "grafana-ingress"
 
-install:
-    helm install {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}} --create-namespace
+status:
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} grafana-ingress
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-upgrade:
-    helm upgrade {{RELEASE_NAME}} {{CHART_PATH}} --namespace {{NAMESPACE}}
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
 
-delete:
-    helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}}
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+test:
+    @echo "Testing Grafana ingress..."
+    curl -I https://grafana.f3s.buetow.org
