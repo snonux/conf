@@ -1,29 +1,65 @@
-install:
-    kubectl apply -f persistent-volumes.yaml
-    kubectl create secret generic additional-scrape-configs --from-file=additional-scrape-configs.yaml -n monitoring --dry-run=client -o yaml | kubectl apply -f -
-    kubectl apply -f grafana-datasources-all.yaml
-    helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
-    kubectl apply -f freebsd-recording-rules.yaml
-    kubectl apply -f openbsd-recording-rules.yaml
-    kubectl apply -f zfs-recording-rules.yaml
-    just -f grafana-ingress/Justfile install
-    @echo "Waiting for Grafana to be ready..."
-    @sleep 10
-    @echo "Restarting Grafana to load datasources..."
-    kubectl delete pod -n monitoring -l app.kubernetes.io/name=grafana
+NAMESPACE := "monitoring"
+APP_NAME := "prometheus"
 
-upgrade:
-    kubectl create secret generic additional-scrape-configs --from-file=additional-scrape-configs.yaml -n monitoring --dry-run=client -o yaml | kubectl apply -f -
-    kubectl apply -f grafana-datasources-all.yaml
-    helm upgrade prometheus prometheus-community/kube-prometheus-stack --namespace monitoring -f persistence-values.yaml
-    kubectl apply -f freebsd-recording-rules.yaml
-    kubectl apply -f openbsd-recording-rules.yaml
-    kubectl apply -f zfs-recording-rules.yaml
-    @echo "Restarting Grafana to load datasources..."
-    kubectl delete pod -n monitoring -l app.kubernetes.io/name=grafana
+status:
+    @echo "=== Prometheus Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=prometheus
+    @echo ""
+    @echo "=== Grafana Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=grafana
+    @echo ""
+    @echo "=== Alertmanager Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=alertmanager
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} | grep prometheus
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep -E '(prometheus|grafana)'
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
 
-uninstall:
-    just -f grafana-ingress/Justfile delete
-    helm uninstall prometheus --namespace monitoring
-    kubectl delete secret additional-scrape-configs -n monitoring || true
-    kubectl delete -f persistent-volumes.yaml     
+logs-prometheus lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=prometheus --tail={{lines}} -f
+
+logs-grafana lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=grafana --tail={{lines}} -f
+
+logs-alertmanager lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=alertmanager --tail={{lines}} -f
+
+port-forward-prometheus port="9090":
+    @echo "Forwarding Prometheus to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/prometheus-kube-prometheus-prometheus {{port}}:9090
+
+port-forward-grafana port="3000":
+    @echo "Forwarding Grafana to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/prometheus-grafana {{port}}:80
+
+port-forward-alertmanager port="9093":
+    @echo "Forwarding Alertmanager to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/prometheus-kube-prometheus-alertmanager {{port}}:9093
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart-prometheus:
+    @echo "Restarting Prometheus..."
+    kubectl rollout restart -n {{NAMESPACE}} statefulset/prometheus-prometheus-kube-prometheus-prometheus
+
+restart-grafana:
+    @echo "Restarting Grafana..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/prometheus-grafana
+
+restart-alertmanager:
+    @echo "Restarting Alertmanager..."
+    kubectl rollout restart -n {{NAMESPACE}} statefulset/alertmanager-prometheus-kube-prometheus-alertmanager
+
+restart: restart-grafana
