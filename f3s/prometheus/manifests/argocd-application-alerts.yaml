@@ -1,0 +1,90 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-application-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # ArgoCD application health and sync monitoring
+    - name: argocd-applications
+      interval: 30s
+      rules:
+        # Alert when any ArgoCD application is unhealthy
+        - alert: ArgoCDApplicationUnhealthy
+          expr: argocd_app_info{health_status!="Healthy"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            component: argocd
+          annotations:
+            summary: "ArgoCD application {{ $labels.name }} is unhealthy"
+            description: "ArgoCD application {{ $labels.name }} in namespace {{ $labels.dest_namespace }} has health status: {{ $labels.health_status }}. The application has been unhealthy for more than 5 minutes."
+            impact: "Service {{ $labels.name }} may be degraded or unavailable. Users may experience service interruptions."
+            action: "Check application status with: argocd app get {{ $labels.name }} --core\nCheck pods: kubectl get pods -n {{ $labels.dest_namespace }}\nView logs: kubectl logs -n {{ $labels.dest_namespace }} -l app={{ $labels.name }} --tail=100"
+            dashboard: "https://argocd.yourdomain.com/applications/{{ $labels.name }}"
+
+        # Alert when any ArgoCD application is out of sync
+        - alert: ArgoCDApplicationOutOfSync
+          expr: argocd_app_info{sync_status!="Synced"} == 1
+          for: 10m
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: "ArgoCD application {{ $labels.name }} is out of sync"
+            description: "ArgoCD application {{ $labels.name }} has sync status: {{ $labels.sync_status }}. The application has been out of sync for more than 10 minutes."
+            impact: "Configuration drift detected. Running configuration may not match Git repository."
+            action: "Check sync status with: argocd app get {{ $labels.name }} --core\nManual sync: argocd app sync {{ $labels.name }} --core\nCheck diff: argocd app diff {{ $labels.name }} --core"
+
+        # Alert when application sync fails repeatedly
+        - alert: ArgoCDApplicationSyncFailing
+          expr: increase(argocd_app_sync_total{phase="Error"}[30m]) > 3
+          for: 5m
+          labels:
+            severity: critical
+            component: argocd
+          annotations:
+            summary: "ArgoCD application {{ $labels.name }} sync is failing repeatedly"
+            description: "ArgoCD application {{ $labels.name }} has failed to sync {{ $value }} times in the last 30 minutes."
+            impact: "Application cannot be updated. New changes are not being deployed."
+            action: "Check sync errors: argocd app get {{ $labels.name }} --core\nView detailed logs: kubectl logs -n cicd -l app.kubernetes.io/name=argocd-application-controller --tail=200 | grep {{ $labels.name }}"
+
+        # Alert when application has been progressing for too long
+        - alert: ArgoCDApplicationStuckProgressing
+          expr: argocd_app_info{health_status="Progressing"} == 1
+          for: 30m
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: "ArgoCD application {{ $labels.name }} stuck in Progressing state"
+            description: "ArgoCD application {{ $labels.name }} has been in Progressing state for more than 30 minutes."
+            impact: "Application deployment is taking longer than expected. New version may not be fully deployed."
+            action: "Check application status: argocd app get {{ $labels.name }} --core\nCheck pods: kubectl get pods -n {{ $labels.dest_namespace }} -w\nCheck events: kubectl get events -n {{ $labels.dest_namespace }} --sort-by='.lastTimestamp'"
+
+        # Alert for critical application failures (Degraded, Suspended, Missing, Unknown)
+        - alert: ArgoCDApplicationDegraded
+          expr: argocd_app_info{health_status=~"Degraded|Suspended|Missing|Unknown"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            component: argocd
+          annotations:
+            summary: "ArgoCD application {{ $labels.name }} is degraded"
+            description: "ArgoCD application {{ $labels.name }} has critical health status: {{ $labels.health_status }}."
+            impact: "Application is in a critical state and requires immediate attention."
+            action: "Check application status: argocd app get {{ $labels.name }} --core\nReview ArgoCD logs: kubectl logs -n cicd -l app.kubernetes.io/name=argocd-server --tail=100"
+
+        # Recording rule: count of unhealthy applications
+        - record: argocd:applications:unhealthy:count
+          expr: count(argocd_app_info{health_status!="Healthy"})
+
+        # Recording rule: count of out-of-sync applications
+        - record: argocd:applications:outof_sync:count
+          expr: count(argocd_app_info{sync_status!="Synced"})
+
+        # Recording rule: total applications
+        - record: argocd:applications:total:count
+          expr: count(argocd_app_info)
