@@ -5,6 +5,7 @@
   "CheckTimeoutS": 10,
   "CheckConcurrency": 3,
   "StateDir": "/var/run/gogios",
+  "PrometheusHosts": ["r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"],
   "Checks": {
     <% for my $host (qw(master standby)) { -%>
     <%   for my $proto (4, 6) { -%>
