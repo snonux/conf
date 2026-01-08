@@ -30,16 +30,41 @@ logs-alertmanager lines="100":
     kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=alertmanager --tail={{lines}} -f
 
 port-forward-prometheus port="9090":
-    @echo "Forwarding Prometheus to localhost:{{port}}"
+    @echo "🚀 Forwarding Prometheus to localhost:{{port}}"
+    @echo ""
+    @echo "Access URLs:"
+    @echo "  Alerts:  http://localhost:{{port}}/alerts"
+    @echo "  Rules:   http://localhost:{{port}}/rules"
+    @echo "  Graph:   http://localhost:{{port}}/graph"
+    @echo "  Targets: http://localhost:{{port}}/targets"
+    @echo ""
+    @echo "Press Ctrl+C to stop"
+    @echo ""
     kubectl port-forward -n {{NAMESPACE}} svc/prometheus-kube-prometheus-prometheus {{port}}:9090
 
 port-forward-grafana port="3000":
-    @echo "Forwarding Grafana to localhost:{{port}}"
+    @echo "🚀 Forwarding Grafana to localhost:{{port}}"
+    @echo ""
+    @echo "Access URL: http://localhost:{{port}}"
+    @echo ""
+    @echo "Press Ctrl+C to stop"
+    @echo ""
     kubectl port-forward -n {{NAMESPACE}} svc/prometheus-grafana {{port}}:80
 
 port-forward-alertmanager port="9093":
-    @echo "Forwarding Alertmanager to localhost:{{port}}"
+    @echo "🚀 Forwarding Alertmanager to localhost:{{port}}"
+    @echo ""
+    @echo "Access URL: http://localhost:{{port}}"
+    @echo ""
+    @echo "Press Ctrl+C to stop"
+    @echo ""
     kubectl port-forward -n {{NAMESPACE}} svc/prometheus-kube-prometheus-alertmanager {{port}}:9093
+
+# Quick access to Prometheus alerts view
+alerts: (port-forward-prometheus "9090")
+
+# Quick access to Alertmanager
+alertmanager: (port-forward-alertmanager "9093")
 
 sync:
     @echo "Triggering ArgoCD sync..."
