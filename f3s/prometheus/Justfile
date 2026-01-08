@@ -88,3 +88,15 @@ restart-alertmanager:
     kubectl rollout restart -n {{NAMESPACE}} statefulset/alertmanager-prometheus-kube-prometheus-alertmanager
 
 restart: restart-grafana
+
+# Query firing alerts via NodePort (default node: r0)
+firing-alerts node="r0":
+    @curl -s "http://{{node}}:30090/api/v1/alerts" | jq -r '.data.alerts[] | select(.state=="firing") | "\(.labels.alertname) [\(.labels.severity // "unknown")]: \(.annotations.summary // .annotations.description // "no description")"'
+
+# Query all alerts (firing and pending) via NodePort
+all-alerts node="r0":
+    @curl -s "http://{{node}}:30090/api/v1/alerts" | jq '.data.alerts'
+
+# Count of firing alerts
+firing-count node="r0":
+    @curl -s "http://{{node}}:30090/api/v1/alerts" | jq '[.data.alerts[] | select(.state=="firing")] | length'
