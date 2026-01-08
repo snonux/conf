@@ -50,6 +50,16 @@ spec:
           kubeScheduler:
             enabled: false
 
+          # Disable alert rules for components not available in k3s
+          defaultRules:
+            rules:
+              kubeProxy: false
+              kubeSchedulerAlerting: false
+              kubeSchedulerRecording: false
+            disabled:
+              KubeProxyDown: true
+              KubeSchedulerDown: true
+
           prometheus:
             prometheusSpec:
               additionalArgs:
