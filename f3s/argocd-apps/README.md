@@ -126,7 +126,7 @@ All applications use automated sync with:
 - **prune: true** - Resources removed from Git are deleted from the cluster
 - **selfHeal: true** - Manual changes in the cluster are automatically reverted to match Git
 
-Exception: **prometheus** has `prune: false` for safety due to its complexity.
+All applications use `prune: true`.
 
 ## Complex Applications
 
