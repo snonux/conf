@@ -20,6 +20,7 @@ metadata:
   namespace: test
 spec:
   storageClassName: ""
+  volumeName: example-apache-pv
   accessModes:
     - ReadWriteMany
   resources:
