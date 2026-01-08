@@ -1,0 +1,505 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-applications-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: '1'
+    app.kubernetes.io/instance: prometheus
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    release: prometheus
+data:
+  argocd-applications.json: |-
+    {
+      "id": null,
+      "uid": "argocd-apps-overview",
+      "title": "ArgoCD Applications - Health & Sync Status",
+      "tags": [
+        "argocd",
+        "applications",
+        "monitoring",
+        "gitops"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "id": 1,
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 0
+          },
+          "type": "stat",
+          "title": "Total Applications",
+          "targets": [
+            {
+              "expr": "count(argocd_app_info)",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value_and_name"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "blue"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 2,
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 0
+          },
+          "type": "stat",
+          "title": "Healthy Applications",
+          "targets": [
+            {
+              "expr": "count(argocd_app_info{health_status=\"Healthy\"})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "graphMode": "area",
+            "colorMode": "value",
+            "textMode": "value_and_name"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "green"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 3,
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "type": "stat",
+          "title": "Unhealthy Applications",
+          "targets": [
+            {
+              "expr": "count(argocd_app_info{health_status!=\"Healthy\"})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "graphMode": "area",
+            "colorMode": "value",
+            "textMode": "value_and_name"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "green"
+                  },
+                  {
+                    "value": 1,
+                    "color": "red"
+                  }
+                ]
+              },
+              "noValue": "0"
+            }
+          }
+        },
+        {
+          "id": 4,
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "type": "stat",
+          "title": "Out of Sync",
+          "targets": [
+            {
+              "expr": "count(argocd_app_info{sync_status!=\"Synced\"})",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "graphMode": "area",
+            "colorMode": "value",
+            "textMode": "value_and_name"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "green"
+                  },
+                  {
+                    "value": 1,
+                    "color": "yellow"
+                  }
+                ]
+              },
+              "noValue": "0"
+            }
+          }
+        },
+        {
+          "id": 5,
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 4
+          },
+          "type": "table",
+          "title": "Application Status Overview",
+          "targets": [
+            {
+              "expr": "argocd_app_info",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "Value": true,
+                  "instance": true,
+                  "job": true,
+                  "namespace": true,
+                  "pod": true,
+                  "repo": true,
+                  "dest_server": true
+                },
+                "renameByName": {
+                  "name": "Application",
+                  "health_status": "Health",
+                  "sync_status": "Sync Status",
+                  "dest_namespace": "Namespace",
+                  "project": "Project"
+                }
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Application"
+              }
+            ]
+          },
+          "fieldConfig": {
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Health"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "Healthy": {
+                            "color": "green",
+                            "text": "✓ Healthy"
+                          },
+                          "Progressing": {
+                            "color": "yellow",
+                            "text": "⟳ Progressing"
+                          },
+                          "Degraded": {
+                            "color": "red",
+                            "text": "✗ Degraded"
+                          },
+                          "Suspended": {
+                            "color": "orange",
+                            "text": "⏸ Suspended"
+                          },
+                          "Missing": {
+                            "color": "red",
+                            "text": "? Missing"
+                          },
+                          "Unknown": {
+                            "color": "gray",
+                            "text": "? Unknown"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Sync Status"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "Synced": {
+                            "color": "green",
+                            "text": "✓ Synced"
+                          },
+                          "OutOfSync": {
+                            "color": "yellow",
+                            "text": "⚠ Out of Sync"
+                          },
+                          "Unknown": {
+                            "color": "gray",
+                            "text": "? Unknown"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": 6,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 12
+          },
+          "type": "timeseries",
+          "title": "Application Health Status Over Time",
+          "targets": [
+            {
+              "expr": "count(argocd_app_info{health_status=\"Healthy\"})",
+              "legendFormat": "Healthy",
+              "refId": "A"
+            },
+            {
+              "expr": "count(argocd_app_info{health_status=\"Progressing\"})",
+              "legendFormat": "Progressing",
+              "refId": "B"
+            },
+            {
+              "expr": "count(argocd_app_info{health_status=\"Degraded\"})",
+              "legendFormat": "Degraded",
+              "refId": "C"
+            },
+            {
+              "expr": "count(argocd_app_info{health_status=~\"Suspended|Missing|Unknown\"})",
+              "legendFormat": "Other (Suspended/Missing/Unknown)",
+              "refId": "D"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Healthy"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Degraded"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Progressing"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 7,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 12
+          },
+          "type": "timeseries",
+          "title": "Sync Operations",
+          "targets": [
+            {
+              "expr": "rate(argocd_app_sync_total{phase=\"Succeeded\"}[5m])",
+              "legendFormat": "{{name}} - Succeeded",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(argocd_app_sync_total{phase=\"Error\"}[5m])",
+              "legendFormat": "{{name}} - Failed",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never"
+              },
+              "unit": "ops"
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 20
+          },
+          "type": "alertlist",
+          "title": "Active Alerts",
+          "options": {
+            "showOptions": "current",
+            "maxItems": 20,
+            "sortOrder": 1,
+            "dashboardAlerts": false,
+            "alertName": "",
+            "dashboardTitle": "",
+            "tags": [],
+            "stateFilter": {
+              "firing": true,
+              "pending": true,
+              "noData": false,
+              "normal": false,
+              "error": true
+            },
+            "folder": "",
+            "alertInstanceLabelFilter": "{component=\"argocd\"}"
+          }
+        }
+      ]
+    }
