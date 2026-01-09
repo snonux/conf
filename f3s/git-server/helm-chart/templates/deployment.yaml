@@ -52,6 +52,7 @@ spec:
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
+            add: ["SYS_CHROOT"]
         resources:
           requests:
             cpu: 50m

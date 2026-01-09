@@ -52,19 +52,35 @@ server:
 # Repo Server configuration (clones repos, generates manifests)
 repoServer:
   replicas: 1
+  # Pod security context - fsGroup ensures secret volumes are readable by argocd user (999)
+  podSecurityContext:
+    fsGroup: 999
   # Enable persistence for repo cache - mount PVC at /home/argocd/repo-cache
   # This avoids conflict with default /tmp mount used by ArgoCD
   volumes:
     - name: repo-server-data
       persistentVolumeClaim:
         claimName: argocd-repo-server-pvc
+    # SSH private key for git-server access
+    - name: argocd-git-ssh-key
+      secret:
+        secretName: argocd-git-ssh-key
+        defaultMode: 0444
   volumeMounts:
     - name: repo-server-data
       mountPath: /home/argocd/repo-cache
-  # Configure repo-server to use the persistent cache directory
+    # Mount SSH key for git operations
+    - name: argocd-git-ssh-key
+      mountPath: /home/argocd/.ssh/id_ed25519
+      subPath: sshPrivateKey
+      readOnly: true
+  # Configure repo-server to use the persistent cache directory and SSH key
   env:
     - name: XDG_CACHE_HOME
       value: /home/argocd/repo-cache
+    # Configure git to use SSH key and accept new host keys
+    - name: GIT_SSH_COMMAND
+      value: "ssh -i /home/argocd/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new"
   # Resource limits
   resources:
     limits:
