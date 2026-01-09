@@ -25,13 +25,9 @@ spec:
         - /bin/sh
         - -c
         - |
-          mkdir -p /cache-init
-          chown -R 101:1000 /cache-init
           mkdir -p /ssh-init
           chown -R 0:0 /ssh-init
         volumeMounts:
-        - name: cgit-cache
-          mountPath: /cache-init
         - name: ssh-host-keys
           mountPath: /ssh-init
 
@@ -89,8 +85,6 @@ spec:
           mountPath: /etc/cgitrc
           subPath: cgitrc
           readOnly: true
-        - name: cgit-cache
-          mountPath: /var/cache/cgit
         securityContext:
           runAsUser: 0
           runAsGroup: 0
@@ -116,7 +110,5 @@ spec:
       - name: cgit-config
         configMap:
           name: cgit-config
-      - name: cgit-cache
-        emptyDir: {}
       - name: ssh-host-keys
         emptyDir: {}
