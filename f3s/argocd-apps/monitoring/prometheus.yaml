@@ -161,7 +161,7 @@ spec:
                 readOnly: true
 
     # Source 2: Additional manifests from Git repository
-    - repoURL: https://codeberg.org/snonux/conf.git
+    - repoURL: ssh://git@git-server.cicd.svc.cluster.local/repos/repos/conf.git
       targetRevision: master
       path: f3s/prometheus/manifests
 
