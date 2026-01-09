@@ -16,7 +16,6 @@ PubkeyAuthentication yes
 PasswordAuthentication no
 PermitEmptyPasswords no
 ChallengeResponseAuthentication no
-UsePAM no
 
 # Restrict to git user only
 AllowUsers git
