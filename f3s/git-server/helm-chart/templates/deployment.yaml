@@ -79,13 +79,17 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # Remove 'user nginx;' directive to avoid setgid errors
-          sed -i 's/^user nginx;//' /etc/nginx/nginx.conf
-          # Start fcgiwrap and set socket permissions
-          spawn-fcgi -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
+          # Copy nginx config to writable location and modify it
+          cp /etc/nginx/nginx.conf /tmp/nginx.conf
+          sed -i 's/^user nginx;//' /tmp/nginx.conf
+          sed -i 's|pid /var/run/nginx.pid;|pid /tmp/nginx.pid;|' /tmp/nginx.conf
+          # Start fcgiwrap with socket in /tmp
+          spawn-fcgi -s /tmp/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           sleep 1
-          chmod 666 /var/run/fcgiwrap.sock
-          exec nginx -g 'daemon off;'
+          chmod 666 /tmp/fcgiwrap.sock
+          # Update cgit.conf to use /tmp socket
+          sed -i 's|unix:/var/run/fcgiwrap.sock|unix:/tmp/fcgiwrap.sock|' /etc/nginx/conf.d/cgit.conf || true
+          exec nginx -c /tmp/nginx.conf -g 'daemon off;'
         ports:
         - containerPort: 80
           name: http
@@ -105,6 +109,8 @@ spec:
           mountPath: /etc/cgitrc
           subPath: cgitrc
           readOnly: true
+        - name: cgit-runtime
+          mountPath: /tmp
         securityContext:
           runAsUser: 33
           runAsGroup: 33
@@ -134,4 +140,6 @@ spec:
         configMap:
           name: cgit-config
       - name: ssh-host-keys
+        emptyDir: {}
+      - name: cgit-runtime
         emptyDir: {}
