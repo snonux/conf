@@ -12,6 +12,9 @@ data:
     root-title=f3s Git Repository Browser
     root-desc=Browse git repositories in f3s cluster
 
+    # Set the virtual root for correct URL generation
+    virtual-root=/
+
     # Disable caching to avoid permission issues
     cache-size=0
 
