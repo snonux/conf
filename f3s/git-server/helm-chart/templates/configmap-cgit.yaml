@@ -1,0 +1,23 @@
+# CGit Configuration
+# Configures cgit to scan /repos for git repositories
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cgit-config
+  namespace: cicd
+data:
+  cgitrc: |
+    # Global settings
+    root-title=f3s Git Repository Browser
+    root-desc=Browse git repositories in f3s cluster
+
+    # Enable git-config for per-repo settings
+    enable-git-config=1
+
+    # Remove .git suffix from repository URLs
+    remove-suffix=1
+
+    # Scan for repositories in /repos
+    # This must be the last setting in the file
+    scan-path=/repos

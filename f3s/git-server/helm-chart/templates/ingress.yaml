@@ -1,0 +1,24 @@
+# CGit Web UI Ingress
+# Exposes cgit web interface at cgit.f3s.buetow.org
+# Following f3s cluster ingress pattern (Traefik)
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cgit-ingress
+  namespace: cicd
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: cgit.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: git-server
+                port:
+                  number: 80
