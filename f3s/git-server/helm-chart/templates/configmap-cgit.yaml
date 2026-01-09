@@ -21,6 +21,6 @@ data:
     # Remove .git suffix from repository URLs
     remove-suffix=1
 
-    # Scan for repositories in /repos
+    # Scan for repositories in /repos/repos
     # This must be the last setting in the file
-    scan-path=/repos
+    scan-path=/repos/repos
