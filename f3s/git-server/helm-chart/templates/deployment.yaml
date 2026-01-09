@@ -29,8 +29,8 @@ spec:
           # The /ssh-git mount point IS the .ssh directory
           cp /ssh-keys-secret/authorized_keys /ssh-git/authorized_keys
           chown -R 1000:1000 /ssh-git
-          chmod 700 /ssh-git
-          chmod 600 /ssh-git/authorized_keys
+          chmod 755 /ssh-git
+          chmod 644 /ssh-git/authorized_keys
         volumeMounts:
         - name: ssh-host-keys
           mountPath: /ssh-init
