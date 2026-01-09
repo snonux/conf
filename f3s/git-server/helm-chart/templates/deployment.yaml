@@ -15,10 +15,6 @@ spec:
       labels:
         app: git-server
     spec:
-      # Allow both git (1000) and www-data (33) to access shared files
-      securityContext:
-        fsGroup: 1000
-
       containers:
       # Container 1: SSH Git Server
       - name: git-server
