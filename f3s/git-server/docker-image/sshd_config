@@ -28,7 +28,7 @@ PermitTunnel no
 
 # Logging
 SyslogFacility AUTH
-LogLevel DEBUG3
+LogLevel INFO
 
 # Performance
 UseDNS no
