@@ -69,7 +69,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          spawn-fcgi -u nginx -g nginx -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
+          spawn-fcgi -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           exec nginx -g 'daemon off;'
         ports:
         - containerPort: 8080
