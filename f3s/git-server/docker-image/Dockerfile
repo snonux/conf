@@ -7,7 +7,8 @@ RUN apk add --no-cache openssh git
 # This restricts the user to git operations only
 RUN adduser -D -u 1000 -s /usr/bin/git-shell git && \
     mkdir -p /home/git/.ssh /repos && \
-    chown -R git:git /home/git /repos
+    chown -R git:git /home/git /repos && \
+    echo "/usr/bin/git-shell" >> /etc/shells
 
 # Copy sshd configuration to /tmp (will be copied to /etc/ssh by entrypoint)
 COPY sshd_config /tmp/sshd_config
