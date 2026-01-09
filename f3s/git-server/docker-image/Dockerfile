@@ -3,11 +3,13 @@ FROM alpine:3.19
 # Install OpenSSH server and git
 RUN apk add --no-cache openssh git
 
-# Create git user with UID 1000 and set git-shell as login shell
+# Create git user with UID 1001, GID 33 (www-data) and set git-shell as login shell
+# UID 1001 and GID 33 match the NFS file ownership
 # This restricts the user to git operations only
-RUN adduser -D -u 1000 -s /usr/bin/git-shell git && \
+# GID 33 is the existing www-data group in Alpine
+RUN adduser -D -u 1001 -G www-data -s /usr/bin/git-shell git && \
     mkdir -p /home/git/.ssh /repos && \
-    chown -R git:git /home/git /repos && \
+    chown -R git:www-data /home/git /repos && \
     echo "/usr/bin/git-shell" >> /etc/shells && \
     passwd -u git
 

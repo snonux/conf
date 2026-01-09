@@ -15,6 +15,8 @@ spec:
       labels:
         app: git-server
     spec:
+      securityContext:
+        fsGroup: 33
       initContainers:
       - name: setup
         image: alpine:3.19
@@ -27,8 +29,9 @@ spec:
           chown -R 0:0 /ssh-init
           # Setup authorized_keys with correct ownership
           # The /ssh-git mount point IS the .ssh directory
+          # UID 1001 and GID 33 match the NFS file ownership
           cp /ssh-keys-secret/authorized_keys /ssh-git/authorized_keys
-          chown -R 1000:1000 /ssh-git
+          chown -R 1001:33 /ssh-git
           chmod 755 /ssh-git
           chmod 644 /ssh-git/authorized_keys
         volumeMounts:
@@ -57,12 +60,11 @@ spec:
         - name: ssh-host-keys
           mountPath: /etc/ssh
         securityContext:
-          runAsUser: 0
-          runAsGroup: 0
+          runAsUser: 1001
+          runAsGroup: 33
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
-            add: ["SYS_CHROOT", "SETGID", "SETUID"]
         resources:
           requests:
             cpu: 50m
@@ -77,9 +79,9 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # Remove 'user nginx;' directive to avoid setgid errors when running as root
+          # Remove 'user nginx;' directive to avoid setgid errors
           sed -i 's/^user nginx;//' /etc/nginx/nginx.conf
-          # Start fcgiwrap and set socket permissions for nginx user
+          # Start fcgiwrap and set socket permissions
           spawn-fcgi -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           sleep 1
           chmod 666 /var/run/fcgiwrap.sock
@@ -104,8 +106,8 @@ spec:
           subPath: cgitrc
           readOnly: true
         securityContext:
-          runAsUser: 0
-          runAsGroup: 0
+          runAsUser: 33
+          runAsGroup: 33
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]

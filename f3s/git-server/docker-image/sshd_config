@@ -1,10 +1,14 @@
 # SSH Server Configuration for Git Server
 # Security-hardened configuration for git-only access
+# Runs as non-root user (git) with privilege separation disabled
 
 # Network
 Port 22
 AddressFamily any
 ListenAddress 0.0.0.0
+
+# Run without privilege separation (required for non-root)
+UsePrivilegeSeparation no
 
 # Host Keys
 HostKey /etc/ssh/ssh_host_ed25519_key
@@ -32,3 +36,6 @@ LogLevel INFO
 
 # Performance
 UseDNS no
+
+# PID file location (writable by non-root)
+PidFile /tmp/sshd.pid
