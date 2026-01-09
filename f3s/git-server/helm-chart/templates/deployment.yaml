@@ -69,6 +69,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
+          # Remove 'user nginx;' directive to avoid setgid errors when running as root
+          sed -i 's/^user nginx;//' /etc/nginx/nginx.conf
           spawn-fcgi -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           exec nginx -g 'daemon off;'
         ports:
