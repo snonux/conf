@@ -66,6 +66,11 @@ spec:
       # Container 2: CGit Web UI
       - name: cgit
         image: joseluisq/alpine-cgit:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          spawn-fcgi -u nginx -g nginx -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
+          exec nginx -g 'daemon off;'
         ports:
         - containerPort: 8080
           name: http
