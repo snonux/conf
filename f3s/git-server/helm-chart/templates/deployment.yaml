@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git-server
+  namespace: cicd
+  labels:
+    app: git-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: git-server
+  template:
+    metadata:
+      labels:
+        app: git-server
+    spec:
+      # Allow both git (1000) and www-data (33) to access shared files
+      securityContext:
+        fsGroup: 1000
+
+      containers:
+      # Container 1: SSH Git Server
+      - name: git-server
+        image: r0.lan.buetow.org:30001/git-server:1.0
+        ports:
+        - containerPort: 22
+          name: ssh
+          protocol: TCP
+        volumeMounts:
+        - name: repos
+          mountPath: /repos
+        - name: git-ssh-keys
+          mountPath: /home/git/.ssh/authorized_keys
+          subPath: authorized_keys
+          readOnly: true
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+
+      # Container 2: CGit Web UI
+      - name: cgit
+        image: joseluisq/alpine-cgit:latest
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: CGIT_TITLE
+          value: "f3s Git Repository Browser"
+        - name: CGIT_DESC
+          value: "Browse git repositories"
+        volumeMounts:
+        - name: repos
+          mountPath: /repos
+          readOnly: true
+        - name: cgit-config
+          mountPath: /etc/cgitrc
+          subPath: cgitrc
+          readOnly: true
+        securityContext:
+          runAsUser: 33
+          runAsGroup: 33
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+            add: ["NET_BIND_SERVICE"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+
+      volumes:
+      - name: repos
+        persistentVolumeClaim:
+          claimName: git-server-pvc
+      - name: git-ssh-keys
+        secret:
+          secretName: git-server-authorized-keys
+          defaultMode: 0400
+      - name: cgit-config
+        configMap:
+          name: cgit-config

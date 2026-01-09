@@ -1,0 +1,7 @@
+all:
+	docker build -t git-server:1.0 .
+
+f3s:
+	docker build -t git-server:1.0 .
+	docker tag git-server:1.0 r0.lan.buetow.org:30001/git-server:1.0
+	docker push r0.lan.buetow.org:30001/git-server:1.0
