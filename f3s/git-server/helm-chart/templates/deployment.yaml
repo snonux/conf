@@ -22,7 +22,7 @@ spec:
       containers:
       # Container 1: SSH Git Server
       - name: git-server
-        image: r0.lan.buetow.org:30001/git-server:1.0
+        image: registry.lan.buetow.org:30001/git-server:1.0
         ports:
         - containerPort: 22
           name: ssh
@@ -68,6 +68,8 @@ spec:
           mountPath: /etc/cgitrc
           subPath: cgitrc
           readOnly: true
+        - name: cgit-cache
+          mountPath: /var/cache/cgit
         securityContext:
           runAsUser: 33
           runAsGroup: 33
@@ -95,3 +97,5 @@ spec:
       - name: cgit-config
         configMap:
           name: cgit-config
+      - name: cgit-cache
+        emptyDir: {}
