@@ -15,6 +15,26 @@ spec:
       labels:
         app: git-server
     spec:
+      securityContext:
+        fsGroup: 1000
+
+      initContainers:
+      - name: setup
+        image: alpine:3.19
+        command:
+        - /bin/sh
+        - -c
+        - |
+          mkdir -p /cache-init
+          chown -R 33:1000 /cache-init
+          mkdir -p /ssh-init
+          chown -R 0:0 /ssh-init
+        volumeMounts:
+        - name: cgit-cache
+          mountPath: /cache-init
+        - name: ssh-host-keys
+          mountPath: /ssh-init
+
       containers:
       # Container 1: SSH Git Server
       - name: git-server
@@ -39,7 +59,6 @@ spec:
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
-            add: ["CHOWN", "DAC_OVERRIDE"]
         resources:
           requests:
             cpu: 50m
@@ -71,12 +90,11 @@ spec:
         - name: cgit-cache
           mountPath: /var/cache/cgit
         securityContext:
-          runAsUser: 0
-          runAsGroup: 0
+          runAsUser: 33
+          runAsGroup: 33
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
-            add: ["NET_BIND_SERVICE", "CHOWN", "DAC_OVERRIDE"]
         resources:
           requests:
             cpu: 50m
