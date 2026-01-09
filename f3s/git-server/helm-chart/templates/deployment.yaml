@@ -19,6 +19,7 @@ spec:
       # Container 1: SSH Git Server
       - name: git-server
         image: registry.lan.buetow.org:30001/git-server:1.0
+        imagePullPolicy: Always
         ports:
         - containerPort: 22
           name: ssh
@@ -30,12 +31,15 @@ spec:
           mountPath: /home/git/.ssh/authorized_keys
           subPath: authorized_keys
           readOnly: true
+        - name: ssh-host-keys
+          mountPath: /etc/ssh
         securityContext:
-          runAsUser: 1000
-          runAsGroup: 1000
+          runAsUser: 0
+          runAsGroup: 0
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
+            add: ["CHOWN", "DAC_OVERRIDE"]
         resources:
           requests:
             cpu: 50m
@@ -93,4 +97,6 @@ spec:
         configMap:
           name: cgit-config
       - name: cgit-cache
+        emptyDir: {}
+      - name: ssh-host-keys
         emptyDir: {}
