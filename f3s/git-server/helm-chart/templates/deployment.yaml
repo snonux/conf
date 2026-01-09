@@ -54,7 +54,6 @@ spec:
           mountPath: /repos
         - name: git-ssh-writable
           mountPath: /home/git/.ssh
-          readOnly: true
         - name: ssh-host-keys
           mountPath: /etc/ssh
         securityContext:
