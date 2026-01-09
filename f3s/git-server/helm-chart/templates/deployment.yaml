@@ -68,7 +68,10 @@ spec:
         - |
           # Remove 'user nginx;' directive to avoid setgid errors when running as root
           sed -i 's/^user nginx;//' /etc/nginx/nginx.conf
+          # Start fcgiwrap and set socket permissions for nginx user
           spawn-fcgi -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
+          sleep 1
+          chmod 666 /var/run/fcgiwrap.sock
           exec nginx -g 'daemon off;'
         ports:
         - containerPort: 80
