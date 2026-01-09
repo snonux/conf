@@ -79,16 +79,18 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # Copy nginx config to writable location and modify it
+          # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
+          cp -r /etc/nginx/conf.d /tmp/conf.d
           sed -i 's/^user nginx;//' /tmp/nginx.conf
           sed -i 's|pid /var/run/nginx.pid;|pid /tmp/nginx.pid;|' /tmp/nginx.conf
+          sed -i 's|/etc/nginx/conf.d/|/tmp/conf.d/|' /tmp/nginx.conf
+          # Update default.conf to use /tmp socket
+          sed -i 's|unix:/var/run/fcgiwrap.sock|unix:/tmp/fcgiwrap.sock|' /tmp/conf.d/default.conf
           # Start fcgiwrap with socket in /tmp
           spawn-fcgi -s /tmp/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           sleep 1
           chmod 666 /tmp/fcgiwrap.sock
-          # Update cgit.conf to use /tmp socket
-          sed -i 's|unix:/var/run/fcgiwrap.sock|unix:/tmp/fcgiwrap.sock|' /etc/nginx/conf.d/cgit.conf || true
           exec nginx -c /tmp/nginx.conf -g 'daemon off;'
         ports:
         - containerPort: 80
