@@ -26,7 +26,7 @@ spec:
         - -c
         - |
           mkdir -p /cache-init
-          chown -R 33:1000 /cache-init
+          chown -R 101:1000 /cache-init
           mkdir -p /ssh-init
           chown -R 0:0 /ssh-init
         volumeMounts:
@@ -90,8 +90,8 @@ spec:
         - name: cgit-cache
           mountPath: /var/cache/cgit
         securityContext:
-          runAsUser: 33
-          runAsGroup: 33
+          runAsUser: 101
+          runAsGroup: 101
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
