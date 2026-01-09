@@ -22,11 +22,23 @@ spec:
         - /bin/sh
         - -c
         - |
+          # Setup SSH host keys directory
           mkdir -p /ssh-init
           chown -R 0:0 /ssh-init
+          # Setup authorized_keys with correct ownership
+          mkdir -p /ssh-git/.ssh
+          cp /ssh-keys-secret/authorized_keys /ssh-git/.ssh/authorized_keys
+          chown -R 1000:1000 /ssh-git/.ssh
+          chmod 700 /ssh-git/.ssh
+          chmod 600 /ssh-git/.ssh/authorized_keys
         volumeMounts:
         - name: ssh-host-keys
           mountPath: /ssh-init
+        - name: git-ssh-keys
+          mountPath: /ssh-keys-secret
+          readOnly: true
+        - name: git-ssh-writable
+          mountPath: /ssh-git
 
       containers:
       # Container 1: SSH Git Server
@@ -40,9 +52,8 @@ spec:
         volumeMounts:
         - name: repos
           mountPath: /repos
-        - name: git-ssh-keys
-          mountPath: /home/git/.ssh/authorized_keys
-          subPath: authorized_keys
+        - name: git-ssh-writable
+          mountPath: /home/git/.ssh
           readOnly: true
         - name: ssh-host-keys
           mountPath: /etc/ssh
@@ -116,6 +127,8 @@ spec:
         secret:
           secretName: git-server-authorized-keys
           defaultMode: 0400
+      - name: git-ssh-writable
+        emptyDir: {}
       - name: cgit-config
         configMap:
           name: cgit-config
