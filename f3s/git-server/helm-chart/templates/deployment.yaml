@@ -71,7 +71,7 @@ spec:
           spawn-fcgi -s /var/run/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           exec nginx -g 'daemon off;'
         ports:
-        - containerPort: 8080
+        - containerPort: 80
           name: http
           protocol: TCP
         env:
