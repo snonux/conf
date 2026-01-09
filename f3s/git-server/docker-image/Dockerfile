@@ -26,6 +26,8 @@ RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then' >> /entrypoint.sh && \
     echo '  ssh-keygen -A' >> /entrypoint.sh && \
     echo 'fi' >> /entrypoint.sh && \
+    echo '# Configure git safe.directory for NFS repositories' >> /entrypoint.sh && \
+    echo 'git config --global --add safe.directory "*"' >> /entrypoint.sh && \
     echo 'exec /usr/sbin/sshd -D -e' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
