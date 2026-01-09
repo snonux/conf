@@ -92,8 +92,8 @@ spec:
         - name: cgit-cache
           mountPath: /var/cache/cgit
         securityContext:
-          runAsUser: 101
-          runAsGroup: 101
+          runAsUser: 0
+          runAsGroup: 0
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
