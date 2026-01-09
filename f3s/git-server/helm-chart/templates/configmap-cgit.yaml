@@ -12,6 +12,9 @@ data:
     root-title=f3s Git Repository Browser
     root-desc=Browse git repositories in f3s cluster
 
+    # Disable caching to avoid permission issues
+    cache-size=0
+
     # Enable git-config for per-repo settings
     enable-git-config=1
 
