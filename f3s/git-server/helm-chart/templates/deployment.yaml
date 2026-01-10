@@ -101,6 +101,9 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
+          # Add git safe.directory exception for repository ownership
+          git config --global --add safe.directory /repos/repos/conf.git
+
           # Configure git repository for HTTP access
           git config --file /repos/repos/conf.git/config http.receivepack true
           git config --file /repos/repos/conf.git/config http.uploadpack true
