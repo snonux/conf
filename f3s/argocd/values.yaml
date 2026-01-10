@@ -78,9 +78,12 @@ repoServer:
   env:
     - name: XDG_CACHE_HOME
       value: /home/argocd/repo-cache
-    # Configure git to use SSH key and accept new host keys
+    # Disable SSH agent to prevent "SSH_AUTH_SOCK not-specified" errors
+    - name: SSH_AUTH_SOCK
+      value: ""
+    # Configure git to use SSH key, disable agent, and accept new host keys
     - name: GIT_SSH_COMMAND
-      value: "ssh -i /home/argocd/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new"
+      value: "ssh -i /home/argocd/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
   # Resource limits
   resources:
     limits:
