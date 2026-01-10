@@ -90,6 +90,7 @@ spec:
           # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
           cp -r /etc/nginx/conf.d /tmp/conf.d
+          cp /etc/nginx/fastcgi_params /tmp/fastcgi_params
           sed -i 's/^user nginx;//' /tmp/nginx.conf
           sed -i 's|pid /var/run/nginx.pid;|pid /tmp/nginx.pid;|' /tmp/nginx.conf
           sed -i 's|/etc/nginx/conf.d/|/tmp/conf.d/|' /tmp/nginx.conf
@@ -108,7 +109,7 @@ spec:
                   fastcgi_param GIT_HTTP_EXPORT_ALL "";\
                   fastcgi_param PATH_INFO /$1/$2;\
                   fastcgi_param REMOTE_USER $remote_user;\
-                  include fastcgi_params;\
+                  include /tmp/fastcgi_params;\
               }\
           ' /tmp/conf.d/default.conf
 
