@@ -49,6 +49,22 @@ spec:
         - name: git-ssh-writable
           mountPath: /ssh-git
 
+      - name: install-git-http-backend
+        image: alpine:3.19
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Install git package (includes git-http-backend)
+          apk add --no-cache git
+          # Copy git-http-backend to shared volume
+          mkdir -p /git-binaries
+          cp /usr/libexec/git-core/git-http-backend /git-binaries/
+          chmod 755 /git-binaries/git-http-backend
+        volumeMounts:
+        - name: cgit-runtime
+          mountPath: /git-binaries
+
       containers:
       # Container 1: SSH Git Server
       - name: git-server
@@ -85,9 +101,6 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # Install git-daemon package which provides git-http-backend
-          apk add --no-cache git-daemon
-
           # Configure git repository for HTTP access
           git config --file /repos/repos/conf.git/config http.receivepack true
           git config --file /repos/repos/conf.git/config http.uploadpack true
@@ -105,11 +118,12 @@ spec:
 
           # Add git-http-backend location to default.conf (insert before the cgit location)
           # Find the server block and add the location directive
+          # Note: git-http-backend is copied to /tmp by initContainer
           sed -i '/location \/ {/i \
               # Git HTTP backend for clone/fetch/pull operations\
               location ~ ^/([^/]+\\.git)/(.*) {\
                   fastcgi_pass unix:/tmp/fcgiwrap.sock;\
-                  fastcgi_param SCRIPT_FILENAME /usr/libexec/git-core/git-http-backend;\
+                  fastcgi_param SCRIPT_FILENAME /tmp/git-http-backend;\
                   fastcgi_param GIT_PROJECT_ROOT /repos/repos;\
                   fastcgi_param GIT_HTTP_EXPORT_ALL "";\
                   fastcgi_param PATH_INFO /$1/$2;\
