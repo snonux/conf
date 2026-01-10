@@ -52,61 +52,18 @@ server:
 # Repo Server configuration (clones repos, generates manifests)
 repoServer:
   replicas: 1
-  # Pod security context - fsGroup ensures secret volumes are readable by argocd user (999)
-  podSecurityContext:
-    fsGroup: 999
   # Enable persistence for repo cache - mount PVC at /home/argocd/repo-cache
-  # This avoids conflict with default /tmp mount used by ArgoCD
   volumes:
     - name: repo-server-data
       persistentVolumeClaim:
         claimName: argocd-repo-server-pvc
-    - name: ssh-agent-socket
-      emptyDir: {}
-    - name: git-ssh-key
-      secret:
-        secretName: argocd-git-ssh-key
-        defaultMode: 0400
   volumeMounts:
     - name: repo-server-data
       mountPath: /home/argocd/repo-cache
-    - name: ssh-agent-socket
-      mountPath: /tmp/ssh-agent
-  # SSH agent sidecar to provide SSH_AUTH_SOCK for git operations
-  extraContainers:
-    - name: ssh-agent
-      image: alpine:3.19
-      command:
-        - sh
-        - -c
-        - |
-          # Install openssh as root
-          apk add --no-cache openssh
-          # Check if user 999 exists, if not create argocd user
-          if ! id 999 >/dev/null 2>&1; then
-            adduser -D -u 999 argocd
-          fi
-          # Get username for UID 999
-          USERNAME=$(getent passwd 999 | cut -d: -f1)
-          # Start ssh-agent as user 999
-          su $USERNAME -s /bin/sh -c '
-            eval $(ssh-agent -s -a /tmp/ssh-agent/socket)
-            chmod 666 /tmp/ssh-agent/socket
-            ssh-add /tmp/ssh-key/sshPrivateKey
-            # Keep agent running
-            while true; do sleep 3600; done
-          '
-      volumeMounts:
-        - name: ssh-agent-socket
-          mountPath: /tmp/ssh-agent
-        - name: git-ssh-key
-          mountPath: /tmp/ssh-key
-  # Configure repo-server to use the persistent cache directory and SSH agent
+  # Configure repo-server to use the persistent cache directory
   env:
     - name: XDG_CACHE_HOME
       value: /home/argocd/repo-cache
-    - name: SSH_AUTH_SOCK
-      value: /tmp/ssh-agent/socket
   # Resource limits
   resources:
     limits:
