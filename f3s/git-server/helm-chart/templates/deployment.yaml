@@ -87,6 +87,10 @@ spec:
         - |
           # Note: joseluisq/alpine-cgit already has git installed, no need to install again
 
+          # Configure git repository for HTTP access
+          git config --file /repos/repos/conf.git/config http.receivepack true
+          git config --file /repos/repos/conf.git/config http.uploadpack true
+
           # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
           cp -r /etc/nginx/conf.d /tmp/conf.d
@@ -132,7 +136,7 @@ spec:
         volumeMounts:
         - name: repos
           mountPath: /repos
-          readOnly: true
+          readOnly: false
         - name: cgit-config
           mountPath: /etc/cgitrc
           subPath: cgitrc
