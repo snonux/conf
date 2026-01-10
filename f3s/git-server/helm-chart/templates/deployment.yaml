@@ -85,7 +85,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # Note: joseluisq/alpine-cgit already has git installed, no need to install again
+          # Install git-daemon package which provides git-http-backend
+          apk add --no-cache git-daemon
 
           # Configure git repository for HTTP access
           git config --file /repos/repos/conf.git/config http.receivepack true
