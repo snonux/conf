@@ -145,6 +145,8 @@ spec:
           name: http
           protocol: TCP
         env:
+        - name: HOME
+          value: "/tmp"
         - name: CGIT_TITLE
           value: "f3s Git Repository Browser"
         - name: CGIT_DESC
