@@ -12,8 +12,9 @@ metadata:
 data:
   ssh_known_hosts: |
     # git-server.cicd.svc.cluster.local SSH host keys (ed25519 and rsa only)
-    git-server.cicd.svc.cluster.local ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINqfstttRe6qVZWB+JCTD7BogfHqxfyyhJ5VqOR2asYq
-    git-server.cicd.svc.cluster.local ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDZgI8CnekdB12qxZQXftz6qa18NJWz2bjtwd5H6UShTCao71ovvGMVkCQsKXv+PwW9ONHnmtO8EwCEPxhfGW7g7RpZu/mmzKTdEI9FUZTY+TapwLOJwYMRh423wOAn2jcSsVe2iGQbDXiRuNHTPZSXB3fOqsdoL11hCL36QoplfKwMGbIQRvE2KgPZXDZshNWJGJ6VF+rPy/Uyrg7w+hOg5Mjv1F0RxMrcKEyEOHDoJBSH/iruE2K4Ip+FiKOkaILq+Tp6KG8U/Pc/wv9XMQkbUT7l4jEbE4vnBpOztQDPS/bk6LoRBN64CvAyZDy1XL7mpjhqQNNNQZOPQ8Esm6cGk7johsWdlN0GHoPk8wDMIBHK4OebmBafuD9YzrnHcy0asnRKTSq6WcVfEgRpsH1kZRpqYk5PwjUxyZgInb/jvcHTwr/zP9nR0fMHbFCq/Q4A5/FpvgJUcIOqdXaeue0Y2jnT8nrBzKf1FU6u3caciCEZraKBgFCds04OUOZd/4U=
+    # Note: These keys change on pod restarts. HTTP git backend is recommended for ArgoCD.
+    git-server.cicd.svc.cluster.local ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGXAI/DBOF3HkON2hESFljnCBC2qC7WrtApmR9rPqVc
+    git-server.cicd.svc.cluster.local ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCP11xiqRb8uHJzWBoQqqWscFBr/Aj7em/QGqGn6OGuRI2yqGFWuoyD341epUjDYnTtuDlY7ZDjVDSMhaej5s7YaWXonsNMkf9ErTtVaUc5hwfayv9wdZEy2R4J4ILY1So+6vihgb6JTgb931J8TDDXhd+s43oelOYd7eOLtd3cLdpP16/+BOSQLBTZxTvJl0My4Q9Up/oLhef3d94NrNUlj+TXCfsMWoPKs17Rt43ej+3o4Hhm+zZ067xzNL82Pdma+Nz+jRoKKlW4f0Be7p5RJLmWnBtES65C+Ya08OyKwMf6REmQrkfBesb4znmlN7dKrDBl9sShj8QsgWJfN9GY3UGqbZ8yhM+8/o8Gehiuk/eInDpMZVrNIOVaeemC6bUomS6608hF3ecPnPlmtSexAdac8FbPuRfEWpPDAC6qc+bg5xa9IZgr1qqC0wPWRIgoBj7K1FQLReiDliMfE/0Q10QKgO17NE8H3FhNpJOlIsBOUfQ/QKNHUWP0jV6Shxk=
 
     # Codeberg.org SSH host keys
     codeberg.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIVIC02vnjFyL+I4RHfvIGNtOgJMe769VTF1VR4EB3ZB
