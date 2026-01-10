@@ -1,0 +1,22 @@
+# ArgoCD Repository Credential for self-hosted git-server
+# This secret tells ArgoCD how to authenticate to the git-server via SSH
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-server-repo-creds
+  namespace: cicd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: ssh://git@git-server.cicd.svc.cluster.local
+  insecure: "true"
+  sshPrivateKey: |
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+    QyNTUxOQAAACAIRE5bIG/4OUmjDzSVif7eLitZ+GW5PksuiMlBJfhHGAAAAJgGCa9qBgmv
+    agAAAAtzc2gtZWQyNTUxOQAAACAIRE5bIG/4OUmjDzSVif7eLitZ+GW5PksuiMlBJfhHGA
+    AAAEAbwYhRydHh8HlKI35Takf/1qCSvZmdJBzbngvz5Zv1bwhETlsgb/g5SaMPNJWJ/t4u
+    K1n4Zbk+Sy6IyUEl+EcYAAAAEmFyZ29jZEBmM3MuY2x1c3RlcgECAw==
+    -----END OPENSSH PRIVATE KEY-----

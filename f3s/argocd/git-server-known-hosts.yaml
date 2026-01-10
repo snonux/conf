@@ -1,0 +1,19 @@
+# ArgoCD SSH known_hosts configuration for git-server
+# This ConfigMap adds the git-server SSH host keys to ArgoCD's known_hosts
+# so that ArgoCD can verify the server's identity when cloning repositories
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-ssh-known-hosts-cm
+  namespace: cicd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  ssh_known_hosts: |
+    # git-server.cicd.svc.cluster.local SSH host keys (ed25519 and rsa only)
+    git-server.cicd.svc.cluster.local ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINqfstttRe6qVZWB+JCTD7BogfHqxfyyhJ5VqOR2asYq
+    git-server.cicd.svc.cluster.local ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDZgI8CnekdB12qxZQXftz6qa18NJWz2bjtwd5H6UShTCao71ovvGMVkCQsKXv+PwW9ONHnmtO8EwCEPxhfGW7g7RpZu/mmzKTdEI9FUZTY+TapwLOJwYMRh423wOAn2jcSsVe2iGQbDXiRuNHTPZSXB3fOqsdoL11hCL36QoplfKwMGbIQRvE2KgPZXDZshNWJGJ6VF+rPy/Uyrg7w+hOg5Mjv1F0RxMrcKEyEOHDoJBSH/iruE2K4Ip+FiKOkaILq+Tp6KG8U/Pc/wv9XMQkbUT7l4jEbE4vnBpOztQDPS/bk6LoRBN64CvAyZDy1XL7mpjhqQNNNQZOPQ8Esm6cGk7johsWdlN0GHoPk8wDMIBHK4OebmBafuD9YzrnHcy0asnRKTSq6WcVfEgRpsH1kZRpqYk5PwjUxyZgInb/jvcHTwr/zP9nR0fMHbFCq/Q4A5/FpvgJUcIOqdXaeue0Y2jnT8nrBzKf1FU6u3caciCEZraKBgFCds04OUOZd/4U=
+
+    # Codeberg.org SSH host keys
+    codeberg.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIVIC02vnjFyL+I4RHfvIGNtOgJMe769VTF1VR4EB3ZB
