@@ -79,8 +79,9 @@ repoServer:
     - name: XDG_CACHE_HOME
       value: /home/argocd/repo-cache
     # Disable SSH agent to prevent "SSH_AUTH_SOCK not-specified" errors
+    # Set to /dev/null as dummy path to satisfy ArgoCD's SSH agent check
     - name: SSH_AUTH_SOCK
-      value: ""
+      value: "/dev/null"
     # Configure git to use SSH key, disable agent, and accept new host keys
     - name: GIT_SSH_COMMAND
       value: "ssh -i /home/argocd/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
