@@ -79,20 +79,44 @@ spec:
             cpu: 250m
             memory: 256Mi
 
-      # Container 2: CGit Web UI
+      # Container 2: CGit Web UI + git-http-backend
       - name: cgit
         image: joseluisq/alpine-cgit:latest
         command: ["/bin/sh", "-c"]
         args:
         - |
+          # Install git for git-http-backend
+          apk add --no-cache git
+
           # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
           cp -r /etc/nginx/conf.d /tmp/conf.d
           sed -i 's/^user nginx;//' /tmp/nginx.conf
           sed -i 's|pid /var/run/nginx.pid;|pid /tmp/nginx.pid;|' /tmp/nginx.conf
           sed -i 's|/etc/nginx/conf.d/|/tmp/conf.d/|' /tmp/nginx.conf
-          # Update default.conf to use /tmp socket
+
+          # Add git-http-backend location to default.conf (before the cgit location)
+          cat > /tmp/conf.d/git-http-backend.conf <<'EOF'
+          # Git HTTP backend for clone/fetch/pull operations
+          location ~ ^/([^/]+\.git)/(.*) {
+              # Enable CORS for cross-origin requests
+              add_header 'Access-Control-Allow-Origin' '*';
+              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+
+              # FastCGI parameters for git-http-backend
+              fastcgi_pass unix:/tmp/fcgiwrap.sock;
+              fastcgi_param SCRIPT_FILENAME /usr/libexec/git-core/git-http-backend;
+              fastcgi_param GIT_PROJECT_ROOT /repos/repos;
+              fastcgi_param GIT_HTTP_EXPORT_ALL "";
+              fastcgi_param PATH_INFO /$1/$2;
+              fastcgi_param REMOTE_USER $remote_user;
+              include fastcgi_params;
+          }
+          EOF
+
+          # Update default.conf to use /tmp socket for cgit
           sed -i 's|unix:/var/run/fcgiwrap.sock|unix:/tmp/fcgiwrap.sock|' /tmp/conf.d/default.conf
+
           # Start fcgiwrap with socket in /tmp
           spawn-fcgi -s /tmp/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
           sleep 1
