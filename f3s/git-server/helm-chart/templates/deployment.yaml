@@ -24,9 +24,15 @@ spec:
         - /bin/sh
         - -c
         - |
-          # Setup SSH host keys directory
+          # Install openssh for key generation
+          apk add --no-cache openssh
+          # Setup SSH host keys directory and generate keys
           mkdir -p /ssh-init
-          chown -R 0:0 /ssh-init
+          ssh-keygen -A -f /ssh-init/..
+          mv /ssh-init/../etc/ssh/ssh_host_* /ssh-init/
+          chown -R 1001:33 /ssh-init
+          chmod 600 /ssh-init/ssh_host_*_key
+          chmod 644 /ssh-init/ssh_host_*_key.pub
           # Setup authorized_keys with correct ownership
           # The /ssh-git mount point IS the .ssh directory
           # UID 1001 and GID 33 match the NFS file ownership
