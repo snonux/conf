@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: ssh://git@git-server.cicd.svc.cluster.local/repos/repos/conf.git
+    repoURL: http://git-server.cicd.svc.cluster.local/conf.git
     targetRevision: master
     path: f3s/pushgateway/helm-chart
   destination:

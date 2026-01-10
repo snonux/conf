@@ -161,7 +161,7 @@ spec:
                 readOnly: true
 
     # Source 2: Additional manifests from Git repository
-    - repoURL: ssh://git@git-server.cicd.svc.cluster.local/repos/repos/conf.git
+    - repoURL: http://git-server.cicd.svc.cluster.local/conf.git
       targetRevision: master
       path: f3s/prometheus/manifests
 
