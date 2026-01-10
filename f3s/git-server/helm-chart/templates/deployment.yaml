@@ -85,8 +85,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # Install git for git-http-backend
-          apk add --no-cache git
+          # Note: joseluisq/alpine-cgit already has git installed, no need to install again
 
           # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
