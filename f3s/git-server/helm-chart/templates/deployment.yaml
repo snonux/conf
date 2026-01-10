@@ -55,8 +55,8 @@ spec:
         - /bin/sh
         - -c
         - |
-          # Install git package (includes git-http-backend)
-          apk add --no-cache git
+          # Install git-daemon package (includes git-http-backend)
+          apk add --no-cache git-daemon
           # Copy git-http-backend to shared volume
           mkdir -p /git-binaries
           cp /usr/libexec/git-core/git-http-backend /git-binaries/
