@@ -132,6 +132,10 @@ spec:
                   fastcgi_param PATH_INFO /$1/$2;\
                   fastcgi_param REMOTE_USER $remote_user;\
                   include /tmp/fastcgi_params;\
+                  # Increase timeouts for git operations (clones can be large)\
+                  fastcgi_read_timeout 300s;\
+                  fastcgi_send_timeout 300s;\
+                  fastcgi_buffering off;\
               }\
           ' /tmp/conf.d/default.conf
 
