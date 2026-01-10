@@ -118,7 +118,62 @@ just uninstall
 
 ## Post-Deployment Configuration
 
-### 1. Change Admin Password
+### 1. Setup Self-Hosted Git Repository
+
+ArgoCD in the f3s cluster uses the self-hosted git-server for all application manifests. The configuration repository (conf.git) must be available on the git-server before deploying applications.
+
+**Ensure conf.git is synced to git-server:**
+
+```bash
+# Using gitsyncer (recommended for keeping repos in sync)
+gitsyncer sync repo conf --backup --no-releases
+
+# Or manually push to git-server
+cd /path/to/conf
+git remote add r0 ssh://git@r0:30022/repos/conf.git
+git push r0 master
+```
+
+**Verify repository is accessible:**
+
+```bash
+# Via SSH
+git ls-remote ssh://git@r0:30022/repos/conf.git
+
+# Via HTTP (used by ArgoCD)
+curl -s "http://git-server.cicd.svc.cluster.local/conf.git/info/refs?service=git-upload-pack" | head -5
+```
+
+**ArgoCD Repository Configuration:**
+
+ArgoCD applications use HTTP to fetch from the self-hosted git-server:
+- **Repository URL**: `http://git-server.cicd.svc.cluster.local/conf.git`
+- **No authentication required** (internal cluster access)
+- **Auto-sync enabled** for most applications
+
+Example application manifest:
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: cicd
+spec:
+  project: default
+  source:
+    repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+    targetRevision: master
+    path: f3s/my-app/helm-chart
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: my-namespace
+```
+
+**Important**: Always push changes to git-server (r0) before ArgoCD can sync them. Changes pushed only to external git hosts (Codeberg/GitHub) will not be picked up by ArgoCD.
+
+See `/home/paul/git/conf/f3s/git-server/helm-chart/README.md` for more details on the git-server setup.
+
+### 2. Change Admin Password
 
 **Important**: Change the default admin password immediately after first login.
 
@@ -134,7 +189,7 @@ argocd login argocd.f3s.buetow.org --insecure
 argocd account update-password
 ```
 
-### 2. Add Git Repositories
+### 3. Add Additional Git Repositories
 
 For public repositories:
 
@@ -157,7 +212,7 @@ argocd repo add git@github.com:yourusername/yourrepo.git \
   --ssh-private-key-path ~/.ssh/id_rsa
 ```
 
-### 3. Create Your First Application
+### 4. Create Your First Application
 
 Using the CLI:
 
@@ -174,7 +229,7 @@ Using the Web UI:
 2. Fill in application details
 3. Click "CREATE"
 
-### 4. Sync an Application
+### 5. Sync an Application
 
 ```bash
 argocd app sync guestbook
