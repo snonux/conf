@@ -45,10 +45,10 @@ Repository structure:
 **External** (from your workstation):
 ```bash
 # Via SSH config alias
-git clone git-server:/repos/repos/<repo>.git
+git clone git-server:/repos/<repo>.git
 
 # Or directly
-git clone ssh://git@r0:30022/repos/repos/<repo>.git
+git clone ssh://git@r0:30022/repos/<repo>.git
 ```
 
 **SSH Configuration** (`~/.ssh/config`):
@@ -107,14 +107,14 @@ Gitsyncer syncs repositories from Codeberg/GitHub to the self-hosted git-server 
       "name": "snonux"
     },
     {
-      "host": "ssh://git@r0:30022/repos/repos",
+      "host": "ssh://git@r0:30022/repos",
       "backupLocation": true
     }
   ]
 }
 ```
 
-**Note**: The config uses explicit NodePort (30022) on cluster node r0. You could also use an SSH alias (see below) with `git@git-server:/repos/repos` for shorter syntax.
+**Note**: The config uses explicit NodePort (30022) on cluster node r0. You could also use an SSH alias (see below) with `git@git-server:/repos` for shorter syntax.
 
 ### SSH Config for Gitsyncer (Optional)
 
@@ -208,7 +208,7 @@ spec:
 # Change from SSH to HTTP
 kubectl edit application <app-name> -n cicd
 
-# Old: ssh://git@git-server.cicd.svc.cluster.local/repos/repos/conf.git
+# Old: ssh://git@git-server.cicd.svc.cluster.local/repos/conf.git
 # New: http://git-server.cicd.svc.cluster.local/conf.git
 ```
 
@@ -324,7 +324,7 @@ kubectl logs -n cicd -l app=git-server -c cgit --tail=50
 
 # Common error: "fatal: detected dubious ownership"
 # Already fixed in deployment with:
-#   git config --global --add safe.directory /repos/repos/<repo>.git
+#   git config --global --add safe.directory /repos/<repo>.git
 #   HOME=/tmp (for cgit container)
 ```
 
@@ -332,14 +332,14 @@ kubectl logs -n cicd -l app=git-server -c cgit --tail=50
 
 **Symptom**: Repository exists but doesn't show in web UI
 
-**Cause**: cgit scans `/repos/repos/` directory
+**Cause**: cgit scans `/repos/` directory
 
 **Verify**:
 ```bash
 # Check scan-path in cgit config
 kubectl get configmap cgit-config -n cicd -o yaml
 
-# Should show: scan-path=/repos/repos
+# Should show: scan-path=/repos
 ```
 
 **Fix**: Restart cgit container
@@ -375,7 +375,7 @@ kubectl exec -n cicd -c git-server $(kubectl get pod -n cicd -l app=git-server -
 
 **Symptom**:
 ```
-fatal: unrecognized command 'mkdir -p repos/repos/<repo>.git && cd repos/repos/<repo>.git && git init --bare'
+fatal: unrecognized command 'mkdir -p repos/<repo>.git && cd repos/<repo>.git && git init --bare'
 ```
 
 **Cause**: git-shell restricts available commands (security feature)

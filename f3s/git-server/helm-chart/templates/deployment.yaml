@@ -77,6 +77,7 @@ spec:
         volumeMounts:
         - name: repos
           mountPath: /repos
+          subPath: repos
         - name: git-ssh-writable
           mountPath: /home/git/.ssh
         - name: ssh-host-keys
@@ -102,11 +103,11 @@ spec:
         args:
         - |
           # Add git safe.directory exception for repository ownership
-          git config --global --add safe.directory /repos/repos/conf.git
+          git config --global --add safe.directory /repos/conf.git
 
           # Configure git repository for HTTP access
-          git config --file /repos/repos/conf.git/config http.receivepack true
-          git config --file /repos/repos/conf.git/config http.uploadpack true
+          git config --file /repos/conf.git/config http.receivepack true
+          git config --file /repos/conf.git/config http.uploadpack true
 
           # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
@@ -127,7 +128,7 @@ spec:
               location ~ ^/([^/]+\\.git)/(.*) {\
                   fastcgi_pass unix:/tmp/fcgiwrap.sock;\
                   fastcgi_param SCRIPT_FILENAME /tmp/git-http-backend;\
-                  fastcgi_param GIT_PROJECT_ROOT /repos/repos;\
+                  fastcgi_param GIT_PROJECT_ROOT /repos;\
                   fastcgi_param GIT_HTTP_EXPORT_ALL "";\
                   fastcgi_param PATH_INFO /$1/$2;\
                   fastcgi_param REMOTE_USER $remote_user;\
@@ -160,6 +161,7 @@ spec:
         volumeMounts:
         - name: repos
           mountPath: /repos
+          subPath: repos
           readOnly: false
         - name: cgit-config
           mountPath: /etc/cgitrc
