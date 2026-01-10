@@ -107,16 +107,18 @@ Gitsyncer syncs repositories from Codeberg/GitHub to the self-hosted git-server 
       "name": "snonux"
     },
     {
-      "host": "git@git-server:/repos/repos",
+      "host": "ssh://git@r0:30022/repos/repos",
       "backupLocation": true
     }
   ]
 }
 ```
 
-### SSH Config for Gitsyncer
+**Note**: The config uses explicit NodePort (30022) on cluster node r0. You could also use an SSH alias (see below) with `git@git-server:/repos/repos` for shorter syntax.
 
-Add to `~/.ssh/config`:
+### SSH Config for Gitsyncer (Optional)
+
+If you prefer using an SSH alias instead of the explicit URL, add to `~/.ssh/config`:
 ```
 Host git-server
 HostName r0
