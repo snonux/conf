@@ -76,6 +76,9 @@ repoServer:
   extraContainers:
     - name: ssh-agent
       image: alpine:3.19
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
       command:
         - sh
         - -c
