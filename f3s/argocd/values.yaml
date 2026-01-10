@@ -82,10 +82,14 @@ repoServer:
         - |
           # Install openssh as root
           apk add --no-cache openssh
-          # Create argocd user if it doesn't exist
-          adduser -D -u 999 argocd 2>/dev/null || true
-          # Start ssh-agent as argocd user
-          su argocd -s /bin/sh -c '
+          # Check if user 999 exists, if not create argocd user
+          if ! id 999 >/dev/null 2>&1; then
+            adduser -D -u 999 argocd
+          fi
+          # Get username for UID 999
+          USERNAME=$(getent passwd 999 | cut -d: -f1)
+          # Start ssh-agent as user 999
+          su $USERNAME -s /bin/sh -c '
             eval $(ssh-agent -s -a /tmp/ssh-agent/socket)
             ssh-add /tmp/ssh-key/sshPrivateKey
             # Keep agent running
