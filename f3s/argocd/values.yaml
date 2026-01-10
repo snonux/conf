@@ -76,18 +76,21 @@ repoServer:
   extraContainers:
     - name: ssh-agent
       image: alpine:3.19
-      securityContext:
-        runAsUser: 999
-        runAsGroup: 999
       command:
         - sh
         - -c
         - |
+          # Install openssh as root
           apk add --no-cache openssh
-          eval $(ssh-agent -s -a /tmp/ssh-agent/socket)
-          ssh-add /tmp/ssh-key/sshPrivateKey
-          # Keep agent running
-          while true; do sleep 3600; done
+          # Create argocd user if it doesn't exist
+          adduser -D -u 999 argocd 2>/dev/null || true
+          # Start ssh-agent as argocd user
+          su argocd -s /bin/sh -c '
+            eval $(ssh-agent -s -a /tmp/ssh-agent/socket)
+            ssh-add /tmp/ssh-key/sshPrivateKey
+            # Keep agent running
+            while true; do sleep 3600; done
+          '
       volumeMounts:
         - name: ssh-agent-socket
           mountPath: /tmp/ssh-agent
