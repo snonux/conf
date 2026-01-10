@@ -91,6 +91,7 @@ repoServer:
           # Start ssh-agent as user 999
           su $USERNAME -s /bin/sh -c '
             eval $(ssh-agent -s -a /tmp/ssh-agent/socket)
+            chmod 666 /tmp/ssh-agent/socket
             ssh-add /tmp/ssh-key/sshPrivateKey
             # Keep agent running
             while true; do sleep 3600; done
