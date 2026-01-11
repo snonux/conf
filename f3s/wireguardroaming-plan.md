@@ -465,12 +465,64 @@ For automation-critical use cases (servers, IoT): Use **Option 2** with monitori
 - Both peers maintain handshakes, but only one actively routes traffic
 - No automatic switchover when active peer fails
 
-NEXT:
+## Completion Status
 
-* ~~Ensure, when fishfinger goes down, wireguard traffic from phoen gets auto-rerouted via blowfish VPN~~ LIMITATION DOCUMENTED: WireGuard does not support automatic failover. Manual reconnection required.
-* Ensure, that OpenBSD NAT rules are deployed via IaC (conf/frontends/...)
-* Ensure, that WireGuard tunnel also works on earth, but only when started manually. It should work in the same way as the client.
-* Commit all changes to the wireguardmeshegenerator git repo and push
-* Update the blog post /home/paul/git/foo.zone-content/gemtext/gemfeed/2025-05-11-f3s-kubernetes-with-freebsd-part-5.gmi.tpl to include the two additional clients and how they were configured additionally. Also mention in the header like in part 7 that the post was updated, and put the timestamp accordingly. also add the updated info before the new section/s added to the blog post.
-* also update the mesh network graph to include the two clients which connect to the two edge nodes blowfish and fishfinger.
+### Completed Tasks
+
+* ✓ **Automatic failover investigation**: Documented as limitation. WireGuard does not support automatic failover by design. Manual reconnection required when active gateway fails.
+
+* ✓ **OpenBSD NAT rules deployed via IaC**:
+  - Created `/home/paul/git/conf/frontends/etc/pf.conf.tpl` with WireGuard NAT rules
+  - Added Rex task 'pf' to deploy pf.conf to both frontends
+  - Deployed successfully to blowfish and fishfinger
+  - Both gateways now have consistent firewall rules managed via IaC
+  - Committed to conf repo (commit 99a91d4)
+
+* ✓ **WireGuard tunnel works on earth**:
+  - Config installed at /etc/wireguard/wg0.conf
+  - Manual start verified (handshakes established with both gateways)
+  - Auto-start disabled (systemctl disable wg-quick@wg0.service)
+  - Currently stopped as requested
+
+* ✓ **Committed and pushed changes**:
+  - conf repo: pf.conf.tpl, Rexfile, wireguardroaming-plan.md (commit 99a91d4)
+  - wireguardmeshgenerator repo: Gemfile, wireguardmeshgenerator.rb, wireguardmeshgenerator.yaml (commit a6984e1)
+  - Both repos pushed to remote
+
+* ✓ **Blog post updated**:
+  - Updated header with "last updated Sun 11 Jan 21:33:40 EET 2026"
+  - Added "Update: Roaming Client Support Added" section after TOC
+  - Added comprehensive "Adding Roaming Clients" section before conclusion
+  - Updated introduction paragraph to mention roaming clients
+  - Committed to foo.zone-content/gemtext (commits dc65c06f, e5a0cf29)
+
+* ✓ **Mesh network graph updated**:
+  - Created Python script to generate updated visualization
+  - New graph includes earth and pixel7pro as purple roaming clients
+  - Shows blue dashed lines from clients to gateways only
+  - Preserves original full mesh (gray lines) for infrastructure hosts
+  - Color-coded by OS: FreeBSD (red), Rocky Linux (teal), OpenBSD (yellow)
+  - Saved as wireguard-full-mesh-with-roaming.svg
+  - Added graph reference to blog post
+  - Committed to foo.zone-content/gemtext (commit e5a0cf29)
+
+## Implementation Complete
+
+All tasks for adding WireGuard roaming client support have been completed:
+
+1. ✅ Modified wireguardmeshgenerator.rb for roaming client detection
+2. ✅ Added earth and pixel7pro to YAML configuration
+3. ✅ Generated and deployed configs to all hosts
+4. ✅ Configured OpenBSD NAT rules via IaC (PF firewall)
+5. ✅ Verified WireGuard works on earth (manual start)
+6. ✅ Tested pixel7pro Android connectivity
+7. ✅ Documented automatic failover limitation
+8. ✅ Committed and pushed all code changes
+9. ✅ Updated blog post with comprehensive documentation
+10. ✅ Generated updated mesh network visualization
+
+**Repositories updated:**
+- `conf` (commit 99a91d4): pf.conf.tpl, Rexfile, wireguardroaming-plan.md
+- `wireguardmeshgenerator` (commit a6984e1): Ruby code, YAML config, Gemfile
+- `foo.zone` (commits dc65c06f, e5a0cf29): blog post, mesh graph
 
