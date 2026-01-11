@@ -631,6 +631,22 @@ task 'ircbouncer',
     service 'znc', ensure => 'started';
   };
 
+desc 'Setup PF firewall with WireGuard NAT rules';
+task 'pf',
+  group => 'frontends',
+  sub {
+    # Deploy pf.conf with NAT rules for WireGuard VPN clients
+    file '/etc/pf.conf',
+      content => template('./etc/pf.conf.tpl'),
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '600',
+      on_change => sub {
+        # Reload PF configuration
+        run 'pfctl -f /etc/pf.conf';
+      };
+  };
+
 # COMBINED TASKS SECTION
 
 desc 'Common configs of all hosts';
@@ -638,6 +654,7 @@ task 'commons',
   group => 'frontends',
   sub {
     run_task 'base';
+    run_task 'pf';
     run_task 'nsd';
     run_task 'nsd_failover';
     run_task 'uptimed';
