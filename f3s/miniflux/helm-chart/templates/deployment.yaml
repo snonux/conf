@@ -53,6 +53,18 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - export DATABASE_URL="postgres://miniflux:${POSTGRES_PASSWORD}@miniflux-postgres:5432/miniflux?sslmode=disable"; exec /usr/bin/miniflux
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -86,6 +98,23 @@ spec:
           volumeMounts:
             - name: miniflux-postgres-data
               mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - miniflux
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - miniflux
+            initialDelaySeconds: 15
+            periodSeconds: 15
+
       volumes:
         - name: miniflux-postgres-data
           persistentVolumeClaim:
