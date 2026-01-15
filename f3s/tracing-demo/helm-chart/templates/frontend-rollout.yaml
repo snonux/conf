@@ -9,16 +9,18 @@ metadata:
     app: tracing-demo-frontend
     component: frontend
 spec:
-  replicas: 2
+  replicas: 3  # Increase to 3 for visible canary (1 old + 1 new + 1 old)
   strategy:
-    blueGreen:
-      # Blue-Green strategy: instant switch with easy rollback
-      activeSlotSelector: stable
-      prePromotionAnalysis:
-        templates:
-        - templateName: check-health
-      autoPromotionEnabled: false  # Manual promotion for demo
-      previewReplicaCount: 1  # Run 1 new pod (preview/green)
+    canary:
+      # Canary strategy with auto-promotion after 1 minute
+      steps:
+      # Step 1: 1 pod (33% traffic) to new version
+      - setWeight: 33
+      # Step 2: Wait 1 minute then auto-promote
+      - pause:
+          duration: 1m  # Auto-promote after 1 minute
+      # Step 3: 100% traffic to new version
+      - setWeight: 100
   
   # Rollout revision history
   revisionHistoryLimit: 3
