@@ -20,7 +20,6 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=false
-      # Ignore old Deployment resources (using Rollout instead)
       - RespectIgnoreDifferences=true
     retry:
       limit: 3
@@ -28,3 +27,14 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 1m
+  ignoreDifferences:
+  # Let Argo Rollouts manage Rollout runtime state
+  - group: argoproj.io
+    kind: Rollout
+    jsonPointers:
+    # Ignore template env vars (kubectl patch adds env vars for triggering)
+    - /spec/template/spec/containers/0/env
+    - /spec/template/spec/containers/1/env
+    - /spec/template/spec/containers/2/env
+    # Ignore status fields (Argo Rollouts manages these)
+    - /status
