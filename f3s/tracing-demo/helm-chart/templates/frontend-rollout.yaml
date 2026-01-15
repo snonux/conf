@@ -16,9 +16,9 @@ spec:
       steps:
       # Step 1: Send 50% of traffic to new version
       - setWeight: 50
-      # Step 2: Wait 2 minutes before proceeding
+      # Step 2: Wait 1 minute before proceeding
       - pause:
-          duration: 2m
+          duration: 1m
       # Step 3: Promote to 100% traffic
       - setWeight: 100
       
