@@ -1,189 +1,222 @@
 # Argo Rollouts Deployment Checklist
 
-## Pre-Deployment Setup
-
-- [ ] Read `ARGO-ROLLOUTS-SUMMARY.md` to understand what was created
-- [ ] Ensure kubectl access to f3s cluster
-- [ ] Ensure ArgoCD is running and accessible
-- [ ] Git repository (conf.git) synced to git-server
+Quick checklist for deploying and testing Argo Rollouts with canary demo.
 
 ## Installation
 
+- [ ] Read `ARGO-ROLLOUTS-SUMMARY.md` - understand what was created
+- [ ] Ensure kubectl access to f3s cluster
+- [ ] Ensure ArgoCD is running
 - [ ] Navigate to `/home/paul/git/conf/f3s/argo-rollouts`
-- [ ] Run `just install` to deploy controller
-- [ ] Verify controller running: `kubectl get pods -n cicd -l app.kubernetes.io/name=argo-rollouts`
-- [ ] Verify CRD installed: `kubectl get crd | grep rollout`
-
-## Optional: Install kubectl Plugin
-
-- [ ] Download kubectl-argo-rollouts:
+- [ ] Run `just install`
+- [ ] Verify controller: `kubectl get pods -n cicd -l app.kubernetes.io/name=argo-rollouts`
+- [ ] Verify CRD: `kubectl get crd | grep rollout`
+- [ ] (Optional) Install plugin: 
   ```bash
   curl -LO https://github.com/argoproj/argo-rollouts/releases/latest/download/kubectl-argo-rollouts-linux-amd64
   chmod +x kubectl-argo-rollouts-linux-amd64
   sudo install -m 755 kubectl-argo-rollouts-linux-amd64 /usr/local/bin/kubectl-argo-rollouts
+  kubectl argo rollouts version
   ```
-- [ ] Verify: `kubectl argo rollouts version`
 
-## ArgoCD Syncing
+## ArgoCD Integration
 
-- [ ] Create/push `argocd-apps/cicd/argo-rollouts.yaml` to git
-- [ ] Create/push `argocd-apps/services/tracing-demo.yaml` updates to git
-- [ ] Force ArgoCD sync (wait 3 min or manual):
+- [ ] Push changes to git-server:
   ```bash
-  argocd app sync argo-rollouts
-  argocd app sync tracing-demo
+  cd /home/paul/git/conf/f3s
+  git add -A && git commit -m "feat: add Argo Rollouts"
+  git push r0 master
   ```
-- [ ] Verify tracing-demo application status: `argocd app get tracing-demo`
+- [ ] Verify ArgoCD app:
+  ```bash
+  kubectl get application argo-rollouts -n cicd
+  argocd app get argo-rollouts
+  ```
+- [ ] Verify tracing-demo app:
+  ```bash
+  kubectl get application tracing-demo -n cicd
+  argocd app get tracing-demo
+  ```
 
 ## Rollout Verification
 
-- [ ] Check frontend rollout deployed: `kubectl get rollout tracing-demo-frontend -n services`
+- [ ] Check rollout exists: `kubectl get rollout tracing-demo-frontend -n services`
 - [ ] Verify status: `kubectl describe rollout tracing-demo-frontend -n services`
-- [ ] Expected: `Status: Healthy` with `2/2 replicas` in stable state
-- [ ] Check pods running: `kubectl get pods -n services -l app=tracing-demo-frontend`
+- [ ] Expected: `Status: Healthy` with `3/3 replicas` in stable state
+- [ ] Check pods: `kubectl get pods -n services -l app=tracing-demo-frontend`
+- [ ] All 3 pods should be `Running`
 
-## Basic Demo (First Time)
+## Demo: Basic Canary Rollout
+
+**Expected: 0-15s: canary starting, 15-60s: observing, 60-90s: promoting**
 
 ### Terminal 1: Watch Rollout
 ```bash
 cd /home/paul/git/conf/f3s/tracing-demo
 just rollout-watch
 ```
-- [ ] Command running and connected
+- [ ] Command runs and connects to cluster
+- [ ] Waiting for rollout to start
 
-### Terminal 2: Generate Load (Optional)
-```bash
-cd /home/paul/git/conf/f3s/tracing-demo
-just load-test &
-```
-- [ ] Requests being sent to frontend
-
-### Terminal 3: Trigger Rollout
-Choose one method:
-
-**Method A: Kubectl Patch (Fastest)**
+### Terminal 2: Trigger Rollout
 ```bash
 kubectl patch rollout tracing-demo-frontend -n services \
   --type='json' \
-  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"registry.lan.buetow.org:30001/tracing-demo-frontend:latest"}]'
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ROLLOUT_V","value":"'$(date +%s)'"}}]'
 ```
-- [ ] Executed successfully
+- [ ] Patch command successful
+- [ ] Terminal 1 shows change immediately
 
-**Method B: Git + ArgoCD (Most GitOps)**
+### Terminal 1: Observe Progress
+- [ ] See `Step: 0/3, SetWeight: 33`
+- [ ] 1 canary pod becoming ready
+- [ ] 3 stable pods still running
+- [ ] After ~15 sec: canary pod ready
+- [ ] After ~60 sec: auto-promotion starts
+- [ ] After ~90 sec: all 3 pods running new version
+- [ ] Status shows `Healthy`
+
+## Demo: Abort/Rollback
+
+**Expected: Stop rollout and keep old version running**
+
+### Terminal 1: Watch Rollout
 ```bash
-cd /home/paul/git/conf/f3s
-# Edit tracing-demo/helm-chart/templates/frontend-rollout.yaml (change image tag)
-git add -A
-git commit -m "chore: update frontend image for demo"
-git remote add r0 ssh://git@r0:30022/repos/conf.git 2>/dev/null || true
-git push r0 master
-kubectl annotate application tracing-demo -n cicd argocd.argoproj.io/refresh=normal --overwrite
+just rollout-watch
 ```
-- [ ] Git push successful
-- [ ] ArgoCD syncing (check web UI or CLI)
 
-## Demo Observation
+### Terminal 2: Trigger Rollout
+```bash
+kubectl patch rollout tracing-demo-frontend -n services \
+  --type='json' \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ROLLOUT_V2","value":"'$(date +%s)'"}}]'
+```
 
-- [ ] Terminal 1 shows: "Progressing" → "canary step 1/3"
-- [ ] After ~30 sec: New canary pod appears
-- [ ] After ~2 min: "canary step 2/3" (pause)
-- [ ] After ~4 min: "canary step 3/3" (100% traffic)
-- [ ] After ~4:20 min: Status shows "Healthy"
-- [ ] Old pods terminated, 2 new pods in stable state
+### Terminal 3: Abort at Canary Step (after 20 seconds)
+```bash
+cd /home/paul/git/conf/f3s/tracing-demo
+just rollout-abort
+```
+- [ ] Abort command accepted
+- [ ] Terminal 1 shows `Status: Aborted`
+- [ ] Canary pods terminate
+- [ ] Old 3 pods continue running
+- [ ] Verify with: `just rollout-status`
 
-## Monitoring (Optional)
+## Demo: Load Testing
 
-- [ ] Check logs: `just logs-frontend`
-- [ ] Check Grafana Tempo for traces: https://grafana.f3s.buetow.org
-  - [ ] Navigate to Explore → Tempo
-  - [ ] Query: `{ resource.service.name = "frontend" }`
-  - [ ] See traces from old and new versions
-- [ ] Check Prometheus metrics: Port-forward and query
+**Expected: Generate traffic while rollout happens**
 
-## Advanced Scenarios
+### Terminal 1: Watch Rollout
+```bash
+just rollout-watch
+```
 
-### Scenario 1: Manual Promotion
-- [ ] Trigger rollout (step above)
-- [ ] After step 1 (30 sec), run:
+### Terminal 2: Start Load Test
+```bash
+just load-test &
+```
+- [ ] Requests being sent
+
+### Terminal 3: Trigger Rollout
+```bash
+kubectl patch rollout tracing-demo-frontend -n services \
+  --type='json' \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ROLLOUT_V3","value":"'$(date +%s)'"}}]'
+```
+- [ ] Rollout progresses with active traffic
+- [ ] Both old and new pods serve requests during canary phase
+
+## Monitoring
+
+- [ ] Check status: `kubectl argo rollouts status tracing-demo-frontend -n services`
+- [ ] Detailed info: `kubectl argo rollouts describe rollout tracing-demo-frontend -n services`
+- [ ] Pod details: `kubectl get pods -n services -l app=tracing-demo-frontend -o wide`
+- [ ] View logs: `just logs-frontend`
+- [ ] View history: `just rollout-history`
+
+## Grafana (Optional)
+
+- [ ] Open Grafana: https://grafana.f3s.buetow.org
+- [ ] Navigate to Explore → Tempo datasource
+- [ ] Query: `{ resource.service.name = "frontend" }`
+- [ ] See traces from old and new versions during rollout
+
+## Integration with Git (GitOps)
+
+- [ ] Edit rollout config:
   ```bash
-  just rollout-promote
+  nano /home/paul/git/conf/f3s/tracing-demo/helm-chart/templates/frontend-rollout.yaml
   ```
-- [ ] Watch rollout skip step 2, immediately promote to 100%
-- [ ] Verify: `just rollout-status` shows "Healthy"
-
-### Scenario 2: Abort/Rollback
-- [ ] Trigger rollout
-- [ ] While progressing, run:
+- [ ] Change any settings (e.g., duration, setWeight)
+- [ ] Commit and push:
   ```bash
-  just rollout-abort
+  git add -A && git commit -m "chore: adjust canary settings"
+  git push r0 master
   ```
-- [ ] Watch canary pods terminate
-- [ ] Old version continues running
-- [ ] Verify: `just rollout-status` shows "Aborted"
-
-### Scenario 3: Check History
-- [ ] After any rollout:
+- [ ] ArgoCD auto-syncs within 3 minutes (or force):
   ```bash
-  just rollout-history
+  kubectl annotate application tracing-demo -n cicd argocd.argoproj.io/refresh=normal --overwrite
   ```
-- [ ] See previous revisions and their status
+- [ ] New settings take effect on next rollout trigger
 
-## Integration with CI/CD
+## Post-Demo
 
-- [ ] Image builds automatically on git push (or configured pipeline)
-- [ ] New image pushed to registry: `registry.lan.buetow.org:30001/tracing-demo-frontend:NEWTAG`
-- [ ] Git updated with new image tag
-- [ ] ArgoCD detects change
-- [ ] Rollout automatically triggered
-- [ ] Canary strategy executes
+- [ ] Abort any stuck rollouts: `just rollout-abort`
+- [ ] Verify stable state: `just rollout-status` shows `Healthy`
+- [ ] Review documentation:
+  - [ ] `ARGO-ROLLOUTS-SUMMARY.md` - architecture
+  - [ ] `ROLLOUTS-SETUP.md` - detailed scenarios
+  - [ ] `README-ROLLOUTS.md` - quick reference
+  - [ ] `tracing-demo/ROLLOUTS-DEMO.md` - technical details
 
-## Post-Deployment
-
-- [ ] Share documentation:
-  - [ ] `ROLLOUTS-SETUP.md` - Complete setup guide
-  - [ ] `tracing-demo/ROLLOUTS-DEMO.md` - Detailed walkthrough
-  - [ ] `ARGO-ROLLOUTS-SUMMARY.md` - Architecture overview
-- [ ] Add team to `kubectl argo rollouts` usage
-- [ ] Consider next steps:
-  - [ ] Deploy Istio for advanced traffic management
-  - [ ] Add Flagger for automated analysis
-  - [ ] Extend to other services (middleware, backend)
-  - [ ] Create monitoring dashboards
-
-## Troubleshooting Checklist
+## Troubleshooting
 
 ### Controller not running
-- [ ] Check pod: `kubectl get pods -n cicd -l app.kubernetes.io/name=argo-rollouts`
-- [ ] Check logs: `kubectl logs -n cicd -l app.kubernetes.io/name=argo-rollouts`
-- [ ] Check CRD: `kubectl get crd | grep rollout`
+```bash
+kubectl get pods -n cicd -l app.kubernetes.io/name=argo-rollouts
+kubectl logs -n cicd -l app.kubernetes.io/name=argo-rollouts
+```
+- [ ] Pod running and ready
 
-### Rollout not deploying
-- [ ] Check ArgoCD sync: `argocd app get tracing-demo`
-- [ ] Check git changes pushed: `git log --oneline | head -5`
-- [ ] Force sync: `argocd app sync tracing-demo --prune`
+### Rollout not deployed
+```bash
+kubectl get rollout tracing-demo-frontend -n services
+kubectl describe rollout tracing-demo-frontend -n services
+```
+- [ ] Check events section for errors
 
-### Canary pods not starting
-- [ ] Check pod status: `kubectl describe pod -n services <pod-name>`
-- [ ] Check logs: `kubectl logs -n services <pod-name>`
-- [ ] Check resource limits: `kubectl top pods -n services`
-- [ ] Check image: `kubectl get pods -n services -o jsonpath='{.items[*].spec.containers[0].image}'`
+### Canary pods in ImagePullBackoff
+- [ ] Use env var patch instead (don't change image tag):
+  ```bash
+  kubectl patch rollout tracing-demo-frontend -n services \
+    --type='json' \
+    -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ROLLOUT_V","value":"'$(date +%s)'"}}]'
+  ```
 
 ### Rollout stuck in Progressing
-- [ ] Check health probes: `kubectl get rollout tracing-demo-frontend -n services -o yaml | grep -A 10 health`
-- [ ] Check replica status: `kubectl get rs -n services -l app=tracing-demo-frontend -o wide`
-- [ ] Check controller logs: `kubectl logs -n cicd -l app.kubernetes.io/name=argo-rollouts --tail=50`
+```bash
+kubectl describe rollout tracing-demo-frontend -n services
+kubectl get pods -n services -l app=tracing-demo-frontend
+```
+- [ ] Check pod readiness probes
+- [ ] Check pod resource requests/limits
+- [ ] Check controller logs
 
-## Cleanup (If Needed)
+## Next Steps
 
-- [ ] Stop rollout: `kubectl argo rollouts abort tracing-demo-frontend -n services`
-- [ ] Rollback to previous: `kubectl rollout undo deployment/tracing-demo-frontend -n services` (if needed)
-- [ ] Uninstall Argo Rollouts: `cd argo-rollouts && just uninstall`
+- [ ] Run through all demo scenarios multiple times
+- [ ] Modify rollout settings and observe behavior
+- [ ] Monitor with Prometheus/Grafana
+- [ ] Extend to other services (middleware, backend)
+- [ ] Optional: Install Istio for advanced traffic routing
+- [ ] Optional: Deploy Flagger for automated analysis
 
 ---
 
-**Setup complete when:**
-- ✅ Argo Rollouts controller running in `cicd` namespace
-- ✅ Frontend rollout deployed in `services` namespace
-- ✅ ArgoCD recognizes rollout resource
-- ✅ One demo run successful (git trigger or kubectl patch)
-- ✅ Team can watch and manage rollouts
+**Setup Complete When:**
+- ✅ Controller running in `cicd` namespace
+- ✅ Rollout deployed in `services` namespace
+- ✅ One full demo executed (0-90 seconds)
+- ✅ Can abort and retry
+- ✅ Team trained on canary deployments
