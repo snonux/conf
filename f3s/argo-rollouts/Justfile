@@ -7,20 +7,15 @@ RELEASE_NAME := "argo-rollouts"
 install:
     helm repo add argo https://argoproj.github.io/argo-helm || true
     helm repo update
-    kubectl apply -f - <<'EOF'
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{NAMESPACE}}
-EOF
-    helm install {{RELEASE_NAME}} argo/argo-rollouts --namespace {{NAMESPACE}} -f values.yaml
+    kubectl create namespace {{NAMESPACE}} || true
+    helm install {{RELEASE_NAME}} argo/argo-rollouts --namespace {{NAMESPACE}} --values values.yaml
     @echo ""
     @echo "Argo Rollouts deployed successfully!"
     @echo "Controller installed in {{NAMESPACE}} namespace"
     @echo ""
 
 upgrade:
-    helm upgrade {{RELEASE_NAME}} argo/argo-rollouts --namespace {{NAMESPACE}} -f values.yaml
+    helm upgrade {{RELEASE_NAME}} argo/argo-rollouts --namespace {{NAMESPACE}} --values values.yaml
 
 uninstall:
     helm uninstall {{RELEASE_NAME}} --namespace {{NAMESPACE}} || true
