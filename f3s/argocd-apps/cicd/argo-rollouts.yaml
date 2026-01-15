@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: tracing-demo
+  name: argo-rollouts
   namespace: cicd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -10,18 +10,16 @@ spec:
   source:
     repoURL: http://git-server.cicd.svc.cluster.local/conf.git
     targetRevision: master
-    path: f3s/tracing-demo/helm-chart
+    path: f3s/argo-rollouts
   destination:
     server: https://kubernetes.default.svc
-    namespace: services
+    namespace: cicd
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=false
-      # Ignore old Deployment resources (using Rollout instead)
-      - RespectIgnoreDifferences=true
+      - CreateNamespace=true
     retry:
       limit: 3
       backoff:

@@ -1,0 +1,28 @@
+# Argo Rollouts Helm Chart Values Override
+# Following f3s cluster patterns: single instance deployment
+
+# Controller configuration
+controller:
+  replicas: 1
+  # Enable metrics for Prometheus integration
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # Will enable if Prometheus available
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# Notification controller - disabled
+notifications:
+  enabled: false
+
+# CRD installation
+crds:
+  install: true
+  keep: true

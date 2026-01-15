@@ -1,0 +1,75 @@
+# Frontend Service Rollout (Progressive Delivery)
+# Replaces frontend-deployment.yaml with canary strategy
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: tracing-demo-frontend
+  namespace: services
+  labels:
+    app: tracing-demo-frontend
+    component: frontend
+spec:
+  replicas: 2
+  strategy:
+    canary:
+      # Canary strategy configuration
+      steps:
+      # Step 1: Send 50% of traffic to new version
+      - setWeight: 50
+      # Step 2: Wait 2 minutes before proceeding
+      - pause:
+          duration: 2m
+      # Step 3: Promote to 100% traffic
+      - setWeight: 100
+      
+      # Traffic management via service weight
+      trafficRouting:
+        # Simple service-based traffic splitting (native K8s round-robin)
+        # For more advanced traffic splitting, install Istio or Linkerd
+        {}
+  
+  # Rollout revision history
+  revisionHistoryLimit: 3
+  
+  # Pod template specification (same as Deployment)
+  selector:
+    matchLabels:
+      app: tracing-demo-frontend
+  template:
+    metadata:
+      labels:
+        app: tracing-demo-frontend
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: registry.lan.buetow.org:30001/tracing-demo-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        env:
+        - name: MIDDLEWARE_URL
+          value: "http://middleware-service.services.svc.cluster.local:5001"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://alloy.monitoring.svc.cluster.local:4317"
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5

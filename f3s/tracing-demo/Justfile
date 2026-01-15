@@ -104,3 +104,40 @@ port-forward-backend:
 check-traces:
     @echo "Check Grafana Tempo for traces with:"
     @echo "  { resource.service.namespace = \"tracing-demo\" }"
+
+# === Argo Rollouts Commands ===
+
+# Watch frontend rollout progress
+rollout-watch:
+    @if ! command -v kubectl-argo-rollouts &> /dev/null; then \
+        echo "ERROR: kubectl argo rollouts plugin not installed"; \
+        echo "Install with: curl -LO https://github.com/argoproj/argo-rollouts/releases/latest/download/kubectl-argo-rollouts-linux-amd64 && sudo install -m 755 kubectl-argo-rollouts-linux-amd64 /usr/local/bin/kubectl-argo-rollouts"; \
+        exit 1; \
+    fi
+    kubectl argo rollouts get rollout tracing-demo-frontend -n {{NAMESPACE}} --watch
+
+# Check rollout status
+rollout-status:
+    kubectl argo rollouts status tracing-demo-frontend -n {{NAMESPACE}}
+
+# Describe rollout
+rollout-info:
+    kubectl argo rollouts get rollout tracing-demo-frontend -n {{NAMESPACE}}
+
+# Promote canary to 100% (skip waiting)
+rollout-promote:
+    kubectl argo rollouts promote tracing-demo-frontend -n {{NAMESPACE}}
+
+# Abort current rollout
+rollout-abort:
+    kubectl argo rollouts abort tracing-demo-frontend -n {{NAMESPACE}}
+
+# View rollout history
+rollout-history:
+    kubectl argo rollouts history tracing-demo-frontend -n {{NAMESPACE}}
+
+# Start demo (requires manual rollout trigger in another terminal)
+rollout-demo:
+    @echo "Starting Argo Rollouts demo..."
+    @echo ""
+    ./rollout-demo.sh
