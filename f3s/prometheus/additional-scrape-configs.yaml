@@ -18,4 +18,34 @@
     - targets:
       - 'pushgateway.monitoring.svc.cluster.local:9091'
 
+# Drop radicale service from being scraped (does not expose Prometheus metrics)
+- job_name: 'radicale-drop'
+  static_configs:
+    - targets:
+      - 'radicale-service.services.svc.cluster.local:80'
+  relabel_configs:
+    - source_labels: [__address__]
+      action: drop
+
+# Kubernetes service discovery with radicale dropped
+- job_name: 'kubernetes-services-no-radicale'
+  kubernetes_sd_configs:
+    - role: service
+      namespaces:
+        names:
+          - services
+  relabel_configs:
+    # Drop radicale service
+    - source_labels: [__meta_kubernetes_service_name]
+      regex: radicale-service
+      action: drop
+    # Keep only metrics ports
+    - source_labels: [__meta_kubernetes_service_port_name]
+      regex: metrics|prometheus
+      action: keep
+    - source_labels: [__meta_kubernetes_service_name]
+      target_label: job
+    - source_labels: [__meta_kubernetes_namespace]
+      target_label: namespace
+
 
