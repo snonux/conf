@@ -23,10 +23,10 @@ Also registered in ArgoCD: `/home/paul/git/conf/f3s/argocd-apps/cicd/argo-rollou
 
 **Replaces**: `frontend-deployment.yaml` (kept for reference)
 
-**Strategy**: Canary with 2-minute observation window
+**Strategy**: Canary with 1-minute observation window
 ```
-Step 1: 50% traffic to new version
-Step 2: Pause 2 minutes (observation period)
+Step 1: 33% traffic to new version (1 new pod, 3 old pods)
+Step 2: Pause 1 minute (observation period)
 Step 3: 100% traffic to new version (auto-promote)
 ```
 
@@ -101,12 +101,12 @@ Added sync option: `RespectIgnoreDifferences=true` to gracefully handle migratio
 │  │  tracing-demo-frontend Rollout     │ │
 │  │  ┌──────────────┐  ┌──────────────┐│ │
 │  │  │ Stable RS    │  │ Canary RS    ││ │
-│  │  │ 2 replicas   │  │ 1-2 replicas ││ │
+│  │  │ 3 replicas   │  │ 1 replica    ││ │
 │  │  └──────────────┘  └──────────────┘│ │
 │  │                                     │ │
 │  │  Endpoints: frontend-service        │ │
 │  │  - Selects both RS (proportional)   │ │
-│  │  - Routes traffic to 50%/100%       │ │
+│  │  - Routes traffic to 67%/33%        │ │
 │  └────────────────────────────────────┘ │
 │                                         │
 │  ┌──────────────────┐                  │

@@ -23,15 +23,16 @@ just rollout-watch
 # 5. Trigger in another terminal (Terminal 2)
 kubectl patch rollout tracing-demo-frontend -n services \
   --type='json' \
-  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"registry.lan.buetow.org:30001/tracing-demo-frontend:latest"}]'
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ROLLOUT_V","value":"'$(date +%s)'"}}]'
 
-# 6. Watch progress in Terminal 1 (~4 minutes total)
+# 6. Watch progress in Terminal 1 (~90 seconds total)
 ```
 
 Expected flow:
-- 0-2 min: **50% traffic** to new version (canary phase 1)
-- 2-4 min: **Wait** for confirmation (canary phase 2)
-- 4+ min: **100% traffic** to new version (auto-promoted)
+- 0-15 sec: **33% traffic** to canary (1 new pod, 3 old pods)
+- 15-60 sec: **Monitor** (paused, observing canary health)
+- 60+ sec: **Auto-promote to 100%** (scales all 3 pods to new version)
+- ~90 sec: **Complete** (all 3 pods running new version)
 
 ## Files Created
 
@@ -61,10 +62,10 @@ Expected flow:
 - No way to validate before 100% rollout
 
 **New way (Rollout with Canary)**:
-- 2 old pods → 1 old + 1 new (50/50 traffic)
-- Observe for 2 minutes
-- If healthy → automatically promote to 2 new pods
-- If unhealthy → abort, revert to 2 old pods
+- 3 old pods → 3 old + 1 new (33% traffic to canary)
+- Observe for 1 minute
+- If healthy → automatically promote all 3 pods to new version
+- If unhealthy → abort, revert to 3 old pods
 - Zero downtime, validated before full rollout
 
 ## Common Commands
@@ -81,10 +82,7 @@ just rollout-status
 # Detailed info
 just rollout-info
 
-# Skip waiting, promote now
-just rollout-promote
-
-# Abort and rollback
+# Abort and rollback (prevents auto-promotion)
 just rollout-abort
 
 # View history
@@ -96,11 +94,11 @@ just load-test
 
 ## What Happens During Canary
 
-### Step 1: 50% Traffic (0-2 minutes)
+### Step 1: 33% Traffic (0-15 seconds)
 ```
 Frontend Service
-├── Stable ReplicaSet (old version): 1 pod → receives 50% traffic
-└── Canary ReplicaSet (new version): 1 pod → receives 50% traffic
+├── Stable ReplicaSet (old version): 3 pods → receives 67% traffic
+└── Canary ReplicaSet (new version): 1 pod → receives 33% traffic
 ```
 
 Monitor during this phase:
@@ -109,18 +107,17 @@ Monitor during this phase:
 - Logs and traces
 - Prometheus metrics
 
-### Step 2: Pause (2 minutes)
+### Step 2: Pause (15-60 seconds)
 ```
-Service pauses traffic shift, waiting for:
-- Manual promotion via: kubectl argo rollouts promote ...
-- Auto-promotion after 2 minutes
-- Or abort: kubectl argo rollouts abort ...
+Service pauses traffic shift, monitoring canary health:
+- Auto-promotion after 1 minute if healthy
+- Or abort: kubectl argo rollouts abort ... to stop
 ```
 
-### Step 3: 100% Traffic (4+ minutes)
+### Step 3: 100% Traffic (60+ seconds)
 ```
 Frontend Service
-├── Stable ReplicaSet (new version): 2 pods → receives 100% traffic
+├── Stable ReplicaSet (new version): 3 pods → receives 100% traffic
 └── Canary ReplicaSet (old version): 0 pods → terminated
 ```
 
@@ -138,11 +135,11 @@ Updates Rollout resource
 Argo Rollouts Controller
     ↓
     ├─→ Scales Canary ReplicaSet (1 new pod)
-    ├─→ Frontend Service routes 50/50 traffic
-    ├─→ Monitors health/metrics for 2 minutes
-    └─→ Auto-promotes or waits for manual action
-        ├─→ If healthy: Scale to 2 new, remove old
-        └─→ If abort: Remove canary, keep old
+    ├─→ Frontend Service routes 33/67 traffic
+    ├─→ Monitors health/metrics for 1 minute
+    └─→ Auto-promotes if healthy
+        ├─→ If healthy: Scale to 3 new, remove old
+        └─→ If abort: Remove canary, keep 3 old
 ```
 
 ## Demo Scenarios
