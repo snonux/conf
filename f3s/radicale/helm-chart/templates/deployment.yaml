@@ -55,11 +55,13 @@ kind: Service
 metadata:
   labels:
     app: radicale
+  annotations:
+    prometheus.io/scrape: "false"
   name: radicale-service
   namespace: services
 spec:
   ports:
-    - name: web
+    - name: http
       port: 80
       protocol: TCP
       targetPort: 8080
