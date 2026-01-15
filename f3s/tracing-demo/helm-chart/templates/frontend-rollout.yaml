@@ -11,22 +11,14 @@ metadata:
 spec:
   replicas: 2
   strategy:
-    canary:
-      # Canary strategy configuration
-      steps:
-      # Step 1: Send 50% of traffic to new version
-      - setWeight: 50
-      # Step 2: Wait 1 minute before proceeding
-      - pause:
-          duration: 1m
-      # Step 3: Promote to 100% traffic
-      - setWeight: 100
-      
-      # Traffic management via service weight
-      trafficRouting:
-        # Simple service-based traffic splitting (native K8s round-robin)
-        # For more advanced traffic splitting, install Istio or Linkerd
-        {}
+    blueGreen:
+      # Blue-Green strategy: instant switch with easy rollback
+      activeSlotSelector: stable
+      prePromotionAnalysis:
+        templates:
+        - templateName: check-health
+      autoPromotionEnabled: false  # Manual promotion for demo
+      previewReplicaCount: 1  # Run 1 new pod (preview/green)
   
   # Rollout revision history
   revisionHistoryLimit: 3
