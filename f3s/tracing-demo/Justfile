@@ -136,6 +136,24 @@ rollout-abort:
 rollout-history:
     kubectl argo rollouts history tracing-demo-frontend -n {{NAMESPACE}}
 
+# === Automated Demo Scripts ===
+
+# Run full automated canary rollout demo
+demo-canary:
+    @./demo-canary-rollout.sh
+
+# Run abort/rollback demo
+demo-abort:
+    @./demo-abort-rollout.sh
+
+# Reset rollout to clean state
+demo-reset:
+    @./demo-reset.sh
+
+# Interactive demo menu
+demo-menu:
+    @./demo-menu.sh
+
 # Start demo (requires manual rollout trigger in another terminal)
 rollout-demo:
     @echo "Starting Argo Rollouts demo..."
