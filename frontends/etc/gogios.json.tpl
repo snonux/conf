@@ -20,7 +20,7 @@
     <%   } -%>
     <% } -%>
     <% for my $host (qw(blowfish fishfinger f0 f1 f2 r0 r1 r2)) { -%>
-    <%   for my $proto (4 6) { -%>
+    <%   for my $proto (4, 6) { -%>
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $host %>.wg0.wan.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
