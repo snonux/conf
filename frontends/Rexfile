@@ -290,6 +290,10 @@ task 'relayd',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'relayd_flags=';
 
+    # Increase daemon login class file descriptor limits for relayd with many TLS certs
+    run 'doas sed -i "s/:openfiles-max=1024:/:openfiles-max=4096:/; s/:openfiles-cur=1024:/:openfiles-cur=4096:/" /etc/login.conf';
+    run 'doas rm -f /etc/login.conf.db && doas cap_mkdb /etc/login.conf';
+
     file '/etc/relayd.conf',
       content => template(
         './etc/relayd.conf.tpl',

@@ -251,3 +251,70 @@ After deploying:
 ssh rex@server "doas rcctl check httpd"
 ssh rex@server "doas rcctl check relayd"
 ```
+
+## Relayd TLS Certificate Loading with Many Keypairs
+
+### File Descriptor Limits - SOLUTION CONFIRMED
+
+When relayd loads many TLS certificates (67+ keypairs in this deployment), it requires increased file descriptor limits beyond the default daemon class limits of 1024.
+
+**Root cause**: The default OpenBSD daemon login class has:
+```
+:openfiles-max=1024:
+:openfiles-cur=1024:
+```
+
+This limits relayd to 1024 open files, causing SNI matching to fail silently for certificates beyond a certain threshold.
+
+**Solution**: Increase the daemon login class limits in `/etc/login.conf`:
+
+```bash
+# Modify /etc/login.conf
+# Change from:
+daemon:\
+        :ignorenologin:\
+        :datasize=4096M:\
+        :maxproc=infinity:\
+        :openfiles-max=1024:
+        :openfiles-cur=1024:
+        
+# Change to:
+daemon:\
+        :ignorenologin:\
+        :datasize=4096M:\
+        :maxproc=infinity:\
+        :openfiles-max=4096:
+        :openfiles-cur=4096:
+```
+
+After modifying `/etc/login.conf`, rebuild the login.conf database:
+```bash
+doas rm /etc/login.conf.db
+doas cap_mkdb /etc/login.conf
+doas rcctl restart relayd
+```
+
+**Verification**: Check that relayd has the increased limit:
+```bash
+doas relayd -dvv 2>&1 | grep "socket_rlimit" | head -1
+# Should show: socket_rlimit: max open files 4096
+```
+
+### SNI Matching Issues with Multiple Certificates
+
+**Issue resolved**: With the file descriptor limit increased to 4096, relayd now properly loads and matches all 67 TLS keypairs via SNI.
+
+**What was happening before the fix**:
+- Relayd hit the 1024 file descriptor limit while loading certificates
+- SNI matching failed for certificates beyond the threshold
+- Relayd defaulted to serving the first certificate in the list (`foo.zone`)
+- Accessing `gogios.buetow.org` would return the `foo.zone` certificate
+
+**After increasing limits**:
+- All 67 certificates load successfully
+- SNI matching works correctly for all domains
+- `gogios.buetow.org` now correctly serves the `gogios.buetow.org` certificate
+
+**References**:
+- IRCNow wiki: "TLS Acceleration with relayd" - documents file descriptor requirements
+- Stack Exchange: "OpenBSD, relayd and acme-client" (Nov 2022)
