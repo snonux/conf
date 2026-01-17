@@ -344,6 +344,17 @@ task 'smtpd',
       mode      => '644',
       on_change => sub { service 'smtpd' => 'restart' };
 
+    # Reject lists for blocking unwanted senders/domains/recipients
+    Rex::Logger::info('Dealing with mail reject lists');
+    for my $reject_list (qw/reject-senders reject-domains reject-recipients/) {
+        file "/etc/mail/$reject_list",
+          source    => "./etc/mail/$reject_list",
+          owner     => 'root',
+          group     => 'wheel',
+          mode      => '644',
+          on_change => sub { service 'smtpd' => 'restart' };
+    }
+
     Rex::Logger::info('Dealing with smtpd.conf');
     file '/etc/mail/smtpd.conf',
       content   => template('./etc/mail/smtpd.conf.tpl'),

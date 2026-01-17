@@ -10,6 +10,11 @@ table aliases file:/etc/mail/aliases
 table virtualdomains file:/etc/mail/virtualdomains
 table virtualusers file:/etc/mail/virtualusers
 
+# Reject lists for blocking unwanted senders/domains/recipients
+table reject-senders file:/etc/mail/reject-senders
+table reject-domains file:/etc/mail/reject-domains
+table reject-recipients file:/etc/mail/reject-recipients
+
 listen on socket
 listen on all tls pki "buetow_org_tls" hostname "<%= "$hostname.$domain" %>"
 #listen on all
@@ -17,6 +22,12 @@ listen on all tls pki "buetow_org_tls" hostname "<%= "$hostname.$domain" %>"
 action localmail mbox alias <aliases>
 action receive mbox virtual <virtualusers>
 action outbound relay
+
+# Reject rules (processed before accept rules)
+# reject-senders: full addresses, reject-domains: patterns like *@domain.com
+match from any mail-from <reject-senders> reject
+match from any mail-from <reject-domains> reject
+match from any for rcpt-to <reject-recipients> reject
 
 match from any for domain <virtualdomains> action receive
 match from local for local action localmail

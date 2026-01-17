@@ -23,9 +23,9 @@
     <%   for my $proto (4, 6) { -%>
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $host %>.wg0.wan.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
+      "Args": ["-H", "<%= $host %>.wg0.wan.buetow.org", "-<%= $proto %>", "-w", "100,20%", "-c", "200,30%"],
       "RandomSpread": 10,
-      "Retries": 3,
+      "Retries": 5,
       "RetryInterval": 3
     },
     <%   } -%>
@@ -117,7 +117,7 @@
       "Plugin": "<%= $plugin_dir %>/check_procs",
       "RandomSpread": 10,
       "RunInterval": 300,
-      "Args": ["-w", "80", "-c", "100"]
+      "Args": ["-w", "100", "-c", "150"]
     },
     "Check Disk <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_disk",
