@@ -23,7 +23,8 @@ authority buypass-test {
 	contact "mailto:me@example.com"
 }
 
-<% for my $host (@$acme_hosts) { -%>
+<% for my $host (@$acme_hosts) {
+     next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
 domain <%= $host %> {
 	alternative names { www.<%= $host %> }
 	domain key "/etc/ssl/private/<%= $host %>.key"
@@ -36,10 +37,3 @@ domain standby.<%= $host %> {
 	sign with letsencrypt
 }
 <% } -%>
-
-# For the server itself (e.g. TLS, or monitoring)
-domain <%= "$hostname.$domain" %> {
-	domain key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
-	domain full chain certificate "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"
-	sign with letsencrypt
-}
