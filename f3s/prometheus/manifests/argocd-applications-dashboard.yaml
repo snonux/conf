@@ -193,12 +193,123 @@ data:
           }
         },
         {
+          "id": 9,
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 4
+          },
+          "type": "table",
+          "title": "Unhealthy Applications",
+          "description": "Lists applications that are not in Healthy state",
+          "targets": [
+            {
+              "expr": "argocd_app_info{health_status!=\"Healthy\"}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "Value": true,
+                  "instance": true,
+                  "job": true,
+                  "namespace": true,
+                  "pod": true,
+                  "repo": true,
+                  "dest_server": true,
+                  "sync_status": true
+                },
+                "renameByName": {
+                  "name": "Application",
+                  "health_status": "Health",
+                  "dest_namespace": "Namespace",
+                  "project": "Project"
+                },
+                "indexByName": {
+                  "name": 0,
+                  "health_status": 1,
+                  "dest_namespace": 2,
+                  "project": 3
+                }
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Health"
+              }
+            ]
+          },
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "All applications healthy"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Health"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "Progressing": {
+                            "color": "yellow",
+                            "text": "⟳ Progressing"
+                          },
+                          "Degraded": {
+                            "color": "red",
+                            "text": "✗ Degraded"
+                          },
+                          "Suspended": {
+                            "color": "orange",
+                            "text": "⏸ Suspended"
+                          },
+                          "Missing": {
+                            "color": "red",
+                            "text": "? Missing"
+                          },
+                          "Unknown": {
+                            "color": "gray",
+                            "text": "? Unknown"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
           "id": 5,
           "gridPos": {
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 4
+            "y": 10
           },
           "type": "table",
           "title": "Application Status Overview",
@@ -339,7 +450,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 12
+            "y": 18
           },
           "type": "timeseries",
           "title": "Application Health Status Over Time",
@@ -440,7 +551,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 12
+            "y": 18
           },
           "type": "timeseries",
           "title": "Sync Operations",
@@ -478,7 +589,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 20
+            "y": 26
           },
           "type": "alertlist",
           "title": "Active Alerts",
