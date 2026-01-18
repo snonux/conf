@@ -86,6 +86,18 @@ our @acme_hosts =
   qw/foo.zone dtail.dev buetow.org git.buetow.org paul.buetow.org joern.buetow.org dory.buetow.org ecat.buetow.org blog.buetow.org znc.buetow.org stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
 push @acme_hosts, @f3s_hosts;
 
+# WireGuard IP addresses for ping checks
+our %wg0_ips = (
+    'blowfish' => { '4' => '192.168.2.110', '6' => 'fd42:beef:cafe:2::110' },
+    'fishfinger' => { '4' => '192.168.2.111', '6' => 'fd42:beef:cafe:2::111' },
+    'f0' => { '4' => '192.168.2.130', '6' => 'fd42:beef:cafe:2::130' },
+    'f1' => { '4' => '192.168.2.131', '6' => 'fd42:beef:cafe:2::131' },
+    'f2' => { '4' => '192.168.2.132', '6' => 'fd42:beef:cafe:2::132' },
+    'r0' => { '4' => '192.168.2.120', '6' => 'fd42:beef:cafe:2::120' },
+    'r1' => { '4' => '192.168.2.121', '6' => 'fd42:beef:cafe:2::121' },
+    'r2' => { '4' => '192.168.2.122', '6' => 'fd42:beef:cafe:2::122' },
+);
+
 # UTILITY TASKS
 
 task 'id',        group => 'frontends', sub { say run 'id' };
@@ -505,7 +517,7 @@ task 'gogios',
       mode   => '755';
 
     file '/etc/gogios.json',
-      content => template( './etc/gogios.json.tpl', acme_hosts => \@acme_hosts ),
+      content => template( './etc/gogios.json.tpl', acme_hosts => \@acme_hosts, wg0_ips => \%wg0_ips ),
       owner   => 'root',
       group   => 'wheel',
       mode    => '744';
