@@ -1,5 +1,6 @@
 # ArgoCD Repository Credential for self-hosted git-server
 # This secret tells ArgoCD how to authenticate to the git-server via SSH
+<<<<<<< HEAD
 apiVersion: v1
 kind: Secret
 metadata:
@@ -20,3 +21,31 @@ stringData:
     AAAEAbwYhRydHh8HlKI35Takf/1qCSvZmdJBzbngvz5Zv1bwhETlsgb/g5SaMPNJWJ/t4u
     K1n4Zbk+Sy6IyUEl+EcYAAAAEmFyZ29jZEBmM3MuY2x1c3RlcgECAw==
     -----END OPENSSH PRIVATE KEY-----
+||||||| 7b4d629
+=======
+#
+# IMPORTANT: Do not commit the private key to git!
+# Deploy this secret manually with:
+#   kubectl create secret generic git-server-repo-creds \
+#     --namespace=cicd \
+#     --from-literal=type=git \
+#     --from-literal=url=ssh://git@git-server.cicd.svc.cluster.local \
+#     --from-literal=insecure=true \
+#     --from-file=sshPrivateKey=/path/to/your/private-key
+#   kubectl label secret git-server-repo-creds -n cicd argocd.argoproj.io/secret-type=repository
+#
+# Or use the template below with your key injected at deploy time:
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-server-repo-creds
+  namespace: cicd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: ssh://git@git-server.cicd.svc.cluster.local
+  insecure: "true"
+  # sshPrivateKey: <INJECT_AT_DEPLOY_TIME>
+>>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc

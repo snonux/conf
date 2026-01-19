@@ -94,13 +94,12 @@ server "<%= $prefix %>paul.buetow.org" {
 }
 <% } -%>
 
-# Redirect to gitub.dtail.dev
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>dtail.dev" {
   listen on * port 8080
   log style forwarded 
   location * {
-    block return 302 "https://github.dtail.dev$REQUEST_URI"
+    block return 302 "https://codeberg.org/snonux/dtail"
   }
 }
 <% } -%>
