@@ -38,7 +38,7 @@
     <%   for my $proto (4, 6) { -%>
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $wg0_ips->{$host}->{$proto} %>", "-<%= $proto %>", "-w", "40,20%", "-c", "80,30%"],
+      "Args": ["-H", "<%= $wg0_ips->{$host}->{$proto} %>", "-<%= $proto %>", "-w", "100,20%", "-c", "200,30%"],
       "RandomSpread": 10,
       "Retries": 5,
       "RetryInterval": 3
