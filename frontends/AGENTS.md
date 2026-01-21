@@ -251,10 +251,6 @@ After deploying:
 ssh rex@server "doas rcctl check httpd"
 ssh rex@server "doas rcctl check relayd"
 ```
-<<<<<<< HEAD
-||||||| 7b4d629
-=======
-
 ## Relayd TLS Certificate Loading with Many Keypairs
 
 ### File Descriptor Limits - SOLUTION CONFIRMED

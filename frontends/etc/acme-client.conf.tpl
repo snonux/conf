@@ -23,18 +23,8 @@ authority buypass-test {
 	contact "mailto:me@example.com"
 }
 
-<<<<<<< HEAD
-<% for my $host (@$acme_hosts) { -%>
-||||||| 7b4d629
-<% for my $host (@$acme_hosts) { -%>
-<%   for my $prefix ('', 'www.', 'standby.') { -%>
-domain <%= $prefix.$host %> {
-	domain key "/etc/ssl/private/<%= $prefix.$host %>.key"
-	domain full chain certificate "/etc/ssl/<%= $prefix.$host %>.fullchain.pem"
-=======
 <% for my $host (@$acme_hosts) {
      next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
->>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc
 domain <%= $host %> {
 	alternative names { www.<%= $host %> }
 	domain key "/etc/ssl/private/<%= $host %>.key"

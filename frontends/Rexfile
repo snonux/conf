@@ -85,25 +85,22 @@ our @f3s_hosts =
 our @acme_hosts =
   qw/foo.zone dtail.dev buetow.org git.buetow.org paul.buetow.org joern.buetow.org dory.buetow.org ecat.buetow.org blog.buetow.org znc.buetow.org stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
 push @acme_hosts, @f3s_hosts;
-<<<<<<< HEAD
-||||||| 7b4d629
-our @dns_zones = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
+our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
 our @dns_zones_remove = qw/paul.cyou/;
-our @acme_hosts = qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
-=======
+our @acme_hosts =
+  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo/;
 
 # WireGuard IP addresses for ping checks
 our %wg0_ips = (
-    'blowfish' => { '4' => '192.168.2.110', '6' => 'fd42:beef:cafe:2::110' },
+    'blowfish'   => { '4' => '192.168.2.110', '6' => 'fd42:beef:cafe:2::110' },
     'fishfinger' => { '4' => '192.168.2.111', '6' => 'fd42:beef:cafe:2::111' },
-    'f0' => { '4' => '192.168.2.130', '6' => 'fd42:beef:cafe:2::130' },
-    'f1' => { '4' => '192.168.2.131', '6' => 'fd42:beef:cafe:2::131' },
-    'f2' => { '4' => '192.168.2.132', '6' => 'fd42:beef:cafe:2::132' },
-    'r0' => { '4' => '192.168.2.120', '6' => 'fd42:beef:cafe:2::120' },
-    'r1' => { '4' => '192.168.2.121', '6' => 'fd42:beef:cafe:2::121' },
-    'r2' => { '4' => '192.168.2.122', '6' => 'fd42:beef:cafe:2::122' },
+    'f0'         => { '4' => '192.168.2.130', '6' => 'fd42:beef:cafe:2::130' },
+    'f1'         => { '4' => '192.168.2.131', '6' => 'fd42:beef:cafe:2::131' },
+    'f2'         => { '4' => '192.168.2.132', '6' => 'fd42:beef:cafe:2::132' },
+    'r0'         => { '4' => '192.168.2.120', '6' => 'fd42:beef:cafe:2::120' },
+    'r1'         => { '4' => '192.168.2.121', '6' => 'fd42:beef:cafe:2::121' },
+    'r2'         => { '4' => '192.168.2.122', '6' => 'fd42:beef:cafe:2::122' },
 );
->>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc
 
 # UTILITY TASKS
 
@@ -311,10 +308,10 @@ task 'relayd',
 
     # Increase daemon login class file descriptor limits for relayd with many TLS certs
     file '/etc/login.conf.d/daemon',
-      source => './etc/login.conf.d/daemon',
-      owner  => 'root',
-      group  => 'wheel',
-      mode   => '644',
+      source    => './etc/login.conf.d/daemon',
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '644',
       on_change => sub {
         run 'doas rm -f /etc/login.conf.db && doas cap_mkdb /etc/login.conf';
       };
@@ -523,18 +520,14 @@ task 'gogios',
       group  => '_gogios',
       mode   => '755';
 
+    file '/var/run/gogios',
+      ensure => 'directory',
+      owner  => '_gogios',
+      group  => '_gogios',
+      mode   => '755';
+
     file '/etc/gogios.json',
-<<<<<<< HEAD
-      content => template( './etc/gogios.json.tpl', acme_hosts => \@acme_hosts ),
-||||||| 7b4d629
-      file '/var/run/gogios',
-        ensure => 'directory',
-        owner => '_gogios',
-        group => '_gogios',
-        mode => '755';
-=======
       content => template( './etc/gogios.json.tpl', acme_hosts => \@acme_hosts, wg0_ips => \%wg0_ips ),
->>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc
       owner   => 'root',
       group   => 'wheel',
       mode    => '744';
@@ -687,11 +680,12 @@ task 'pf',
   sub {
     # Deploy pf.conf with NAT rules for WireGuard VPN clients
     file '/etc/pf.conf',
-      content => template('./etc/pf.conf.tpl'),
-      owner   => 'root',
-      group   => 'wheel',
-      mode    => '600',
+      content   => template('./etc/pf.conf.tpl'),
+      owner     => 'root',
+      group     => 'wheel',
+      mode      => '600',
       on_change => sub {
+
         # Reload PF configuration
         run 'pfctl -f /etc/pf.conf';
       };
