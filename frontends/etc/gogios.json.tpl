@@ -7,6 +7,7 @@
   "StateDir": "/var/run/gogios",
   "HTMLStatusFile": "/var/www/htdocs/buetow.org/self/gogios/index.html",
   "PrometheusHosts": ["r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"],
+  "PrometheusOnlyIfNotExists": "/tmp/f3s_taken_down",
   "Checks": {
     <% for my $host (qw(master standby)) { -%>
     <%   for my $proto (4, 6) { -%>
@@ -24,6 +25,7 @@
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $host %>.wg0.wan.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
+      "OnlyIfNotExists": "/tmp/f3s_taken_down",
       "RandomSpread": 10,
       "Retries": 3,
       "RetryInterval": 3
