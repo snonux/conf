@@ -151,6 +151,18 @@ server "<%= $prefix %>dory.buetow.org" {
 }
 <% } -%>
 
+# Solarcat special host
+<% for my $prefix (@prefixes) { -%>
+server "<%= $prefix %>solarcat.buetow.org" {
+  listen on * port 8080
+  log style forwarded 
+  location * {
+    root "/htdocs/joern/solarcat.buetow.org"
+    directory auto index
+  }
+}
+<% } -%>
+
 # ecat special host
 <% for my $prefix (@prefixes) { -%>
 server "<%= $prefix %>ecat.buetow.org" {
