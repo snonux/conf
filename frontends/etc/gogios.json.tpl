@@ -7,6 +7,7 @@
   "StateDir": "/var/run/gogios",
   "HTMLStatusFile": "/var/www/htdocs/buetow.org/self/gogios/index.html",
   "PrometheusHosts": ["r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"],
+  "PrometheusNotifyDisable": true,
   "Checks": {
     <% for my $host (qw(master standby)) { -%>
     <%   for my $proto (4, 6) { -%>
@@ -14,7 +15,6 @@
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $host %>.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
       "RandomSpread": 10,
-<<<<<<< HEAD
       "Retries": 3,
       "RetryInterval": 3
     },
@@ -25,10 +25,8 @@
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $host %>.wg0.wan.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
+      "NotifyDisable": true,
       "RandomSpread": 10,
-||||||| 7b4d629
-=======
->>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc
       "Retries": 3,
       "RetryInterval": 3
     },
@@ -132,13 +130,7 @@
       "Plugin": "<%= $plugin_dir %>/check_procs",
       "RandomSpread": 10,
       "RunInterval": 300,
-<<<<<<< HEAD
-      "Args": ["-w", "80", "-c", "100"]
-||||||| 7b4d629
-      "Args": ["-w", "80", "-c", "100"]
-=======
       "Args": ["-w", "100", "-c", "150"]
->>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc
     },
     "Check Disk <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_disk",
