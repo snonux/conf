@@ -82,7 +82,7 @@ our @f3s_hosts =
 our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
 our @dns_zones_remove = qw/paul.cyou/;
 our @acme_hosts =
-  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org solarcat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
+  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org ecat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
 
 # WireGuard IP addresses for ping checks
 our %wg0_ips = (
