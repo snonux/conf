@@ -20,23 +20,23 @@
     },
     <%   } -%>
     <% } -%>
-    <% for my $host (qw(blowfish fishfinger f0 f1 f2 r0 r1 r2)) { -%>
-    <%   for my $proto (4, 6) { -%>
-    "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_ping",
-      "Args": ["-H", "<%= $host %>.wg0.wan.buetow.org", "-<%= $proto %>", "-w", "100,10%", "-c", "200,15%"],
-      "OnlyIfNotExists": "/tmp/f3s_taken_down",
-      "RandomSpread": 10,
-      "Retries": 3,
-      "RetryInterval": 3
-    },
-    <%   } -%>
-    <% } -%>
-    <% for my $host (qw(blowfish fishfinger f0 f1 f2 r0 r1 r2)) { -%>
+    <% for my $host (qw(blowfish fishfinger)) { -%>
     <%   for my $proto (4, 6) { -%>
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
       "Args": ["-H", "<%= $wg0_ips->{$host}->{$proto} %>", "-<%= $proto %>", "-w", "100,20%", "-c", "200,30%"],
+      "RandomSpread": 10,
+      "Retries": 5,
+      "RetryInterval": 3
+    },
+    <%   } -%>
+    <% } -%>
+    <% for my $host (qw(f0 f1 f2 r0 r1 r2)) { -%>
+    <%   for my $proto (4, 6) { -%>
+    "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_ping",
+      "Args": ["-H", "<%= $wg0_ips->{$host}->{$proto} %>", "-<%= $proto %>", "-w", "100,20%", "-c", "200,30%"],
+      "OnlyIfNotExists": "/tmp/f3s_taken_down",
       "RandomSpread": 10,
       "Retries": 5,
       "RetryInterval": 3
