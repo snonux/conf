@@ -26,7 +26,9 @@ http protocol "https" {
          # Skip server hostnames - each server only has its own cert, handled by dedicated keypair below
          next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
     tls keypair <%= $host %>
+    <% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
     tls keypair standby.<%= $host %>
+    <% } -%>
     <% } -%>
     tls keypair <%= $hostname.'.'.$domain -%>
 

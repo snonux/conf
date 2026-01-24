@@ -31,9 +31,11 @@ domain <%= $host %> {
 	domain full chain certificate "/etc/ssl/<%= $host %>.fullchain.pem"
 	sign with letsencrypt
 }
+<% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
 domain standby.<%= $host %> {
 	domain key "/etc/ssl/private/standby.<%= $host %>.key"
 	domain full chain certificate "/etc/ssl/standby.<%= $host %>.fullchain.pem"
 	sign with letsencrypt
 }
+<% } -%>
 <% } -%>

@@ -175,9 +175,21 @@ server "<%= $prefix %>gogios.buetow.org" {
 }
 <% } -%>
 
-# Fallback for f3s hosts - serve fallback page for ALL paths
+# f3s hosts: ACME challenges on port 80, fallback page on port 8080 (served by master when k3s cluster is down)
 <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) { -%>
-server "<%= $prefix.$host %>" {
+server "<%= $prefix.$host %>-port80" {
+  listen on * port 80
+  log style forwarded
+  location "/.well-known/acme-challenge/*" {
+    root "/acme"
+    request strip 2
+  }
+  location * {
+    block return 302 "https://$HTTP_HOST$REQUEST_URI"
+  }
+}
+
+server "<%= $prefix.$host %>-port8080" {
   listen on * port 8080
   log style forwarded
   location * {
