@@ -39,3 +39,11 @@ domain standby.<%= $host %> {
 }
 <% } -%>
 <% } -%>
+
+# Current server's FQDN (blowfish.buetow.org or fishfinger.buetow.org)
+# Each server only has its own cert, no www/standby variants for server hostnames
+domain <%= "$hostname.$domain" %> {
+	domain key "/etc/ssl/private/<%= "$hostname.$domain" %>.key"
+	domain full chain certificate "/etc/ssl/<%= "$hostname.$domain" %>.fullchain.pem"
+	sign with letsencrypt
+}
