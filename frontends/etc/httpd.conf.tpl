@@ -39,6 +39,29 @@ server "<%= "$hostname.$domain" %>" {
   }
 }
 
+# f3s cluster fallback page on port 8080 when cluster is down
+server "f3s.buetow.org" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    # Rewrite all requests to /index.html to show fallback page regardless of path
+    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+  }
+}
+
+# Catch-all for any unmatched .f3s.buetow.org subdomain on port 8080
+# Serves fallback page when k3s cluster is down
+server "*.f3s.buetow.org" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    # Rewrite all requests to /index.html to show fallback page regardless of path
+    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+  }
+}
+
 # Gemtexter hosts
 <% for my $host (qw/foo.zone stats.foo.zone/) { for my $prefix (@prefixes) { -%>
 server "<%= $prefix.$host %>" {
