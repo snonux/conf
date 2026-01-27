@@ -1,0 +1,38 @@
+NAMESPACE := "test"
+APP_NAME := "apache"
+
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app=apache
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} apache-service
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} apache-ingress
+    @echo ""
+    @echo "=== PVC ==="
+    @kubectl get pvc -n {{NAMESPACE}} apache-pvc
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
+
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=apache --tail={{lines}} -f
+
+port-forward port="8080":
+    @echo "Forwarding apache to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/apache-service {{port}}:80
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+restart:
+    @echo "Restarting apache..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/apache-deployment

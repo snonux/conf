@@ -1,19 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: example-apache-volume-claim
+  name: apache
   namespace: cicd
   finalizers:
-    - resources-finalizer.argocd.argoproj.io
+   - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: http://git-server.cicd.svc.cluster.local/conf.git
     targetRevision: master
-    path: f3s/example-apache-volume-claim/helm-chart
+    path: f3s/apache/helm-chart
   destination:
     server: https://kubernetes.default.svc
-    namespace: test
+    namespace: services
   syncPolicy:
     automated:
       prune: true
