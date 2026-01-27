@@ -7,5 +7,5 @@ This chart deploys a simple Apache web server with a persistent volume claim.
 To install the chart with the release name `my-release`, run the following command:
 
 ```bash
-helm install apache . --namespace test --create-namespace
+helm install apache . --namespace services --create-namespace
 ```

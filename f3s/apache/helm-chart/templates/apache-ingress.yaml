@@ -2,8 +2,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: apache-ingress
-  namespace: test
-  namespace: test
+  namespace: services
+  namespace: services
   annotations:
     spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web

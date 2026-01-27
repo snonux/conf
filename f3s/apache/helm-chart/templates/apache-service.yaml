@@ -4,7 +4,7 @@ metadata:
   labels:
     app: apache
   name: apache-service
-  namespace: test
+  namespace: services
 spec:
   ports:
     - name: web

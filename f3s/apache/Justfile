@@ -1,4 +1,4 @@
-NAMESPACE := "test"
+NAMESPACE := "services"
 APP_NAME := "apache"
 
 status:
