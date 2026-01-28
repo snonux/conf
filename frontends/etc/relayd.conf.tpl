@@ -56,11 +56,16 @@ http protocol "https" {
     # For f3s hosts: use relay-level failover (f3s -> localhost backup)
     # Registry is special: needs explicit routing to port 30001
     <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) {
-         if ($host eq 'registry.f3s.buetow.org') { -%>
+          if ($host eq 'registry.f3s.buetow.org') { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
     <%   }
        } } -%>
-}
+
+    # Add cache-control headers to f3s fallback pages (served from localhost when cluster is down)
+    match response header set "Cache-Control" value "no-cache, no-store, must-revalidate"
+    match response header set "Pragma" value "no-cache"
+    match response header set "Expires" value "0"
+    }
 
 relay "https4" {
     listen on <%= $vio0_ip %> port 443 tls
