@@ -23,3 +23,5 @@
 * Avoid large functions, split them into smaller, focused helper functions. 50 lines per function max.
 * Aim for a unit test coverage of 60%
 * Avoid code duplication where reasonable.
+
+public-snippets/go/go-projects/go-projects.md
