@@ -24,7 +24,10 @@ table <localhost> {
 http protocol "https" {
     <% for my $host (@$acme_hosts) {
          # Skip server hostnames - each server only has its own cert, handled by dedicated keypair below
-         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
+         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
+         # Skip ipv4/ipv6 subdomains - they use the parent cert as SANs
+         next if $host =~ /^(ipv4|ipv6)\./;
+    -%>
     tls keypair <%= $host %>
     <% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
     tls keypair standby.<%= $host %>

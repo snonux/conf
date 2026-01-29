@@ -24,9 +24,21 @@ authority buypass-test {
 }
 
 <% for my $host (@$acme_hosts) {
-     next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
+     next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
+     # Skip ipv4/ipv6 subdomains - they're included as SANs in parent cert
+     next if $host =~ /^(ipv4|ipv6)\./;
+-%>
+<%   # Check if this host has ipv4/ipv6 subdomains that need to be included as SANs
+     my @alt_names = ("www.$host");
+     for my $sub_host (@$acme_hosts) {
+         if ($sub_host =~ /^(ipv4|ipv6)\.\Q$host\E$/) {
+             push @alt_names, $sub_host;
+         }
+     }
+     my $alt_names_str = join(' ', @alt_names);
+-%>
 domain <%= $host %> {
-	alternative names { www.<%= $host %> }
+	alternative names { <%= $alt_names_str %> }
 	domain key "/etc/ssl/private/<%= $host %>.key"
 	domain full chain certificate "/etc/ssl/<%= $host %>.fullchain.pem"
 	sign with letsencrypt
