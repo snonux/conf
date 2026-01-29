@@ -54,20 +54,21 @@ www.tmp      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.tmp   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.tmp   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
-<% for my $host (@$f3s_hosts) { -%>
+<% for my $host (@$f3s_hosts) {
+     my $is_ipv6_only = $host =~ /^ipv6\./;
+     my $is_ipv4_only = $host =~ /^ipv4\./;
+-%>
+<% unless ($is_ipv6_only) { -%>
 <%= $host %>.         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-<%= $host %>.         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 www.<%= $host %>.     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.<%= $host %>.     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.<%= $host %>. 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
+<% } -%>
+<% unless ($is_ipv4_only) { -%>
+<%= $host %>.         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+www.<%= $host %>.     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.<%= $host %>. 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 <% } -%>
-
-; ipv6test stuff
-ipv4.ipv6test.f3s 300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-ipv6.ipv6test.f3s 300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.ipv4.ipv6test.f3s 300 IN A <%= $ips->{urrent_standby{ipv4} %> ; Enable failover
-standby.ipv6.ipv6test.f3s 300 IN AAAA <%= $ips->{urrent_standby{ipv6} %> ; Enable failover
+<% } -%>
 
 ; So joern can directly preview the content before rsync happens from blowfish to fishfinger
 joern IN CNAME blowfish
