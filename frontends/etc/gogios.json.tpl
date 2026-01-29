@@ -73,7 +73,12 @@
     <% } -%>
     <% for my $host (@$acme_hosts) {
          # Skip server hostnames - they have dedicated checks above without www/standby variants
-         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'; -%>
+         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
+         # Skip ipv4/ipv6 subdomains - they're included as SANs in parent cert and checked there
+         next if $host =~ /^(ipv4|ipv6)\./;
+         my $is_ipv6_only = $host =~ /^ipv6\./;
+         my $is_ipv4_only = $host =~ /^ipv4\./;
+    -%>
     <%   for my $prefix ('', 'standby.', 'www.') { -%>
     <%     my $depends_on = $prefix eq 'standby.' ? 'standby.buetow.org' : 'master.buetow.org'; -%>
     "Check TLS Certificate <%= $prefix . $host %>": {
@@ -92,6 +97,20 @@
     },
     <%     } -%>
     <%   } -%>
+    <% } -%>
+    <%# Special handling for ipv4/ipv6 subdomains - only check the appropriate IP version -%>
+    <% for my $host (@$acme_hosts) {
+         next unless $host =~ /^(ipv4|ipv6)\./;
+         my $is_ipv6_only = $host =~ /^ipv6\./;
+         my $is_ipv4_only = $host =~ /^ipv4\./;
+         my $proto = $is_ipv6_only ? 6 : 4;
+    -%>
+    "Check HTTP IPv<%= $proto %> <%= $host %>": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "RandomSpread": 10,
+      "Args": ["<%= $host %>", "-<%= $proto %>"],
+      "DependsOn": ["Check Ping<%= $proto %> master.buetow.org"]
+    },
     <% } -%>
     <% for my $host (qw(fishfinger blowfish)) { -%>
     <%   for my $proto (4, 6) { -%>
