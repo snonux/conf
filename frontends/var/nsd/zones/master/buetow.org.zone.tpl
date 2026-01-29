@@ -63,6 +63,12 @@ standby.<%= $host %>. 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable fai
 standby.<%= $host %>. 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 <% } -%>
 
+; ipv6test stuff
+ipv4.ipv6test.f3s 300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
+ipv6.ipv6test.f3s 300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+standby.ipv4.ipv6test.f3s 300 IN A <%= $ips->{urrent_standby{ipv4} %> ; Enable failover
+standby.ipv6.ipv6test.f3s 300 IN AAAA <%= $ips->{urrent_standby{ipv6} %> ; Enable failover
+
 ; So joern can directly preview the content before rsync happens from blowfish to fishfinger
 joern IN CNAME blowfish
 www.joern IN CNAME blowfish

@@ -18,3 +18,23 @@ spec:
                 name: ipv6test-service
                 port:
                   number: 80
+    - host: ipv4.ipv6test.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ipv6test-service
+                port:
+                  number: 80
+    - host: ipv6.ipv6test.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ipv6test-service
+                port:
+                  number: 80
