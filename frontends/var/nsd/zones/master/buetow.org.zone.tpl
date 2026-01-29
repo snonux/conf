@@ -55,8 +55,8 @@ standby.tmp   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.tmp   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
 <% for my $host (@$f3s_hosts) {
-     my $is_ipv6_only = $host =~ /^ipv6\./;
-     my $is_ipv4_only = $host =~ /^ipv4\./;
+     my $is_ipv6_only = $host =~ /ipv6\./;
+     my $is_ipv4_only = $host =~ /ipv4\./;
 -%>
 <% unless ($is_ipv6_only) { -%>
 <%= $host %>.         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
