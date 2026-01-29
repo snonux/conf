@@ -1,0 +1,41 @@
+NAMESPACE := "services"
+APP_NAME := "ipv6test"
+
+# Show deployment status
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep ipv6test
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} ipv6test-service
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} ipv6test-ingress
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
+
+# View logs from ipv6test (default 100 lines)
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=ipv6test --tail={{lines}} -f
+
+# Port forward to ipv6test web UI
+port-forward port="8080":
+    @echo "Forwarding ipv6test to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/ipv6test-service {{port}}:80
+
+# Trigger ArgoCD sync
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+# Show ArgoCD application details
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+# Restart ipv6test
+restart:
+    @echo "Restarting ipv6test..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/ipv6test

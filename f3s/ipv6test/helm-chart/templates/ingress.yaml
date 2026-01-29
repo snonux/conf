@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ipv6test-ingress
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: ipv6test.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ipv6test-service
+                port:
+                  number: 80
