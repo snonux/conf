@@ -1,0 +1,5 @@
+apiVersion: v2
+name: traefik-config
+description: HelmChartConfig to customize k3s bundled Traefik ingress controller.
+version: 0.1.0
+appVersion: "1.0.0"
