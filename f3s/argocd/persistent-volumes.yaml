@@ -15,7 +15,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   hostPath:
     path: /data/nfs/k3svolumes/argocd/repo-server
-    type: DirectoryOrCreate
+    type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
