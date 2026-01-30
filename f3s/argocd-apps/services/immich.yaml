@@ -13,7 +13,7 @@ spec:
       targetRevision: master
       path: f3s/immich/helm-chart
     # Deploy Immich Helm chart with custom values
-    - repoURL: https://immich-app.github.io/immich/
+    - repoURL: https://immich-app.github.io/immich-charts/
       chart: immich
       targetRevision: 0.10.3
       helm:
