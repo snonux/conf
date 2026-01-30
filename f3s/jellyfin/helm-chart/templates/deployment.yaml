@@ -33,14 +33,14 @@ spec:
               mountPath: /media/libraries
             - name: jellyfin-data
               mountPath: /data
-          volumes:
-          - name: jellyfin-config
+      volumes:
+        - name: jellyfin-config
           persistentVolumeClaim:
             claimName: jellyfin-pvc
-          - name: jellyfin-libraries
+        - name: jellyfin-libraries
           persistentVolumeClaim:
             claimName: jellyfin-libraries-pvc
-          - name: jellyfin-data
+        - name: jellyfin-data
           persistentVolumeClaim:
             claimName: jellyfin-data-pvc
 ---
