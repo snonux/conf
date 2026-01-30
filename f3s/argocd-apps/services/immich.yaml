@@ -7,10 +7,82 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: http://git-server.cicd.svc.cluster.local/conf.git
-    targetRevision: master
-    path: f3s/immich/helm-chart
+  sources:
+    # Deploy custom resources first (PVs, PVCs, PostgreSQL)
+    - repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+      targetRevision: master
+      path: f3s/immich/helm-chart
+    # Deploy Immich Helm chart with custom values
+    - repoURL: https://immich-app.github.io/immich/
+      chart: immich
+      targetRevision: 0.10.3
+      helm:
+        releaseName: immich
+        values: |
+          valkey:
+            enabled: true
+            persistence:
+              data:
+                enabled: true
+                type: persistentVolumeClaim
+                size: 1Gi
+                storageClass: ""
+                existingClaim: "immich-valkey-pvc"
+          immich:
+            persistence:
+              library:
+                existingClaim: "immich-library-pvc"
+          server:
+            enabled: true
+            controllers:
+              main:
+                containers:
+                  main:
+                    volumeMounts:
+                      - name: yoga-videos
+                        mountPath: /external/yoga-videos
+                        readOnly: true
+                volumes:
+                  - name: yoga-videos
+                    persistentVolumeClaim:
+                      claimName: immich-yoga-videos-pvc
+                      readOnly: true
+            ingress:
+              main:
+                enabled: true
+                annotations:
+                  spec.ingressClassName: traefik
+                  traefik.ingress.kubernetes.io/router.entrypoints: web
+                  traefik.ingress.kubernetes.io/router.middlewares: services-immich-body-size@kubernetescrd
+                hosts:
+                  - host: immich.f3s.buetow.org
+                    paths:
+                      - path: "/"
+                        service:
+                          identifier: main
+                          port: 2283
+          machine-learning:
+            enabled: true
+            persistence:
+              cache:
+                enabled: true
+                type: persistentVolumeClaim
+                size: 10Gi
+                storageClass: ""
+                existingClaim: "immich-ml-cache-pvc"
+          controllers:
+            main:
+              containers:
+                main:
+                  env:
+                    DB_HOSTNAME: immich-postgres
+                    DB_DATABASE_NAME: immich
+                    DB_USERNAME: immich
+                    DB_PASSWORD:
+                      valueFrom:
+                        secretKeyRef:
+                          name: immich-db-secret
+                          key: password
   destination:
     server: https://kubernetes.default.svc
     namespace: services
