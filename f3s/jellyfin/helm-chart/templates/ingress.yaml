@@ -1,0 +1,15 @@
+# Jellyfin Traefik Ingress
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: jellyfin-ingress
+  namespace: services
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`jelly.f3s.buetow.org`)
+      kind: Rule
+      services:
+        - name: jellyfin-server
+          port: 8096

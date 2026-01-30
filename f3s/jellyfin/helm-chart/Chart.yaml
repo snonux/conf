@@ -1,0 +1,5 @@
+apiVersion: v2
+name: jellyfin-resources
+description: Custom resources for Jellyfin deployment (PVs, PVCs, Ingress)
+version: 0.1.0
+appVersion: "latest"
