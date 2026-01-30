@@ -30,7 +30,7 @@ spec:
            - name: jellyfin-config
              mountPath: /config
          volumes:
-       - name: jellyfin-config
+         - name: jellyfin-config
          persistentVolumeClaim:
            claimName: jellyfin-pvc
 ---
