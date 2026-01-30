@@ -18,14 +18,16 @@ immich:
     # Main data store for all photos/videos shared between components
     library:
       existingClaim: "immich-library-pvc"
-    # External library - Yoga videos from Syncthing
-    yoga-videos:
-      existingClaim: "immich-yoga-videos-pvc"
-      mountPath: /external/yoga-videos
 
 # Server component with ingress
 server:
   enabled: true
+  persistence:
+    yoga-videos:
+      enabled: true
+      type: persistentVolumeClaim
+      existingClaim: "immich-yoga-videos-pvc"
+      mountPath: /external/yoga-videos
   ingress:
     main:
       enabled: true
