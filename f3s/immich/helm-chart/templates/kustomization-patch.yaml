@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-server
+  namespace: services
+spec:
+  template:
+    spec:
+      containers:
+      - name: immich-server
+        volumeMounts:
+        - name: yoga-videos
+          mountPath: /external/yoga-videos
+          readOnly: true
+      volumes:
+      - name: yoga-videos
+        persistentVolumeClaim:
+          claimName: immich-yoga-videos-pvc
+          readOnly: true
