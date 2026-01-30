@@ -27,9 +27,9 @@ spec:
              cpu: 2000m
              memory: 2Gi
          volumeMounts:
-         - name: jellyfin-config
-           mountPath: /config
-       volumes:
+           - name: jellyfin-config
+             mountPath: /config
+         volumes:
        - name: jellyfin-config
          persistentVolumeClaim:
            claimName: jellyfin-pvc
