@@ -8,7 +8,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`jelly.f3s.buetow.org`)
+    - match: Host(`jellyfin.f3s.buetow.org`)
       kind: Rule
       services:
         - name: jellyfin-server

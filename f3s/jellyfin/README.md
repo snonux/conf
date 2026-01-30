@@ -38,7 +38,7 @@ Jellyfin is a single-component deployment consisting of:
 
 ## Access
 
-Once deployed, Jellyfin will be available at: **https://jelly.f3s.buetow.org**
+Once deployed, Jellyfin will be available at: **https://jellyfin.f3s.buetow.org**
 
 Default setup instructions:
 1. Navigate to the URL above

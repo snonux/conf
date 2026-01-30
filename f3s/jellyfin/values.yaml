@@ -28,7 +28,7 @@ ingress:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
   hosts:
-    - host: jelly.f3s.buetow.org
+    - host: jellyfin.f3s.buetow.org
       paths:
         - path: /
           pathType: Prefix
