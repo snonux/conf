@@ -7,13 +7,18 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: https://immich-app.github.io/immich-charts/
-    chart: immich
-    targetRevision: 0.10.3
-    helm:
-      releaseName: immich
-      values: |
+  sources:
+    # Deploy custom resources (PVs, PVCs, PostgreSQL, Middleware)
+    - repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+      targetRevision: master
+      path: f3s/immich/helm-chart
+    # Deploy Immich Helm chart with custom values
+    - repoURL: https://immich-app.github.io/immich-charts/
+      chart: immich
+      targetRevision: 0.10.3
+      helm:
+        releaseName: immich
+        values: |
           valkey:
             enabled: true
             persistence:
@@ -83,7 +88,7 @@ spec:
     namespace: services
   syncPolicy:
     automated:
-      prune: true
+      prune: false
       selfHeal: true
     syncOptions:
       - CreateNamespace=false
