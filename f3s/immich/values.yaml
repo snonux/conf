@@ -22,12 +22,19 @@ immich:
 # Server component with ingress
 server:
   enabled: true
-  persistence:
-    yoga-videos:
-      enabled: true
-      type: persistentVolumeClaim
-      existingClaim: "immich-yoga-videos-pvc"
-      mountPath: /external/yoga-videos
+  controllers:
+    main:
+      containers:
+        main:
+          volumeMounts:
+            - name: yoga-videos
+              mountPath: /external/yoga-videos
+              readOnly: true
+      volumes:
+        - name: yoga-videos
+          persistentVolumeClaim:
+            claimName: immich-yoga-videos-pvc
+            readOnly: true
   ingress:
     main:
       enabled: true
