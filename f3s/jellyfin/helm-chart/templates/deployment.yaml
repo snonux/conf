@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin-server
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyfin-server
+  template:
+    metadata:
+      labels:
+        app: jellyfin-server
+    spec:
+      containers:
+      - name: jellyfin
+        image: jellyfin/jellyfin:latest
+        ports:
+        - containerPort: 8096
+          name: http
+        volumeMounts:
+        - name: jellyfin-config
+          mountPath: /config
+      volumes:
+      - name: jellyfin-config
+        persistentVolumeClaim:
+          claimName: jellyfin-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: jellyfin-server
+  name: jellyfin-server
+  namespace: services
+spec:
+  ports:
+    - name: http
+      port: 8096
+      protocol: TCP
+      targetPort: 8096
+  selector:
+    app: jellyfin-server
