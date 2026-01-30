@@ -11,7 +11,7 @@ spec:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   hostPath:
-    path: /data/nfs/k3svolumes/jellyfin
+    path: /data/nfs/k3svolumes/jellyfin/config
     type: Directory
 ---
 apiVersion: v1
@@ -27,11 +27,11 @@ spec:
     requests:
       storage: 50Gi
 ---
-# Jellyfin PersistentVolume - Libraries storage
+# Jellyfin PersistentVolume - data storage
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: jellyfin-libraries-pv
+  name: jellyfin-data-pv
 spec:
   capacity:
     storage: 500Gi
@@ -40,13 +40,13 @@ spec:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   hostPath:
-    path: /data/nfs/k3svolumes/jellyfin/libraries
+    path: /data/nfs/k3svolumes/jellyfin/data
     type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: jellyfin-libraries-pvc
+  name: jellyfin-data-pvc
   namespace: services
 spec:
   storageClassName: ""
