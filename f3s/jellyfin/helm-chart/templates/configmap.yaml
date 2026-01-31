@@ -11,11 +11,11 @@ data:
       <CertificatePath />
       <CertificatePassword />
       <BaseUrl />
-      <PublicHttpsPort>8920</PublicHttpsPort>
+      <PublicHttpsPort>443</PublicHttpsPort>
       <HttpServerPortNumber>8096</HttpServerPortNumber>
       <HttpsPortNumber>8920</HttpsPortNumber>
       <EnableHttps>false</EnableHttps>
-      <PublicPort>8096</PublicPort>
+      <PublicPort>443</PublicPort>
       <UPnPCreateHttpPortMap>false</UPnPCreateHttpPortMap>
       <UDPPortRange />
       <EnableIPV6>false</EnableIPV6>
