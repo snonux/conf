@@ -4,6 +4,11 @@ metadata:
   name: jellyfin-network-config
   namespace: services
 data:
+  database.xml: |
+    <?xml version="1.0" encoding="utf-8"?>
+    <SqliteOptions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+      <LockMode>Optimistic</LockMode>
+    </SqliteOptions>
   network.xml: |
     <?xml version="1.0" encoding="utf-8"?>
     <NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
