@@ -33,9 +33,6 @@ spec:
               mountPath: /media/libraries
             - name: jellyfin-data
               mountPath: /data
-            - name: jellyfin-database-config
-              mountPath: /config/config/database.xml
-              subPath: database.xml
       volumes:
         - name: jellyfin-config
           persistentVolumeClaim:
@@ -46,12 +43,6 @@ spec:
         - name: jellyfin-data
           persistentVolumeClaim:
             claimName: jellyfin-data-pvc
-        - name: jellyfin-database-config
-          configMap:
-            name: jellyfin-network-config
-            items:
-              - key: database.xml
-                path: database.xml
 ---
 apiVersion: v1
 kind: Service
