@@ -104,6 +104,31 @@ relay "https6" {
     forward to <f3s_jellyfin> port 30096 check tcp
 }
 
+# Jellyfin alternative ports for Android app discovery
+relay "jellyfin-8096-ipv4" {
+    listen on <%= $vio0_ip %> port 8096 tls
+    protocol "https"
+    forward to <f3s_jellyfin> port 30096 check tcp
+}
+
+relay "jellyfin-8096-ipv6" {
+    listen on <%= $ipv6address->($hostname) %> port 8096 tls
+    protocol "https"
+    forward to <f3s_jellyfin> port 30096 check tcp
+}
+
+relay "jellyfin-8920-ipv4" {
+    listen on <%= $vio0_ip %> port 8920 tls
+    protocol "https"
+    forward to <f3s_jellyfin> port 30096 check tcp
+}
+
+relay "jellyfin-8920-ipv6" {
+    listen on <%= $ipv6address->($hostname) %> port 8920 tls
+    protocol "https"
+    forward to <f3s_jellyfin> port 30096 check tcp
+}
+
 tcp protocol "gemini" {
     tls keypair foo.zone
     tls keypair stats.foo.zone
