@@ -44,11 +44,6 @@ http protocol "https" {
 
      # Enable WebSocket support
      http websockets
-     
-     # Connection pooling and keepalive for better performance
-     timeout connect 5s
-     timeout http_request 10s
-     timeout http_keepalive 60s
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
