@@ -68,18 +68,15 @@ http protocol "https" {
     # Jellyfin uses NodePorts (bypasses Traefik)
     <% for my $host (@$f3s_hosts) {
           for my $prefix (@prefixes) {
-              if ($host eq 'registry.f3s.buetow.org') {
-    -%>
+              if ($host eq 'registry.f3s.buetow.org') { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
-    <%         } elsif ($host eq 'jellyfin.f3s.buetow.org') {
-    -%>
+    <%         } elsif ($host eq 'jellyfin.f3s.buetow.org') { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_jellyfin>
-    <%         } else {
-    -%>
+    <%         } else { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
-    <%         }
-          }
-    } -%>
+    <%         } -%>
+    <%   } -%>
+    <% } -%>
 
     # Add cache-control headers to f3s fallback pages (served from localhost when cluster is down)
     match response header set "Cache-Control" value "no-cache, no-store, must-revalidate"
