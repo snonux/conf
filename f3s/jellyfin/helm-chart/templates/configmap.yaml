@@ -11,11 +11,11 @@ data:
       <CertificatePath />
       <CertificatePassword />
       <BaseUrl />
-      <PublicHttpsPort>0</PublicHttpsPort>
+      <PublicHttpsPort>443</PublicHttpsPort>
       <HttpServerPortNumber>8096</HttpServerPortNumber>
       <HttpsPortNumber>8920</HttpsPortNumber>
       <EnableHttps>false</EnableHttps>
-      <PublicPort>0</PublicPort>
+      <PublicPort>443</PublicPort>
       <UPnPCreateHttpPortMap>false</UPnPCreateHttpPortMap>
       <UDPPortRange />
       <EnableIPV6>false</EnableIPV6>
@@ -42,5 +42,5 @@ data:
         <ProxyAddress>10.0.0.0/8</ProxyAddress>
         <ProxyAddress>192.168.0.0/16</ProxyAddress>
       </KnownProxies>
-      <EnablePublishedServerUriByRequest>true</EnablePublishedServerUriByRequest>
+      <EnablePublishedServerUriByRequest>false</EnablePublishedServerUriByRequest>
     </NetworkConfiguration>
