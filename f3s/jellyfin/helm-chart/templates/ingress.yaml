@@ -1,26 +1,8 @@
-# Jellyfin Traefik IngressRoute - HTTPS
+# Jellyfin Traefik Ingress
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: jellyfin-ingress
-  namespace: services
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`jellyfin.f3s.buetow.org`)
-      kind: Rule
-      services:
-        - name: jellyfin-server
-          port: 8096
-  tls:
-    certResolver: letsencrypt
----
-# Redirect HTTP to HTTPS
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: jellyfin-ingress-redirect
   namespace: services
 spec:
   entryPoints:
@@ -29,17 +11,18 @@ spec:
     - match: Host(`jellyfin.f3s.buetow.org`)
       kind: Rule
       middlewares:
-        - name: redirect-https
+        - name: jellyfin-headers
       services:
         - name: jellyfin-server
           port: 8096
 ---
+# Middleware to add X-Forwarded-Proto header so Jellyfin knows it's HTTPS
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: redirect-https
+  name: jellyfin-headers
   namespace: services
 spec:
-  redirectScheme:
-    scheme: https
-    permanent: true
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: https
