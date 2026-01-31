@@ -65,14 +65,17 @@ http protocol "https" {
 
     # For f3s hosts: use relay-level failover (f3s -> localhost backup)
     # Registry is special: needs explicit routing to port 30001
-    <% for my $host (@$f3s_hosts) { for my $prefix (@prefixes) {
-          if ($host eq 'registry.f3s.buetow.org') { -%>
+    <% for my $host (@$f3s_hosts) {
+          for my $prefix (@prefixes) {
+              if ($host eq 'registry.f3s.buetow.org') {
+    -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
-    <%   }
-          elsif ($host eq 'jellyfin.f3s.buetow.org') { -%>
+    <%         } elsif ($host eq 'jellyfin.f3s.buetow.org') {
+    -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_jellyfin>
-    <%   }
-       } } -%>
+    <%         }
+          }
+    } -%>
 
     # Add cache-control headers to f3s fallback pages (served from localhost when cluster is down)
     match response header set "Cache-Control" value "no-cache, no-store, must-revalidate"
@@ -81,7 +84,7 @@ http protocol "https" {
     }
 
 relay "https4" {
-    listen on <%= $vio0_ip %> port 443 tls
+    listen on <%= $ipv4address->($hostname) %> port 443 tls
     protocol "https"
     persist
     timeout connect 10s

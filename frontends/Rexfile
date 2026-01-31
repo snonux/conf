@@ -46,6 +46,17 @@ $ips{current_master}{fqdn} = 'fishfinger.' . $ips{domain};
 $ips{current_standby} = $ips{blowfish};
 $ips{current_standby}{fqdn} = 'blowfish.' . $ips{domain};
 
+# Gather IPv4 addresses based on hostname.
+our $ipv4address = sub {
+    my $hostname = shift;
+    my $ip       = $ips{$hostname}{ipv4};
+    unless ( defined $ip ) {
+        Rex::Logger::info( "Unable to determine IPv4 address for $hostname", 'error' );
+        return '127.0.0.1';
+    }
+    return $ip;
+};
+
 # Gather IPv6 addresses based on hostname.
 our $ipv6address = sub {
     my $hostname = shift;
@@ -313,6 +324,7 @@ task 'relayd',
     file '/etc/relayd.conf',
       content => template(
         './etc/relayd.conf.tpl',
+        ipv4address => $ipv4address,
         ipv6address => $ipv6address,
         f3s_hosts   => \@f3s_hosts,
         acme_hosts  => \@acme_hosts
