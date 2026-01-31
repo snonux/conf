@@ -7,7 +7,7 @@ WORKDIR /build/MinVid
 RUN npm install && npm run build
 
 # Build API
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS api-builder
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS api-builder
 WORKDIR /build
 RUN apk add --no-cache git
 RUN git clone https://github.com/Ludvigaman/MinVid.git .
@@ -15,7 +15,7 @@ WORKDIR /build/MinVid-API
 RUN dotnet publish -c Release -o /app/publish
 
 # Final image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
 
 ENV PUID=1000
 ENV PGID=1000
@@ -31,6 +31,8 @@ COPY --from=api-builder /app/publish .
 COPY --from=frontend-builder /build/MinVid/dist ./wwwroot
 
 EXPOSE 80
+
+ENV ASPNETCORE_URLS=http://+:80
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

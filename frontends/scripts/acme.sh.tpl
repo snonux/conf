@@ -20,7 +20,8 @@ handle_cert () {
     host=$1
     host_ip=`host $host | awk '/has address/ { print $(NF) }'`
 
-    grep -q "^server \"$host\"" /etc/httpd.conf
+    # Check for server block, accounting for f3s hosts which have -port80/-port8080 suffixes
+    grep -q "^server \"$host" /etc/httpd.conf
     if [ $? -ne 0 ]; then
         echo "Host $host not configured in httpd, skipping..."
         return

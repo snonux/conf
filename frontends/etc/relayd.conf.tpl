@@ -65,6 +65,7 @@ http protocol "https" {
 
     # For f3s hosts: use relay-level failover (f3s -> localhost backup)
     # Registry is special: needs explicit routing to port 30001
+    # Jellyfin uses NodePorts (bypasses Traefik)
     <% for my $host (@$f3s_hosts) {
           for my $prefix (@prefixes) {
               if ($host eq 'registry.f3s.buetow.org') {
@@ -73,6 +74,9 @@ http protocol "https" {
     <%         } elsif ($host eq 'jellyfin.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_jellyfin>
+    <%         } else {
+    -%>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s>
     <%         }
           }
     } -%>
