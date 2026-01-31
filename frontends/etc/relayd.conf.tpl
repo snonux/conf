@@ -34,16 +34,22 @@ http protocol "https" {
          next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
          # Skip ipv4/ipv6 subdomains - they use the parent cert as SANs
          next if $host =~ /^(ipv4|ipv6)\./;
-    -%>
-    tls keypair <%= $host %>
-    <% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
-    tls keypair standby.<%= $host %>
-    <% } -%>
-    <% } -%>
-    tls keypair <%= $hostname.'.'.$domain -%>
+     -%>
+     tls keypair <%= $host %>
+     <% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
+     tls keypair standby.<%= $host %>
+     <% } -%>
+     <% } -%>
+     tls keypair <%= $hostname.'.'.$domain -%>
 
-    # Enable WebSocket support
-    http websockets
+     # Enable WebSocket support
+     http websockets
+     
+     # Connection pooling and keepalive for better performance
+     persist
+     timeout connect 5s
+     timeout http_request 10s
+     timeout http_keepalive 60s
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
