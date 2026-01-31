@@ -86,9 +86,7 @@ http protocol "https" {
 relay "https4" {
     listen on <%= $ipv4address->($hostname) %> port 443 tls
     protocol "https"
-    persist
-    timeout connect 10s
-    timeout session 300s
+    session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
     forward to <localhost> port 8080
@@ -101,9 +99,7 @@ relay "https4" {
 relay "https6" {
     listen on <%= $ipv6address->($hostname) %> port 443 tls
     protocol "https"
-    persist
-    timeout connect 10s
-    timeout session 300s
+    session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
     forward to <localhost> port 8080

@@ -52,6 +52,13 @@ server:
 # Repo Server configuration (clones repos, generates manifests)
 repoServer:
   replicas: 1
+  # Increase liveness probe timeout to prevent restarts during slow health checks
+  livenessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 5
+  readinessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 5
   # Enable persistence for repo cache - mount PVC at /home/argocd/repo-cache
   volumes:
     - name: repo-server-data
