@@ -42,5 +42,5 @@ data:
         <ProxyAddress>10.0.0.0/8</ProxyAddress>
         <ProxyAddress>192.168.0.0/16</ProxyAddress>
       </KnownProxies>
-      <EnablePublishedServerUriByRequest>false</EnablePublishedServerUriByRequest>
+      <EnablePublishedServerUriByRequest>true</EnablePublishedServerUriByRequest>
     </NetworkConfiguration>
