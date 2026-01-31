@@ -15,6 +15,13 @@ table <f3s_registry> {
   192.168.2.122
 }
 
+# Jellyfin NodePorts (bypasses Traefik to avoid double proxy issues)
+table <f3s_jellyfin> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+
 # Local OpenBSD httpd
 table <localhost> {
   127.0.0.1
@@ -62,6 +69,9 @@ http protocol "https" {
           if ($host eq 'registry.f3s.buetow.org') { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
     <%   }
+          elsif ($host eq 'jellyfin.f3s.buetow.org') { -%>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_jellyfin>
+    <%   }
        } } -%>
 
     # Add cache-control headers to f3s fallback pages (served from localhost when cluster is down)
@@ -78,6 +88,8 @@ relay "https4" {
     forward to <localhost> port 8080
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
+    # Jellyfin uses NodePorts (bypasses Traefik)
+    forward to <f3s_jellyfin> port 30096 check tcp
 }
 
 relay "https6" {
@@ -88,6 +100,8 @@ relay "https6" {
     forward to <localhost> port 8080
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
+    # Jellyfin uses NodePorts (bypasses Traefik)
+    forward to <f3s_jellyfin> port 30096 check tcp
 }
 
 tcp protocol "gemini" {
