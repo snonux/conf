@@ -1,0 +1,5 @@
+apiVersion: v2
+name: minvid
+description: A Helm chart for deploying MinVid.
+version: 0.1.0
+appVersion: "latest"
