@@ -16,7 +16,7 @@ spec:
         - name: jellyfin-server
           port: 8096
 ---
-# Middleware to add X-Forwarded-Proto header so Jellyfin knows it's HTTPS
+# Middleware to add headers for reverse proxy (relayd TLS offloading)
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -26,3 +26,4 @@ spec:
   headers:
     customRequestHeaders:
       X-Forwarded-Proto: https
+      X-Forwarded-Host: jellyfin.f3s.buetow.org
