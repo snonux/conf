@@ -47,6 +47,7 @@ http protocol "https" {
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
+    match request header set "X-Forwarded-Host" value "$HTTP_HOST"
 
     # WebSocket headers - passed through for WebSocket connections
     pass header "Connection"
@@ -105,6 +106,7 @@ relay "https6" {
 }
 
 # Jellyfin alternative ports for Android app discovery
+# Use the same "https" protocol to get X-Forwarded headers
 relay "jellyfin-8096-ipv4" {
     listen on <%= $vio0_ip %> port 8096 tls
     protocol "https"
