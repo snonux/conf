@@ -15,12 +15,13 @@ spec:
     spec:
       containers:
       - name: minvid
-        image: ghcr.io/mariodian/minvid
+        image: ghcr.io/ludvigaman/minvid:latest
+        imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 3000
+        - containerPort: 80
         volumeMounts:
         - name: minvid-data
-          mountPath: /data
+          mountPath: /app/data
       volumes:
       - name: minvid-data
         persistentVolumeClaim:
@@ -36,8 +37,8 @@ metadata:
 spec:
   ports:
     - name: web
-      port: 3000
+      port: 80
       protocol: TCP
-      targetPort: 3000
+      targetPort: 8000
   selector:
     app: minvid

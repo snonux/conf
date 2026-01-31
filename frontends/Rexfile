@@ -85,7 +85,7 @@ our $secrets = sub { read_file './secrets/' . shift };
 
 # k3s cluster running on FreeBSD in my LAN
 our @f3s_hosts =
-  qw/f3s.buetow.org git.f3s.buetow.org cgit.f3s.buetow.org jellyfin.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org vault.f3s.buetow.org syncthing.f3s.buetow.org uprecords.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
+  qw/f3s.buetow.org git.f3s.buetow.org cgit.f3s.buetow.org jellyfin.f3s.buetow.org minvid.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org vault.f3s.buetow.org syncthing.f3s.buetow.org uprecords.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
 
 # optionally, only enable manually for temp time, as no password protection yet
 # push @f3s_hosts, 'registry.f3s.buetow.org';
@@ -93,7 +93,7 @@ our @f3s_hosts =
 our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
 our @dns_zones_remove = qw/paul.cyou/;
 our @acme_hosts =
-  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org ecat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org f3s.buetow.org jellyfin.f3s.buetow.org git.f3s.buetow.org cgit.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org vault.f3s.buetow.org syncthing.f3s.buetow.org uprecords.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
+  qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org ecat.buetow.org fotos.buetow.org znc.buetow.org dtail.dev foo.zone stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org f3s.buetow.org jellyfin.f3s.buetow.org minvid.f3s.buetow.org git.f3s.buetow.org cgit.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org vault.f3s.buetow.org syncthing.f3s.buetow.org uprecords.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
 
 # WireGuard IP addresses for ping checks
 our %wg0_ips = (

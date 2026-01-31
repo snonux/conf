@@ -20,9 +20,9 @@ status:
 logs lines="100":
     kubectl logs -n {{NAMESPACE}} -l app=minvid --tail={{lines}} -f
 
-port-forward port="3000":
+port-forward port="8000":
     @echo "Forwarding minvid to localhost:{{port}}"
-    kubectl port-forward -n {{NAMESPACE}} svc/minvid-service {{port}}:3000
+    kubectl port-forward -n {{NAMESPACE}} svc/minvid-service {{port}}:80
 
 sync:
     @echo "Triggering ArgoCD sync..."
