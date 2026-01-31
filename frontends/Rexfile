@@ -132,10 +132,10 @@ task 'base',
     run 'touch /etc/rc.local';
 
     file '/etc/myname',
-      content => template( './etc/myname.tpl', fqdns => $fqdns ),
-      owner   => 'root',
-      group   => 'wheel',
-      mode    => '644';
+     content => template( './etc/myname.tpl', fqdns => $fqdns, ipv4address => $ipv4address ),
+     owner   => 'root',
+     group   => 'wheel',
+     mode    => '644';
   };
 
 desc 'Setup uptimed';

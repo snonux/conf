@@ -1,1 +1,1 @@
-<%= $fqdns->($vio0_ip) %>
+<%= $fqdns->($ipv4address->($hostname)) %>

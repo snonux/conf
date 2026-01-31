@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: minvid
-        image: registry.f3s.buetow.org/minvid:latest
+        image: r0.lan.buetow.org:30001/minvid:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80

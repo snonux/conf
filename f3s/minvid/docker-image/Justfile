@@ -1,0 +1,7 @@
+all:
+	docker build -t minvid:latest .
+
+f3s:
+	docker build -t minvid:latest .
+	docker tag minvid:latest r0.lan.buetow.org:30001/minvid:latest
+	docker push r0.lan.buetow.org:30001/minvid:latest

@@ -116,7 +116,7 @@ relay "https6" {
 # Jellyfin alternative ports for Android app discovery
 # Use the same "https" protocol to get X-Forwarded headers
 # relay "jellyfin-8096-ipv4" {
-#     listen on <%= $vio0_ip %> port 8096 tls
+#     listen on <%= $ipv4address->($hostname) %> port 8096 tls
 #     protocol "https"
 #     forward to <f3s_jellyfin> port 30096 check tcp
 # }
@@ -128,7 +128,7 @@ relay "https6" {
 # }
 
 # relay "jellyfin-8920-ipv4" {
-#     listen on <%= $vio0_ip %> port 8920 tls
+#     listen on <%= $ipv4address->($hostname) %> port 8920 tls
 #     protocol "https"
 #     forward to <f3s_jellyfin> port 30096 check tcp
 # }
@@ -151,7 +151,7 @@ tcp protocol "gemini" {
 }
 
 relay "gemini4" {
-    listen on <%= $vio0_ip %> port 1965 tls
+    listen on <%= $ipv4address->($hostname) %> port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
 }
