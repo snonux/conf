@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
       - name: minvid
-        image: ghcr.io/ludvigaman/minvid:latest
-        imagePullPolicy: IfNotPresent
+        image: registry.f3s.buetow.org/minvid:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
         volumeMounts:
