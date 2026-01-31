@@ -29,7 +29,11 @@ authority buypass-test {
      next if $host =~ /^(ipv4|ipv6)\./;
 -%>
 <%   # Check if this host has ipv4/ipv6 subdomains that need to be included as SANs
-     my @alt_names = ("www.$host");
+     my @alt_names;
+     # Don't add www prefix for f3s hosts - they don't have DNS records for www variants
+     unless (grep { $_ eq $host } @$f3s_hosts) {
+         push @alt_names, "www.$host";
+     }
      for my $sub_host (@$acme_hosts) {
          if ($sub_host =~ /^(ipv4|ipv6)\.\Q$host\E$/) {
              push @alt_names, $sub_host;
