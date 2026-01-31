@@ -47,7 +47,6 @@ http protocol "https" {
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
-    match request header set "X-Forwarded-Host" value "$HTTP_HOST"
 
     # WebSocket headers - passed through for WebSocket connections
     pass header "Connection"
