@@ -85,8 +85,7 @@ relay "https4" {
     protocol "https"
     persist
     timeout connect 10s
-    timeout http_request 30s
-    timeout http_keepalive 120s
+    timeout session 300s
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
     forward to <localhost> port 8080
@@ -101,8 +100,7 @@ relay "https6" {
     protocol "https"
     persist
     timeout connect 10s
-    timeout http_request 30s
-    timeout http_keepalive 120s
+    timeout session 300s
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
     forward to <localhost> port 8080
