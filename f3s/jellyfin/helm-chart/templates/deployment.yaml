@@ -34,7 +34,7 @@ spec:
             - name: jellyfin-data
               mountPath: /data
             - name: jellyfin-database-config
-              mountPath: /config/database.xml
+              mountPath: /config/config/database.xml
               subPath: database.xml
       volumes:
         - name: jellyfin-config
