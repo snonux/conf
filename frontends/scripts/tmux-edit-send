@@ -132,7 +132,6 @@ send_content() {
     if [ "$first_line" -eq 1 ] && [ -n "$prompt_text" ]; then
       if [[ "$line" == "$prompt_text"* ]]; then
         line="${line#"$prompt_text"}"
-        line="${line# }"
       fi
     fi
     first_line=0
