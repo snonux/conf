@@ -1,3 +1,1 @@
-require for <'*/Rexfile'>; 
-
-# vim: syntax=perl
+require for <'*/Rexfile'>;
