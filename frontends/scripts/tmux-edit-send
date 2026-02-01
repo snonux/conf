@@ -50,6 +50,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+prompt_text="$(tmux capture-pane -p -t "$target" -S -2000 2>/dev/null | \
+  awk '/^ *│ *→/ && index($0,"INSERT")==0 && index($0,"Add a follow-up")==0 {line=$0} END { if (line!="") { sub(/^.*→ ?/, "", line); sub(/[[:space:]│]+$/, "", line); print line } }')"
+if [ -n "$prompt_text" ]; then
+  printf '%s\n' "$prompt_text" > "$tmpfile"
+fi
+
 "$editor" "$tmpfile"
 log "editor exited with status $?"
 
