@@ -51,7 +51,42 @@ cleanup() {
 trap cleanup EXIT
 
 prompt_text="$(tmux capture-pane -p -t "$target" -S -2000 2>/dev/null | \
-  awk '/^ *│ *→/ && index($0,"INSERT")==0 && index($0,"Add a follow-up")==0 {line=$0} END { if (line!="") { sub(/^.*→ ?/, "", line); sub(/[[:space:]│]+$/, "", line); print line } }')"
+  awk '
+    function trim_box(line) {
+      sub(/^ *│ ?/, "", line)
+      sub(/ *│ *$/, "", line)
+      sub(/[[:space:]]+$/, "", line)
+      return line
+    }
+    /^ *│ *→/ && index($0,"INSERT")==0 && index($0,"Add a follow-up")==0 {
+      if (text != "") last = text
+      text = ""
+      capture = 1
+      line = $0
+      sub(/^.*→ ?/, "", line)
+      line = trim_box(line)
+      if (line != "") text = line
+      next
+    }
+    capture {
+      if ($0 ~ /^ *└/) {
+        capture = 0
+        if (text != "") last = text
+        next
+      }
+      if ($0 ~ /^ *│/ && index($0,"INSERT")==0 && index($0,"Add a follow-up")==0) {
+        line = trim_box($0)
+        if (line != "") {
+          if (text != "") text = text " " line
+          else text = line
+        }
+      }
+    }
+    END {
+      if (text != "") last = text
+      if (last != "") print last
+    }
+  ')"
 if [ -n "$prompt_text" ]; then
   printf '%s\n' "$prompt_text" > "$tmpfile"
 fi
