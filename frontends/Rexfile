@@ -139,6 +139,12 @@ task 'base',
       owner   => 'root',
       group   => 'wheel',
       mode    => '644';
+
+    file '/usr/local/bin/tmux-edit-send',
+      source => './scripts/tmux-edit-send',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '755';
   };
 
 desc 'Setup uptimed';

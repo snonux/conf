@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -u -o pipefail
+
+log_file="${TMPDIR:-/tmp}/tmux-edit-send.log"
+log() {
+  printf '%s\n' "$*" >> "$log_file"
+}
+
+target_file="${1:-}"
+target=""
+if [ -n "$target_file" ] && [ -f "$target_file" ]; then
+  target="$(sed -n '1p' "$target_file" | tr -d '[:space:]')"
+  log "file target=${target:-<empty>}"
+  rm -f "$target_file"
+fi
+
+if [ -z "$target" ]; then
+  target="${TMUX_EDIT_TARGET:-}"
+fi
+log "env target=${target:-<empty>}"
+if [ -z "$target" ]; then
+  env_line="$(tmux show-environment -g TMUX_EDIT_TARGET 2>/dev/null || true)"
+  case "$env_line" in
+    TMUX_EDIT_TARGET=*) target="${env_line#TMUX_EDIT_TARGET=}" ;;
+  esac
+fi
+log "tmux env target=${target:-<empty>}"
+
+current_pane="$(tmux display-message -p "#{pane_id}" 2>/dev/null || true)"
+log "current pane=${current_pane:-<empty>}"
+if [ -n "$target" ] && [[ "$target" == *"#{"* ]]; then
+  log "format target detected, clearing"
+  target=""
+fi
+if [ -z "$target" ]; then
+  target="$(tmux display-message -p "#{last_pane}" 2>/dev/null || true)"
+elif [ "$target" = "$current_pane" ]; then
+  last_pane="$(tmux display-message -p "#{last_pane}" 2>/dev/null || true)"
+  if [ -n "$last_pane" ]; then
+    target="$last_pane"
+  fi
+fi
+log "fallback target=${target:-<empty>}"
+
+editor="${EDITOR:-vi}"
+tmpfile="$(mktemp "./.tmux-edit-send.XXXXXX.md")"
+
+cleanup() {
+  rm -f "$tmpfile"
+}
+trap cleanup EXIT
+
+"$editor" "$tmpfile"
+log "editor exited with status $?"
+
+if [ ! -s "$tmpfile" ]; then
+  log "empty file, nothing sent"
+  exit 0
+fi
+
+# Validate target after editor so popup stays open.
+if [ -z "$target" ]; then
+  log "error: no target pane determined"
+  echo "Could not determine target pane." >&2
+  exit 1
+fi
+
+target_found=0
+for pane in $(tmux list-panes -a -F "#{pane_id}" 2>/dev/null || true); do
+  if [ "$pane" = "$target" ]; then
+    target_found=1
+    break
+  fi
+done
+
+if [ "$target_found" -ne 1 ]; then
+  log "error: target pane not found: $target"
+  echo "Target pane not found: $target" >&2
+  exit 1
+fi
+
+# Send line by line to preserve newlines reliably.
+while IFS= read -r line || [ -n "$line" ]; do
+  tmux send-keys -t "$target" -l "$line"
+  tmux send-keys -t "$target" Enter
+done < "$tmpfile"
+log "sent content to $target"
