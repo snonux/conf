@@ -86,7 +86,15 @@ if [ "$target_found" -ne 1 ]; then
 fi
 
 # Send line by line to preserve newlines reliably.
+first_line=1
 while IFS= read -r line || [ -n "$line" ]; do
+  if [ "$first_line" -eq 1 ] && [ -n "${prompt_text:-}" ]; then
+    if [[ "$line" == "$prompt_text"* ]]; then
+      line="${line#"$prompt_text"}"
+      line="${line# }"
+    fi
+  fi
+  first_line=0
   tmux send-keys -t "$target" -l "$line"
   tmux send-keys -t "$target" Enter
 done < "$tmpfile"
