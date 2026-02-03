@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: ipv6test
-        image: registry.lan.buetow.org:30001/ipv6test:1.6.1
+        image: registry.lan.buetow.org:30001/ipv6test:1.6.2
         ports:
         - containerPort: 8080
         securityContext:
