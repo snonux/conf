@@ -1,0 +1,44 @@
+NAMESPACE := "services"
+APP_NAME := "navidrome"
+
+# Show deployment status
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep navidrome
+    @echo ""
+    @echo "=== Service ==="
+    @kubectl get svc -n {{NAMESPACE}} navidrome-service
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} navidrome-ingress
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep navidrome
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
+
+# View logs
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=navidrome --tail={{lines}} -f
+
+# Port forward
+port-forward port="4533":
+    @echo "Forwarding navidrome to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/navidrome-service {{port}}:4533
+
+# Trigger ArgoCD sync
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+# Show ArgoCD application details
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+# Restart
+restart:
+    @echo "Restarting navidrome..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/navidrome
