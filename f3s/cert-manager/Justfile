@@ -1,0 +1,77 @@
+# Justfile for cert-manager
+
+# Install cert-manager
+install:
+    kubectl apply -f cert-manager.yaml
+    @echo "Waiting for cert-manager to be ready..."
+    kubectl wait --for=condition=Available --timeout=300s deployment/cert-manager -n cert-manager
+    kubectl wait --for=condition=Available --timeout=300s deployment/cert-manager-webhook -n cert-manager
+    kubectl wait --for=condition=Available --timeout=300s deployment/cert-manager-cainjector -n cert-manager
+    kubectl apply -f self-signed-issuer.yaml
+    kubectl apply -f ca-certificate.yaml
+    @echo "Waiting for CA certificate to be ready..."
+    sleep 10
+    kubectl wait --for=condition=Ready --timeout=120s certificate/selfsigned-ca -n cert-manager
+    kubectl apply -f wildcard-certificate.yaml
+    @echo "Waiting for wildcard certificate to be ready..."
+    kubectl wait --for=condition=Ready --timeout=120s certificate/f3s-lan-wildcard -n cert-manager
+    @echo ""
+    @echo "cert-manager installation complete!"
+    @echo "Run 'just export-certs' to export certificates for relayd"
+
+# Upgrade cert-manager
+upgrade:
+    kubectl apply -f cert-manager.yaml
+    kubectl apply -f self-signed-issuer.yaml
+    kubectl apply -f ca-certificate.yaml
+    kubectl apply -f wildcard-certificate.yaml
+
+# Uninstall cert-manager
+uninstall:
+    kubectl delete -f wildcard-certificate.yaml --ignore-not-found
+    kubectl delete -f ca-certificate.yaml --ignore-not-found
+    kubectl delete -f self-signed-issuer.yaml --ignore-not-found
+    kubectl delete -f cert-manager.yaml --ignore-not-found
+
+# Check certificate status
+status:
+    @echo "=== ClusterIssuers ==="
+    kubectl get clusterissuer
+    @echo ""
+    @echo "=== Certificates ==="
+    kubectl get certificate -n cert-manager
+    @echo ""
+    @echo "=== Certificate Details ==="
+    kubectl describe certificate -n cert-manager
+
+# Export certificates for relayd
+export-certs:
+    #!/bin/bash
+    set -e
+    echo "Exporting certificates..."
+    kubectl get secret f3s-lan-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/f3s-lan-cert.pem
+    kubectl get secret f3s-lan-tls -n cert-manager -o jsonpath='{.data.tls\.key}' | base64 -d > /tmp/f3s-lan-key.pem
+    echo "Certificates exported to /tmp/f3s-lan-cert.pem and /tmp/f3s-lan-key.pem"
+    echo ""
+    echo "Copy to FreeBSD hosts with:"
+    echo "  scp /tmp/f3s-lan-*.pem paul@f0:/tmp/"
+    echo "  scp /tmp/f3s-lan-*.pem paul@f1:/tmp/"
+
+# Export CA certificate for client trust
+export-ca:
+    #!/bin/bash
+    set -e
+    echo "Exporting CA certificate..."
+    kubectl get secret selfsigned-ca-secret -n cert-manager -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/f3s-lan-ca.crt
+    echo "CA certificate exported to /tmp/f3s-lan-ca.crt"
+    echo ""
+    echo "Install on clients to trust self-signed certificates."
+    echo "See README.md for platform-specific instructions."
+
+# Renew wildcard certificate (force renewal)
+renew:
+    kubectl delete certificate f3s-lan-wildcard -n cert-manager
+    kubectl apply -f wildcard-certificate.yaml
+    @echo "Waiting for certificate to be ready..."
+    kubectl wait --for=condition=Ready --timeout=120s certificate/f3s-lan-wildcard -n cert-manager
+    @echo "Certificate renewed. Run 'just export-certs' to update relayd."

@@ -18,3 +18,25 @@ spec:
                 name: navidrome-service
                 port:
                   number: 4533
+---
+# LAN Ingress for navidrome.f3s.lan.buetow.org
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: navidrome-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: navidrome.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: navidrome-service
+                port:
+                  number: 4533

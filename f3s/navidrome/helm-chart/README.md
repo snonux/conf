@@ -7,8 +7,46 @@ This directory contains the Kubernetes configuration for deploying Navidrome, a 
 - **Application**: Navidrome
 - **Image**: `deluan/navidrome:latest`
 - **Namespace**: `services`
-- **Ingress**: `navidrome.f3s.buetow.org`
+- **External Ingress**: `navidrome.f3s.buetow.org` (via OpenBSD relayd)
+- **LAN Ingress**: `navidrome.f3s.lan.buetow.org` (via FreeBSD CARP + relayd)
 - **Port**: 4533
+
+## Access Methods
+
+### External Access (Internet)
+
+Access from anywhere via `https://navidrome.f3s.buetow.org`:
+- Routes through OpenBSD relayd (WireGuard tunnel)
+- TLS certificates managed by Let's Encrypt
+- Available from internet-connected devices
+
+### LAN Access (Local Network)
+
+Access from local network via `https://navidrome.f3s.lan.buetow.org`:
+- Routes through FreeBSD CARP VIP (192.168.1.138) with relayd
+- TLS certificates managed by cert-manager (self-signed)
+- Direct access without WireGuard overhead
+- Requires DNS configuration and CA certificate trust (see below)
+
+#### DNS Configuration for LAN
+
+Add to your DNS server or `/etc/hosts`:
+
+```
+192.168.1.138  navidrome.f3s.lan.buetow.org
+```
+
+#### Trusting Self-Signed CA
+
+To avoid browser warnings, install the f3s LAN CA certificate:
+
+1. Export CA from k3s:
+   ```bash
+   cd /home/paul/git/conf/f3s/cert-manager
+   just export-ca
+   ```
+
+2. Install on your device (see `cert-manager/README.md` for platform-specific instructions)
 
 ## Storage
 

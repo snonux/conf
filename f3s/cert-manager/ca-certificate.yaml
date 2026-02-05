@@ -1,0 +1,20 @@
+---
+# CA certificate for signing other certificates
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: selfsigned-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: f3s-lan-ca
+  secretName: selfsigned-ca-secret
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  duration: 87600h # 10 years
+  renewBefore: 720h # 30 days
