@@ -19,7 +19,7 @@ spec:
                 port:
                   number: 4533
 ---
-# LAN Ingress for navidrome.f3s.lan.buetow.org
+# LAN Ingress for navidrome.f3s.lan.buetow.org with TLS
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -27,8 +27,12 @@ metadata:
   namespace: services
   annotations:
     spec.ingressClassName: traefik
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  tls:
+    - hosts:
+        - navidrome.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
   rules:
     - host: navidrome.f3s.lan.buetow.org
       http:
