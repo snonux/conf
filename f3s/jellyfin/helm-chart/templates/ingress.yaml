@@ -1,3 +1,46 @@
-# Jellyfin is exposed via NodePorts 30096 and 30920
-# relayd on frontend proxies directly to these ports, bypassing Traefik
-# This avoids double reverse-proxy complexity and certificate chain issues
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin-ingress
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: jellyfin.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jellyfin-server
+                port:
+                  number: 8096
+---
+# LAN Ingress for jellyfin.f3s.lan.buetow.org with TLS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - jellyfin.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: jellyfin.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jellyfin-server
+                port:
+                  number: 8096
