@@ -1,0 +1,52 @@
+# Jellyfin Helm Chart Configuration
+# Deploy to services namespace with persistent storage
+
+# Image configuration
+image:
+  repository: jellyfin/jellyfin
+  tag: "10.11.6"
+  pullPolicy: IfNotPresent
+
+# Persistence
+persistence:
+  config:
+    enabled: true
+    type: pvc
+    existingClaim: jellyfin-pvc
+    mountPath: /config
+    size: 50Gi
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8096
+
+# Ingress configuration
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  hosts:
+    - host: jellyfin.f3s.buetow.org
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Resources
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 4000m
+    memory: 4Gi
+
+# Node selector (if needed)
+nodeSelector: {}
+
+# Tolerations (if needed)
+tolerations: []
+
+# Affinity rules (if needed)
+affinity: {}

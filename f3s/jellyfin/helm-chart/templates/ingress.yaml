@@ -1,0 +1,3 @@
+# Jellyfin is exposed via NodePorts 30096 and 30920
+# relayd on frontend proxies directly to these ports, bypassing Traefik
+# This avoids double reverse-proxy complexity and certificate chain issues

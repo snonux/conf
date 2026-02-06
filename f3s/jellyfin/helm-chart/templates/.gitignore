@@ -1,0 +1,2 @@
+# Secrets should not be committed
+*-secret.yaml

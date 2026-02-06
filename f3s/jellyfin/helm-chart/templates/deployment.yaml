@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin-server
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyfin-server
+  template:
+    metadata:
+      labels:
+        app: jellyfin-server
+    spec:
+      containers:
+        - name: jellyfin
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8096
+              name: http
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 4000m
+              memory: 4Gi
+          volumeMounts:
+            - name: jellyfin-config
+              mountPath: /config
+            - name: jellyfin-libraries
+              mountPath: /media/libraries
+            - name: jellyfin-data
+              mountPath: /data
+      volumes:
+        - name: jellyfin-config
+          persistentVolumeClaim:
+            claimName: jellyfin-config-pvc
+        - name: jellyfin-libraries
+          persistentVolumeClaim:
+            claimName: jellyfin-libraries-pvc
+        - name: jellyfin-data
+          persistentVolumeClaim:
+            claimName: jellyfin-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: jellyfin-server
+  name: jellyfin-server
+  namespace: services
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 8096
+      protocol: TCP
+      targetPort: 8096
+      nodePort: 30096
+    - name: https
+      port: 8920
+      protocol: TCP
+      targetPort: 8096
+      nodePort: 30920
+  selector:
+    app: jellyfin-server
