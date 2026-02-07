@@ -7,6 +7,7 @@ A self-hosted git repository solution for the f3s k3s cluster, replacing externa
 - **SSH Git Server**: Alpine-based container with OpenSSH and git for repository access
 - **CGit Web UI**: Browse repositories at `http://cgit.f3s.buetow.org`
 - **Single Pod Design**: Both containers share storage via ReadWriteMany PVC
+- **Persistent SSH Host Keys**: Keys are stored in NFS and persist across pod restarts
 
 ## Architecture
 
@@ -249,10 +250,11 @@ To recover:
 ## Security Notes
 
 - SSH keys are restricted to git-shell only (no shell access)
-- git-server container runs as non-root user (UID 1000)
+- git-server container runs as non-root user (UID 1001)
 - cgit container has read-only access to repositories
-- All container capabilities dropped except NET_BIND_SERVICE for cgit
+- All container capabilities dropped for enhanced security
 - Secrets managed via Kubernetes Secrets, never committed to git
+- SSH host keys stored in NFS but copied to local emptyDir at startup (OpenSSH security requirement)
 
 ## Monitoring
 
