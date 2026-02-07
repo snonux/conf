@@ -36,8 +36,9 @@ spec:
             type: ClusterIP
           ingress:
             enabled: false # Managed by local chart Source 1
-          adminPasswordSecret: "pihole-admin-password"
-          adminPasswordKey: "password"
+          admin:
+            existingSecret: "pihole-admin-password"
+            passwordKey: "password"
   destination:
     server: https://kubernetes.default.svc
     namespace: services
