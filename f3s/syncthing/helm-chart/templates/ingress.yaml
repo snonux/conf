@@ -18,3 +18,28 @@ spec:
                 name: syncthing-service
                 port:
                   number: 8384
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: syncthing-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - syncthing.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: syncthing.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: syncthing-service
+                port:
+                  number: 8384

@@ -18,3 +18,28 @@ spec:
                 name: {{ .Values.ingress.service.name }}
                 port:
                   number: {{ .Values.ingress.service.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress-lan
+  namespace: {{ .Values.ingress.namespace }}
+  annotations:
+    spec.ingressClassName: {{ index .Values.ingress.annotations "spec.ingressClassName" }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - grafana.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: grafana.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.ingress.service.name }}
+                port:
+                  number: {{ .Values.ingress.service.port }}

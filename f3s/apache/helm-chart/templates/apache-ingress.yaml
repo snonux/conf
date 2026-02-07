@@ -3,7 +3,6 @@ kind: Ingress
 metadata:
   name: apache-ingress
   namespace: services
-  namespace: services
   annotations:
     spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
@@ -30,6 +29,53 @@ spec:
                 port:
                   number: 80
     - host: www.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apache-service
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: apache-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - f3s.lan.buetow.org
+        - standby.f3s.lan.buetow.org
+        - www.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apache-service
+                port:
+                  number: 80
+    - host: standby.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apache-service
+                port:
+                  number: 80
+    - host: www.f3s.lan.buetow.org
       http:
         paths:
           - path: /

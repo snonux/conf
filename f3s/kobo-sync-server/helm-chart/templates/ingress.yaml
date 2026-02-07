@@ -2,11 +2,38 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: koreader-sync-server-ingress
+  namespace: services
   annotations:
-    kubernetes.io/ingress.class: "traefik"
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
   - host: koreader.f3s.buetow.org
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: koreader-sync-server
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: koreader-sync-server-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - koreader.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+  - host: koreader.f3s.lan.buetow.org
     http:
       paths:
       - path: /

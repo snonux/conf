@@ -22,3 +22,29 @@ spec:
                 name: argocd-server
                 port:
                   number: 80
+---
+# ArgoCD UI LAN Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress-lan
+  namespace: cicd
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - argocd.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: argocd.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80

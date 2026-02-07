@@ -38,3 +38,50 @@ spec:
                 name: ipv6test-service
                 port:
                   number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ipv6test-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - ipv6test.f3s.lan.buetow.org
+        - ipv4.ipv6test.f3s.lan.buetow.org
+        - ipv6.ipv6test.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: ipv6test.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ipv6test-service
+                port:
+                  number: 80
+    - host: ipv4.ipv6test.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ipv6test-service
+                port:
+                  number: 80
+    - host: ipv6.ipv6test.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ipv6test-service
+                port:
+                  number: 80
