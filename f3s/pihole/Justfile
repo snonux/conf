@@ -1,0 +1,31 @@
+NAMESPACE := "services"
+APP_NAME := "pihole"
+
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=pihole
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} -l app.kubernetes.io/name=pihole
+    @echo ""
+    @echo "=== Ingresses ==="
+    @kubectl get ingress -n {{NAMESPACE}} -l app.kubernetes.io/name=pihole
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} -l app.kubernetes.io/name=pihole
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
+
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app.kubernetes.io/name=pihole --tail={{lines}} -f
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+restart:
+    @echo "Restarting Pi-hole..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/pihole
