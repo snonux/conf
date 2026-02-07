@@ -45,6 +45,15 @@ spec:
             chown 1001:33 /ssh-persistent/sshd_config
             chmod 644 /ssh-persistent/sshd_config
           fi
+          # Copy SSH host keys from NFS to local emptyDir
+          # OpenSSH refuses to load keys from NFS for security reasons
+          echo "Copying SSH keys to local storage..."
+          cp -a /ssh-persistent/* /ssh-local/
+          chown -R 1001:33 /ssh-local
+          chmod 755 /ssh-local
+          chmod 600 /ssh-local/ssh_host_*_key
+          chmod 644 /ssh-local/ssh_host_*_key.pub
+          chmod 644 /ssh-local/sshd_config
           # Setup authorized_keys with correct ownership
           # The /ssh-git mount point IS the .ssh directory
           # UID 1001 and GID 33 match the NFS file ownership
@@ -56,6 +65,8 @@ spec:
         - name: repos
           mountPath: /ssh-persistent
           subPath: ssh-keys
+        - name: ssh-host-keys
+          mountPath: /ssh-local
         - name: git-ssh-keys
           mountPath: /ssh-keys-secret
           readOnly: true
@@ -96,9 +107,8 @@ spec:
           subPath: repos
         - name: git-ssh-writable
           mountPath: /home/git/.ssh
-        - name: repos
+        - name: ssh-host-keys
           mountPath: /etc/ssh
-          subPath: ssh-keys
         securityContext:
           runAsUser: 1001
           runAsGroup: 33
@@ -216,5 +226,7 @@ spec:
       - name: sshd-config
         configMap:
           name: git-server-sshd-config
+      - name: ssh-host-keys
+        emptyDir: {}
       - name: cgit-runtime
         emptyDir: {}
