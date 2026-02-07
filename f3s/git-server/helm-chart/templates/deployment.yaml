@@ -31,12 +31,19 @@ spec:
           if [ ! -f /ssh-persistent/ssh_host_ed25519_key ]; then
             echo "Generating new SSH host keys (first time setup)..."
             ssh-keygen -A -f /ssh-persistent/..
-            mv /ssh-persistent/../etc/ssh/ssh_host_* /ssh-persistent/
+            mv /ssh-persistent/../etc/ssh/ssh_host_* /ssh-persistent/ 2>/dev/null || true
             chown -R 1001:33 /ssh-persistent
             chmod 600 /ssh-persistent/ssh_host_*_key
             chmod 644 /ssh-persistent/ssh_host_*_key.pub
           else
             echo "SSH host keys already exist, reusing them."
+          fi
+          # Copy sshd_config if not exists
+          if [ ! -f /ssh-persistent/sshd_config ]; then
+            echo "Copying sshd_config to persistent storage..."
+            cp /sshd-config/sshd_config /ssh-persistent/sshd_config
+            chown 1001:33 /ssh-persistent/sshd_config
+            chmod 644 /ssh-persistent/sshd_config
           fi
           # Setup authorized_keys with correct ownership
           # The /ssh-git mount point IS the .ssh directory
@@ -54,6 +61,9 @@ spec:
           readOnly: true
         - name: git-ssh-writable
           mountPath: /ssh-git
+        - name: sshd-config
+          mountPath: /sshd-config
+          readOnly: true
 
       - name: install-git-http-backend
         image: alpine:3.19
@@ -203,5 +213,8 @@ spec:
       - name: cgit-config
         configMap:
           name: cgit-config
+      - name: sshd-config
+        configMap:
+          name: git-server-sshd-config
       - name: cgit-runtime
         emptyDir: {}

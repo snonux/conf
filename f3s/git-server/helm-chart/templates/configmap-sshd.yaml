@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: git-server-sshd-config
+  namespace: cicd
+data:
+  sshd_config: |
+    # SSH Server Configuration for Git Server
+    # Security-hardened configuration for git-only access
+    # Runs as non-root user (git) with privilege separation disabled
+    
+    # Network
+    Port 22
+    AddressFamily any
+    ListenAddress 0.0.0.0
+    
+    # Host Keys
+    HostKey /etc/ssh/ssh_host_ed25519_key
+    HostKey /etc/ssh/ssh_host_rsa_key
+    
+    # Security
+    PermitRootLogin no
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    PermitEmptyPasswords no
+    ChallengeResponseAuthentication no
+    
+    # Restrict to git user only
+    AllowUsers git
+    
+    # Disable tunneling and forwarding
+    X11Forwarding no
+    AllowTcpForwarding no
+    AllowAgentForwarding no
+    PermitTunnel no
+    
+    # Logging
+    SyslogFacility AUTH
+    LogLevel INFO
+    
+    # Performance
+    UseDNS no
+    
+    # PID file location (writable by non-root)
+    PidFile /tmp/sshd.pid
