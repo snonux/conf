@@ -21,6 +21,70 @@ kubectl create secret generic pihole-admin-password \
 - **External**: [https://pihole.f3s.buetow.org](https://pihole.f3s.buetow.org)
 - **LAN**: [https://pihole.f3s.lan.buetow.org](https://pihole.f3s.lan.buetow.org)
 
+## DNS Service
+
+Pi-hole DNS is available on both the Wireguard mesh and LAN networks:
+- **Wireguard mesh**: 192.168.2.120 (port 53 UDP/TCP)
+- **LAN IPs**: 192.168.1.120, 192.168.1.121, 192.168.1.122 (port 53 UDP/TCP)
+
+### Client Configuration
+
+#### Linux (Fedora/NetworkManager)
+
+Configure your network connection to use Pi-hole with automatic failover:
+
+```bash
+# List active connections
+nmcli connection show --active
+
+# For WiFi connection (replace with your connection name)
+nmcli con mod "Your-WiFi-Name" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
+nmcli con mod "Your-WiFi-Name" ipv4.ignore-auto-dns yes
+nmcli con up "Your-WiFi-Name"
+
+# For wired connection (replace with your connection name)
+nmcli con mod "Your-Wired-Name" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
+nmcli con mod "Your-Wired-Name" ipv4.ignore-auto-dns yes
+nmcli con up "Your-Wired-Name"
+```
+
+DNS servers are tried in order:
+1. Primary: 192.168.1.120 (r0)
+2. Fallback: 192.168.1.121 (r1)
+3. Fallback: 192.168.1.122 (r2)
+4. Last resort: 192.168.1.1 (router)
+
+#### Verify Configuration
+
+```bash
+# Check configured DNS servers
+nmcli dev show | grep DNS
+
+# Check /etc/resolv.conf
+cat /etc/resolv.conf
+
+# Test DNS resolution through Pi-hole
+dig @192.168.1.120 google.com +short
+
+# Test ad blocking (should return 0.0.0.0)
+dig doubleclick.net +short
+```
+
+#### Firefox Configuration
+
+If using Firefox, ensure DNS over HTTPS (DoH) is disabled:
+1. Open Firefox → Settings → Privacy & Security
+2. Scroll to "DNS over HTTPS"
+3. Set to "Off" or "Default Protection"
+
+This allows Firefox to use the system DNS (Pi-hole) instead of bypassing it with DoH.
+
+#### Router Configuration (Alternative)
+
+For network-wide Pi-hole usage, configure your router's DHCP server to hand out Pi-hole as the DNS server:
+- Primary DNS: 192.168.1.120
+- Secondary DNS: 192.168.1.121 (or 192.168.1.1 for fallback to router)
+
 ## Storage
 
 Configuration is persisted on NFS at:
