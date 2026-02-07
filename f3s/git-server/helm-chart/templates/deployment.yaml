@@ -26,13 +26,18 @@ spec:
         - |
           # Install openssh for key generation
           apk add --no-cache openssh
-          # Setup SSH host keys directory and generate keys
-          mkdir -p /ssh-init
-          ssh-keygen -A -f /ssh-init/..
-          mv /ssh-init/../etc/ssh/ssh_host_* /ssh-init/
-          chown -R 1001:33 /ssh-init
-          chmod 600 /ssh-init/ssh_host_*_key
-          chmod 644 /ssh-init/ssh_host_*_key.pub
+          # Setup SSH host keys - only generate if they don't exist (persist across restarts)
+          mkdir -p /ssh-persistent
+          if [ ! -f /ssh-persistent/ssh_host_ed25519_key ]; then
+            echo "Generating new SSH host keys (first time setup)..."
+            ssh-keygen -A -f /ssh-persistent/..
+            mv /ssh-persistent/../etc/ssh/ssh_host_* /ssh-persistent/
+            chown -R 1001:33 /ssh-persistent
+            chmod 600 /ssh-persistent/ssh_host_*_key
+            chmod 644 /ssh-persistent/ssh_host_*_key.pub
+          else
+            echo "SSH host keys already exist, reusing them."
+          fi
           # Setup authorized_keys with correct ownership
           # The /ssh-git mount point IS the .ssh directory
           # UID 1001 and GID 33 match the NFS file ownership
@@ -41,8 +46,9 @@ spec:
           chmod 755 /ssh-git
           chmod 644 /ssh-git/authorized_keys
         volumeMounts:
-        - name: ssh-host-keys
-          mountPath: /ssh-init
+        - name: repos
+          mountPath: /ssh-persistent
+          subPath: ssh-keys
         - name: git-ssh-keys
           mountPath: /ssh-keys-secret
           readOnly: true
@@ -80,8 +86,9 @@ spec:
           subPath: repos
         - name: git-ssh-writable
           mountPath: /home/git/.ssh
-        - name: ssh-host-keys
+        - name: repos
           mountPath: /etc/ssh
+          subPath: ssh-keys
         securityContext:
           runAsUser: 1001
           runAsGroup: 33
@@ -196,7 +203,5 @@ spec:
       - name: cgit-config
         configMap:
           name: cgit-config
-      - name: ssh-host-keys
-        emptyDir: {}
       - name: cgit-runtime
         emptyDir: {}
