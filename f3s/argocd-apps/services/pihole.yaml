@@ -32,6 +32,8 @@ spec:
                   claimName: "pihole-dnsmasq-pvc"
           serviceDns:
             type: LoadBalancer
+            externalIPs:
+              - 192.168.1.120  # LAN access
           serviceWeb:
             type: ClusterIP
           ingress:
