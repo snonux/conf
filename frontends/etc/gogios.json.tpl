@@ -7,6 +7,15 @@
   "MinNotifyIntervalS": 3600,
   "StateDir": "/var/run/gogios",
   "HTMLStatusFile": "/var/www/htdocs/buetow.org/self/gogios/index.html",
+  <% if ($hostname eq 'fishfinger') { -%>
+  "PeerURL": "https://blowfish.buetow.org/gogios/index.json",
+  "PeerPrimaryName": "fishfinger.buetow.org",
+  "PeerSecondaryName": "blowfish.buetow.org",
+  <% } elsif ($hostname eq 'blowfish') { -%>
+  "PeerURL": "https://fishfinger.buetow.org/gogios/index.json",
+  "PeerPrimaryName": "fishfinger.buetow.org",
+  "PeerSecondaryName": "blowfish.buetow.org",
+  <% } -%>
   "PrometheusHosts": ["r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"],
   "PrometheusOnlyIfNotExists": "/tmp/f3s_taken_down",
   "Checks": {
