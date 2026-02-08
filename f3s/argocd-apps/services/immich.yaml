@@ -34,6 +34,8 @@ spec:
                 existingClaim: "immich-library-pvc"
           server:
             enabled: true
+            image:
+              tag: v2.5.5
             controllers:
               main:
                 containers:
@@ -63,6 +65,8 @@ spec:
                           port: 2283
           machine-learning:
             enabled: true
+            image:
+              tag: v2.5.5
             persistence:
               cache:
                 enabled: true
