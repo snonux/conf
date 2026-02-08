@@ -61,23 +61,6 @@ spec:
                         service:
                           identifier: main
                           port: 2283
-              lan:
-                enabled: true
-                annotations:
-                  spec.ingressClassName: traefik
-                  traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-                  traefik.ingress.kubernetes.io/router.middlewares: services-immich-body-size@kubernetescrd
-                tls:
-                  - hosts:
-                      - immich.f3s.lan.buetow.org
-                    secretName: f3s-lan-tls
-                hosts:
-                  - host: immich.f3s.lan.buetow.org
-                    paths:
-                      - path: "/"
-                        service:
-                          identifier: main
-                          port: 2283
           machine-learning:
             enabled: true
             persistence:

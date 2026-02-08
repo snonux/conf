@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich-server-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: services-immich-body-size@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - immich.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: immich.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: immich-server
+                port:
+                  number: 2283
