@@ -31,21 +31,42 @@ Pi-hole DNS is available on both the Wireguard mesh and LAN networks:
 
 #### Linux (Fedora/NetworkManager)
 
+##### Quick Toggle (Recommended)
+
+If you have the dotfiles repository, use the toggle script:
+
+```bash
+# Toggle Pi-hole DNS on/off
+pihole-dns-toggle
+
+# Or use specific commands
+pihole-dns-toggle on      # Enable Pi-hole DNS
+pihole-dns-toggle off     # Disable Pi-hole (use DHCP DNS)
+pihole-dns-toggle status  # Show current status
+```
+
+The script is located at `~/git/dotfiles/scripts/pihole-dns-toggle` and automatically detects your active network connection.
+
+##### Manual Configuration
+
 Configure your network connection to use Pi-hole with automatic failover:
 
 ```bash
-# List active connections
+# First, identify your active connection name
 nmcli connection show --active
 
-# For WiFi connection (replace with your connection name)
-nmcli con mod "Your-WiFi-Name" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
-nmcli con mod "Your-WiFi-Name" ipv4.ignore-auto-dns yes
-nmcli con up "Your-WiFi-Name"
+# Configure DNS servers (replace CONNECTION_NAME with your actual connection name from above)
+nmcli con mod "CONNECTION_NAME" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
+nmcli con mod "CONNECTION_NAME" ipv4.ignore-auto-dns yes
+nmcli con up "CONNECTION_NAME"
+```
 
-# For wired connection (replace with your connection name)
-nmcli con mod "Your-Wired-Name" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
-nmcli con mod "Your-Wired-Name" ipv4.ignore-auto-dns yes
-nmcli con up "Your-Wired-Name"
+Example for a WiFi connection named `www_irregular_ninja`:
+
+```bash
+nmcli con mod "www_irregular_ninja" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
+nmcli con mod "www_irregular_ninja" ipv4.ignore-auto-dns yes
+nmcli con up "www_irregular_ninja"
 ```
 
 DNS servers are tried in order:
