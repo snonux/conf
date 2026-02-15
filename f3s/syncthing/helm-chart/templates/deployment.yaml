@@ -19,6 +19,31 @@ spec:
         ports:
         - containerPort: 8384
         - containerPort: 22000
+        # Startup probe: give syncthing time to initialize (especially if NFS is slow)
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8384
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 24  # 120 seconds total (24 * 5s)
+        # Liveness probe: restart pod if syncthing becomes unresponsive (stale NFS)
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8384
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3  # Restart after 90 seconds of failures
+        # Readiness probe: remove from service if not ready
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8384
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 2
         volumeMounts:
         - name: syncthing-config
           mountPath: /config
