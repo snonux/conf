@@ -89,13 +89,6 @@ www.ecat    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 standby.ecat 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
 standby.ecat 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
 
-fotos        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-fotos        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.fotos    300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.fotos    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.fotos 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.fotos 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
-
 git          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
 git          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
 www.git      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
