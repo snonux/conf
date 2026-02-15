@@ -20,6 +20,31 @@ spec:
         image: registry:2
         ports:
         - containerPort: 5000
+        # Startup probe: give registry time to initialize (especially if NFS is slow)
+        startupProbe:
+          httpGet:
+            path: /v2/
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 12  # 60 seconds total (12 * 5s)
+        # Liveness probe: restart pod if registry returns 503 (stale NFS) or becomes unresponsive
+        livenessProbe:
+          httpGet:
+            path: /v2/
+            port: 5000
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3  # Restart after 90 seconds of failures
+        # Readiness probe: remove from service if not ready
+        readinessProbe:
+          httpGet:
+            path: /v2/
+            port: 5000
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 2
         volumeMounts:
         - name: registry-storage
           mountPath: /var/lib/registry
