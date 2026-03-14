@@ -1,0 +1,32 @@
+# frozen_string_literal: true
+
+require "#{ENV['HOME']}/git/rcm/lib/dsl"
+
+desc 'Improve english'
+task :english do
+  configure do
+    agent hexai do
+      'hexai PROMPT'
+    end
+
+    prompt improve english do
+      <<~TEXT
+        Don't remove or modify any lines starting with any of those characters: < > # ` *
+        Correct English spellings and grammar.
+        Improve clarity of the text.
+        Don't introduce any new text or headers.
+        Don't modify any source code text unless code comments.
+      TEXT
+    end
+
+    tpl_files = Dir.glob(File.expand_path('~/git/foo.zone-content/gemtext/**/*.tpl'))
+    gmi_files = Dir.glob(File.expand_path('~/git/foo.zone-content/gemtext/**/*.gmi')).reject do |gmi|
+      File.exist?("#{gmi}.tpl")
+    end
+    (tpl_files + gmi_files).each do |f|
+      file f do
+        agent hexai improve english
+      end
+    end
+  end
+end

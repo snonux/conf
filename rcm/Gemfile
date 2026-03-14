@@ -1,0 +1,4 @@
+source 'https://rubygems.org'
+
+gem 'rcm', path: "#{ENV['HOME']}/git/rcm"
+gem 'rake'
