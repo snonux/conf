@@ -9,23 +9,32 @@ task :english do
       'hexai PROMPT'
     end
 
-    prompt improve english do
+    agent gpt20b do
+      'ollama run gpt-oss:20b --hidethinking PROMPT'
+    end
+
+    agent gpt120b do
+      ENV['OLLAMA_HOST'] = 'http://hyperstack.wg1:11434'
+      'ollama run gpt-oss:120b --hidethinking PROMPT'
+    end
+
+    prompt improve blog english do
       <<~TEXT
+        This is text from my blog in Gemini Gemtext format plus extra tags.
         Don't remove or modify any lines starting with any of those characters: < > # ` *
-        Correct English spellings and grammar.
-        Improve clarity of the text.
-        Don't introduce any new text or headers.
-        Don't modify any source code text unless code comments.
+        Correct English spellings and grammar. Improve clarity of the text.
+        Don't introduce any new text or headers. Don't modify any source code text unless code comments.
+        Only point out the corrections you would someone to implement.
       TEXT
     end
 
-    tpl_files = Dir.glob(File.expand_path('~/git/foo.zone-content/gemtext/**/*.tpl'))
-    gmi_files = Dir.glob(File.expand_path('~/git/foo.zone-content/gemtext/**/*.gmi')).reject do |gmi|
-      File.exist?("#{gmi}.tpl")
+    blog_contents = Dir.glob(File.expand_path('~/git/foo.zone-content/gemtext/**/*.gmi')).map do |gmi|
+      File.exist?("#{gmi}.tpl") ? "#{gmi}.tpl" : gmi
     end
-    (tpl_files + gmi_files).each do |f|
-      file f do
-        agent hexai improve english
+
+    blog_contents.each do |blog_content|
+      file blog_content do
+        agent gpt120b improve blog english
       end
     end
   end

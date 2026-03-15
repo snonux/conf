@@ -1,0 +1,59 @@
+[auth]
+api_key_file = "~/.hyperstack"
+
+[hyperstack]
+base_url = "https://infrahub-api.nexgencloud.com/v1"
+
+[state]
+file = ".hyperstack-vm-state.json"
+
+[vm]
+name_prefix = "gpt-oss"
+hostname = "hyperstack"
+environment_name = "snonux-ollama"
+
+# A100-80GB is the cost-first default for gpt-oss-120b inference.
+# Switch this to n3-H100x1 if you want safer throughput and compatibility headroom.
+flavor_name = "n3-A100x1"
+image_name = "Ubuntu Server 24.04 LTS R570 CUDA 12.8 with Docker"
+assign_floating_ip = true
+create_bootable_volume = false
+enable_port_randomization = false
+labels = ["gpt-oss-120b", "wireguard"]
+
+[ssh]
+username = "ubuntu"
+private_key_path = "~/.ssh/id_rsa"
+hyperstack_key_name = "earth"
+port = 22
+connect_timeout_sec = 10
+
+[network]
+wireguard_udp_port = 56710
+wireguard_subnet = "192.168.3.0/24"
+ollama_port = 11434
+allowed_ssh_cidrs = ["0.0.0.0/0"]
+allowed_wireguard_cidrs = ["0.0.0.0/0"]
+
+[bootstrap]
+enable_guest_bootstrap = true
+install_wireguard = true
+configure_ufw = true
+configure_ollama_host = false
+
+[ollama]
+install = true
+models_dir = "/ephemeral/ollama/models"
+listen_host = "0.0.0.0:11434"
+gpu_overhead_mb = 2000
+num_parallel = 4
+pull_models = ["qwen3-coder:30b", "gpt-oss:20b", "gpt-oss:120b", "nemotron-3-super"]
+
+[wireguard]
+auto_setup = true
+setup_script = "./wg1-setup.sh"
+
+[local_client]
+check_wg1_service = true
+interface_name = "wg1"
+config_path = "/etc/wireguard/wg1.conf"

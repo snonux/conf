@@ -8,7 +8,6 @@ This document outlines the steps to install and configure OpenCode to work with 
 - Ollama installed on the remote server
 
 ## Installation Steps
-
 ### 0. Install Ollama
 
 Install Ollama on the remote server:

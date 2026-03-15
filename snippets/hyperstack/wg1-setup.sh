@@ -82,12 +82,6 @@ fi
 
 VM_IP="$1"
 
-# Validate IP format (basic check)
-if ! [[ "$VM_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    print_error "Error: Invalid IP address format: $VM_IP"
-    exit 1
-fi
-
 echo "=============================================="
 print_warning "IMPORTANT: Ensure UDP port ${WG_PORT} is open on the VM!"
 print_warning "This must be configured in your cloud provider's"
@@ -189,6 +183,7 @@ print_success "Server config installed"
 echo "Configuring firewall (ufw) on hyperstack..."
 ssh "${SSH_USER}@${VM_IP}" << 'REMOTE_SCRIPT'
 # Ensure ufw is enabled
+sudo ufw allow ssh comment 'Allow SSH' 2>/dev/null || true
 sudo ufw --force enable >/dev/null 2>&1 || true
 
 # Allow WireGuard port
