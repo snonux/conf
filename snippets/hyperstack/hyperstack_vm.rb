@@ -5,6 +5,10 @@ begin
   require 'bundler/setup'
 rescue LoadError
   nil
+rescue Gem::Exception => e
+  # Ruby can ship with a Bundler library version whose matching executable
+  # is not installed locally. Fall back to direct gem loading in that case.
+  raise unless e.is_a?(Gem::GemNotFoundException) || e.is_a?(Gem::LoadError)
 end
 
 require 'json'
