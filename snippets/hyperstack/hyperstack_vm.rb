@@ -43,7 +43,7 @@ module HyperstackVM
         'file' => '.hyperstack-vm-state.json'
       },
       'vm' => {
-        'name_prefix' => 'gpt-oss',
+        'name_prefix' => 'hyperstack',
         'hostname' => 'hyperstack',
         'flavor_name' => 'n3-A100x1',
         'image_name' => 'Ubuntu Server 24.04 LTS R570 CUDA 12.8 with Docker',
@@ -506,17 +506,28 @@ module HyperstackVM
         request.body = JSON.generate(payload)
       end
 
-      response = Net::HTTP.start(
-        uri.host,
-        uri.port,
-        use_ssl: uri.scheme == 'https',
-        open_timeout: 30,
-        read_timeout: 120
-      ) { |http| http.request(request) }
+      retries_left = 4
+      begin
+        response = Net::HTTP.start(
+          uri.host,
+          uri.port,
+          use_ssl: uri.scheme == 'https',
+          open_timeout: 30,
+          read_timeout: 120
+        ) { |http| http.request(request) }
 
-      parse_response(response)
-    rescue Timeout::Error, Errno::ECONNREFUSED, SocketError, OpenSSL::SSL::SSLError => e
-      raise Error, "Hyperstack API request failed for #{path}: #{e.message}"
+        parse_response(response)
+      rescue Timeout::Error, Errno::ECONNREFUSED, Errno::ECONNRESET,
+             Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+             SocketError, OpenSSL::SSL::SSLError, Net::OpenTimeout => e
+        raise Error, "Hyperstack API request failed for #{path}: #{e.message}" if retries_left <= 0
+
+        retries_left -= 1
+        delay = (4 - retries_left) * 5
+        warn "API request to #{path} failed (#{e.class}: #{e.message}), retrying in #{delay}s (#{retries_left} left)..."
+        sleep delay
+        retry
+      end
     end
 
     def parse_response(response)
@@ -733,17 +744,27 @@ module HyperstackVM
         @state_store.save(state)
       end
 
-      if ollama_setup_needed?(state)
-        setup_ollama(state['public_ip'])
-        state['ollama_setup_at'] = Time.now.utc.iso8601
-        state['ollama_models_dir'] = @config.ollama_models_dir
-        state['ollama_pulled_models'] = desired_ollama_models
+      # Install Ollama binary and configure the service (fast), but defer
+      # model pulls until after the WireGuard tunnel is up so that the user
+      # can monitor progress over the tunnel.
+      if @config.ollama_install_enabled? && state['ollama_installed_at'].nil?
+        install_ollama_service(state['public_ip'])
+        state['ollama_installed_at'] = Time.now.utc.iso8601
         @state_store.save(state)
       end
 
       if wireguard_setup_needed?(state)
         run_wireguard_setup(state['public_ip'])
         state['wireguard_setup_at'] = Time.now.utc.iso8601
+        @state_store.save(state)
+      end
+
+      # Pull and verify models after the tunnel is established
+      if ollama_setup_needed?(state)
+        pull_ollama_models(state['public_ip'])
+        state['ollama_setup_at'] = Time.now.utc.iso8601
+        state['ollama_models_dir'] = @config.ollama_models_dir
+        state['ollama_pulled_models'] = desired_ollama_models
         @state_store.save(state)
       end
 
@@ -833,6 +854,9 @@ module HyperstackVM
     end
 
     def wait_for_ssh(host)
+      # Remove stale host key for this IP — VMs frequently reuse IPs after
+      # delete/recreate, causing StrictHostKeyChecking to reject the new key
+      remove_stale_host_key(host)
       info "Waiting for SSH on #{host}:#{@config.ssh_port}..."
       with_polling("SSH on #{host}:#{@config.ssh_port}") do
         next nil unless tcp_open?(host, @config.ssh_port)
@@ -859,22 +883,52 @@ module HyperstackVM
 
     def bootstrap_guest(host)
       info 'Bootstrapping Ubuntu guest over SSH...'
-      stdout, stderr, status = run_ssh_command(host, guest_bootstrap_script)
-      raise Error, "Guest bootstrap failed: #{stderr.strip.empty? ? stdout : stderr}" unless status.success?
+      retries = 3
+      retries.times do |attempt|
+        stdout, stderr, status = run_ssh_command(host, guest_bootstrap_script)
+        return if status.success?
+
+        msg = stderr.strip.empty? ? stdout : stderr
+        raise Error, "Guest bootstrap failed after #{retries} attempts: #{msg}" if attempt == retries - 1
+
+        warn "Bootstrap attempt #{attempt + 1}/#{retries} failed (#{msg.lines.last&.strip}), retrying in 15s..."
+        sleep 15
+      end
     end
 
     def ollama_setup_needed?(state)
       return false unless @config.ollama_install_enabled?
+      # Re-run setup if state has no record, or if desired models changed
+      return true if state['ollama_setup_at'].nil?
 
-      state['ollama_setup_at'].nil? || model_list_signature(desired_ollama_models) != model_list_signature(state['ollama_pulled_models'])
+      model_list_signature(desired_ollama_models) != model_list_signature(state['ollama_pulled_models'])
     end
 
-    def setup_ollama(host)
+    def install_ollama_service(host)
       info "Installing and configuring Ollama on #{host}..."
-      output, status = run_ssh_command_streaming(host, ollama_setup_script)
-      return if status.success?
+      output, status = run_ssh_command_streaming(host, ollama_install_script)
+      raise Error, "Ollama install failed: #{output.strip}" unless status.success?
+    end
 
-      raise Error, "Ollama setup failed: #{output.strip}"
+    def pull_ollama_models(host)
+      info "Pulling Ollama models on #{host}..."
+      output, status = run_ssh_command_streaming(host, ollama_pull_script)
+      raise Error, "Ollama model pull failed: #{output.strip}" unless status.success?
+
+      # Verify all models are actually present on the remote (belt-and-suspenders
+      # check in case ollama pull returned 0 without actually pulling the model)
+      verify_remote_models(host)
+    end
+
+    def verify_remote_models(host)
+      stdout, _stderr, status = run_ssh_command(host, 'ollama list')
+      return unless status.success?
+
+      remote_models = stdout.lines.drop(1).map { |l| l.split.first }.compact
+      missing = desired_ollama_models.reject { |m| remote_models.any? { |r| r.start_with?(m) } }
+      return if missing.empty?
+
+      raise Error, "Models missing after setup: #{missing.join(', ')}. Remote has: #{remote_models.join(', ')}"
     end
 
     def wireguard_setup_needed?(state)
@@ -889,21 +943,31 @@ module HyperstackVM
 
     def run_wireguard_setup(host)
       validate_wireguard_setup_script!
-      info "Running WireGuard auto-setup via #{@config.wireguard_setup_script} #{host}..."
+      retries = 3
+      retries.times do |attempt|
+        info "Running WireGuard auto-setup via #{@config.wireguard_setup_script} #{host}..."
 
+        status = run_wireguard_script(host)
+        return if status.success?
+
+        if attempt == retries - 1
+          raise Error, "WireGuard setup failed after #{retries} attempts (exit #{status.exitstatus})."
+        end
+
+        delay = (attempt + 1) * 15
+        warn "WireGuard setup attempt #{attempt + 1}/#{retries} failed (exit #{status.exitstatus}), retrying in #{delay}s..."
+        sleep delay
+      end
+    end
+
+    def run_wireguard_script(host)
       Open3.popen2e('bash', @config.wireguard_setup_script, host) do |stdin, output, wait_thr|
         stdin.sync = true
         stdin.puts
         stdin.close
 
-        output.each do |line|
-          @out.print(line)
-        end
-
-        status = wait_thr.value
-        next if status.success?
-
-        raise Error, "WireGuard setup script failed with exit status #{status.exitstatus}."
+        output.each { |line| @out.print(line) }
+        wait_thr.value
       end
     end
 
@@ -940,6 +1004,14 @@ module HyperstackVM
       raise Error, "Configured WireGuard settings do not match #{script_path}: #{mismatches.join('; ')}"
     end
 
+    def remove_stale_host_key(host)
+      system('ssh-keygen', '-R', host, out: File::NULL, err: File::NULL)
+      # Also remove bracketed form for non-standard ports
+      if @config.ssh_port != 22
+        system('ssh-keygen', '-R', "[#{host}]:#{@config.ssh_port}", out: File::NULL, err: File::NULL)
+      end
+    end
+
     def failed_vm?(vm)
       [vm['status'], vm['vm_state'], vm['power_state']].compact.any? do |value|
         value.to_s.downcase.match?(/error|failed|deleted|shelved/)
@@ -955,7 +1027,7 @@ module HyperstackVM
         sock.close
         true
       end
-    rescue Errno::ECONNREFUSED, Errno::ETIMEDOUT, SocketError, IOError
+    rescue Errno::ECONNREFUSED, Errno::ETIMEDOUT, Errno::EHOSTUNREACH, Errno::ENETUNREACH, SocketError, IOError
       false
     end
 
@@ -1107,6 +1179,16 @@ module HyperstackVM
       script = []
       script << 'set -euo pipefail'
 
+      # Wait for any running unattended-upgrades or apt locks to release
+      # before attempting package operations (transient lock on fresh VMs)
+      script << 'echo "Waiting for apt locks to clear..."'
+      script << 'for i in $(seq 1 30); do'
+      script << '  if ! fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; then break; fi'
+      script << '  echo "  apt lock held, waiting ($i/30)..."; sleep 10'
+      script << 'done'
+      script << 'sudo systemctl stop unattended-upgrades.service 2>/dev/null || true'
+      script << 'sudo systemctl disable unattended-upgrades.service 2>/dev/null || true'
+
       if @config.install_wireguard?
         script << 'which wg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y wireguard)'
       end
@@ -1119,14 +1201,18 @@ module HyperstackVM
       end
 
       if @config.configure_ollama_host?
+        # Only write a minimal OLLAMA_HOST override if no override exists yet;
+        # ollama_setup_script writes the full override (OLLAMA_MODELS, GPU_OVERHEAD, etc.)
         script << "if systemctl list-unit-files | grep -q '^ollama.service'; then"
-        script << '  sudo mkdir -p /etc/systemd/system/ollama.service.d'
-        script << "  cat <<'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null"
+        script << '  if [ ! -f /etc/systemd/system/ollama.service.d/override.conf ]; then'
+        script << '    sudo mkdir -p /etc/systemd/system/ollama.service.d'
+        script << "    cat <<'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null"
         script << '[Service]'
         script << "Environment=\"OLLAMA_HOST=0.0.0.0:#{@config.ollama_port}\""
         script << 'OVERRIDE'
-        script << '  sudo systemctl daemon-reload'
-        script << '  sudo systemctl restart ollama || true'
+        script << '    sudo systemctl daemon-reload'
+        script << '    sudo systemctl restart ollama || true'
+        script << '  fi'
         script << 'fi'
       end
 
@@ -1151,10 +1237,13 @@ module HyperstackVM
       normalized_model_list(models).sort
     end
 
-    def ollama_setup_script
+    # Installs the Ollama binary, configures the systemd override (models dir,
+    # listen host, GPU overhead, parallelism), and starts the service.  Model
+    # pulls are handled separately by ollama_pull_script so that the WireGuard
+    # tunnel can be established first.
+    def ollama_install_script
       models_dir = @config.ollama_models_dir
       listen_host = @config.ollama_listen_host
-      model_pulls = desired_ollama_models
 
       script = []
       script << 'set -euo pipefail'
@@ -1178,8 +1267,35 @@ module HyperstackVM
       script << 'sudo systemctl restart ollama'
       script << 'sleep 3'
       script << 'systemctl is-active --quiet ollama'
+      script << 'echo ollama-install-ok'
+      script.join("\n")
+    end
+
+    # Pulls each configured model with retry and per-model + final verification.
+    # Run after WireGuard is up so the user can monitor progress over the tunnel.
+    def ollama_pull_script
+      models_dir = @config.ollama_models_dir
+      model_pulls = desired_ollama_models
+
+      script = []
+      script << 'set -euo pipefail'
+      # Pull each model with retry (transient network failures) and verify
+      # it is actually present afterwards
       model_pulls.each do |model|
-        script << "ollama pull #{Shellwords.escape(model)}"
+        escaped = Shellwords.escape(model)
+        script << "echo \"Pulling model #{model}...\""
+        script << "for attempt in 1 2 3; do"
+        script << "  if ollama pull #{escaped}; then break; fi"
+        script << "  if [ \"$attempt\" -eq 3 ]; then echo \"FATAL: failed to pull #{model} after 3 attempts\"; exit 1; fi"
+        script << "  echo \"  pull attempt $attempt failed, retrying in 15s...\"; sleep 15"
+        script << "done"
+        script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} not found after pull\"; exit 1; }"
+      end
+      # Final verification: ensure all expected models are listed
+      script << 'echo "Verifying all models are present..."'
+      model_pulls.each do |model|
+        escaped = Shellwords.escape(model)
+        script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} missing in final check\"; exit 1; }"
       end
       script << "echo ollama-models-dir=#{models_dir}"
       script << 'echo ollama-ok'

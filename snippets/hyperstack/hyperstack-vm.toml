@@ -8,7 +8,7 @@ base_url = "https://infrahub-api.nexgencloud.com/v1"
 file = ".hyperstack-vm-state.json"
 
 [vm]
-name_prefix = "gpt-oss"
+name_prefix = "hyperstack"
 hostname = "hyperstack"
 environment_name = "snonux-ollama"
 
@@ -47,7 +47,7 @@ models_dir = "/ephemeral/ollama/models"
 listen_host = "0.0.0.0:11434"
 gpu_overhead_mb = 2000
 num_parallel = 4
-pull_models = ["qwen3-coder:30b", "gpt-oss:20b", "gpt-oss:120b", "nemotron-3-super"]
+pull_models = ["qwen3-coder-next", "qwen3-coder:30b", "gpt-oss:20b", "gpt-oss:120b", "nemotron-3-super"]
 
 [wireguard]
 auto_setup = true

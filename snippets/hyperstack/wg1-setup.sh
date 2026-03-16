@@ -73,6 +73,29 @@ print_error() {
     echo -e "${RED}$1${NC}"
 }
 
+# Retry wrapper for SSH/SCP commands that may fail due to transient
+# connection resets (e.g. sshd restart from unattended-upgrades).
+# Usage: retry_ssh ssh user@host "command"
+#        retry_ssh scp file user@host:/path
+retry_ssh() {
+    local max_attempts=5
+    local attempt=1
+    local delay=10
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+        if [[ $attempt -ge $max_attempts ]]; then
+            print_error "Command failed after ${max_attempts} attempts: $*"
+            return 1
+        fi
+        echo "  SSH attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s..."
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay + 5))
+    done
+}
+
 # Validate arguments
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 <VM_PUBLIC_IP>"
@@ -159,64 +182,56 @@ print_success "Client config created"
 echo ""
 echo "=== Setting up hyperstack VM (${VM_IP}) ==="
 
-# Check SSH connectivity
+# Wait for SSH to become available (handles transient connection resets
+# from sshd restarts due to unattended-upgrades or package installs)
 echo "Testing SSH connection..."
-if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "${SSH_USER}@${VM_IP}" "echo 'SSH OK'" 2>/dev/null; then
-    print_error "Error: Cannot connect to ${SSH_USER}@${VM_IP}"
-    print_error "Please ensure SSH access is configured."
-    exit 1
-fi
+retry_ssh ssh -o ConnectTimeout=10 -o BatchMode=yes "${SSH_USER}@${VM_IP}" "echo 'SSH OK'"
 print_success "SSH connection OK"
 
 # Install WireGuard on server if not present
 echo "Installing WireGuard on hyperstack..."
-ssh "${SSH_USER}@${VM_IP}" "which wg >/dev/null 2>&1 || (sudo apt update && sudo apt install -y wireguard)"
+retry_ssh ssh "${SSH_USER}@${VM_IP}" "which wg >/dev/null 2>&1 || (sudo apt update && sudo apt install -y wireguard)"
 print_success "WireGuard installed"
 
 # Copy server config to hyperstack
 echo "Copying wg1.conf to hyperstack..."
-scp "$TMPDIR/server-wg1.conf" "${SSH_USER}@${VM_IP}:/tmp/wg1.conf"
-ssh "${SSH_USER}@${VM_IP}" "sudo mv /tmp/wg1.conf /etc/wireguard/wg1.conf && sudo chmod 600 /etc/wireguard/wg1.conf"
+retry_ssh scp "$TMPDIR/server-wg1.conf" "${SSH_USER}@${VM_IP}:/tmp/wg1.conf"
+retry_ssh ssh "${SSH_USER}@${VM_IP}" "sudo mv /tmp/wg1.conf /etc/wireguard/wg1.conf && sudo chmod 600 /etc/wireguard/wg1.conf"
 print_success "Server config installed"
 
 # Configure firewall on hyperstack
 echo "Configuring firewall (ufw) on hyperstack..."
-ssh "${SSH_USER}@${VM_IP}" << 'REMOTE_SCRIPT'
-# Ensure ufw is enabled
+retry_ssh ssh "${SSH_USER}@${VM_IP}" bash -s << 'REMOTE_SCRIPT'
 sudo ufw allow ssh comment 'Allow SSH' 2>/dev/null || true
 sudo ufw --force enable >/dev/null 2>&1 || true
-
-# Allow WireGuard port
 sudo ufw allow 56710/udp comment 'WireGuard wg1' 2>/dev/null || true
-
-# Allow Ollama access from wg1 subnet
 sudo ufw allow from 192.168.3.0/24 to any port 11434 proto tcp comment 'Ollama via wg1' 2>/dev/null || true
-
 echo "Firewall rules added"
 REMOTE_SCRIPT
 print_success "Firewall configured"
 
-# Configure Ollama to listen on all interfaces
+# Ensure Ollama listens on all interfaces (only if override not already set
+# by ollama_setup_script, which also configures OLLAMA_MODELS and other env vars)
 echo "Configuring Ollama to listen on 0.0.0.0..."
-ssh "${SSH_USER}@${VM_IP}" << 'REMOTE_SCRIPT'
-# Create override directory if it doesn't exist
-sudo mkdir -p /etc/systemd/system/ollama.service.d
-
-# Create or update override.conf to bind Ollama to all interfaces
-cat << 'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null
+retry_ssh ssh "${SSH_USER}@${VM_IP}" bash -s << 'REMOTE_SCRIPT'
+if [ -f /etc/systemd/system/ollama.service.d/override.conf ] && \
+   grep -q 'OLLAMA_HOST' /etc/systemd/system/ollama.service.d/override.conf; then
+  echo "Ollama override already configured, skipping"
+else
+  sudo mkdir -p /etc/systemd/system/ollama.service.d
+  cat << 'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null
 [Service]
 Environment="OLLAMA_HOST=0.0.0.0:11434"
 OVERRIDE
-
-# Reload systemd and restart Ollama
-sudo systemctl daemon-reload
-sudo systemctl restart ollama 2>/dev/null || echo "Note: Ollama service not running or not installed"
+  sudo systemctl daemon-reload
+  sudo systemctl restart ollama 2>/dev/null || echo "Note: Ollama service not running or not installed"
+fi
 REMOTE_SCRIPT
 print_success "Ollama configured"
 
 # Start wg1 on hyperstack
 echo "Starting wg1 on hyperstack..."
-ssh "${SSH_USER}@${VM_IP}" "sudo systemctl start wg-quick@wg1 2>/dev/null || sudo wg-quick up wg1"
+retry_ssh ssh "${SSH_USER}@${VM_IP}" "sudo systemctl start wg-quick@wg1 2>/dev/null || sudo wg-quick up wg1"
 print_success "wg1 started on hyperstack"
 
 echo ""
