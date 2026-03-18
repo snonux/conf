@@ -90,7 +90,8 @@ tensor_parallel_size = 1
 tool_call_parser = "qwen3_coder"
 
 # NVIDIA Nemotron-3-Super-120B-A12B AWQ 4-bit — hybrid Mamba+MoE (12B active / 120B total).
-# ~60 GB weights on A100 80GB; 256K context window (most of 80 GB available for KV cache).
+# ~60 GB weights on A100 80GB. Uses NoPE (no positional embeddings) so context can be set to
+# 1M by just raising max_model_len; no YaRN needed. May OOM above 256K on A100 80GB.
 # Requires trust_remote_code=true for the nemotron_h architecture.
 # Note: cyankiwi AWQ has model_type="nemotron_nas" (underscore); vLLM keys on "nemotron-nas"
 # (hyphen), so vLLM may not recognise it without trust_remote_code and latest vLLM.
@@ -100,7 +101,7 @@ tool_call_parser = "qwen3_coder"
 [vllm.presets.nemotron-super]
 model = "cyankiwi/NVIDIA-Nemotron-3-Super-120B-A12B-AWQ-4bit"
 container_name = "vllm_nemotron_super"
-max_model_len = 65536
+max_model_len = 262144
 gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = "qwen3_xml"
