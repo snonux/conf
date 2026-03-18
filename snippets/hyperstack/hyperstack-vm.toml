@@ -100,7 +100,9 @@ container_name = "vllm_nemotron_super"
 max_model_len = 65536
 gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
-tool_call_parser = ""
+# llama3_json lets vLLM accept tool_choice requests (required by opencode).
+# Nemotron won't spontaneously call tools, so the vLLM 0.17.1 token_ids bug won't trigger.
+tool_call_parser = "llama3_json"
 trust_remote_code = true
 
 # OpenAI GPT-OSS 20B — ultra-fast MoE (3.6B active / 20B total, MXFP4), ~14 GB on A100.

@@ -1106,9 +1106,11 @@ module HyperstackVM
     end
 
     def wait_for_ssh(host)
-      # Remove stale host key for this IP — VMs frequently reuse IPs after
-      # delete/recreate, causing StrictHostKeyChecking to reject the new key
+      # Remove stale host keys for both the IP and the WireGuard hostname — VMs
+      # frequently reuse IPs and the same WireGuard alias after delete/recreate,
+      # causing StrictHostKeyChecking to reject the new host key.
       remove_stale_host_key(host)
+      remove_stale_host_key(@config.wireguard_gateway_hostname)
       info "Waiting for SSH on #{host}:#{@config.ssh_port}..."
       with_polling("SSH on #{host}:#{@config.ssh_port}") do
         next nil unless tcp_open?(host, @config.ssh_port)
