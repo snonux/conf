@@ -31,7 +31,31 @@ end
 module HyperstackVM
   class Error < StandardError; end
 
-  class Config
+  class ConfigLoader
+    attr_reader :path
+
+    def self.load(path)
+      expanded = File.expand_path(path)
+      raise Error, "Config file not found: #{expanded}" unless File.exist?(expanded)
+
+      raw = TomlRB.load_file(expanded)
+      new(raw, expanded)
+    rescue TomlRB::ParseError => e
+      raise Error, "Failed to parse TOML config #{expanded}: #{e.message}"
+    end
+
+    def initialize(raw, path)
+      @path = path
+      @data = deep_merge(DEFAULTS, raw || {})
+      validate!
+    end
+
+    def config
+      Config.new(@data, @path)
+    end
+
+    private
+
     DEFAULTS = {
       'auth' => {
         'api_key_file' => '~/.hyperstack'
@@ -62,7 +86,7 @@ module HyperstackVM
       'network' => {
         'wireguard_udp_port' => 56_710,
         'wireguard_subnet' => '192.168.3.0/24',
-        'ollama_port' => 11_434,  # reused by vLLM for firewall compatibility
+        'ollama_port' => 11_434,
         'litellm_port' => 4_000,
         'allowed_ssh_cidrs' => ['0.0.0.0/0'],
         'allowed_wireguard_cidrs' => ['0.0.0.0/0']
@@ -74,7 +98,6 @@ module HyperstackVM
         'configure_ollama_host' => false
       },
       'ollama' => {
-        # Disabled in favour of vLLM; set install: true to use Ollama instead.
         'install' => false,
         'models_dir' => '/ephemeral/ollama/models',
         'listen_host' => '0.0.0.0:11434',
@@ -84,7 +107,6 @@ module HyperstackVM
         'pull_models' => ['qwen3-coder:30b', 'gpt-oss:20b', 'gpt-oss:120b', 'nemotron-3-super']
       },
       'vllm' => {
-        # vLLM serves one model via Docker; LiteLLM translates Anthropic API → OpenAI chat completions.
         'install' => true,
         'model' => 'bullpoint/Qwen3-Coder-Next-AWQ-4bit',
         'hug_cache_dir' => '/ephemeral/hug',
@@ -93,7 +115,6 @@ module HyperstackVM
         'gpu_memory_utilization' => 0.92,
         'tensor_parallel_size' => 1,
         'tool_call_parser' => 'qwen3_coder',
-        # LiteLLM maps each Claude model alias to the vLLM model; add new Anthropic IDs here.
         'litellm_claude_model_names' => %w[
           claude-sonnet-4-20250514
           claude-opus-4-20250514
@@ -113,22 +134,68 @@ module HyperstackVM
       }
     }.freeze
 
-    attr_reader :path
+    def validate!
+      %w[auth hyperstack state vm ssh network bootstrap ollama vllm wireguard local_client].each do |section|
+        raise Error, "Missing config section [#{section}]" unless @data.key?(section)
+      end
 
-    def self.load(path)
-      expanded = File.expand_path(path)
-      raise Error, "Config file not found: #{expanded}" unless File.exist?(expanded)
+      %w[environment_name flavor_name image_name].each do |key|
+        raise Error, "Missing [vm].#{key} in config #{path}" if blank?(dig('vm', key))
+      end
 
-      raw = TomlRB.load_file(expanded)
-      new(raw, expanded)
-    rescue TomlRB::ParseError => e
-      raise Error, "Failed to parse TOML config #{expanded}: #{e.message}"
+      if fetch('vm', 'hostname') && fetch('vm', 'hostname') !~ /\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z/
+        raise Error,
+              "Invalid [vm].hostname #{fetch('vm',
+                                             'hostname').inspect}; use lowercase letters, digits, and hyphens only."
+      end
+
+      %w[username hyperstack_key_name].each do |key|
+        raise Error, "Missing [ssh].#{key} in config #{path}" if blank?(dig('ssh', key))
+      end
+
+      [fetch('network', 'wireguard_subnet'), *fetch('network', 'allowed_ssh_cidrs'),
+       *fetch('network', 'allowed_wireguard_cidrs')].each do |cidr|
+        IPAddr.new(cidr)
+      rescue IPAddr::InvalidAddressError => e
+        raise Error, "Invalid CIDR #{cidr.inspect}: #{e.message}"
+      end
     end
 
-    def initialize(raw, path)
+    def fetch(section, key)
+      dig(section, key)
+    end
+
+    def dig(*keys)
+      keys.reduce(@data) do |memo, key|
+        memo.is_a?(Hash) ? memo[key] : nil
+      end
+    end
+
+    def blank?(value)
+      value.nil? || value.to_s.strip.empty?
+    end
+
+    def truthy?(value)
+      value == true
+    end
+
+    def deep_merge(left, right)
+      left.merge(right) do |_key, old_value, new_value|
+        if old_value.is_a?(Hash) && new_value.is_a?(Hash)
+          deep_merge(old_value, new_value)
+        else
+          new_value
+        end
+      end
+    end
+  end
+
+  class Config
+    attr_reader :path
+
+    def initialize(data, path = nil)
+      @data = data
       @path = path
-      @data = deep_merge(DEFAULTS, raw || {})
-      validate!
     end
 
     def api_key
@@ -242,8 +309,6 @@ module HyperstackVM
       Integer(fetch('network', 'litellm_port'))
     end
 
-    # Derives the VM's WireGuard IP as the first host in the subnet (network + 1).
-    # E.g. 192.168.3.0/24 → 192.168.3.1
     def wireguard_gateway_ip
       base = IPAddr.new(wireguard_subnet).to_s
       parts = base.split('.').map(&:to_i)
@@ -251,10 +316,6 @@ module HyperstackVM
       parts.join('.')
     end
 
-    # Returns the hostname alias for the WireGuard gateway, using the convention
-    # "hyperstack.<interface>" (e.g. hyperstack.wg1 for the wg1 interface).
-    # This matches the /etc/hosts entry set up by wg1-setup.sh on the local machine
-    # and avoids hardcoding the raw WireGuard IP in connection URLs.
     def wireguard_gateway_hostname
       "hyperstack.#{local_interface_name}"
     end
@@ -303,8 +364,6 @@ module HyperstackVM
       Integer(fetch('ollama', 'num_parallel'))
     end
 
-    # Maximum context length for Ollama inference; keeps KV cache bounded
-    # on single-GPU setups to avoid slow prefill at large context sizes.
     def ollama_context_length
       Integer(fetch('ollama', 'context_length'))
     end
@@ -345,8 +404,6 @@ module HyperstackVM
       fetch('vllm', 'tool_call_parser')
     end
 
-    # Claude model aliases that LiteLLM maps to the vLLM model.
-    # Must match what Claude Code sends in the model field.
     def litellm_claude_model_names
       Array(fetch('vllm', 'litellm_claude_model_names')).map(&:to_s)
     end
@@ -355,8 +412,6 @@ module HyperstackVM
       fetch('vllm', 'litellm_master_key')
     end
 
-    # Returns the hash of named presets from [vllm.presets.*].
-    # Each preset may override any subset of the top-level [vllm] fields.
     def vllm_presets
       Hash(dig('vllm', 'presets')).transform_keys(&:to_s)
     end
@@ -365,8 +420,6 @@ module HyperstackVM
       vllm_presets.keys
     end
 
-    # Resolves a named preset, merging its values over the [vllm] defaults
-    # so callers always get a complete set of parameters.
     def vllm_preset(name)
       raw = vllm_presets[name.to_s]
       unless raw
@@ -374,18 +427,14 @@ module HyperstackVM
         raise Error, "Unknown vLLM preset #{name.inspect}. Available: #{available}"
       end
       {
-        'model'                  => raw['model']                  || vllm_model,
-        'container_name'         => raw['container_name']         || vllm_container_name,
-        'max_model_len'          => Integer(raw['max_model_len']  || vllm_max_model_len),
+        'model' => raw['model'] || vllm_model,
+        'container_name' => raw['container_name'] || vllm_container_name,
+        'max_model_len' => Integer(raw['max_model_len'] || vllm_max_model_len),
         'gpu_memory_utilization' => Float(raw['gpu_memory_utilization'] || vllm_gpu_memory_utilization),
-        'tensor_parallel_size'   => Integer(raw['tensor_parallel_size'] || vllm_tensor_parallel_size),
-        # Empty string means "no tool calling"; use key? so empty string doesn't fall back to default.
-        'tool_call_parser'       => raw.key?('tool_call_parser') ? raw['tool_call_parser'] : vllm_tool_call_parser,
-        # trust_remote_code: required by some models (e.g. Nemotron) for custom architectures.
-        'trust_remote_code'      => raw.key?('trust_remote_code') ? raw['trust_remote_code'] : false,
-        # extra_vllm_args: arbitrary additional flags passed verbatim to the vLLM docker command.
-        # Used for special loaders (Mistral format) or reasoning parsers (deepseek_r1).
-        'extra_vllm_args'        => raw.key?('extra_vllm_args') ? Array(raw['extra_vllm_args']) : []
+        'tensor_parallel_size' => Integer(raw['tensor_parallel_size'] || vllm_tensor_parallel_size),
+        'tool_call_parser' => raw.key?('tool_call_parser') ? raw['tool_call_parser'] : vllm_tool_call_parser,
+        'trust_remote_code' => raw.key?('trust_remote_code') ? raw['trust_remote_code'] : false,
+        'extra_vllm_args' => raw.key?('extra_vllm_args') ? Array(raw['extra_vllm_args']) : []
       }
     end
 
@@ -420,50 +469,12 @@ module HyperstackVM
         rules << firewall_rule('udp', wireguard_udp_port, cidr)
       end
 
-      # Port 11434: shared by Ollama and vLLM (WireGuard-subnet-restricted).
       rules << firewall_rule('tcp', ollama_port, wireguard_subnet)
-      # Port 4000: LiteLLM Anthropic-API proxy (WireGuard-subnet-restricted).
       rules << firewall_rule('tcp', litellm_port, wireguard_subnet)
       rules.uniq
     end
 
     private
-
-    def validate!
-      %w[auth hyperstack state vm ssh network bootstrap ollama vllm wireguard local_client].each do |section|
-        raise Error, "Missing config section [#{section}]" unless @data.key?(section)
-      end
-
-      %w[environment_name flavor_name image_name].each do |key|
-        raise Error, "Missing [vm].#{key} in config #{path}" if blank?(dig('vm', key))
-      end
-
-      if vm_hostname && vm_hostname !~ /\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z/
-        raise Error, "Invalid [vm].hostname #{vm_hostname.inspect}; use lowercase letters, digits, and hyphens only."
-      end
-
-      %w[username hyperstack_key_name].each do |key|
-        raise Error, "Missing [ssh].#{key} in config #{path}" if blank?(dig('ssh', key))
-      end
-
-      [wireguard_subnet, *allowed_ssh_cidrs, *allowed_wireguard_cidrs].each do |cidr|
-        IPAddr.new(cidr)
-      rescue IPAddr::InvalidAddressError => e
-        raise Error, "Invalid CIDR #{cidr.inspect}: #{e.message}"
-      end
-    end
-
-    def firewall_rule(protocol, port, cidr)
-      ip = IPAddr.new(cidr)
-      {
-        'direction' => 'ingress',
-        'ethertype' => ip.ipv4? ? 'IPv4' : 'IPv6',
-        'protocol' => protocol,
-        'port_range_min' => port,
-        'port_range_max' => port,
-        'remote_ip_prefix' => cidr
-      }
-    end
 
     def fetch(section, key)
       dig(section, key)
@@ -508,17 +519,19 @@ module HyperstackVM
       return File.expand_path(string) if string.start_with?('~')
       return string if string.start_with?('/')
 
-      File.expand_path(string, File.dirname(path))
+      File.expand_path(string, File.dirname(@path)) if @path
     end
 
-    def deep_merge(left, right)
-      left.merge(right) do |_key, old_value, new_value|
-        if old_value.is_a?(Hash) && new_value.is_a?(Hash)
-          deep_merge(old_value, new_value)
-        else
-          new_value
-        end
-      end
+    def firewall_rule(protocol, port, cidr)
+      ip = IPAddr.new(cidr)
+      {
+        'direction' => 'ingress',
+        'ethertype' => ip.ipv4? ? 'IPv4' : 'IPv6',
+        'protocol' => protocol,
+        'port_range_min' => port,
+        'port_range_max' => port,
+        'remote_ip_prefix' => cidr
+      }
     end
   end
 
@@ -863,7 +876,7 @@ module HyperstackVM
       current = state&.dig('vllm_model')
 
       if presets.empty?
-        info "No presets configured in [vllm.presets.*]."
+        info 'No presets configured in [vllm.presets.*].'
         info "Active model: #{current || @config.vllm_model}"
         return
       end
@@ -875,13 +888,13 @@ module HyperstackVM
         info "  #{active ? '*' : ' '} #{name.ljust(24)} #{p['model']}"
       end
       info ''
-      info "  (* = currently loaded on VM)" if current
+      info '  (* = currently loaded on VM)' if current
     end
 
     # Switches the running VM to a different named model preset.
     # Stops the old container, starts the new one, and hot-reloads LiteLLM config.
     def switch_model(preset_name:, dry_run: false)
-      preset = @config.vllm_preset(preset_name)  # raises if unknown
+      preset = @config.vllm_preset(preset_name) # raises if unknown
       state  = @state_store.load
 
       old_container = state&.dig('vllm_container_name') || @config.vllm_container_name
@@ -900,8 +913,9 @@ module HyperstackVM
       end
 
       raise Error, "No tracked VM. Run 'create' first." unless state&.dig('vm_id')
+
       host = state['public_ip']
-      raise Error, "No public IP in state file." if host.nil? || host.empty?
+      raise Error, 'No public IP in state file.' if host.nil? || host.empty?
 
       # Stop the old container only when it has a different name from the new one.
       if old_container != new_container
@@ -944,9 +958,7 @@ module HyperstackVM
         test_litellm(wg_ip)
       end
 
-      if @config.ollama_install_enabled?
-        info "  Ollama test: connect via SSH and run 'ollama list' to verify models."
-      end
+      info "  Ollama test: connect via SSH and run 'ollama list' to verify models." if @config.ollama_install_enabled?
 
       info 'All inference tests passed.'
     end
@@ -1024,12 +1036,12 @@ module HyperstackVM
 
       info "VM ready: #{state['public_ip']} (id=#{state['vm_id']})"
       print_local_wireguard_summary(state['public_ip'])
-      if effective_vllm?
-        wg_ip = @config.wireguard_gateway_hostname
-        info "Run 'ruby hyperstack.rb test' to verify vLLM and LiteLLM."
-        info "  vLLM:    http://#{wg_ip}:#{@config.ollama_port}/v1/models"
-        info "  LiteLLM: http://#{wg_ip}:#{@config.litellm_port}/v1/messages"
-      end
+      return unless effective_vllm?
+
+      wg_ip = @config.wireguard_gateway_hostname
+      info "Run 'ruby hyperstack.rb test' to verify vLLM and LiteLLM."
+      info "  vLLM:    http://#{wg_ip}:#{@config.ollama_port}/v1/models"
+      info "  LiteLLM: http://#{wg_ip}:#{@config.litellm_port}/v1/messages"
     end
 
     def build_create_payload(vm_name, resolved)
@@ -1116,7 +1128,7 @@ module HyperstackVM
       with_polling("SSH on #{host}:#{@config.ssh_port}") do
         next nil unless tcp_open?(host, @config.ssh_port)
 
-        stdout, stderr, status = run_ssh_command(host, 'true')
+        _, stderr, status = run_ssh_command(host, 'true')
         if status.success?
           true
         else
@@ -1252,7 +1264,9 @@ module HyperstackVM
       mismatches << "ssh.username must be 'ubuntu'" unless @config.ssh_username == 'ubuntu'
       mismatches << "local_client.interface_name must be 'wg1'" unless @config.local_interface_name == 'wg1'
       mismatches << 'network.wireguard_udp_port must be 56710' unless @config.wireguard_udp_port == 56_710
-      mismatches << "network.wireguard_subnet must be '192.168.3.0/24'" unless @config.wireguard_subnet == '192.168.3.0/24'
+      unless @config.wireguard_subnet == '192.168.3.0/24'
+        mismatches << "network.wireguard_subnet must be '192.168.3.0/24'"
+      end
 
       return if mismatches.empty?
 
@@ -1262,9 +1276,9 @@ module HyperstackVM
     def remove_stale_host_key(host)
       system('ssh-keygen', '-R', host, out: File::NULL, err: File::NULL)
       # Also remove bracketed form for non-standard ports
-      if @config.ssh_port != 22
-        system('ssh-keygen', '-R', "[#{host}]:#{@config.ssh_port}", out: File::NULL, err: File::NULL)
-      end
+      return unless @config.ssh_port != 22
+
+      system('ssh-keygen', '-R', "[#{host}]:#{@config.ssh_port}", out: File::NULL, err: File::NULL)
     end
 
     def failed_vm?(vm)
@@ -1365,9 +1379,7 @@ module HyperstackVM
       end
       if effective_ollama?
         info "Ollama will be installed with models stored under #{@config.ollama_models_dir}"
-        unless desired_ollama_models.empty?
-          info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}"
-        end
+        info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}" unless desired_ollama_models.empty?
       end
       if effective_vllm?
         preset_cfg  = effective_vllm_preset_config
@@ -1401,9 +1413,7 @@ module HyperstackVM
       end
       if ollama_setup_needed?(state)
         info "Ollama would be installed with models stored under #{@config.ollama_models_dir}"
-        unless desired_ollama_models.empty?
-          info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}"
-        end
+        info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}" unless desired_ollama_models.empty?
       end
       if vllm_setup_needed?(state)
         info "vLLM would be installed: #{@config.vllm_model}"
@@ -1521,7 +1531,7 @@ module HyperstackVM
       script = []
       script << 'set -euo pipefail'
       script << 'sudo pkill -f unattended-upgrade >/dev/null 2>&1 || true'
-      script << "if ! command -v ollama >/dev/null 2>&1; then curl -fsSL https://ollama.ai/install.sh | sh; fi"
+      script << 'if ! command -v ollama >/dev/null 2>&1; then curl -fsSL https://ollama.ai/install.sh | sh; fi'
       if models_dir.start_with?('/ephemeral')
         script << "mountpoint -q /ephemeral || { echo 'Expected /ephemeral mount is missing'; exit 1; }"
       end
@@ -1558,11 +1568,11 @@ module HyperstackVM
       model_pulls.each do |model|
         escaped = Shellwords.escape(model)
         script << "echo \"Pulling model #{model}...\""
-        script << "for attempt in 1 2 3; do"
+        script << 'for attempt in 1 2 3; do'
         script << "  if ollama pull #{escaped}; then break; fi"
         script << "  if [ \"$attempt\" -eq 3 ]; then echo \"FATAL: failed to pull #{model} after 3 attempts\"; exit 1; fi"
-        script << "  echo \"  pull attempt $attempt failed, retrying in 15s...\"; sleep 15"
-        script << "done"
+        script << '  echo "  pull attempt $attempt failed, retrying in 15s..."; sleep 15'
+        script << 'done'
         script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} not found after pull\"; exit 1; }"
       end
       # Final verification: ensure all expected models are listed
@@ -1632,8 +1642,8 @@ module HyperstackVM
     # preset_config overrides individual fields; unset fields fall back to [vllm] defaults.
     def vllm_install_script(preset_config: nil)
       cfg              = preset_config || {}
-      model            = cfg['model']                  || @config.vllm_model
-      cache_dir        = @config.vllm_hug_cache_dir    # always use main config for shared cache
+      model            = cfg['model'] || @config.vllm_model
+      cache_dir        = @config.vllm_hug_cache_dir # always use main config for shared cache
       container        = cfg['container_name']         || @config.vllm_container_name
       max_len          = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
       gpu_util         = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
@@ -1643,7 +1653,7 @@ module HyperstackVM
       # empty string means "disable tool calling" (e.g. gpt-oss reasoning models).
       parser           = @config.vllm_tool_call_parser if parser.nil?
       trust_remote     = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : false
-      port             = @config.ollama_port  # vLLM reuses the Ollama port for firewall compat
+      port             = @config.ollama_port # vLLM reuses the Ollama port for firewall compat
 
       docker_args = [
         'docker run -d',
@@ -1685,7 +1695,7 @@ module HyperstackVM
       #   warm restart: model load + CUDA graphs ≈ 100 s
       # Timeout: 120 × 5 s = 10 minutes
       script << 'echo "Waiting for vLLM to become ready (up to 10 min for first model download)..."'
-      script << "for i in $(seq 1 120); do"
+      script << 'for i in $(seq 1 120); do'
       script << "  if curl -sf http://localhost:#{port}/v1/models >/dev/null 2>&1; then echo vllm-ready; break; fi"
       script << "  state=$(docker inspect --format='{{.State.Status}}' #{Shellwords.escape(container)} 2>/dev/null || echo unknown)"
       script << '  echo "  vLLM not ready yet ($i/120, container=$state)..."'
@@ -1705,7 +1715,7 @@ module HyperstackVM
       vllm_port   = @config.ollama_port
       model       = model_override || @config.vllm_model
       claude_names = @config.litellm_claude_model_names
-      master_key  = @config.litellm_master_key
+      master_key = @config.litellm_master_key
 
       # Build model_list YAML entries; each Claude alias maps to the vLLM model.
       # "hosted_vllm/" prefix forces LiteLLM to use /v1/chat/completions (not /v1/responses).
@@ -1770,10 +1780,10 @@ module HyperstackVM
     # the service in place — faster than litellm_install_script because it skips
     # the venv creation and apt-get steps that are already in place.
     def litellm_reload_script(model)
-      port        = @config.litellm_port
-      vllm_port   = @config.ollama_port
+      @config.litellm_port
+      vllm_port = @config.ollama_port
       claude_names = @config.litellm_claude_model_names
-      master_key  = @config.litellm_master_key
+      master_key = @config.litellm_master_key
 
       model_entries = claude_names.flat_map do |name|
         [
@@ -1820,7 +1830,7 @@ module HyperstackVM
       # Use the currently loaded model (may differ from config default after a switch).
       model = models.first
       info "    Models loaded: #{models.join(', ')}"
-      info "  Testing vLLM inference..."
+      info '  Testing vLLM inference...'
       reply = vllm_chat(wg_ip, port, model, 'Say hello in five words.')
       info "    vLLM response: #{reply}"
     rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH, SocketError => e
@@ -1942,15 +1952,15 @@ module HyperstackVM
       command = @argv.shift
       raise Error, 'Missing command. Use create, delete, or status.' if command.nil?
 
-      config = Config.load(global[:config_path])
-      state_store = StateStore.new(config.state_file)
-      client = HyperstackClient.new(base_url: config.api_base_url, api_key: config.api_key)
+      config_loader = ConfigLoader.load(global[:config_path])
+      state_store = StateStore.new(config_loader.config.state_file)
+      client = HyperstackClient.new(base_url: config_loader.config.api_base_url, api_key: config_loader.config.api_key)
       local_wireguard = LocalWireGuard.new(
-        interface_name: config.local_interface_name,
-        config_path: config.local_wg_config_path
+        interface_name: config_loader.config.local_interface_name,
+        config_path: config_loader.config.local_wg_config_path
       )
       manager = Manager.new(
-        config: config,
+        config: config_loader.config,
         client: client,
         state_store: state_store,
         local_wireguard: local_wireguard
@@ -1992,13 +2002,15 @@ module HyperstackVM
         manager.test
       when 'model'
         sub = @argv.shift
-        raise Error, "Missing model subcommand. Use: model list | model switch PRESET [--dry-run]" if sub.nil?
+        raise Error, 'Missing model subcommand. Use: model list | model switch PRESET [--dry-run]' if sub.nil?
+
         case sub
         when 'list'
           manager.list_models
         when 'switch'
           preset = @argv.shift
-          raise Error, "Missing preset name. Usage: model switch PRESET [--dry-run]" if preset.nil?
+          raise Error, 'Missing preset name. Usage: model switch PRESET [--dry-run]' if preset.nil?
+
           dry_run = false
           OptionParser.new { |o| o.on('--dry-run') { dry_run = true } }.parse!(@argv)
           manager.switch_model(preset_name: preset, dry_run: dry_run)
