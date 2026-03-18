@@ -251,6 +251,14 @@ module HyperstackVM
       parts.join('.')
     end
 
+    # Returns the hostname alias for the WireGuard gateway, using the convention
+    # "hyperstack.<interface>" (e.g. hyperstack.wg1 for the wg1 interface).
+    # This matches the /etc/hosts entry set up by wg1-setup.sh on the local machine
+    # and avoids hardcoding the raw WireGuard IP in connection URLs.
+    def wireguard_gateway_hostname
+      "hyperstack.#{local_interface_name}"
+    end
+
     def allowed_ssh_cidrs
       Array(fetch('network', 'allowed_ssh_cidrs')).map(&:to_s)
     end
@@ -371,7 +379,8 @@ module HyperstackVM
         'max_model_len'          => Integer(raw['max_model_len']  || vllm_max_model_len),
         'gpu_memory_utilization' => Float(raw['gpu_memory_utilization'] || vllm_gpu_memory_utilization),
         'tensor_parallel_size'   => Integer(raw['tensor_parallel_size'] || vllm_tensor_parallel_size),
-        'tool_call_parser'       => raw['tool_call_parser']       || vllm_tool_call_parser,
+        # Empty string means "no tool calling"; use key? so empty string doesn't fall back to default.
+        'tool_call_parser'       => raw.key?('tool_call_parser') ? raw['tool_call_parser'] : vllm_tool_call_parser,
         # trust_remote_code: required by some models (e.g. Nemotron) for custom architectures.
         'trust_remote_code'      => raw.key?('trust_remote_code') ? raw['trust_remote_code'] : false
       }
@@ -879,8 +888,9 @@ module HyperstackVM
         info "DRY RUN: model switch to preset '#{preset_name}'"
         info "  #{current_model || 'none'} → #{preset['model']}"
         info "  container: #{old_container} → #{new_container}"
-        trust_note = preset['trust_remote_code'] ? ', trust_remote_code: true' : ''
-        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{preset['tool_call_parser']}#{trust_note}"
+        trust_note  = preset['trust_remote_code'] ? ', trust_remote_code: true' : ''
+        parser_note = preset['tool_call_parser'].to_s.empty? ? 'none' : preset['tool_call_parser']
+        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{parser_note}#{trust_note}"
         return
       end
 
@@ -921,7 +931,7 @@ module HyperstackVM
       state = @state_store.load
       raise Error, "No tracked VM state file found at #{@state_store.path}." if state.nil?
 
-      wg_ip = @config.wireguard_gateway_ip
+      wg_ip = @config.wireguard_gateway_hostname
       info "Running end-to-end inference tests via WireGuard (#{wg_ip})..."
 
       if @config.vllm_install_enabled?
@@ -1010,7 +1020,7 @@ module HyperstackVM
       info "VM ready: #{state['public_ip']} (id=#{state['vm_id']})"
       print_local_wireguard_summary(state['public_ip'])
       if effective_vllm?
-        wg_ip = @config.wireguard_gateway_ip
+        wg_ip = @config.wireguard_gateway_hostname
         info "Run 'ruby hyperstack.rb test' to verify vLLM and LiteLLM."
         info "  vLLM:    http://#{wg_ip}:#{@config.ollama_port}/v1/models"
         info "  LiteLLM: http://#{wg_ip}:#{@config.litellm_port}/v1/messages"
@@ -1621,7 +1631,10 @@ module HyperstackVM
       max_len          = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
       gpu_util         = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
       tp_size          = Integer(cfg['tensor_parallel_size'] || @config.vllm_tensor_parallel_size)
-      parser           = cfg['tool_call_parser']       || @config.vllm_tool_call_parser
+      parser           = cfg['tool_call_parser']
+      # parser is nil only when preset explicitly omits the key and config has no default;
+      # empty string means "disable tool calling" (e.g. gpt-oss reasoning models).
+      parser           = @config.vllm_tool_call_parser if parser.nil?
       trust_remote     = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : false
       port             = @config.ollama_port  # vLLM reuses the Ollama port for firewall compat
 
@@ -1634,14 +1647,18 @@ module HyperstackVM
         'vllm/vllm-openai:latest',
         "--model #{Shellwords.escape(model)}",
         "--tensor-parallel-size #{tp_size}",
-        '--enable-auto-tool-choice',
-        "--tool-call-parser #{Shellwords.escape(parser)}",
         '--enable-prefix-caching',
         "--gpu-memory-utilization #{gpu_util}",
         "--max-model-len #{max_len}",
         '--host 0.0.0.0',
         "--port #{port}"
       ]
+      # Tool calling is optional: empty/nil parser disables it (e.g. gpt-oss reasoning models
+      # crash vLLM's llama3_json parser due to the extra token_ids field in responses).
+      unless parser.nil? || parser.empty?
+        docker_args << '--enable-auto-tool-choice'
+        docker_args << "--tool-call-parser #{Shellwords.escape(parser)}"
+      end
       docker_args << '--trust-remote-code' if trust_remote
       docker_run = docker_args.join(' ')
 
@@ -1816,7 +1833,9 @@ module HyperstackVM
       req['anthropic-version'] = '2023-06-01'
       req.body = JSON.generate(
         'model' => model,
-        'max_tokens' => 50,
+        # 500 tokens: reasoning models (e.g. gpt-oss) consume tokens on chain-of-thought
+        # before producing content; 50 is too small and yields an empty content field.
+        'max_tokens' => 500,
         'messages' => [{ 'role' => 'user', 'content' => 'Say hello in five words.' }]
       )
       resp = Net::HTTP.start(uri.host, uri.port, open_timeout: 10, read_timeout: 120) { |h| h.request(req) }
@@ -1837,7 +1856,9 @@ module HyperstackVM
       req.body = JSON.generate(
         'model' => model,
         'messages' => [{ 'role' => 'user', 'content' => prompt }],
-        'max_tokens' => 50
+        # 500 tokens: reasoning models (e.g. gpt-oss) use tokens for chain-of-thought
+        # before content; 50 is too small and yields an empty content field.
+        'max_tokens' => 500
       )
       resp = Net::HTTP.start(uri.host, uri.port, open_timeout: 10, read_timeout: 120) { |h| h.request(req) }
       raise Error, "vLLM inference returned HTTP #{resp.code}" unless resp.code == '200'

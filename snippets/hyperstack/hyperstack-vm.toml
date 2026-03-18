@@ -102,6 +102,51 @@ gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = "llama3_json"
 
+# OpenAI GPT-OSS 20B — ultra-fast MoE (3.6B active / 20B total, MXFP4), ~14 GB on A100.
+# Native MXFP4 quantization; vLLM auto-detects it (no --quantization flag needed).
+# With only 14 GB weights, most of the 80 GB is available for KV cache (64K+ context).
+# tool_call_parser = "" disables --enable-auto-tool-choice: the llama3_json parser crashes
+# on gpt-oss responses (vLLM 0.17.1 adds token_ids to responses, breaking the parser API).
+[vllm.presets.gpt-oss-20b]
+model = "openai/gpt-oss-20b"
+container_name = "vllm_gpt_oss_20b"
+max_model_len = 65536
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = ""
+
+# OpenAI GPT-OSS 120B — powerful MoE (5.1B active / 117B total, MXFP4), ~65 GB on A100.
+# Leaves ~8 GB for KV cache; 40K context is the practical ceiling on a single A100 80GB.
+# Set >= 40K so Claude Code's ~33K system prompt fits (opencode needs only ~14K).
+# tool_call_parser = "" disables --enable-auto-tool-choice (same reason as gpt-oss-20b).
+[vllm.presets.gpt-oss-120b]
+model = "openai/gpt-oss-120b"
+container_name = "vllm_gpt_oss_120b"
+max_model_len = 40960
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = ""
+
+# Qwen2.5-Coder-32B-Instruct AWQ — best-in-class open coding model at 32B, ~18 GB on A100.
+# Official Qwen AWQ release; max_position_embeddings=32768 per model config.json.
+[vllm.presets.qwen25-coder-32b]
+model = "Qwen/Qwen2.5-Coder-32B-Instruct-AWQ"
+container_name = "vllm_qwen25_coder32b"
+max_model_len = 32768
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = "hermes"
+
+# Qwen3-Coder-30B-A3B AWQ — Qwen3 generation coding MoE (3B active / 30B total), ~18 GB.
+# Note: model card warns of significant quality loss at 4-bit for this MoE architecture.
+[vllm.presets.qwen3-coder-30b]
+model = "QuantTrio/Qwen3-Coder-30B-A3B-Instruct-AWQ"
+container_name = "vllm_qwen3_coder30b"
+max_model_len = 65536
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = "qwen3_coder"
+
 [wireguard]
 auto_setup = true
 setup_script = "./wg1-setup.sh"
