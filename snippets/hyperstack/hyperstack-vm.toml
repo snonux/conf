@@ -75,6 +75,32 @@ litellm_claude_model_names = [
   "claude-haiku-3-5-20241022"
 ]
 
+# Named model presets for 'ruby hyperstack.rb model switch <name>'.
+# Each preset overrides the matching [vllm] field; unset fields fall back to [vllm] defaults.
+# Switch examples:
+#   ruby hyperstack.rb model switch qwen3-coder-next  # fast coding, 256k context
+#   ruby hyperstack.rb model switch nemotron-super     # extended analysis, 131k context
+
+[vllm.presets.qwen3-coder-next]
+model = "bullpoint/Qwen3-Coder-Next-AWQ-4bit"
+container_name = "vllm_qwen3"
+max_model_len = 262144
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = "qwen3_coder"
+
+# Nemotron-Super 49B AWQ — deep reasoning / extended code analysis.
+# ~25 GB weights + KV cache fits comfortably on A100 80GB.
+# Verify the exact HuggingFace AWQ model ID before first use:
+#   curl -s http://192.168.3.1:11434/v1/models | python3 -m json.tool
+[vllm.presets.nemotron-super]
+model = "solidrust/Llama-3.3-Nemotron-Super-49B-v1-AWQ"
+container_name = "vllm_nemotron"
+max_model_len = 131072
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = "llama3_json"
+
 [wireguard]
 auto_setup = true
 setup_script = "./wg1-setup.sh"

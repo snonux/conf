@@ -347,6 +347,34 @@ module HyperstackVM
       fetch('vllm', 'litellm_master_key')
     end
 
+    # Returns the hash of named presets from [vllm.presets.*].
+    # Each preset may override any subset of the top-level [vllm] fields.
+    def vllm_presets
+      Hash(dig('vllm', 'presets')).transform_keys(&:to_s)
+    end
+
+    def vllm_preset_names
+      vllm_presets.keys
+    end
+
+    # Resolves a named preset, merging its values over the [vllm] defaults
+    # so callers always get a complete set of parameters.
+    def vllm_preset(name)
+      raw = vllm_presets[name.to_s]
+      unless raw
+        available = vllm_preset_names.empty? ? 'none configured' : vllm_preset_names.join(', ')
+        raise Error, "Unknown vLLM preset #{name.inspect}. Available: #{available}"
+      end
+      {
+        'model'                  => raw['model']                  || vllm_model,
+        'container_name'         => raw['container_name']         || vllm_container_name,
+        'max_model_len'          => Integer(raw['max_model_len']  || vllm_max_model_len),
+        'gpu_memory_utilization' => Float(raw['gpu_memory_utilization'] || vllm_gpu_memory_utilization),
+        'tensor_parallel_size'   => Integer(raw['tensor_parallel_size'] || vllm_tensor_parallel_size),
+        'tool_call_parser'       => raw['tool_call_parser']       || vllm_tool_call_parser
+      }
+    end
+
     def local_client_checks_enabled?
       truthy?(fetch('local_client', 'check_wg1_service'))
     end
@@ -705,10 +733,13 @@ module HyperstackVM
       @out = out
     end
 
-    def create(replace: false, dry_run: false, install_vllm: nil, install_ollama: nil)
+    def create(replace: false, dry_run: false, install_vllm: nil, install_ollama: nil, vllm_preset: nil)
       # CLI flags override config; nil means "use config default".
       @effective_vllm = install_vllm.nil? ? @config.vllm_install_enabled? : install_vllm
       @effective_ollama = install_ollama.nil? ? @config.ollama_install_enabled? : install_ollama
+      # Validate preset name early so we fail before touching any remote state.
+      @effective_vllm_preset = vllm_preset
+      @config.vllm_preset(vllm_preset) if vllm_preset
       existing_state = @state_store.load
       if existing_state && existing_state['vm_id']
         if replace
@@ -810,6 +841,77 @@ module HyperstackVM
       print_local_wireguard_summary(state&.dig('public_ip'))
     end
 
+    # Lists configured model presets and marks the one currently running on the VM.
+    def list_models
+      presets = @config.vllm_preset_names
+      state   = @state_store.load
+      current = state&.dig('vllm_model')
+
+      if presets.empty?
+        info "No presets configured in [vllm.presets.*]."
+        info "Active model: #{current || @config.vllm_model}"
+        return
+      end
+
+      info 'Configured vLLM model presets:'
+      presets.each do |name|
+        p      = @config.vllm_preset(name)
+        active = p['model'] == current
+        info "  #{active ? '*' : ' '} #{name.ljust(24)} #{p['model']}"
+      end
+      info ''
+      info "  (* = currently loaded on VM)" if current
+    end
+
+    # Switches the running VM to a different named model preset.
+    # Stops the old container, starts the new one, and hot-reloads LiteLLM config.
+    def switch_model(preset_name:, dry_run: false)
+      preset = @config.vllm_preset(preset_name)  # raises if unknown
+      state  = @state_store.load
+
+      old_container = state&.dig('vllm_container_name') || @config.vllm_container_name
+      new_container = preset['container_name']
+      current_model = state&.dig('vllm_model')
+
+      if dry_run
+        info "DRY RUN: model switch to preset '#{preset_name}'"
+        info "  #{current_model || 'none'} → #{preset['model']}"
+        info "  container: #{old_container} → #{new_container}"
+        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{preset['tool_call_parser']}"
+        return
+      end
+
+      raise Error, "No tracked VM. Run 'create' first." unless state&.dig('vm_id')
+      host = state['public_ip']
+      raise Error, "No public IP in state file." if host.nil? || host.empty?
+
+      # Stop the old container only when it has a different name from the new one.
+      if old_container != new_container
+        info "Stopping old vLLM container #{old_container}..."
+        output, status = run_ssh_command_streaming(host, vllm_stop_script(old_container))
+        raise Error, "Failed to stop container #{old_container}: #{output.strip}" unless status.success?
+      end
+
+      info "Starting vLLM with preset '#{preset_name}' (#{preset['model']})..."
+      output, status = run_ssh_command_streaming(host, vllm_install_script(preset_config: preset))
+      raise Error, "vLLM install failed: #{output.strip}" unless status.success?
+
+      # Hot-reload LiteLLM: rewrite config for the new model and restart the service.
+      # Skips venv/apt install since those are already in place.
+      info "Reloading LiteLLM proxy config for #{preset['model']}..."
+      output, status = run_ssh_command_streaming(host, litellm_reload_script(preset['model']))
+      raise Error, "LiteLLM reload failed: #{output.strip}" unless status.success?
+
+      state['vllm_model']          = preset['model']
+      state['vllm_container_name'] = new_container
+      state['vllm_preset']         = preset_name
+      state['vllm_setup_at']       = Time.now.utc.iso8601
+      @state_store.save(state)
+
+      info "Model switched to '#{preset_name}' (#{preset['model']})."
+      info "Run 'ruby hyperstack.rb test' to verify."
+    end
+
     # Runs end-to-end inference tests against vLLM and LiteLLM over WireGuard.
     # Requires wg1 to be active and the VM to be fully provisioned.
     def test
@@ -886,9 +988,12 @@ module HyperstackVM
       # Set up vLLM (Docker container) + LiteLLM (Anthropic-API proxy) after
       # the tunnel is up so that model-download progress is visible locally.
       if vllm_setup_needed?(state)
-        setup_vllm_stack(state['public_ip'])
-        state['vllm_setup_at'] = Time.now.utc.iso8601
-        state['vllm_model'] = @config.vllm_model
+        preset_cfg = effective_vllm_preset_config
+        setup_vllm_stack(state['public_ip'], preset_config: preset_cfg)
+        state['vllm_setup_at']       = Time.now.utc.iso8601
+        state['vllm_model']          = preset_cfg&.dig('model')          || @config.vllm_model
+        state['vllm_container_name'] = preset_cfg&.dig('container_name') || @config.vllm_container_name
+        state['vllm_preset']         = @effective_vllm_preset
         @state_store.save(state)
       end
 
@@ -1245,8 +1350,13 @@ module HyperstackVM
         end
       end
       if effective_vllm?
-        info "vLLM will be installed: #{@config.vllm_model}"
-        info "  Container: #{@config.vllm_container_name}, port #{@config.ollama_port}, max_model_len #{@config.vllm_max_model_len}"
+        preset_cfg  = effective_vllm_preset_config
+        vllm_m      = preset_cfg&.dig('model')          || @config.vllm_model
+        vllm_cname  = preset_cfg&.dig('container_name') || @config.vllm_container_name
+        vllm_maxlen = preset_cfg&.dig('max_model_len')  || @config.vllm_max_model_len
+        preset_note = @effective_vllm_preset ? " (preset: #{@effective_vllm_preset})" : ''
+        info "vLLM will be installed: #{vllm_m}#{preset_note}"
+        info "  Container: #{vllm_cname}, port #{@config.ollama_port}, max_model_len #{vllm_maxlen}"
         info "LiteLLM proxy will be installed on port #{@config.litellm_port}"
         info "  Claude model aliases: #{@config.litellm_claude_model_names.join(', ')}"
       end
@@ -1456,35 +1566,59 @@ module HyperstackVM
       defined?(@effective_vllm) ? @effective_vllm : @config.vllm_install_enabled?
     end
 
-    def vllm_setup_needed?(state)
-      return false unless effective_vllm?
-      # Re-run if never set up, or if the configured model changed since last setup.
-      return true if state['vllm_setup_at'].nil?
+    # Returns the resolved preset config hash when a preset was selected via
+    # --model, or nil when using the top-level [vllm] defaults directly.
+    def effective_vllm_preset_config
+      name = defined?(@effective_vllm_preset) ? @effective_vllm_preset : nil
+      return nil unless name
 
-      state['vllm_model'] != @config.vllm_model
+      @config.vllm_preset(name)
     end
 
-    def setup_vllm_stack(host)
+    def vllm_setup_needed?(state)
+      return false unless effective_vllm?
+      return true if state['vllm_setup_at'].nil?
+
+      # Re-run if the active model changed (direct config edit or --model preset flag).
+      desired = effective_vllm_preset_config&.dig('model') || @config.vllm_model
+      state['vllm_model'] != desired
+    end
+
+    # Generates a script that stops and removes a named Docker container.
+    # Used when switching to a preset whose container_name differs from the current one.
+    def vllm_stop_script(container_name)
+      script = []
+      script << 'set -euo pipefail'
+      script << "docker stop #{Shellwords.escape(container_name)} 2>/dev/null || true"
+      script << "docker rm #{Shellwords.escape(container_name)} 2>/dev/null || true"
+      script << 'echo vllm-stopped'
+      script.join("\n")
+    end
+
+    def setup_vllm_stack(host, preset_config: nil)
       info "Setting up vLLM Docker container on #{host}..."
-      output, status = run_ssh_command_streaming(host, vllm_install_script)
+      output, status = run_ssh_command_streaming(host, vllm_install_script(preset_config: preset_config))
       raise Error, "vLLM install failed: #{output.strip}" unless status.success?
 
+      model = preset_config&.dig('model') || @config.vllm_model
       info "Setting up LiteLLM Anthropic-API proxy on #{host}..."
-      output, status = run_ssh_command_streaming(host, litellm_install_script)
+      output, status = run_ssh_command_streaming(host, litellm_install_script(model_override: model))
       raise Error, "LiteLLM install failed: #{output.strip}" unless status.success?
     end
 
     # Generates the remote shell script that pulls the vLLM Docker image, starts
     # the container, and polls until the model is fully loaded (up to 10 minutes
     # to cover the first-run ~45 GB model download).
-    def vllm_install_script
-      model     = @config.vllm_model
-      cache_dir = @config.vllm_hug_cache_dir
-      container = @config.vllm_container_name
-      max_len   = @config.vllm_max_model_len
-      gpu_util  = @config.vllm_gpu_memory_utilization
-      tp_size   = @config.vllm_tensor_parallel_size
-      parser    = @config.vllm_tool_call_parser
+    # preset_config overrides individual fields; unset fields fall back to [vllm] defaults.
+    def vllm_install_script(preset_config: nil)
+      cfg       = preset_config || {}
+      model     = cfg['model']                  || @config.vllm_model
+      cache_dir = @config.vllm_hug_cache_dir    # always use main config for shared cache
+      container = cfg['container_name']         || @config.vllm_container_name
+      max_len   = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
+      gpu_util  = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
+      tp_size   = Integer(cfg['tensor_parallel_size'] || @config.vllm_tensor_parallel_size)
+      parser    = cfg['tool_call_parser']       || @config.vllm_tool_call_parser
       port      = @config.ollama_port  # vLLM reuses the Ollama port for firewall compat
 
       docker_run = [
@@ -1533,10 +1667,11 @@ module HyperstackVM
     # Generates the remote shell script that installs LiteLLM in a Python venv,
     # writes a config mapping Claude model aliases to the vLLM endpoint, and
     # starts the proxy as a systemd service on litellm_port.
-    def litellm_install_script
+    # model_override replaces the HuggingFace model name in the generated YAML.
+    def litellm_install_script(model_override: nil)
       port        = @config.litellm_port
       vllm_port   = @config.ollama_port
-      model       = @config.vllm_model
+      model       = model_override || @config.vllm_model
       claude_names = @config.litellm_claude_model_names
       master_key  = @config.litellm_master_key
 
@@ -1596,6 +1731,44 @@ module HyperstackVM
       script << 'sleep 5'
       script << 'systemctl is-active --quiet litellm'
       script << 'echo litellm-install-ok'
+      script.join("\n")
+    end
+
+    # Rewrites /ephemeral/litellm-config.yaml for a different model and restarts
+    # the service in place — faster than litellm_install_script because it skips
+    # the venv creation and apt-get steps that are already in place.
+    def litellm_reload_script(model)
+      port        = @config.litellm_port
+      vllm_port   = @config.ollama_port
+      claude_names = @config.litellm_claude_model_names
+      master_key  = @config.litellm_master_key
+
+      model_entries = claude_names.flat_map do |name|
+        [
+          "  - model_name: \"#{name}\"",
+          '    litellm_params:',
+          "      model: \"hosted_vllm/#{model}\"",
+          "      api_base: \"http://localhost:#{vllm_port}/v1\"",
+          '      api_key: "EMPTY"'
+        ]
+      end
+
+      script = []
+      script << 'set -euo pipefail'
+      script << "sudo tee /ephemeral/litellm-config.yaml > /dev/null << 'LITELLM_YAML'"
+      script << 'model_list:'
+      script.concat(model_entries)
+      script << ''
+      script << 'litellm_settings:'
+      script << '  drop_params: true'
+      script << ''
+      script << 'general_settings:'
+      script << "  master_key: \"#{master_key}\""
+      script << 'LITELLM_YAML'
+      script << 'sudo systemctl restart litellm'
+      script << 'sleep 3'
+      script << 'systemctl is-active --quiet litellm'
+      script << 'echo litellm-reload-ok'
       script.join("\n")
     end
 
@@ -1718,10 +1891,12 @@ module HyperstackVM
           puts opts
           puts
           puts 'Commands:'
-          puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama]'
+          puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama] [--model PRESET]'
           puts '  delete [--vm-id ID] [--dry-run]'
           puts '  status'
           puts '  test'
+          puts '  model list'
+          puts '  model switch PRESET [--dry-run]'
           exit 0
         end
       end
@@ -1750,6 +1925,7 @@ module HyperstackVM
         dry_run = false
         install_vllm = nil
         install_ollama = nil
+        vllm_preset = nil
         parser = OptionParser.new do |opts|
           opts.on('--replace', 'Delete the tracked VM before creating a new one') { replace = true }
           opts.on('--dry-run', 'Resolve config and print the create plan without creating a VM') { dry_run = true }
@@ -1757,9 +1933,11 @@ module HyperstackVM
           opts.on('--no-vllm', 'Disable vLLM+LiteLLM setup (overrides config)') { install_vllm = false }
           opts.on('--ollama', 'Enable Ollama setup (overrides config)') { install_ollama = true }
           opts.on('--no-ollama', 'Disable Ollama setup (overrides config)') { install_ollama = false }
+          opts.on('--model PRESET', 'Use a named vLLM model preset at create time') { |v| vllm_preset = v }
         end
         parser.parse!(@argv)
-        manager.create(replace: replace, dry_run: dry_run, install_vllm: install_vllm, install_ollama: install_ollama)
+        manager.create(replace: replace, dry_run: dry_run, install_vllm: install_vllm,
+                       install_ollama: install_ollama, vllm_preset: vllm_preset)
       when 'delete'
         vm_id = nil
         dry_run = false
@@ -1775,8 +1953,23 @@ module HyperstackVM
         manager.status
       when 'test'
         manager.test
+      when 'model'
+        sub = @argv.shift
+        raise Error, "Missing model subcommand. Use: model list | model switch PRESET [--dry-run]" if sub.nil?
+        case sub
+        when 'list'
+          manager.list_models
+        when 'switch'
+          preset = @argv.shift
+          raise Error, "Missing preset name. Usage: model switch PRESET [--dry-run]" if preset.nil?
+          dry_run = false
+          OptionParser.new { |o| o.on('--dry-run') { dry_run = true } }.parse!(@argv)
+          manager.switch_model(preset_name: preset, dry_run: dry_run)
+        else
+          raise Error, "Unknown model subcommand #{sub.inspect}. Use list or switch."
+        end
       else
-        raise Error, "Unknown command #{command.inspect}. Use create, delete, status, or test."
+        raise Error, "Unknown command #{command.inspect}. Use create, delete, status, test, or model."
       end
     end
   end
