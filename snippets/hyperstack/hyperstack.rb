@@ -371,7 +371,9 @@ module HyperstackVM
         'max_model_len'          => Integer(raw['max_model_len']  || vllm_max_model_len),
         'gpu_memory_utilization' => Float(raw['gpu_memory_utilization'] || vllm_gpu_memory_utilization),
         'tensor_parallel_size'   => Integer(raw['tensor_parallel_size'] || vllm_tensor_parallel_size),
-        'tool_call_parser'       => raw['tool_call_parser']       || vllm_tool_call_parser
+        'tool_call_parser'       => raw['tool_call_parser']       || vllm_tool_call_parser,
+        # trust_remote_code: required by some models (e.g. Nemotron) for custom architectures.
+        'trust_remote_code'      => raw.key?('trust_remote_code') ? raw['trust_remote_code'] : false
       }
     end
 
@@ -877,7 +879,8 @@ module HyperstackVM
         info "DRY RUN: model switch to preset '#{preset_name}'"
         info "  #{current_model || 'none'} → #{preset['model']}"
         info "  container: #{old_container} → #{new_container}"
-        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{preset['tool_call_parser']}"
+        trust_note = preset['trust_remote_code'] ? ', trust_remote_code: true' : ''
+        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{preset['tool_call_parser']}#{trust_note}"
         return
       end
 
@@ -1611,17 +1614,18 @@ module HyperstackVM
     # to cover the first-run ~45 GB model download).
     # preset_config overrides individual fields; unset fields fall back to [vllm] defaults.
     def vllm_install_script(preset_config: nil)
-      cfg       = preset_config || {}
-      model     = cfg['model']                  || @config.vllm_model
-      cache_dir = @config.vllm_hug_cache_dir    # always use main config for shared cache
-      container = cfg['container_name']         || @config.vllm_container_name
-      max_len   = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
-      gpu_util  = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
-      tp_size   = Integer(cfg['tensor_parallel_size'] || @config.vllm_tensor_parallel_size)
-      parser    = cfg['tool_call_parser']       || @config.vllm_tool_call_parser
-      port      = @config.ollama_port  # vLLM reuses the Ollama port for firewall compat
+      cfg              = preset_config || {}
+      model            = cfg['model']                  || @config.vllm_model
+      cache_dir        = @config.vllm_hug_cache_dir    # always use main config for shared cache
+      container        = cfg['container_name']         || @config.vllm_container_name
+      max_len          = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
+      gpu_util         = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
+      tp_size          = Integer(cfg['tensor_parallel_size'] || @config.vllm_tensor_parallel_size)
+      parser           = cfg['tool_call_parser']       || @config.vllm_tool_call_parser
+      trust_remote     = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : false
+      port             = @config.ollama_port  # vLLM reuses the Ollama port for firewall compat
 
-      docker_run = [
+      docker_args = [
         'docker run -d',
         '--gpus all', '--ipc=host', '--network host',
         "--name #{Shellwords.escape(container)}",
@@ -1637,7 +1641,9 @@ module HyperstackVM
         "--max-model-len #{max_len}",
         '--host 0.0.0.0',
         "--port #{port}"
-      ].join(' ')
+      ]
+      docker_args << '--trust-remote-code' if trust_remote
+      docker_run = docker_args.join(' ')
 
       script = []
       script << 'set -euo pipefail'
@@ -1775,8 +1781,7 @@ module HyperstackVM
     # Tests the vLLM OpenAI-compatible API: lists loaded models and runs a
     # short inference request to confirm the model accepts requests.
     def test_vllm(wg_ip)
-      port  = @config.ollama_port
-      model = @config.vllm_model
+      port = @config.ollama_port
 
       info "  Testing vLLM models list at http://#{wg_ip}:#{port}/v1/models..."
       uri  = URI("http://#{wg_ip}:#{port}/v1/models")
@@ -1784,8 +1789,10 @@ module HyperstackVM
       raise Error, "vLLM /v1/models returned HTTP #{resp.code}" unless resp.code == '200'
 
       models = JSON.parse(resp.body).fetch('data', []).map { |m| m['id'] }
-      raise Error, "vLLM returned an empty model list (expected #{model})" if models.empty?
+      raise Error, 'vLLM returned an empty model list' if models.empty?
 
+      # Use the currently loaded model (may differ from config default after a switch).
+      model = models.first
       info "    Models loaded: #{models.join(', ')}"
       info "  Testing vLLM inference..."
       reply = vllm_chat(wg_ip, port, model, 'Say hello in five words.')

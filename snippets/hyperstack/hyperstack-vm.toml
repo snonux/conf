@@ -89,14 +89,15 @@ gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = "qwen3_coder"
 
-# Nemotron-Super 49B AWQ — deep reasoning / extended code analysis.
-# ~25 GB weights + KV cache fits comfortably on A100 80GB.
-# Verify the exact HuggingFace AWQ model ID before first use:
-#   curl -s http://192.168.3.1:11434/v1/models | python3 -m json.tool
+# Llama-3.3-70B-Instruct AWQ 4-bit — deep reasoning / extended code analysis.
+# ~35 GB weights on A100 80GB; 32K context window fits within KV budget.
+# Replaces nemotron-super: the NAS model (cyankiwi AWQ) has num_key_value_heads=null
+# in its config.json (by design for the heterogeneous architecture), which is
+# incompatible with vLLM's pydantic ModelConfig validation (requires int).
 [vllm.presets.nemotron-super]
-model = "solidrust/Llama-3.3-Nemotron-Super-49B-v1-AWQ"
-container_name = "vllm_nemotron"
-max_model_len = 131072
+model = "casperhansen/llama-3.3-70b-instruct-awq"
+container_name = "vllm_llama70b"
+max_model_len = 32768
 gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = "llama3_json"
