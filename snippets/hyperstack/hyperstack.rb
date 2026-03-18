@@ -380,6 +380,12 @@ module HyperstackVM
       fetch('vllm', 'hug_cache_dir')
     end
 
+    # Derived from hug_cache_dir: sibling directory for torch.compile artifacts.
+    # Persisted across container restarts so recompilation is skipped on warm switches.
+    def vllm_compile_cache_dir
+      File.join(File.dirname(fetch('vllm', 'hug_cache_dir')), 'vllm_cache')
+    end
+
     def vllm_container_name
       fetch('vllm', 'container_name')
     end
@@ -921,7 +927,9 @@ module HyperstackVM
       end
 
       info "Starting vLLM with preset '#{preset_name}' (#{preset['model']})..."
-      output, status = run_ssh_command_streaming(host, vllm_install_script(preset_config: preset))
+      # Skip docker pull: image is already present; pulling on every switch risks a
+      # surprise multi-GB download if the upstream image was updated.
+      output, status = run_ssh_command_streaming(host, vllm_install_script(preset_config: preset, pull_image: false))
       raise Error, "vLLM install failed: #{output.strip}" unless status.success?
 
       # Hot-reload LiteLLM: rewrite config for the new model and restart the service.
@@ -1632,14 +1640,17 @@ module HyperstackVM
       raise Error, "LiteLLM install failed: #{output.strip}" unless status.success?
     end
 
-    # Generates the remote shell script that pulls the vLLM Docker image, starts
-    # the container, and polls until the model is fully loaded (up to 10 minutes
+    # Generates the remote shell script that (optionally) pulls the vLLM Docker image,
+    # starts the container, and polls until the model is fully loaded (up to 10 minutes
     # to cover the first-run ~45 GB model download).
     # preset_config overrides individual fields; unset fields fall back to [vllm] defaults.
-    def vllm_install_script(preset_config: nil)
+    # pull_image: true on initial install; false on model switch (image already present,
+    # and pulling every switch can trigger a multi-GB download if the image was updated).
+    def vllm_install_script(preset_config: nil, pull_image: true)
       cfg              = preset_config || {}
       model            = cfg['model'] || @config.vllm_model
-      cache_dir        = @config.vllm_hug_cache_dir # always use main config for shared cache
+      cache_dir        = @config.vllm_hug_cache_dir     # always use main config for shared HF cache
+      compile_cache    = @config.vllm_compile_cache_dir # persisted torch.compile artifacts
       container        = cfg['container_name']         || @config.vllm_container_name
       max_len          = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
       gpu_util         = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
@@ -1657,6 +1668,9 @@ module HyperstackVM
         "--name #{Shellwords.escape(container)}",
         '--restart always',
         "-v #{Shellwords.escape(cache_dir)}:/root/.cache/huggingface",
+        # Mount torch.compile cache so CUDA kernel compilation is skipped on warm restarts.
+        # Without this, every container restart recompiles (~30-60 s extra).
+        "-v #{Shellwords.escape(compile_cache)}:/root/.cache/vllm",
         'vllm/vllm-openai:latest',
         "--model #{Shellwords.escape(model)}",
         "--tensor-parallel-size #{tp_size}",
@@ -1679,16 +1693,19 @@ module HyperstackVM
 
       script = []
       script << 'set -euo pipefail'
-      script << "sudo mkdir -p #{Shellwords.escape(cache_dir)}"
-      script << "sudo chmod -R 0777 #{Shellwords.escape(cache_dir)}"
+      script << "sudo mkdir -p #{Shellwords.escape(cache_dir)} #{Shellwords.escape(compile_cache)}"
+      script << "sudo chmod -R 0777 #{Shellwords.escape(cache_dir)} #{Shellwords.escape(compile_cache)}"
       # Stop and remove any existing container so re-runs are idempotent.
       script << "docker stop #{Shellwords.escape(container)} 2>/dev/null || true"
       script << "docker rm #{Shellwords.escape(container)} 2>/dev/null || true"
-      script << 'docker pull vllm/vllm-openai:latest'
+      # Pull the image only when explicitly requested (initial install / forced update).
+      # Skipping pull on model switches avoids surprise multi-GB downloads when the image
+      # has been updated upstream, which would otherwise add several minutes to a switch.
+      script << 'docker pull vllm/vllm-openai:latest' if pull_image
       script << docker_run
       # Poll until the model is loaded:
       #   first run:    ~45 GB download (~2.5 min) + model load (~65 s) + CUDA graphs (~35 s) ≈ 4-5 min
-      #   warm restart: model load + CUDA graphs ≈ 100 s
+      #   warm restart: model load (~65 s) + CUDA graphs (~35 s, skipped if compile cache warm) ≈ 65-100 s
       # Timeout: 120 × 5 s = 10 minutes
       script << 'echo "Waiting for vLLM to become ready (up to 10 min for first model download)..."'
       script << 'for i in $(seq 1 120); do'
