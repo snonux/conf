@@ -123,13 +123,14 @@ tensor_parallel_size = 1
 tool_call_parser = ""
 
 # OpenAI GPT-OSS 120B — powerful MoE (5.1B active / 117B total, MXFP4), ~65 GB on A100.
-# MXFP4 KV cache is very compact: vLLM allocates 168K token blocks (10560×16) at 0.92 util.
-# 163840 (160K) stays within physical KV capacity; handles long Claude Code sessions (135K+).
+# Hard architecture limit: max_position_embeddings=131072 in model config.json.
+# 131072 is the absolute ceiling — exceeding it causes NaN or CUDA OOB errors.
+# For sessions approaching this limit, start a fresh opencode conversation.
 # tool_call_parser = "" disables --enable-auto-tool-choice (same reason as gpt-oss-20b).
 [vllm.presets.gpt-oss-120b]
 model = "openai/gpt-oss-120b"
 container_name = "vllm_gpt_oss_120b"
-max_model_len = 163840
+max_model_len = 131072
 gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = ""
