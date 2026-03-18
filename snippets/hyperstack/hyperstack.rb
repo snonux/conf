@@ -1950,7 +1950,18 @@ module HyperstackVM
       global_parser.order!(@argv)
 
       command = @argv.shift
-      raise Error, 'Missing command. Use create, delete, or status.' if command.nil?
+      if command.nil?
+        puts global_parser
+        puts
+        puts 'Commands:'
+        puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama] [--model PRESET]'
+        puts '  delete [--vm-id ID] [--dry-run]'
+        puts '  status'
+        puts '  test'
+        puts '  model list'
+        puts '  model switch PRESET [--dry-run]'
+        exit 0
+      end
 
       config_loader = ConfigLoader.load(global[:config_path])
       state_store = StateStore.new(config_loader.config.state_file)
