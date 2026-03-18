@@ -39,7 +39,7 @@ ruby hyperstack.rb create
 ruby hyperstack.rb test
 
 # Use Claude Code against the local vLLM
-ANTHROPIC_BASE_URL=http://192.168.3.1:4000 \
+ANTHROPIC_BASE_URL=http://hyperstack.wg1:4000 \
 ANTHROPIC_API_KEY=sk-litellm-master \
 claude --model claude-opus-4-6-20260604 --dangerously-skip-permissions
 
@@ -52,7 +52,7 @@ ruby hyperstack.rb delete
 WireGuard (`wg1`) must be active before connecting.
 
 ```bash
-ANTHROPIC_BASE_URL=http://192.168.3.1:4000 \
+ANTHROPIC_BASE_URL=http://hyperstack.wg1:4000 \
 ANTHROPIC_API_KEY=sk-litellm-master \
 claude --model claude-opus-4-6-20260604 --dangerously-skip-permissions
 ```
@@ -66,7 +66,7 @@ claude /logout
 **Fish shell alias** (add to `~/.config/fish/config.fish`):
 
 ```fish
-alias claude-local='ANTHROPIC_BASE_URL=http://192.168.3.1:4000 \
+alias claude-local='ANTHROPIC_BASE_URL=http://hyperstack.wg1:4000 \
   ANTHROPIC_API_KEY=sk-litellm-master \
   claude --model claude-opus-4-6-20260604 --dangerously-skip-permissions'
 ```
@@ -87,7 +87,7 @@ Add new Anthropic model IDs to `vllm.litellm_claude_model_names` in `hyperstack-
 OpenCode speaks OpenAI natively — connect directly to vLLM, no LiteLLM needed:
 
 ```bash
-OPENAI_BASE_URL=http://192.168.3.1:11434/v1 \
+OPENAI_BASE_URL=http://hyperstack.wg1:11434/v1 \
 OPENAI_API_KEY=EMPTY \
 opencode
 ```
