@@ -846,6 +846,7 @@ module HyperstackVM
           info "Tracked VM: #{state['vm_id']} #{vm['name']}"
           info "Status: #{vm['status']} / #{vm['vm_state']}"
           info "Public IP: #{connect_host_for(vm) || 'none'}"
+          info "Active model: #{state['vllm_model'] || @config.vllm_model}"
           info "Missing firewall rules: #{missing_rules.empty? ? 'none' : missing_rules.size}"
         rescue Error => e
           warn "Unable to load VM #{state['vm_id']}: #{e.message}"
