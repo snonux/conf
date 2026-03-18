@@ -1922,48 +1922,41 @@ module HyperstackVM
   class CLI
     def initialize(argv)
       @argv = argv.dup
+      @config_path = File.join(__dir__, 'hyperstack-vm.toml')
+    end
+
+    def show_help
+      puts @global_parser
+      puts
+      puts 'Commands:'
+      puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama] [--model PRESET]'
+      puts '  delete [--vm-id ID] [--dry-run]'
+      puts '  status'
+      puts '  test'
+      puts '  model list'
+      puts '  model switch PRESET [--dry-run]'
     end
 
     def run
-      global = {
-        config_path: File.join(__dir__, 'hyperstack-vm.toml')
-      }
-
-      global_parser = OptionParser.new do |opts|
+      @global_parser = OptionParser.new do |opts|
         opts.banner = 'Usage: ruby hyperstack.rb [--config path] <create|delete|status> [options]'
-        opts.on('--config PATH', "Path to TOML config (default: #{global[:config_path]})") do |value|
-          global[:config_path] = value
+        opts.on('--config PATH', "Path to TOML config (default: #{@config_path})") do |value|
+          @config_path = value
         end
         opts.on('-h', '--help', 'Show help') do
-          puts opts
-          puts
-          puts 'Commands:'
-          puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama] [--model PRESET]'
-          puts '  delete [--vm-id ID] [--dry-run]'
-          puts '  status'
-          puts '  test'
-          puts '  model list'
-          puts '  model switch PRESET [--dry-run]'
+          show_help
           exit 0
         end
       end
-      global_parser.order!(@argv)
+      @global_parser.order!(@argv)
 
       command = @argv.shift
       if command.nil?
-        puts global_parser
-        puts
-        puts 'Commands:'
-        puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama] [--model PRESET]'
-        puts '  delete [--vm-id ID] [--dry-run]'
-        puts '  status'
-        puts '  test'
-        puts '  model list'
-        puts '  model switch PRESET [--dry-run]'
+        show_help
         exit 0
       end
 
-      config_loader = ConfigLoader.load(global[:config_path])
+      config_loader = ConfigLoader.load(@config_path)
       state_store = StateStore.new(config_loader.config.state_file)
       client = HyperstackClient.new(base_url: config_loader.config.api_base_url, api_key: config_loader.config.api_key)
       local_wireguard = LocalWireGuard.new(
