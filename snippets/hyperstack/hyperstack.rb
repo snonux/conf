@@ -382,7 +382,10 @@ module HyperstackVM
         # Empty string means "no tool calling"; use key? so empty string doesn't fall back to default.
         'tool_call_parser'       => raw.key?('tool_call_parser') ? raw['tool_call_parser'] : vllm_tool_call_parser,
         # trust_remote_code: required by some models (e.g. Nemotron) for custom architectures.
-        'trust_remote_code'      => raw.key?('trust_remote_code') ? raw['trust_remote_code'] : false
+        'trust_remote_code'      => raw.key?('trust_remote_code') ? raw['trust_remote_code'] : false,
+        # extra_vllm_args: arbitrary additional flags passed verbatim to the vLLM docker command.
+        # Used for special loaders (Mistral format) or reasoning parsers (deepseek_r1).
+        'extra_vllm_args'        => raw.key?('extra_vllm_args') ? Array(raw['extra_vllm_args']) : []
       }
     end
 
@@ -890,7 +893,8 @@ module HyperstackVM
         info "  container: #{old_container} → #{new_container}"
         trust_note  = preset['trust_remote_code'] ? ', trust_remote_code: true' : ''
         parser_note = preset['tool_call_parser'].to_s.empty? ? 'none' : preset['tool_call_parser']
-        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{parser_note}#{trust_note}"
+        extra_note  = preset['extra_vllm_args']&.any? ? ", extra_args: #{preset['extra_vllm_args'].join(' ')}" : ''
+        info "  max_model_len: #{preset['max_model_len']}, tool_call_parser: #{parser_note}#{trust_note}#{extra_note}"
         return
       end
 
@@ -1660,6 +1664,8 @@ module HyperstackVM
         docker_args << "--tool-call-parser #{Shellwords.escape(parser)}"
       end
       docker_args << '--trust-remote-code' if trust_remote
+      # Append any extra flags verbatim (e.g. Mistral loader flags, reasoning parser).
+      (cfg['extra_vllm_args'] || []).each { |arg| docker_args << arg }
       docker_run = docker_args.join(' ')
 
       script = []

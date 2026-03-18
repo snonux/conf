@@ -89,18 +89,19 @@ gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = "qwen3_coder"
 
-# Llama-3.3-70B-Instruct AWQ 4-bit — deep reasoning / extended code analysis.
-# ~35 GB weights on A100 80GB; 32K context window fits within KV budget.
-# Replaces nemotron-super: the NAS model (cyankiwi AWQ) has num_key_value_heads=null
-# in its config.json (by design for the heterogeneous architecture), which is
-# incompatible with vLLM's pydantic ModelConfig validation (requires int).
+# NVIDIA Nemotron-3-Super-120B-A12B AWQ 4-bit — hybrid Mamba+MoE (12B active / 120B total).
+# ~60 GB weights on A100 80GB; 256K context window (most of 80 GB available for KV cache).
+# Requires trust_remote_code=true for the nemotron_h architecture.
+# Note: cyankiwi AWQ has model_type="nemotron_nas" (underscore); vLLM keys on "nemotron-nas"
+# (hyphen), so vLLM may not recognise it without trust_remote_code and latest vLLM.
 [vllm.presets.nemotron-super]
-model = "casperhansen/llama-3.3-70b-instruct-awq"
-container_name = "vllm_llama70b"
-max_model_len = 32768
+model = "cyankiwi/NVIDIA-Nemotron-3-Super-120B-A12B-AWQ-4bit"
+container_name = "vllm_nemotron_super"
+max_model_len = 65536
 gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
-tool_call_parser = "llama3_json"
+tool_call_parser = ""
+trust_remote_code = true
 
 # OpenAI GPT-OSS 20B — ultra-fast MoE (3.6B active / 20B total, MXFP4), ~14 GB on A100.
 # Native MXFP4 quantization; vLLM auto-detects it (no --quantization flag needed).
@@ -146,6 +147,43 @@ max_model_len = 65536
 gpu_memory_utilization = 0.92
 tensor_parallel_size = 1
 tool_call_parser = "qwen3_coder"
+
+# DeepSeek-R1-Distill-Qwen-32B AWQ — R1 reasoning distillation of Qwen 32B, ~18 GB on A100.
+# Generates <think> reasoning tokens; --reasoning-parser deepseek_r1 exposes them in the API.
+# tool_call_parser="" disables tool calling (reasoning models don't support it reliably).
+[vllm.presets.deepseek-r1-32b]
+model = "casperhansen/deepseek-r1-distill-qwen-32b-awq"
+container_name = "vllm_deepseek_r1_32b"
+max_model_len = 32768
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = ""
+extra_vllm_args = ["--reasoning-parser", "deepseek_r1"]
+
+# Qwen3-32B AWQ — dense 32B reasoning model with extended context, ~18 GB on A100.
+# Native thinking mode; --reasoning-parser deepseek_r1 is compatible with Qwen3 thinking format.
+# tool_call_parser="" disables tool calling (reasoning models don't support it reliably).
+[vllm.presets.qwen3-32b]
+model = "Qwen/Qwen3-32B-AWQ"
+container_name = "vllm_qwen3_32b"
+max_model_len = 32768
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = ""
+extra_vllm_args = ["--reasoning-parser", "deepseek_r1"]
+
+# Devstral-Small-2507 AWQ — Mistral's coding agent model (~15 GB on A100).
+# Uses HF safetensors weights but Mistral tokenizer (tekken.json) and config (params.json).
+# --load_format mistral is NOT used: AWQ weights are in standard HF safetensors format.
+# --tokenizer_mode mistral and --config_format mistral handle the Mistral-native files.
+[vllm.presets.devstral]
+model = "cyankiwi/Devstral-Small-2507-AWQ-4bit"
+container_name = "vllm_devstral"
+max_model_len = 32768
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = "mistral"
+extra_vllm_args = ["--tokenizer_mode", "mistral", "--config_format", "mistral"]
 
 [wireguard]
 auto_setup = true
