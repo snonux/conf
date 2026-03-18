@@ -62,7 +62,8 @@ module HyperstackVM
       'network' => {
         'wireguard_udp_port' => 56_710,
         'wireguard_subnet' => '192.168.3.0/24',
-        'ollama_port' => 11_434,
+        'ollama_port' => 11_434,  # reused by vLLM for firewall compatibility
+        'litellm_port' => 4_000,
         'allowed_ssh_cidrs' => ['0.0.0.0/0'],
         'allowed_wireguard_cidrs' => ['0.0.0.0/0']
       },
@@ -73,12 +74,33 @@ module HyperstackVM
         'configure_ollama_host' => false
       },
       'ollama' => {
-        'install' => true,
+        # Disabled in favour of vLLM; set install: true to use Ollama instead.
+        'install' => false,
         'models_dir' => '/ephemeral/ollama/models',
         'listen_host' => '0.0.0.0:11434',
         'gpu_overhead_mb' => 2000,
-        'num_parallel' => 4,
+        'num_parallel' => 1,
+        'context_length' => 32_768,
         'pull_models' => ['qwen3-coder:30b', 'gpt-oss:20b', 'gpt-oss:120b', 'nemotron-3-super']
+      },
+      'vllm' => {
+        # vLLM serves one model via Docker; LiteLLM translates Anthropic API → OpenAI chat completions.
+        'install' => true,
+        'model' => 'bullpoint/Qwen3-Coder-Next-AWQ-4bit',
+        'hug_cache_dir' => '/ephemeral/hug',
+        'container_name' => 'vllm_qwen3',
+        'max_model_len' => 262_144,
+        'gpu_memory_utilization' => 0.92,
+        'tensor_parallel_size' => 1,
+        'tool_call_parser' => 'qwen3_coder',
+        # LiteLLM maps each Claude model alias to the vLLM model; add new Anthropic IDs here.
+        'litellm_claude_model_names' => %w[
+          claude-sonnet-4-20250514
+          claude-opus-4-20250514
+          claude-opus-4-6-20260604
+          claude-haiku-3-5-20241022
+        ],
+        'litellm_master_key' => 'sk-litellm-master'
       },
       'wireguard' => {
         'auto_setup' => true,
@@ -216,6 +238,19 @@ module HyperstackVM
       Integer(fetch('network', 'ollama_port'))
     end
 
+    def litellm_port
+      Integer(fetch('network', 'litellm_port'))
+    end
+
+    # Derives the VM's WireGuard IP as the first host in the subnet (network + 1).
+    # E.g. 192.168.3.0/24 → 192.168.3.1
+    def wireguard_gateway_ip
+      base = IPAddr.new(wireguard_subnet).to_s
+      parts = base.split('.').map(&:to_i)
+      parts[-1] += 1
+      parts.join('.')
+    end
+
     def allowed_ssh_cidrs
       Array(fetch('network', 'allowed_ssh_cidrs')).map(&:to_s)
     end
@@ -260,8 +295,56 @@ module HyperstackVM
       Integer(fetch('ollama', 'num_parallel'))
     end
 
+    # Maximum context length for Ollama inference; keeps KV cache bounded
+    # on single-GPU setups to avoid slow prefill at large context sizes.
+    def ollama_context_length
+      Integer(fetch('ollama', 'context_length'))
+    end
+
     def ollama_pull_models
       Array(fetch('ollama', 'pull_models')).map(&:to_s)
+    end
+
+    def vllm_install_enabled?
+      truthy?(fetch('vllm', 'install'))
+    end
+
+    def vllm_model
+      fetch('vllm', 'model')
+    end
+
+    def vllm_hug_cache_dir
+      fetch('vllm', 'hug_cache_dir')
+    end
+
+    def vllm_container_name
+      fetch('vllm', 'container_name')
+    end
+
+    def vllm_max_model_len
+      Integer(fetch('vllm', 'max_model_len'))
+    end
+
+    def vllm_gpu_memory_utilization
+      Float(fetch('vllm', 'gpu_memory_utilization'))
+    end
+
+    def vllm_tensor_parallel_size
+      Integer(fetch('vllm', 'tensor_parallel_size'))
+    end
+
+    def vllm_tool_call_parser
+      fetch('vllm', 'tool_call_parser')
+    end
+
+    # Claude model aliases that LiteLLM maps to the vLLM model.
+    # Must match what Claude Code sends in the model field.
+    def litellm_claude_model_names
+      Array(fetch('vllm', 'litellm_claude_model_names')).map(&:to_s)
+    end
+
+    def litellm_master_key
+      fetch('vllm', 'litellm_master_key')
     end
 
     def local_client_checks_enabled?
@@ -295,14 +378,17 @@ module HyperstackVM
         rules << firewall_rule('udp', wireguard_udp_port, cidr)
       end
 
+      # Port 11434: shared by Ollama and vLLM (WireGuard-subnet-restricted).
       rules << firewall_rule('tcp', ollama_port, wireguard_subnet)
+      # Port 4000: LiteLLM Anthropic-API proxy (WireGuard-subnet-restricted).
+      rules << firewall_rule('tcp', litellm_port, wireguard_subnet)
       rules.uniq
     end
 
     private
 
     def validate!
-      %w[auth hyperstack state vm ssh network bootstrap ollama wireguard local_client].each do |section|
+      %w[auth hyperstack state vm ssh network bootstrap ollama vllm wireguard local_client].each do |section|
         raise Error, "Missing config section [#{section}]" unless @data.key?(section)
       end
 
@@ -619,7 +705,10 @@ module HyperstackVM
       @out = out
     end
 
-    def create(replace: false, dry_run: false)
+    def create(replace: false, dry_run: false, install_vllm: nil, install_ollama: nil)
+      # CLI flags override config; nil means "use config default".
+      @effective_vllm = install_vllm.nil? ? @config.vllm_install_enabled? : install_vllm
+      @effective_ollama = install_ollama.nil? ? @config.ollama_install_enabled? : install_ollama
       existing_state = @state_store.load
       if existing_state && existing_state['vm_id']
         if replace
@@ -721,10 +810,36 @@ module HyperstackVM
       print_local_wireguard_summary(state&.dig('public_ip'))
     end
 
+    # Runs end-to-end inference tests against vLLM and LiteLLM over WireGuard.
+    # Requires wg1 to be active and the VM to be fully provisioned.
+    def test
+      state = @state_store.load
+      raise Error, "No tracked VM state file found at #{@state_store.path}." if state.nil?
+
+      wg_ip = @config.wireguard_gateway_ip
+      info "Running end-to-end inference tests via WireGuard (#{wg_ip})..."
+
+      if @config.vllm_install_enabled?
+        test_vllm(wg_ip)
+        test_litellm(wg_ip)
+      end
+
+      if @config.ollama_install_enabled?
+        info "  Ollama test: connect via SSH and run 'ollama list' to verify models."
+      end
+
+      info 'All inference tests passed.'
+    end
+
     private
 
     def resumable_state?(state)
-      state['vm_id'] && (state['bootstrapped_at'].nil? || ollama_setup_needed?(state) || wireguard_setup_needed?(state))
+      state['vm_id'] && (
+        state['bootstrapped_at'].nil? ||
+        ollama_setup_needed?(state) ||
+        vllm_setup_needed?(state) ||
+        wireguard_setup_needed?(state)
+      )
     end
 
     def continue_create(state)
@@ -747,7 +862,7 @@ module HyperstackVM
       # Install Ollama binary and configure the service (fast), but defer
       # model pulls until after the WireGuard tunnel is up so that the user
       # can monitor progress over the tunnel.
-      if @config.ollama_install_enabled? && state['ollama_installed_at'].nil?
+      if effective_ollama? && state['ollama_installed_at'].nil?
         install_ollama_service(state['public_ip'])
         state['ollama_installed_at'] = Time.now.utc.iso8601
         @state_store.save(state)
@@ -759,12 +874,21 @@ module HyperstackVM
         @state_store.save(state)
       end
 
-      # Pull and verify models after the tunnel is established
+      # Pull and verify Ollama models after the tunnel is established.
       if ollama_setup_needed?(state)
         pull_ollama_models(state['public_ip'])
         state['ollama_setup_at'] = Time.now.utc.iso8601
         state['ollama_models_dir'] = @config.ollama_models_dir
         state['ollama_pulled_models'] = desired_ollama_models
+        @state_store.save(state)
+      end
+
+      # Set up vLLM (Docker container) + LiteLLM (Anthropic-API proxy) after
+      # the tunnel is up so that model-download progress is visible locally.
+      if vllm_setup_needed?(state)
+        setup_vllm_stack(state['public_ip'])
+        state['vllm_setup_at'] = Time.now.utc.iso8601
+        state['vllm_model'] = @config.vllm_model
         @state_store.save(state)
       end
 
@@ -777,6 +901,12 @@ module HyperstackVM
 
       info "VM ready: #{state['public_ip']} (id=#{state['vm_id']})"
       print_local_wireguard_summary(state['public_ip'])
+      if effective_vllm?
+        wg_ip = @config.wireguard_gateway_ip
+        info "Run 'ruby hyperstack.rb test' to verify vLLM and LiteLLM."
+        info "  vLLM:    http://#{wg_ip}:#{@config.ollama_port}/v1/models"
+        info "  LiteLLM: http://#{wg_ip}:#{@config.litellm_port}/v1/messages"
+      end
     end
 
     def build_create_payload(vm_name, resolved)
@@ -897,7 +1027,7 @@ module HyperstackVM
     end
 
     def ollama_setup_needed?(state)
-      return false unless @config.ollama_install_enabled?
+      return false unless effective_ollama?
       # Re-run setup if state has no record, or if desired models changed
       return true if state['ollama_setup_at'].nil?
 
@@ -1108,11 +1238,17 @@ module HyperstackVM
       else
         info 'Guest bootstrap is disabled in config.'
       end
-      if @config.ollama_install_enabled?
+      if effective_ollama?
         info "Ollama will be installed with models stored under #{@config.ollama_models_dir}"
         unless desired_ollama_models.empty?
           info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}"
         end
+      end
+      if effective_vllm?
+        info "vLLM will be installed: #{@config.vllm_model}"
+        info "  Container: #{@config.vllm_container_name}, port #{@config.ollama_port}, max_model_len #{@config.vllm_max_model_len}"
+        info "LiteLLM proxy will be installed on port #{@config.litellm_port}"
+        info "  Claude model aliases: #{@config.litellm_claude_model_names.join(', ')}"
       end
       if @config.wireguard_auto_setup?
         info "WireGuard auto-setup script: #{@config.wireguard_setup_script} <vm_public_ip>"
@@ -1138,6 +1274,10 @@ module HyperstackVM
         unless desired_ollama_models.empty?
           info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}"
         end
+      end
+      if vllm_setup_needed?(state)
+        info "vLLM would be installed: #{@config.vllm_model}"
+        info "LiteLLM proxy would be installed on port #{@config.litellm_port}"
       end
       if wireguard_setup_needed?(state)
         info "WireGuard auto-setup script would run: #{@config.wireguard_setup_script} #{state['public_ip'] || '<pending-public-ip>'}"
@@ -1197,7 +1337,10 @@ module HyperstackVM
         script << "sudo ufw allow #{@config.ssh_port}/tcp comment 'Allow SSH' >/dev/null 2>&1 || true"
         script << 'sudo ufw --force enable >/dev/null 2>&1 || true'
         script << "sudo ufw allow #{@config.wireguard_udp_port}/udp comment 'WireGuard #{@config.local_interface_name}' >/dev/null 2>&1 || true"
-        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.ollama_port} proto tcp comment 'Ollama via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
+        # Port 11434 is shared by Ollama and vLLM; open for both regardless of which is installed.
+        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.ollama_port} proto tcp comment 'Inference API (Ollama/vLLM) via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
+        # Port 4000: LiteLLM proxy (Anthropic API → vLLM); open alongside the inference port.
+        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.litellm_port} proto tcp comment 'LiteLLM proxy via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
       end
 
       if @config.configure_ollama_host?
@@ -1260,6 +1403,7 @@ module HyperstackVM
       script << "Environment=\"OLLAMA_MODELS=#{models_dir}\""
       script << "Environment=\"OLLAMA_GPU_OVERHEAD=#{@config.ollama_gpu_overhead_mb}\""
       script << "Environment=\"OLLAMA_NUM_PARALLEL=#{@config.ollama_num_parallel}\""
+      script << "Environment=\"OLLAMA_CONTEXT_LENGTH=#{@config.ollama_context_length}\""
       script << "Environment=\"OLLAMA_HOST=#{listen_host}\""
       script << 'OVERRIDE'
       script << 'sudo systemctl daemon-reload'
@@ -1300,6 +1444,225 @@ module HyperstackVM
       script << "echo ollama-models-dir=#{models_dir}"
       script << 'echo ollama-ok'
       script.join("\n")
+    end
+
+    # Returns the effective Ollama flag: CLI override if set, else config default.
+    def effective_ollama?
+      defined?(@effective_ollama) ? @effective_ollama : @config.ollama_install_enabled?
+    end
+
+    # Returns the effective vLLM flag: CLI override if set, else config default.
+    def effective_vllm?
+      defined?(@effective_vllm) ? @effective_vllm : @config.vllm_install_enabled?
+    end
+
+    def vllm_setup_needed?(state)
+      return false unless effective_vllm?
+      # Re-run if never set up, or if the configured model changed since last setup.
+      return true if state['vllm_setup_at'].nil?
+
+      state['vllm_model'] != @config.vllm_model
+    end
+
+    def setup_vllm_stack(host)
+      info "Setting up vLLM Docker container on #{host}..."
+      output, status = run_ssh_command_streaming(host, vllm_install_script)
+      raise Error, "vLLM install failed: #{output.strip}" unless status.success?
+
+      info "Setting up LiteLLM Anthropic-API proxy on #{host}..."
+      output, status = run_ssh_command_streaming(host, litellm_install_script)
+      raise Error, "LiteLLM install failed: #{output.strip}" unless status.success?
+    end
+
+    # Generates the remote shell script that pulls the vLLM Docker image, starts
+    # the container, and polls until the model is fully loaded (up to 10 minutes
+    # to cover the first-run ~45 GB model download).
+    def vllm_install_script
+      model     = @config.vllm_model
+      cache_dir = @config.vllm_hug_cache_dir
+      container = @config.vllm_container_name
+      max_len   = @config.vllm_max_model_len
+      gpu_util  = @config.vllm_gpu_memory_utilization
+      tp_size   = @config.vllm_tensor_parallel_size
+      parser    = @config.vllm_tool_call_parser
+      port      = @config.ollama_port  # vLLM reuses the Ollama port for firewall compat
+
+      docker_run = [
+        'docker run -d',
+        '--gpus all', '--ipc=host', '--network host',
+        "--name #{Shellwords.escape(container)}",
+        '--restart always',
+        "-v #{Shellwords.escape(cache_dir)}:/root/.cache/huggingface",
+        'vllm/vllm-openai:latest',
+        "--model #{Shellwords.escape(model)}",
+        "--tensor-parallel-size #{tp_size}",
+        '--enable-auto-tool-choice',
+        "--tool-call-parser #{Shellwords.escape(parser)}",
+        '--enable-prefix-caching',
+        "--gpu-memory-utilization #{gpu_util}",
+        "--max-model-len #{max_len}",
+        '--host 0.0.0.0',
+        "--port #{port}"
+      ].join(' ')
+
+      script = []
+      script << 'set -euo pipefail'
+      script << "sudo mkdir -p #{Shellwords.escape(cache_dir)}"
+      script << "sudo chmod -R 0777 #{Shellwords.escape(cache_dir)}"
+      # Stop and remove any existing container so re-runs are idempotent.
+      script << "docker stop #{Shellwords.escape(container)} 2>/dev/null || true"
+      script << "docker rm #{Shellwords.escape(container)} 2>/dev/null || true"
+      script << 'docker pull vllm/vllm-openai:latest'
+      script << docker_run
+      # Poll until the model is loaded:
+      #   first run:    ~45 GB download (~2.5 min) + model load (~65 s) + CUDA graphs (~35 s) ≈ 4-5 min
+      #   warm restart: model load + CUDA graphs ≈ 100 s
+      # Timeout: 120 × 5 s = 10 minutes
+      script << 'echo "Waiting for vLLM to become ready (up to 10 min for first model download)..."'
+      script << "for i in $(seq 1 120); do"
+      script << "  if curl -sf http://localhost:#{port}/v1/models >/dev/null 2>&1; then echo vllm-ready; break; fi"
+      script << "  state=$(docker inspect --format='{{.State.Status}}' #{Shellwords.escape(container)} 2>/dev/null || echo unknown)"
+      script << '  echo "  vLLM not ready yet ($i/120, container=$state)..."'
+      script << '  sleep 5'
+      script << 'done'
+      script << "curl -sf http://localhost:#{port}/v1/models >/dev/null || { echo 'FATAL: vLLM did not become ready within 10 minutes'; exit 1; }"
+      script << 'echo vllm-install-ok'
+      script.join("\n")
+    end
+
+    # Generates the remote shell script that installs LiteLLM in a Python venv,
+    # writes a config mapping Claude model aliases to the vLLM endpoint, and
+    # starts the proxy as a systemd service on litellm_port.
+    def litellm_install_script
+      port        = @config.litellm_port
+      vllm_port   = @config.ollama_port
+      model       = @config.vllm_model
+      claude_names = @config.litellm_claude_model_names
+      master_key  = @config.litellm_master_key
+
+      # Build model_list YAML entries; each Claude alias maps to the vLLM model.
+      # "hosted_vllm/" prefix forces LiteLLM to use /v1/chat/completions (not /v1/responses).
+      model_entries = claude_names.flat_map do |name|
+        [
+          "  - model_name: \"#{name}\"",
+          '    litellm_params:',
+          "      model: \"hosted_vllm/#{model}\"",
+          "      api_base: \"http://localhost:#{vllm_port}/v1\"",
+          '      api_key: "EMPTY"'
+        ]
+      end
+
+      script = []
+      script << 'set -euo pipefail'
+      script << 'sudo apt-get install -y python3.12-venv'
+      script << 'sudo mkdir -p /ephemeral/litellm-env'
+      script << 'sudo chown ubuntu:ubuntu /ephemeral/litellm-env'
+      script << 'python3 -m venv /ephemeral/litellm-env'
+      script << '/ephemeral/litellm-env/bin/pip install --quiet "litellm[proxy]"'
+
+      # Write litellm-config.yaml via heredoc; drop_params silently discards
+      # Claude-specific params (e.g. context_management) that vLLM ignores.
+      script << "sudo tee /ephemeral/litellm-config.yaml > /dev/null << 'LITELLM_YAML'"
+      script << 'model_list:'
+      script.concat(model_entries)
+      script << ''
+      script << 'litellm_settings:'
+      script << '  drop_params: true'
+      script << ''
+      script << 'general_settings:'
+      script << "  master_key: \"#{master_key}\""
+      script << 'LITELLM_YAML'
+
+      # Write systemd unit via heredoc; restart on failure so transient crashes self-heal.
+      script << "sudo tee /etc/systemd/system/litellm.service > /dev/null << 'LITELLM_UNIT'"
+      script << '[Unit]'
+      script << 'Description=LiteLLM Proxy'
+      script << 'After=network.target docker.service'
+      script << 'Requires=docker.service'
+      script << ''
+      script << '[Service]'
+      script << 'Type=simple'
+      script << 'User=ubuntu'
+      script << "ExecStart=/ephemeral/litellm-env/bin/litellm --config /ephemeral/litellm-config.yaml --host 0.0.0.0 --port #{port}"
+      script << 'Restart=always'
+      script << 'RestartSec=5'
+      script << ''
+      script << '[Install]'
+      script << 'WantedBy=multi-user.target'
+      script << 'LITELLM_UNIT'
+
+      script << 'sudo systemctl daemon-reload'
+      script << 'sudo systemctl enable --now litellm'
+      script << 'sleep 5'
+      script << 'systemctl is-active --quiet litellm'
+      script << 'echo litellm-install-ok'
+      script.join("\n")
+    end
+
+    # Tests the vLLM OpenAI-compatible API: lists loaded models and runs a
+    # short inference request to confirm the model accepts requests.
+    def test_vllm(wg_ip)
+      port  = @config.ollama_port
+      model = @config.vllm_model
+
+      info "  Testing vLLM models list at http://#{wg_ip}:#{port}/v1/models..."
+      uri  = URI("http://#{wg_ip}:#{port}/v1/models")
+      resp = Net::HTTP.get_response(uri)
+      raise Error, "vLLM /v1/models returned HTTP #{resp.code}" unless resp.code == '200'
+
+      models = JSON.parse(resp.body).fetch('data', []).map { |m| m['id'] }
+      raise Error, "vLLM returned an empty model list (expected #{model})" if models.empty?
+
+      info "    Models loaded: #{models.join(', ')}"
+      info "  Testing vLLM inference..."
+      reply = vllm_chat(wg_ip, port, model, 'Say hello in five words.')
+      info "    vLLM response: #{reply}"
+    rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH, SocketError => e
+      raise Error, "Cannot reach vLLM at #{wg_ip}:#{port} — is WireGuard (wg1) active? (#{e.message})"
+    end
+
+    # Tests the LiteLLM proxy using the Anthropic Messages API format,
+    # which is what Claude Code sends when pointed at a custom base URL.
+    def test_litellm(wg_ip)
+      port  = @config.litellm_port
+      model = @config.litellm_claude_model_names.first
+      key   = @config.litellm_master_key
+
+      info "  Testing LiteLLM proxy at http://#{wg_ip}:#{port}/v1/messages..."
+      uri = URI("http://#{wg_ip}:#{port}/v1/messages")
+      req = Net::HTTP::Post.new(uri)
+      req['Content-Type'] = 'application/json'
+      req['x-api-key'] = key
+      req['anthropic-version'] = '2023-06-01'
+      req.body = JSON.generate(
+        'model' => model,
+        'max_tokens' => 50,
+        'messages' => [{ 'role' => 'user', 'content' => 'Say hello in five words.' }]
+      )
+      resp = Net::HTTP.start(uri.host, uri.port, open_timeout: 10, read_timeout: 120) { |h| h.request(req) }
+      raise Error, "LiteLLM returned HTTP #{resp.code}: #{resp.body}" unless resp.code == '200'
+
+      text = JSON.parse(resp.body).fetch('content', []).find { |b| b['type'] == 'text' }&.dig('text').to_s.strip
+      info "    LiteLLM response: #{text}"
+    rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH, SocketError => e
+      raise Error, "Cannot reach LiteLLM at #{wg_ip}:#{port} — is WireGuard (wg1) active? (#{e.message})"
+    end
+
+    # Sends a single OpenAI chat completion request and returns the reply text.
+    def vllm_chat(host, port, model, prompt)
+      uri = URI("http://#{host}:#{port}/v1/chat/completions")
+      req = Net::HTTP::Post.new(uri)
+      req['Content-Type'] = 'application/json'
+      req['Authorization'] = 'Bearer EMPTY'
+      req.body = JSON.generate(
+        'model' => model,
+        'messages' => [{ 'role' => 'user', 'content' => prompt }],
+        'max_tokens' => 50
+      )
+      resp = Net::HTTP.start(uri.host, uri.port, open_timeout: 10, read_timeout: 120) { |h| h.request(req) }
+      raise Error, "vLLM inference returned HTTP #{resp.code}" unless resp.code == '200'
+
+      JSON.parse(resp.body).dig('choices', 0, 'message', 'content').to_s.strip
     end
 
     def integer_or_nil(value)
@@ -1347,7 +1710,7 @@ module HyperstackVM
       }
 
       global_parser = OptionParser.new do |opts|
-        opts.banner = 'Usage: ruby hyperstack_vm.rb [--config path] <create|delete|status> [options]'
+        opts.banner = 'Usage: ruby hyperstack.rb [--config path] <create|delete|status> [options]'
         opts.on('--config PATH', "Path to TOML config (default: #{global[:config_path]})") do |value|
           global[:config_path] = value
         end
@@ -1355,9 +1718,10 @@ module HyperstackVM
           puts opts
           puts
           puts 'Commands:'
-          puts '  create [--replace] [--dry-run]'
+          puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama]'
           puts '  delete [--vm-id ID] [--dry-run]'
           puts '  status'
+          puts '  test'
           exit 0
         end
       end
@@ -1384,12 +1748,18 @@ module HyperstackVM
       when 'create'
         replace = false
         dry_run = false
+        install_vllm = nil
+        install_ollama = nil
         parser = OptionParser.new do |opts|
           opts.on('--replace', 'Delete the tracked VM before creating a new one') { replace = true }
           opts.on('--dry-run', 'Resolve config and print the create plan without creating a VM') { dry_run = true }
+          opts.on('--vllm', 'Enable vLLM+LiteLLM setup (overrides config)') { install_vllm = true }
+          opts.on('--no-vllm', 'Disable vLLM+LiteLLM setup (overrides config)') { install_vllm = false }
+          opts.on('--ollama', 'Enable Ollama setup (overrides config)') { install_ollama = true }
+          opts.on('--no-ollama', 'Disable Ollama setup (overrides config)') { install_ollama = false }
         end
         parser.parse!(@argv)
-        manager.create(replace: replace, dry_run: dry_run)
+        manager.create(replace: replace, dry_run: dry_run, install_vllm: install_vllm, install_ollama: install_ollama)
       when 'delete'
         vm_id = nil
         dry_run = false
@@ -1403,8 +1773,10 @@ module HyperstackVM
         manager.delete(vm_id: vm_id, dry_run: dry_run)
       when 'status'
         manager.status
+      when 'test'
+        manager.test
       else
-        raise Error, "Unknown command #{command.inspect}. Use create, delete, or status."
+        raise Error, "Unknown command #{command.inspect}. Use create, delete, status, or test."
       end
     end
   end

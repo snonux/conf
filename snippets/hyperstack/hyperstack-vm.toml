@@ -31,7 +31,10 @@ connect_timeout_sec = 10
 [network]
 wireguard_udp_port = 56710
 wireguard_subnet = "192.168.3.0/24"
+# Port 11434 is shared by both Ollama and vLLM for firewall compatibility.
 ollama_port = 11434
+# Port 4000: LiteLLM Anthropic-API proxy (used with vLLM).
+litellm_port = 4000
 allowed_ssh_cidrs = ["0.0.0.0/0"]
 allowed_wireguard_cidrs = ["0.0.0.0/0"]
 
@@ -42,12 +45,35 @@ configure_ufw = true
 configure_ollama_host = false
 
 [ollama]
-install = true
+# Disabled in favour of vLLM; set install = true to switch back to Ollama.
+install = false
 models_dir = "/ephemeral/ollama/models"
 listen_host = "0.0.0.0:11434"
 gpu_overhead_mb = 2000
-num_parallel = 4
+num_parallel = 1
+context_length = 32768
 pull_models = ["qwen3-coder-next", "qwen3-coder:30b", "gpt-oss:20b", "gpt-oss:120b", "nemotron-3-super"]
+
+# vLLM serves one model via Docker; LiteLLM translates Anthropic API → OpenAI.
+# Use --vllm / --no-vllm CLI flags to override install at runtime.
+[vllm]
+install = true
+model = "bullpoint/Qwen3-Coder-Next-AWQ-4bit"
+# HuggingFace model cache on ephemeral NVMe (fast; survives reboots on most providers).
+hug_cache_dir = "/ephemeral/hug"
+container_name = "vllm_qwen3"
+max_model_len = 262144
+gpu_memory_utilization = 0.92
+tensor_parallel_size = 1
+tool_call_parser = "qwen3_coder"
+# LiteLLM maps each entry to the vLLM model; add new Anthropic model IDs here.
+litellm_master_key = "sk-litellm-master"
+litellm_claude_model_names = [
+  "claude-sonnet-4-20250514",
+  "claude-opus-4-20250514",
+  "claude-opus-4-6-20260604",
+  "claude-haiku-3-5-20241022"
+]
 
 [wireguard]
 auto_setup = true
