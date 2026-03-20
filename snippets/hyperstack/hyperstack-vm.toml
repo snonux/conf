@@ -31,12 +31,14 @@ connect_timeout_sec = 10
 [network]
 wireguard_udp_port = 56710
 wireguard_subnet = "192.168.3.0/24"
+# Secure default: "auto" resolves your current public egress IP to /32 at runtime.
+# Override with explicit CIDRs if you deploy from multiple networks or want broader access.
+allowed_ssh_cidrs = ["auto"]
+allowed_wireguard_cidrs = ["auto"]
 # Port 11434 is shared by both Ollama and vLLM for firewall compatibility.
 ollama_port = 11434
 # Port 4000: LiteLLM Anthropic-API proxy (used with vLLM).
 litellm_port = 4000
-allowed_ssh_cidrs = ["0.0.0.0/0"]
-allowed_wireguard_cidrs = ["0.0.0.0/0"]
 
 [bootstrap]
 enable_guest_bootstrap = true

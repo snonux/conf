@@ -26,6 +26,9 @@ The VM gets `192.168.3.1`; your local machine gets `192.168.3.2`.
 
 - Hyperstack account with API key in `~/.hyperstack`
 - SSH key registered in Hyperstack as `earth` (or change `ssh.hyperstack_key_name` in the TOML)
+- Review `[network].allowed_ssh_cidrs` and `[network].allowed_wireguard_cidrs` in your TOML.
+  The secure default is `["auto"]`, which resolves your current public egress IP to `/32`.
+  Set explicit CIDRs or `HYPERSTACK_OPERATOR_CIDR` if you deploy from a different network.
 - WireGuard setup script: `wg1-setup.sh` (present in this directory)
 - Ruby with `toml-rb` gem: `bundle install`
 
@@ -123,6 +126,10 @@ Edit `hyperstack-vm.toml` to change defaults. Key sections:
 | `[ollama]` | Ollama settings (disabled by default; set `install = true` to use instead) |
 | `[network]` | Ports, WireGuard subnet, allowed CIDRs |
 | `[wireguard]` | Auto-setup script path |
+
+`allowed_ssh_cidrs` and `allowed_wireguard_cidrs` accept either explicit CIDRs such as
+`["203.0.113.4/32"]` or `["auto"]`. `auto` resolves the current public operator IP at runtime;
+set `HYPERSTACK_OPERATOR_CIDR` to override that detection when needed.
 
 ## Monitoring vLLM
 

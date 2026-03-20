@@ -87,8 +87,8 @@ module HyperstackVM
         'wireguard_server_ip' => nil,
         'ollama_port' => 11_434,
         'litellm_port' => 4_000,
-        'allowed_ssh_cidrs' => ['0.0.0.0/0'],
-        'allowed_wireguard_cidrs' => ['0.0.0.0/0']
+        'allowed_ssh_cidrs' => ['auto'],
+        'allowed_wireguard_cidrs' => ['auto']
       },
       'bootstrap' => {
         'enable_guest_bootstrap' => true,
@@ -152,8 +152,15 @@ module HyperstackVM
         raise Error, "Missing [ssh].#{key} in config #{path}" if blank?(dig('ssh', key))
       end
 
-      [fetch('network', 'wireguard_subnet'), *fetch('network', 'allowed_ssh_cidrs'),
-       *fetch('network', 'allowed_wireguard_cidrs')].each do |cidr|
+      ssh_cidrs = normalized_cidrs(fetch('network', 'allowed_ssh_cidrs'))
+      wireguard_cidrs = normalized_cidrs(fetch('network', 'allowed_wireguard_cidrs'))
+
+      raise Error, missing_cidr_message('allowed_ssh_cidrs') if ssh_cidrs.empty?
+      raise Error, missing_cidr_message('allowed_wireguard_cidrs') if wireguard_cidrs.empty?
+
+      [fetch('network', 'wireguard_subnet'), *ssh_cidrs, *wireguard_cidrs].each do |cidr|
+        next if cidr == 'auto'
+
         IPAddr.new(cidr)
       rescue IPAddr::InvalidAddressError => e
         raise Error, "Invalid CIDR #{cidr.inspect}: #{e.message}"
@@ -190,6 +197,14 @@ module HyperstackVM
 
     def truthy?(value)
       value == true
+    end
+
+    def normalized_cidrs(values)
+      Array(values).map { |value| value.to_s.strip }.reject(&:empty?)
+    end
+
+    def missing_cidr_message(key)
+      "Missing [network].#{key} in config #{path}; set it to one or more CIDRs, or ['auto'] to restrict access to the current public operator IP."
     end
 
     def deep_merge(left, right)
@@ -344,11 +359,11 @@ module HyperstackVM
     end
 
     def allowed_ssh_cidrs
-      Array(fetch('network', 'allowed_ssh_cidrs')).map(&:to_s)
+      resolved_allowed_cidrs('allowed_ssh_cidrs')
     end
 
     def allowed_wireguard_cidrs
-      Array(fetch('network', 'allowed_wireguard_cidrs')).map(&:to_s)
+      resolved_allowed_cidrs('allowed_wireguard_cidrs')
     end
 
     def guest_bootstrap_enabled?
@@ -532,6 +547,62 @@ module HyperstackVM
 
     def truthy?(value)
       value == true
+    end
+
+    def resolved_allowed_cidrs(key)
+      values = Array(fetch('network', key)).map { |value| value.to_s.strip }.reject(&:empty?)
+      values.flat_map { |value| value == 'auto' ? [detected_operator_cidr] : [value] }.uniq
+    end
+
+    def detected_operator_cidr
+      return @detected_operator_cidr if defined?(@detected_operator_cidr)
+
+      configured = ENV['HYPERSTACK_OPERATOR_CIDR'].to_s.strip
+      @detected_operator_cidr = normalize_operator_cidr(configured) unless configured.empty?
+      return @detected_operator_cidr if defined?(@detected_operator_cidr)
+
+      @detected_operator_cidr = detect_public_operator_cidr
+    end
+
+    def normalize_operator_cidr(value)
+      ip = IPAddr.new(value)
+      suffix = ip.ipv4? ? 32 : 128
+      value.include?('/') ? value : "#{ip}/#{suffix}"
+    rescue IPAddr::InvalidAddressError => e
+      raise Error, "Invalid HYPERSTACK_OPERATOR_CIDR #{value.inspect}: #{e.message}"
+    end
+
+    def detect_public_operator_cidr
+      [
+        'https://api.ipify.org',
+        'https://ifconfig.me/ip',
+        'https://ipv4.icanhazip.com'
+      ].each do |url|
+        cidr = fetch_public_cidr(url)
+        return cidr if cidr
+      end
+
+      source = path || 'the active config'
+      raise Error,
+            "Unable to detect the current public operator IP for [network].allowed_*_cidrs = ['auto']. Set HYPERSTACK_OPERATOR_CIDR or replace 'auto' with explicit CIDRs in #{source}."
+    end
+
+    def fetch_public_cidr(url)
+      uri = URI(url)
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https', open_timeout: 5, read_timeout: 5) do |http|
+        http.request(Net::HTTP::Get.new(uri))
+      end
+      return nil unless response.is_a?(Net::HTTPSuccess)
+
+      body = response.body.to_s.strip
+      return nil if body.empty?
+
+      ip = IPAddr.new(body)
+      suffix = ip.ipv4? ? 32 : 128
+      "#{ip}/#{suffix}"
+    rescue IPAddr::InvalidAddressError, SocketError, SystemCallError, Timeout::Error, Net::OpenTimeout,
+           Net::ReadTimeout, OpenSSL::SSL::SSLError
+      nil
     end
 
     def custom_user_data
@@ -1569,6 +1640,8 @@ module HyperstackVM
       info "Resolved image: #{resolved[:image]['name']}"
       info "Resolved SSH keypair: #{resolved[:keypair]['name']}"
       info "Planned VM name: #{vm_name}"
+      info "Allowed SSH CIDRs: #{@config.allowed_ssh_cidrs.join(', ')}"
+      info "Allowed WireGuard CIDRs: #{@config.allowed_wireguard_cidrs.join(', ')}"
       info 'Create payload:'
       @out.puts(JSON.pretty_generate(payload))
       if @config.guest_bootstrap_enabled?
