@@ -518,7 +518,7 @@ module HyperstackVM
       expand_path(fetch('wireguard', 'setup_script'))
     end
 
-    def desired_security_rules
+    def desired_security_rules(include_ollama: ollama_install_enabled?, include_vllm: vllm_install_enabled?)
       rules = []
 
       allowed_ssh_cidrs.each do |cidr|
@@ -529,8 +529,8 @@ module HyperstackVM
         rules << firewall_rule('udp', wireguard_udp_port, cidr)
       end
 
-      rules << firewall_rule('tcp', ollama_port, wireguard_subnet)
-      rules << firewall_rule('tcp', litellm_port, wireguard_subnet)
+      rules << firewall_rule('tcp', ollama_port, wireguard_subnet) if include_ollama || include_vllm
+      rules << firewall_rule('tcp', litellm_port, wireguard_subnet) if include_vllm
       rules.uniq
     end
 
@@ -1127,6 +1127,7 @@ module HyperstackVM
         'public_ip' => instance['floating_ip'],
         'created_at' => Time.now.utc.iso8601
       }
+      sync_service_mode_state(state)
       @state_store.save(state)
       continue_create(state)
     end
@@ -1167,14 +1168,17 @@ module HyperstackVM
       else
         begin
           vm = @client.get_vm(state['vm_id'])
-          desired = @config.desired_security_rules.map { |rule| normalize_rule(rule) }
+          desired = desired_security_rules_for_state(state).map { |rule| normalize_rule(rule) }
           current = Array(vm['security_rules']).map { |rule| normalize_rule(rule) }
           missing_rules = desired - current
+          vllm_enabled = state_vllm_enabled?(state)
+          ollama_enabled = state_ollama_enabled?(state)
 
           info "Tracked VM: #{state['vm_id']} #{vm['name']}"
           info "Status: #{vm['status']} / #{vm['vm_state']}"
           info "Public IP: #{connect_host_for(vm) || 'none'}"
-          info "Active model: #{state['vllm_model'] || @config.vllm_model}"
+          info "Service mode: #{service_mode_summary(vllm_enabled: vllm_enabled, ollama_enabled: ollama_enabled)}"
+          info "Active model: #{state['vllm_model'] || @config.vllm_model}" if vllm_enabled
           info "Missing firewall rules: #{missing_rules.empty? ? 'none' : missing_rules.size}"
         rescue Error => e
           warn "Unable to load VM #{state['vm_id']}: #{e.message}"
@@ -1260,6 +1264,9 @@ module HyperstackVM
       state['vllm_container_name'] = new_container
       state['vllm_preset']         = preset_name
       state['vllm_setup_at']       = Time.now.utc.iso8601
+      state['services'] ||= {}
+      state['services']['vllm_enabled'] = true
+      state['services']['ollama_enabled'] = state_ollama_enabled?(state)
       @state_store.save(state)
 
       info "Model switched to '#{preset_name}' (#{preset['model']})."
@@ -1273,14 +1280,16 @@ module HyperstackVM
       raise Error, "No tracked VM state file found at #{@state_store.path}." if state.nil?
 
       wg_ip = @config.wireguard_gateway_hostname
+      vllm_enabled = state_vllm_enabled?(state)
+      ollama_enabled = state_ollama_enabled?(state)
       info "Running end-to-end inference tests via WireGuard (#{wg_ip})..."
 
-      if @config.vllm_install_enabled?
+      if vllm_enabled
         test_vllm(wg_ip)
         test_litellm(wg_ip)
       end
 
-      info "  Ollama test: connect via SSH and run 'ollama list' to verify models." if @config.ollama_install_enabled?
+      info "  Ollama test: connect via SSH and run 'ollama list' to verify models." if ollama_enabled
 
       info 'All inference tests passed.'
     end
@@ -1298,6 +1307,7 @@ module HyperstackVM
 
     def continue_create(state)
       vm_id = state['vm_id']
+      sync_service_mode_state(state)
 
       vm = wait_for_vm_ready(vm_id)
       ensure_security_rules(vm)
@@ -1384,7 +1394,7 @@ module HyperstackVM
         'assign_floating_ip' => @config.assign_floating_ip?,
         'create_bootable_volume' => @config.create_bootable_volume?,
         'enable_port_randomization' => @config.enable_port_randomization?,
-        'security_rules' => @config.desired_security_rules
+        'security_rules' => desired_security_rules
       }
       payload['labels'] = @config.labels unless @config.labels.empty?
       payload['user_data'] = @config.user_data if @config.user_data
@@ -1465,7 +1475,7 @@ module HyperstackVM
 
     def ensure_security_rules(vm)
       existing = Array(vm['security_rules']).map { |rule| normalize_rule(rule) }
-      desired = @config.desired_security_rules.map { |rule| normalize_rule(rule) }
+      desired = desired_security_rules.map { |rule| normalize_rule(rule) }
 
       (desired - existing).each do |rule|
         info "Adding Hyperstack firewall rule #{rule['protocol']} #{rule['remote_ip_prefix']} #{rule['port_range_min']}..."
@@ -1749,6 +1759,47 @@ module HyperstackVM
         'port_range_max' => integer_or_nil(rule['port_range_max']),
         'remote_ip_prefix' => rule['remote_ip_prefix'].to_s
       }
+    end
+
+    def sync_service_mode_state(state)
+      state['services'] = {
+        'vllm_enabled' => effective_vllm?,
+        'ollama_enabled' => effective_ollama?
+      }
+    end
+
+    def desired_security_rules(include_vllm: effective_vllm?, include_ollama: effective_ollama?)
+      @config.desired_security_rules(include_vllm: include_vllm, include_ollama: include_ollama)
+    end
+
+    def desired_security_rules_for_state(state)
+      desired_security_rules(include_vllm: state_vllm_enabled?(state), include_ollama: state_ollama_enabled?(state))
+    end
+
+    def state_vllm_enabled?(state)
+      recorded = state&.dig('services', 'vllm_enabled')
+      return recorded unless recorded.nil?
+
+      return true if state&.key?('vllm_setup_at')
+
+      @config.vllm_install_enabled?
+    end
+
+    def state_ollama_enabled?(state)
+      recorded = state&.dig('services', 'ollama_enabled')
+      return recorded unless recorded.nil?
+
+      return true if state&.key?('ollama_installed_at') || state&.key?('ollama_setup_at')
+
+      @config.ollama_install_enabled?
+    end
+
+    def service_mode_summary(vllm_enabled:, ollama_enabled:)
+      return 'vLLM+LiteLLM enabled, Ollama enabled' if vllm_enabled && ollama_enabled
+      return 'vLLM+LiteLLM enabled, Ollama disabled' if vllm_enabled
+      return 'Ollama enabled, vLLM+LiteLLM disabled' if ollama_enabled
+
+      'All inference services disabled'
     end
 
     def cleanup_local_access(dry_run:, hostnames:, allowed_ips:)
