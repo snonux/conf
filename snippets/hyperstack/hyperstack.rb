@@ -8,6 +8,7 @@ rescue LoadError, Gem::GemNotFoundException, Gem::LoadError, Errno::ENOENT
 end
 
 require 'json'
+require 'fileutils'
 require 'net/http'
 require 'open3'
 require 'optparse'
@@ -307,6 +308,10 @@ module HyperstackVM
 
     def ssh_private_key_path
       expand_path(fetch('ssh', 'private_key_path'))
+    end
+
+    def ssh_known_hosts_path
+      "#{state_file}.known_hosts"
     end
 
     def ssh_key_name
@@ -1077,6 +1082,7 @@ module HyperstackVM
       info "Deleting VM #{target_vm_id}..."
       @client.delete_vm(target_vm_id)
       wait_for_deletion(target_vm_id)
+      delete_ssh_known_hosts_file
       @state_store.delete unless preserve_state_on_failure
       info "VM #{target_vm_id} deleted."
     rescue Error
@@ -1374,14 +1380,10 @@ module HyperstackVM
     end
 
     def wait_for_ssh(host)
-      # Remove stale host keys for both the IP and the WireGuard hostname — VMs
-      # frequently reuse IPs and the same WireGuard alias after delete/recreate,
-      # causing StrictHostKeyChecking to reject the new host key.
-      remove_stale_host_key(host)
-      remove_stale_host_key(@config.wireguard_gateway_hostname)
       info "Waiting for SSH on #{host}:#{@config.ssh_port}..."
       with_polling("SSH on #{host}:#{@config.ssh_port}") do
         next nil unless tcp_open?(host, @config.ssh_port)
+        next nil unless ensure_trusted_ssh_host(host)
 
         _, stderr, status = run_ssh_command(host, 'true')
         if status.success?
@@ -1544,12 +1546,60 @@ module HyperstackVM
       raise Error, "Configured WireGuard settings do not match #{script_path}: #{mismatches.join('; ')}"
     end
 
-    def remove_stale_host_key(host)
-      system('ssh-keygen', '-R', host, out: File::NULL, err: File::NULL)
-      # Also remove bracketed form for non-standard ports
-      return unless @config.ssh_port != 22
+    def ensure_trusted_ssh_host(host)
+      scanned = scan_ssh_host_keys(host)
+      return false if scanned.empty?
 
-      system('ssh-keygen', '-R', "[#{host}]:#{@config.ssh_port}", out: File::NULL, err: File::NULL)
+      existing = known_host_entries
+      if existing.empty?
+        write_known_host_entries(scanned)
+        info "Pinned SSH host key for #{host} in #{@config.ssh_known_hosts_path}."
+        return true
+      end
+
+      return true if existing == scanned
+
+      raise Error,
+            "SSH host key mismatch for #{host}. Refusing to continue. Delete #{@config.ssh_known_hosts_path} only if you intentionally replaced this VM."
+    end
+
+    def scan_ssh_host_keys(host)
+      stdout, stderr, status = Open3.capture3('ssh-keyscan', '-T', @config.ssh_connect_timeout.to_s,
+                                              '-p', @config.ssh_port.to_s, host)
+      unless status.success?
+        warn "ssh-keyscan not ready yet: #{stderr.strip}" unless stderr.to_s.strip.empty?
+        return []
+      end
+
+      stdout.lines.map(&:strip).reject { |line| line.empty? || line.start_with?('#') }.sort.uniq
+    rescue Errno::ENOENT
+      raise Error, 'ssh-keyscan is required to pin SSH host keys but was not found in PATH.'
+    end
+
+    def known_host_entries
+      path = @config.ssh_known_hosts_path
+      return [] unless File.exist?(path)
+
+      File.readlines(path, chomp: true).map(&:strip).reject(&:empty?).sort.uniq
+    rescue Errno::EACCES => e
+      raise Error, "Cannot read SSH known_hosts file #{path}: #{e.message}"
+    end
+
+    def write_known_host_entries(entries)
+      path = @config.ssh_known_hosts_path
+      FileUtils.mkdir_p(File.dirname(path))
+      temp_path = "#{path}.tmp"
+      File.write(temp_path, "#{entries.join("\n")}\n")
+      File.chmod(0o600, temp_path)
+      File.rename(temp_path, path)
+    rescue Errno::EACCES => e
+      raise Error, "Cannot write SSH known_hosts file #{path}: #{e.message}"
+    end
+
+    def delete_ssh_known_hosts_file
+      File.delete(@config.ssh_known_hosts_path) if File.exist?(@config.ssh_known_hosts_path)
+    rescue Errno::EACCES => e
+      raise Error, "Cannot delete SSH known_hosts file #{@config.ssh_known_hosts_path}: #{e.message}"
     end
 
     def failed_vm?(vm)
@@ -1594,7 +1644,8 @@ module HyperstackVM
       command = [
         'ssh',
         '-o', 'BatchMode=yes',
-        '-o', 'StrictHostKeyChecking=accept-new',
+        '-o', 'StrictHostKeyChecking=yes',
+        '-o', "UserKnownHostsFile=#{@config.ssh_known_hosts_path}",
         '-o', "ConnectTimeout=#{@config.ssh_connect_timeout}",
         '-p', @config.ssh_port.to_s
       ]

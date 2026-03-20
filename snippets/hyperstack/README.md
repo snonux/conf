@@ -131,6 +131,9 @@ Edit `hyperstack-vm.toml` to change defaults. Key sections:
 `["203.0.113.4/32"]` or `["auto"]`. `auto` resolves the current public operator IP at runtime;
 set `HYPERSTACK_OPERATOR_CIDR` to override that detection when needed.
 
+SSH host keys are pinned per state file in `<state>.known_hosts`. `delete` and `--replace`
+clear that trust file for intentional reprovisioning; unexpected host key changes now fail closed.
+
 ## Monitoring vLLM
 
 ```bash
