@@ -836,6 +836,22 @@ module HyperstackVM
       removed
     end
 
+    def remove_hostnames(hostnames, dry_run: false)
+      targets = Array(hostnames).map(&:to_s).map(&:strip).reject(&:empty?).uniq
+      return [] if targets.empty?
+
+      content = hosts_contents
+      raise Error, 'Unable to read /etc/hosts for hostname cleanup.' if content.nil?
+
+      updated, removed = prune_hosts_entries(content, targets)
+      return [] if removed.empty?
+      return removed if dry_run
+
+      write_hosts(updated)
+      @hosts_contents = updated
+      removed
+    end
+
     private
 
     def service_state
@@ -964,6 +980,52 @@ module HyperstackVM
       stdout, _stderr, status = Open3.capture3('sudo', '-n', 'cat', @config_path)
       @config_contents = status.success? ? stdout : nil
     end
+
+    def hosts_contents
+      return @hosts_contents if defined?(@hosts_contents)
+
+      @hosts_contents = File.read('/etc/hosts')
+    rescue Errno::EACCES, Errno::ENOENT
+      stdout, _stderr, status = Open3.capture3('sudo', '-n', 'cat', '/etc/hosts')
+      @hosts_contents = status.success? ? stdout : nil
+    end
+
+    def prune_hosts_entries(content, hostnames)
+      removed = []
+      updated = content.each_line.filter_map do |line|
+        rewritten, line_removed = prune_host_line(line, hostnames)
+        removed.concat(line_removed)
+        rewritten
+      end
+      [updated.join, removed.uniq]
+    end
+
+    def prune_host_line(line, hostnames)
+      stripped = line.strip
+      return [line, []] if stripped.empty? || stripped.start_with?('#')
+
+      body, comment = line.split('#', 2)
+      tokens = body.split(/\s+/)
+      return [line, []] if tokens.empty?
+
+      ip = tokens.shift
+      removed = tokens & hostnames
+      return [line, []] if removed.empty?
+
+      remaining = tokens - hostnames
+      return [nil, removed] if remaining.empty?
+
+      rewritten = ([ip] + remaining).join("\t")
+      rewritten = "#{rewritten}  # #{comment.strip}" if comment && !comment.strip.empty?
+      ["#{rewritten}\n", removed]
+    end
+
+    def write_hosts(content)
+      File.write('/etc/hosts', content)
+    rescue Errno::EACCES
+      _stdout, stderr, status = Open3.capture3('sudo', '-n', 'tee', '/etc/hosts', stdin_data: content)
+      raise Error, "Failed to update /etc/hosts: #{stderr.to_s.strip}" unless status.success?
+    end
   end
 
   # Thread-safe output wrapper that prepends a fixed prefix to each line.
@@ -1073,6 +1135,7 @@ module HyperstackVM
       state = @state_store.load
       target_vm_id = vm_id || state&.dig('vm_id')
       raise Error, "No VM ID provided and no state file found at #{@state_store.path}." if target_vm_id.nil?
+      cleanup_local = state && target_vm_id == state['vm_id']
 
       if dry_run
         print_delete_dry_run(target_vm_id, state, preserve_state_on_failure: preserve_state_on_failure)
@@ -1082,6 +1145,11 @@ module HyperstackVM
       info "Deleting VM #{target_vm_id}..."
       @client.delete_vm(target_vm_id)
       wait_for_deletion(target_vm_id)
+      if cleanup_local
+        cleanup = cleanup_local_access(dry_run: false, hostnames: [@config.wireguard_gateway_hostname],
+                                       allowed_ips: ["#{@config.wireguard_gateway_ip}/32"])
+        report_local_cleanup(@out, cleanup, dry_run: false)
+      end
       delete_ssh_known_hosts_file
       @state_store.delete unless preserve_state_on_failure
       info "VM #{target_vm_id} deleted."
@@ -1683,6 +1751,34 @@ module HyperstackVM
       }
     end
 
+    def cleanup_local_access(dry_run:, hostnames:, allowed_ips:)
+      {
+        peers: @local_wireguard.remove_peers_by_allowed_ips(allowed_ips, dry_run: dry_run),
+        hostnames: @local_wireguard.remove_hostnames(hostnames, dry_run: dry_run)
+      }
+    end
+
+    def report_local_cleanup(output, cleanup, dry_run:)
+      peer_summary = cleanup[:peers].map { |peer| peer['AllowedIPs'] || peer['Endpoint'] }.join(', ')
+      host_summary = cleanup[:hostnames].join(', ')
+
+      if dry_run
+        if cleanup[:peers].empty? && cleanup[:hostnames].empty?
+          output.puts('DRY RUN: no matching local WireGuard peers or host entries would be removed.')
+          return
+        end
+
+        output.puts("DRY RUN: local WireGuard peers would be removed for #{peer_summary}.") unless cleanup[:peers].empty?
+        output.puts("DRY RUN: local host entries would be removed for #{host_summary}.") unless cleanup[:hostnames].empty?
+        return
+      end
+
+      output.puts('No matching local WireGuard peers needed removal.') if cleanup[:peers].empty?
+      output.puts('No matching local host entries needed removal.') if cleanup[:hostnames].empty?
+      output.puts("Local WireGuard peers removed for #{peer_summary}.") unless cleanup[:peers].empty?
+      output.puts("Local host entries removed for #{host_summary}.") unless cleanup[:hostnames].empty?
+    end
+
     def print_create_dry_run(vm_name, resolved, payload)
       info 'DRY RUN: no VM or state file will be created.'
       info "State file: #{@state_store.path}"
@@ -1762,6 +1858,9 @@ module HyperstackVM
       if state && state['vm_id'].to_i == target_vm_id.to_i
         action = preserve_state_on_failure ? 'would remain unchanged' : 'would be removed'
         info "Tracked state file #{@state_store.path} #{action}."
+        cleanup = cleanup_local_access(dry_run: true, hostnames: [@config.wireguard_gateway_hostname],
+                                       allowed_ips: ["#{@config.wireguard_gateway_ip}/32"])
+        report_local_cleanup(@out, cleanup, dry_run: true)
       else
         info 'No tracked state entry would be modified.'
       end
@@ -2555,18 +2654,12 @@ module HyperstackVM
 
       if errors.empty?
         allowed_ips = loaders.map { |loader| "#{loader.config.wireguard_gateway_ip}/32" }
+        hostnames = loaders.map { |loader| loader.config.wireguard_gateway_hostname }
         begin
-          removed = build_local_wireguard(loaders.first.config).remove_peers_by_allowed_ips(allowed_ips, dry_run: dry_run)
-          summary = removed.map { |peer| peer['AllowedIPs'] || peer['Endpoint'] }.join(', ')
-          if dry_run
-            message = removed.empty? ? 'DRY RUN: no matching local WireGuard peers would be removed.' :
-                                       "DRY RUN: local WireGuard peers would be removed for #{summary}."
-            local_wg_out.puts(message)
-          elsif removed.empty?
-            local_wg_out.puts('No matching local WireGuard peers needed removal.')
-          else
-            local_wg_out.puts("Local WireGuard peers removed for #{summary}.")
-          end
+          local_manager = build_manager(loaders.first.config, out: local_wg_out)
+          cleanup = local_manager.send(:cleanup_local_access, dry_run: dry_run, hostnames: hostnames,
+                                       allowed_ips: allowed_ips)
+          local_manager.send(:report_local_cleanup, local_wg_out, cleanup, dry_run: dry_run)
         rescue Error => e
           errors[:local_wireguard] = e.message
         end

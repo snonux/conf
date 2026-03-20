@@ -47,6 +47,7 @@ ANTHROPIC_API_KEY=sk-litellm-master \
 claude --model claude-opus-4-6-20260604 --dangerously-skip-permissions
 
 # Tear down
+# Also removes the tracked local wg1 peer, hostname alias, and pinned SSH host key.
 ruby hyperstack.rb delete
 ```
 
