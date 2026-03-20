@@ -51,6 +51,24 @@ claude --model claude-opus-4-6-20260604 --dangerously-skip-permissions
 ruby hyperstack.rb delete
 ```
 
+## Using Pi
+
+Bring both VMs up first:
+
+```bash
+ruby hyperstack.rb create-both
+```
+
+Then start one Pi session per terminal:
+
+```bash
+./pi-vm1
+./pi-vm2
+```
+
+These wrappers `cd` into this repo before launching Pi, so the project-local
+settings in `.pi/settings.json` still apply.
+
 ## Using Claude Code with vLLM
 
 WireGuard (`wg1`) must be active before connecting.
