@@ -1,0 +1,8 @@
+{
+  "defaultProvider": "hyperstack1",
+  "defaultModel": "cyankiwi/NVIDIA-Nemotron-3-Super-120B-A12B-AWQ-4bit",
+  "enabledModels": [
+    "hyperstack1/cyankiwi/NVIDIA-Nemotron-3-Super-120B-A12B-AWQ-4bit",
+    "hyperstack2/bullpoint/Qwen3-Coder-Next-AWQ-4bit"
+  ]
+}
