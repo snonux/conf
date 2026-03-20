@@ -743,6 +743,23 @@ module HyperstackVM
       }
     end
 
+    def remove_peers_by_allowed_ips(allowed_ips, dry_run: false)
+      targets = Array(allowed_ips).map(&:to_s).map(&:strip).reject(&:empty?).uniq
+      return [] if targets.empty?
+
+      content = config_contents
+      raise Error, "Unable to read #{@config_path} for peer cleanup." if content.nil?
+
+      updated, removed = prune_peer_blocks(content, targets)
+      return [] if removed.empty?
+      return removed if dry_run
+
+      write_config(updated)
+      restart_service_if_active
+      @config_contents = updated
+      removed
+    end
+
     private
 
     def service_state
@@ -789,6 +806,78 @@ module HyperstackVM
 
       peers << current_peer if current_section == 'Peer' && current_peer && !current_peer.empty?
       peers
+    end
+
+    def prune_peer_blocks(content, allowed_ips)
+      kept = []
+      removed = []
+
+      parse_wireguard_blocks(content).each do |block|
+        if block[:section] == 'Peer' && allowed_ips.include?(block[:values]['AllowedIPs'].to_s.strip)
+          removed << block[:values]
+        else
+          kept << block[:lines].join
+        end
+      end
+
+      [kept.join, removed]
+    end
+
+    def parse_wireguard_blocks(content)
+      blocks = []
+      current_section = nil
+      current_lines = []
+
+      content.each_line do |line|
+        stripped = line.strip
+        if stripped.start_with?('[') && stripped.end_with?(']')
+          blocks << wireguard_block(current_section, current_lines) unless current_lines.empty?
+          current_section = stripped[1..-2]
+          current_lines = [line]
+        else
+          current_lines << line
+        end
+      end
+
+      blocks << wireguard_block(current_section, current_lines) unless current_lines.empty?
+      blocks
+    end
+
+    def wireguard_block(section, lines)
+      {
+        section: section,
+        lines: lines.dup,
+        values: parse_wireguard_section_values(section, lines)
+      }
+    end
+
+    def parse_wireguard_section_values(section, lines)
+      return {} unless section == 'Peer'
+
+      lines.each_with_object({}) do |line, values|
+        stripped = line.strip
+        next if stripped.empty? || stripped.start_with?('#') || stripped.start_with?('[')
+
+        key, value = stripped.split('=', 2).map { |part| part&.strip }
+        values[key] = value if key && value
+      end
+    end
+
+    def write_config(content)
+      File.write(@config_path, content)
+    rescue Errno::EACCES
+      _stdout, stderr, status = Open3.capture3('sudo', '-n', 'tee', @config_path, stdin_data: content)
+      raise Error, "Failed to update #{@config_path}: #{stderr.to_s.strip}" unless status.success?
+
+      _stdout, stderr, status = Open3.capture3('sudo', '-n', 'chmod', '600', @config_path)
+      raise Error, "Failed to chmod #{@config_path}: #{stderr.to_s.strip}" unless status.success?
+    end
+
+    def restart_service_if_active
+      return unless service_state == 'active'
+
+      _stdout, stderr, status = Open3.capture3('sudo', '-n', 'systemctl', 'restart', "wg-quick@#{@interface_name}")
+      raise Error, "Failed to restart wg-quick@#{@interface_name}: #{stderr.to_s.strip}" unless status.success?
     end
 
     def config_contents
@@ -2021,7 +2110,11 @@ module HyperstackVM
       endpoints = Array(wg_status['endpoints']).compact.uniq
       info "Local WireGuard #{@config.local_interface_name}: #{wg_status['service_state']}"
       if endpoints.empty?
-        warn "Unable to read #{@config.local_wg_config_path} for local WireGuard endpoint validation."
+        if wg_status['config_readable']
+          info 'Local WireGuard has no configured peers.'
+        else
+          warn "Unable to read #{@config.local_wg_config_path} for local WireGuard endpoint validation."
+        end
         return
       end
 
@@ -2202,10 +2295,7 @@ module HyperstackVM
     def build_manager(config, out: $stdout, wg_setup_pre: nil, wg_setup_post: nil)
       state_store     = StateStore.new(config.state_file)
       client          = HyperstackClient.new(base_url: config.api_base_url, api_key: config.api_key)
-      local_wireguard = LocalWireGuard.new(
-        interface_name: config.local_interface_name,
-        config_path:    config.local_wg_config_path
-      )
+      local_wireguard = build_local_wireguard(config)
       Manager.new(
         config:          config,
         client:          client,
@@ -2214,6 +2304,13 @@ module HyperstackVM
         out:             out,
         wg_setup_pre:    wg_setup_pre,
         wg_setup_post:   wg_setup_post
+      )
+    end
+
+    def build_local_wireguard(config)
+      LocalWireGuard.new(
+        interface_name: config.local_interface_name,
+        config_path:    config.local_wg_config_path
       )
     end
 
@@ -2318,8 +2415,10 @@ module HyperstackVM
     def run_delete_both(dry_run:)
       out_mutex = Mutex.new
       errors = {}
+      loaders = pair_config_loaders
+      local_wg_out = PrefixedOutput.new('[local-wireguard] ', $stdout, out_mutex)
 
-      pair_config_loaders.each_with_index do |loader, index|
+      loaders.each_with_index do |loader, index|
         label = "vm#{index + 1}"
         manager = build_manager(loader.config, out: PrefixedOutput.new("[#{label}] ", $stdout, out_mutex))
 
@@ -2327,6 +2426,25 @@ module HyperstackVM
           manager.delete(dry_run: dry_run)
         rescue Error => e
           errors[label.to_sym] = e.message
+        end
+      end
+
+      if errors.empty?
+        allowed_ips = loaders.map { |loader| "#{loader.config.wireguard_gateway_ip}/32" }
+        begin
+          removed = build_local_wireguard(loaders.first.config).remove_peers_by_allowed_ips(allowed_ips, dry_run: dry_run)
+          summary = removed.map { |peer| peer['AllowedIPs'] || peer['Endpoint'] }.join(', ')
+          if dry_run
+            message = removed.empty? ? 'DRY RUN: no matching local WireGuard peers would be removed.' :
+                                       "DRY RUN: local WireGuard peers would be removed for #{summary}."
+            local_wg_out.puts(message)
+          elsif removed.empty?
+            local_wg_out.puts('No matching local WireGuard peers needed removal.')
+          else
+            local_wg_out.puts("Local WireGuard peers removed for #{summary}.")
+          end
+        rescue Error => e
+          errors[:local_wireguard] = e.message
         end
       end
 
