@@ -1052,6 +1052,384 @@ module HyperstackVM
     end
   end
 
+  class ProvisioningScripts
+    def initialize(config:)
+      @config = config
+    end
+
+    def guest_bootstrap_script
+      script = []
+      script << 'set -euo pipefail'
+
+      # Wait for any running unattended-upgrades or apt locks to release
+      # before attempting package operations (transient lock on fresh VMs)
+      script << 'echo "Waiting for apt locks to clear..."'
+      script << 'for i in $(seq 1 30); do'
+      script << '  if ! fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; then break; fi'
+      script << '  echo "  apt lock held, waiting ($i/30)..."; sleep 10'
+      script << 'done'
+      script << 'sudo systemctl stop unattended-upgrades.service 2>/dev/null || true'
+      script << 'sudo systemctl disable unattended-upgrades.service 2>/dev/null || true'
+
+      if @config.install_wireguard?
+        script << 'which wg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y wireguard)'
+      end
+
+      if @config.configure_ufw?
+        script << "sudo ufw allow #{@config.ssh_port}/tcp comment 'Allow SSH' >/dev/null 2>&1 || true"
+        script << 'sudo ufw --force enable >/dev/null 2>&1 || true'
+        script << "sudo ufw allow #{@config.wireguard_udp_port}/udp comment 'WireGuard #{@config.local_interface_name}' >/dev/null 2>&1 || true"
+        # Port 11434 is shared by Ollama and vLLM; open for both regardless of which is installed.
+        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.ollama_port} proto tcp comment 'Inference API (Ollama/vLLM) via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
+        # Port 4000: LiteLLM proxy (Anthropic API -> vLLM); open alongside the inference port.
+        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.litellm_port} proto tcp comment 'LiteLLM proxy via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
+      end
+
+      if @config.configure_ollama_host?
+        # Only write a minimal OLLAMA_HOST override if no override exists yet;
+        # ollama_setup_script writes the full override (OLLAMA_MODELS, GPU_OVERHEAD, etc.)
+        script << "if systemctl list-unit-files | grep -q '^ollama.service'; then"
+        script << '  if [ ! -f /etc/systemd/system/ollama.service.d/override.conf ]; then'
+        script << '    sudo mkdir -p /etc/systemd/system/ollama.service.d'
+        script << "    cat <<'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null"
+        script << '[Service]'
+        script << "Environment=\"OLLAMA_HOST=0.0.0.0:#{@config.ollama_port}\""
+        script << 'OVERRIDE'
+        script << '    sudo systemctl daemon-reload'
+        script << '    sudo systemctl restart ollama || true'
+        script << '  fi'
+        script << 'fi'
+      end
+
+      script << 'echo bootstrap-ok'
+      script.join("\n")
+    end
+
+    def desired_ollama_models
+      normalized_model_list(@config.ollama_pull_models)
+    end
+
+    def model_list_signature(models)
+      normalized_model_list(models).sort
+    end
+
+    def ollama_install_script
+      models_dir = @config.ollama_models_dir
+      listen_host = @config.ollama_listen_host
+
+      script = []
+      script << 'set -euo pipefail'
+      script << 'sudo pkill -f unattended-upgrade >/dev/null 2>&1 || true'
+      script << 'if ! command -v ollama >/dev/null 2>&1; then curl -fsSL https://ollama.ai/install.sh | sh; fi'
+      if models_dir.start_with?('/ephemeral')
+        script << "mountpoint -q /ephemeral || { echo 'Expected /ephemeral mount is missing'; exit 1; }"
+      end
+      script << "sudo mkdir -p #{Shellwords.escape(models_dir)}"
+      script << "sudo chown -R ollama:ollama #{Shellwords.escape(File.dirname(models_dir))}"
+      script << 'sudo mkdir -p /etc/systemd/system/ollama.service.d'
+      script << "cat <<'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null"
+      script << '[Service]'
+      script << "Environment=\"OLLAMA_MODELS=#{models_dir}\""
+      script << "Environment=\"OLLAMA_GPU_OVERHEAD=#{@config.ollama_gpu_overhead_mb}\""
+      script << "Environment=\"OLLAMA_NUM_PARALLEL=#{@config.ollama_num_parallel}\""
+      script << "Environment=\"OLLAMA_CONTEXT_LENGTH=#{@config.ollama_context_length}\""
+      script << "Environment=\"OLLAMA_HOST=#{listen_host}\""
+      script << 'OVERRIDE'
+      script << 'sudo systemctl daemon-reload'
+      script << 'sudo systemctl enable --now ollama'
+      script << 'sudo systemctl restart ollama'
+      script << 'sleep 3'
+      script << 'systemctl is-active --quiet ollama'
+      script << 'echo ollama-install-ok'
+      script.join("\n")
+    end
+
+    def ollama_pull_script(models: desired_ollama_models)
+      models_dir = @config.ollama_models_dir
+
+      script = []
+      script << 'set -euo pipefail'
+      # Pull each model with retry (transient network failures) and verify
+      # it is actually present afterwards
+      models.each do |model|
+        escaped = Shellwords.escape(model)
+        script << "echo \"Pulling model #{model}...\""
+        script << 'for attempt in 1 2 3; do'
+        script << "  if ollama pull #{escaped}; then break; fi"
+        script << "  if [ \"$attempt\" -eq 3 ]; then echo \"FATAL: failed to pull #{model} after 3 attempts\"; exit 1; fi"
+        script << '  echo "  pull attempt $attempt failed, retrying in 15s..."; sleep 15'
+        script << 'done'
+        script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} not found after pull\"; exit 1; }"
+      end
+      # Final verification: ensure all expected models are listed
+      script << 'echo "Verifying all models are present..."'
+      models.each do |model|
+        escaped = Shellwords.escape(model)
+        script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} missing in final check\"; exit 1; }"
+      end
+      script << "echo ollama-models-dir=#{models_dir}"
+      script << 'echo ollama-ok'
+      script.join("\n")
+    end
+
+    def vllm_stop_script(container_name)
+      script = []
+      script << 'set -euo pipefail'
+      script << "docker stop #{Shellwords.escape(container_name)} 2>/dev/null || true"
+      script << "docker rm #{Shellwords.escape(container_name)} 2>/dev/null || true"
+      script << 'echo vllm-stopped'
+      script.join("\n")
+    end
+
+    def vllm_install_script(preset_config: nil, pull_image: true)
+      cfg = preset_config || {}
+      model = cfg['model'] || @config.vllm_model
+      cache_dir = @config.vllm_hug_cache_dir
+      compile_cache = @config.vllm_compile_cache_dir
+      container = cfg['container_name'] || @config.vllm_container_name
+      max_len = Integer(cfg['max_model_len'] || @config.vllm_max_model_len)
+      gpu_util = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
+      tp_size = Integer(cfg['tensor_parallel_size'] || @config.vllm_tensor_parallel_size)
+      parser = cfg['tool_call_parser']
+      # parser is nil only when preset explicitly omits the key and config has no default;
+      # empty string means "disable tool calling" (e.g. gpt-oss reasoning models).
+      parser = @config.vllm_tool_call_parser if parser.nil?
+      # Fall back to the top-level [vllm] config values when no preset is in use.
+      # This allows setting trust_remote_code / extra_vllm_args in the default [vllm] block
+      # without requiring a --model preset flag at create time.
+      trust_remote = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : @config.vllm_trust_remote_code
+      port = @config.ollama_port
+
+      docker_args = [
+        'docker run -d',
+        '--gpus all', '--ipc=host', '--network host',
+        "--name #{Shellwords.escape(container)}",
+        '--restart always',
+        "-v #{Shellwords.escape(cache_dir)}:/root/.cache/huggingface",
+        # Mount torch.compile cache so CUDA kernel compilation is skipped on warm restarts.
+        # Without this, every container restart recompiles (~30-60 s extra).
+        "-v #{Shellwords.escape(compile_cache)}:/root/.cache/vllm",
+        'vllm/vllm-openai:latest',
+        "--model #{Shellwords.escape(model)}",
+        "--tensor-parallel-size #{tp_size}",
+        '--enable-prefix-caching',
+        "--gpu-memory-utilization #{gpu_util}",
+        "--max-model-len #{max_len}",
+        '--host 0.0.0.0',
+        "--port #{port}"
+      ]
+      # Tool calling is optional: empty/nil parser disables it.
+      unless parser.nil? || parser.empty?
+        docker_args << '--enable-auto-tool-choice'
+        docker_args << "--tool-call-parser #{Shellwords.escape(parser)}"
+      end
+      docker_args << '--trust-remote-code' if trust_remote
+      extra_args = cfg.key?('extra_vllm_args') ? Array(cfg['extra_vllm_args']) : @config.vllm_extra_args
+      extra_args.each { |arg| docker_args << arg }
+      docker_run = docker_args.join(' ')
+
+      script = []
+      script << 'set -euo pipefail'
+      script << "sudo mkdir -p #{Shellwords.escape(cache_dir)} #{Shellwords.escape(compile_cache)}"
+      script << "sudo chmod -R 0777 #{Shellwords.escape(cache_dir)} #{Shellwords.escape(compile_cache)}"
+      script << "docker stop #{Shellwords.escape(container)} 2>/dev/null || true"
+      script << "docker rm #{Shellwords.escape(container)} 2>/dev/null || true"
+      script << 'docker pull vllm/vllm-openai:latest' if pull_image
+      script << docker_run
+      script << 'echo "Waiting for vLLM to become ready (up to 10 min for first model download)..."'
+      script << 'for i in $(seq 1 120); do'
+      script << "  if curl -sf http://localhost:#{port}/v1/models >/dev/null 2>&1; then echo vllm-ready; break; fi"
+      script << "  state=$(docker inspect --format='{{.State.Status}}' #{Shellwords.escape(container)} 2>/dev/null || echo unknown)"
+      script << '  echo "  vLLM not ready yet ($i/120, container=$state)..."'
+      script << '  sleep 5'
+      script << 'done'
+      script << "curl -sf http://localhost:#{port}/v1/models >/dev/null || { echo 'FATAL: vLLM did not become ready within 10 minutes'; exit 1; }"
+      script << 'echo vllm-install-ok'
+      script.join("\n")
+    end
+
+    def litellm_install_script(model_override: nil)
+      port = @config.litellm_port
+      model = model_override || @config.vllm_model
+
+      script = []
+      script << 'set -euo pipefail'
+      script << 'sudo apt-get install -y python3.12-venv'
+      script << 'sudo mkdir -p /ephemeral/litellm-env'
+      script << 'sudo chown ubuntu:ubuntu /ephemeral/litellm-env'
+      script << 'python3 -m venv /ephemeral/litellm-env'
+      script << '/ephemeral/litellm-env/bin/pip install --quiet "litellm[proxy]"'
+      script << "sudo tee /ephemeral/litellm-config.yaml > /dev/null << 'LITELLM_YAML'"
+      script << 'model_list:'
+      script.concat(litellm_model_entries(model))
+      script << ''
+      script << 'litellm_settings:'
+      script << '  drop_params: true'
+      script << ''
+      script << 'general_settings:'
+      script << "  master_key: \"#{@config.litellm_master_key}\""
+      script << 'LITELLM_YAML'
+      script << "sudo tee /etc/systemd/system/litellm.service > /dev/null << 'LITELLM_UNIT'"
+      script << '[Unit]'
+      script << 'Description=LiteLLM Proxy'
+      script << 'After=network.target docker.service'
+      script << 'Requires=docker.service'
+      script << ''
+      script << '[Service]'
+      script << 'Type=simple'
+      script << 'User=ubuntu'
+      script << "ExecStart=/ephemeral/litellm-env/bin/litellm --config /ephemeral/litellm-config.yaml --host 0.0.0.0 --port #{port}"
+      script << 'Restart=always'
+      script << 'RestartSec=5'
+      script << ''
+      script << '[Install]'
+      script << 'WantedBy=multi-user.target'
+      script << 'LITELLM_UNIT'
+      script << 'sudo systemctl daemon-reload'
+      script << 'sudo systemctl enable --now litellm'
+      script << 'sleep 5'
+      script << 'systemctl is-active --quiet litellm'
+      script << 'echo litellm-install-ok'
+      script.join("\n")
+    end
+
+    def litellm_reload_script(model)
+      script = []
+      script << 'set -euo pipefail'
+      script << "sudo tee /ephemeral/litellm-config.yaml > /dev/null << 'LITELLM_YAML'"
+      script << 'model_list:'
+      script.concat(litellm_model_entries(model))
+      script << ''
+      script << 'litellm_settings:'
+      script << '  drop_params: true'
+      script << ''
+      script << 'general_settings:'
+      script << "  master_key: \"#{@config.litellm_master_key}\""
+      script << 'LITELLM_YAML'
+      script << 'sudo systemctl restart litellm'
+      script << 'sleep 3'
+      script << 'systemctl is-active --quiet litellm'
+      script << 'echo litellm-reload-ok'
+      script.join("\n")
+    end
+
+    private
+
+    def normalized_model_list(models)
+      Array(models).each_with_object([]) do |model, ordered|
+        normalized = model.to_s.strip
+        next if normalized.empty? || ordered.include?(normalized)
+
+        ordered << normalized
+      end
+    end
+
+    def litellm_model_entries(model)
+      vllm_port = @config.ollama_port
+
+      @config.litellm_claude_model_names.flat_map do |name|
+        [
+          "  - model_name: \"#{name}\"",
+          '    litellm_params:',
+          "      model: \"hosted_vllm/#{model}\"",
+          "      api_base: \"http://localhost:#{vllm_port}/v1\"",
+          '      api_key: "EMPTY"'
+        ]
+      end
+    end
+  end
+
+  class RemoteProvisioner
+    def initialize(config:, scripts:, out:, ssh_command_runner:, ssh_stream_runner:)
+      @config = config
+      @scripts = scripts
+      @out = out
+      @ssh_command_runner = ssh_command_runner
+      @ssh_stream_runner = ssh_stream_runner
+    end
+
+    def bootstrap_guest(host)
+      info 'Bootstrapping Ubuntu guest over SSH...'
+      retries = 3
+      retries.times do |attempt|
+        stdout, stderr, status = @ssh_command_runner.call(host, @scripts.guest_bootstrap_script)
+        return if status.success?
+
+        msg = stderr.strip.empty? ? stdout : stderr
+        raise Error, "Guest bootstrap failed after #{retries} attempts: #{msg}" if attempt == retries - 1
+
+        warn "Bootstrap attempt #{attempt + 1}/#{retries} failed (#{msg.lines.last&.strip}), retrying in 15s..."
+        sleep 15
+      end
+    end
+
+    def install_ollama_service(host)
+      info "Installing and configuring Ollama on #{host}..."
+      output, status = @ssh_stream_runner.call(host, @scripts.ollama_install_script)
+      raise Error, "Ollama install failed: #{output.strip}" unless status.success?
+    end
+
+    def pull_ollama_models(host)
+      info "Pulling Ollama models on #{host}..."
+      output, status = @ssh_stream_runner.call(host, @scripts.ollama_pull_script)
+      raise Error, "Ollama model pull failed: #{output.strip}" unless status.success?
+
+      verify_remote_models(host)
+    end
+
+    def stop_vllm_container(host, container_name)
+      info "Stopping old vLLM container #{container_name}..."
+      output, status = @ssh_stream_runner.call(host, @scripts.vllm_stop_script(container_name))
+      raise Error, "Failed to stop container #{container_name}: #{output.strip}" unless status.success?
+    end
+
+    def install_vllm(host, preset_config: nil, pull_image: true)
+      info "Setting up vLLM Docker container on #{host}..."
+      output, status = @ssh_stream_runner.call(host, @scripts.vllm_install_script(preset_config: preset_config,
+                                                                                  pull_image: pull_image))
+      raise Error, "vLLM install failed: #{output.strip}" unless status.success?
+    end
+
+    def install_litellm(host, model:)
+      info "Setting up LiteLLM Anthropic-API proxy on #{host}..."
+      output, status = @ssh_stream_runner.call(host, @scripts.litellm_install_script(model_override: model))
+      raise Error, "LiteLLM install failed: #{output.strip}" unless status.success?
+    end
+
+    def reload_litellm(host, model)
+      info "Reloading LiteLLM proxy config for #{model}..."
+      output, status = @ssh_stream_runner.call(host, @scripts.litellm_reload_script(model))
+      raise Error, "LiteLLM reload failed: #{output.strip}" unless status.success?
+    end
+
+    def setup_vllm_stack(host, preset_config: nil)
+      install_vllm(host, preset_config: preset_config)
+      model = preset_config&.dig('model') || @config.vllm_model
+      install_litellm(host, model: model)
+    end
+
+    private
+
+    def verify_remote_models(host)
+      stdout, _stderr, status = @ssh_command_runner.call(host, 'ollama list')
+      return unless status.success?
+
+      remote_models = stdout.lines.drop(1).map { |line| line.split.first }.compact
+      missing = @scripts.desired_ollama_models.reject { |model| remote_models.any? { |remote| remote.start_with?(model) } }
+      return if missing.empty?
+
+      raise Error, "Models missing after setup: #{missing.join(', ')}. Remote has: #{remote_models.join(', ')}"
+    end
+
+    def info(message)
+      @out.puts(message)
+    end
+
+    def warn(message)
+      @out.puts("WARNING: #{message}")
+    end
+  end
+
   class Manager
     # wg_setup_pre:  optional Proc called just before this VM's WireGuard setup step runs.
     #                Used by create-both to block VM2 until VM1 has written the base wg1.conf.
@@ -1064,6 +1442,10 @@ module HyperstackVM
       @state_store = state_store
       @local_wireguard = local_wireguard
       @out = out
+      @scripts = ProvisioningScripts.new(config: config)
+      @provisioner = RemoteProvisioner.new(config: config, scripts: @scripts, out: out,
+                                           ssh_command_runner: method(:run_ssh_command),
+                                           ssh_stream_runner: method(:run_ssh_command_streaming))
       @wg_setup_pre  = wg_setup_pre
       @wg_setup_post = wg_setup_post
     end
@@ -1243,22 +1625,17 @@ module HyperstackVM
 
       # Stop the old container only when it has a different name from the new one.
       if old_container != new_container
-        info "Stopping old vLLM container #{old_container}..."
-        output, status = run_ssh_command_streaming(host, vllm_stop_script(old_container))
-        raise Error, "Failed to stop container #{old_container}: #{output.strip}" unless status.success?
+        @provisioner.stop_vllm_container(host, old_container)
       end
 
       info "Starting vLLM with preset '#{preset_name}' (#{preset['model']})..."
       # Skip docker pull: image is already present; pulling on every switch risks a
       # surprise multi-GB download if the upstream image was updated.
-      output, status = run_ssh_command_streaming(host, vllm_install_script(preset_config: preset, pull_image: false))
-      raise Error, "vLLM install failed: #{output.strip}" unless status.success?
+      @provisioner.install_vllm(host, preset_config: preset, pull_image: false)
 
       # Hot-reload LiteLLM: rewrite config for the new model and restart the service.
       # Skips venv/apt install since those are already in place.
-      info "Reloading LiteLLM proxy config for #{preset['model']}..."
-      output, status = run_ssh_command_streaming(host, litellm_reload_script(preset['model']))
-      raise Error, "LiteLLM reload failed: #{output.strip}" unless status.success?
+      @provisioner.reload_litellm(host, preset['model'])
 
       state['vllm_model']          = preset['model']
       state['vllm_container_name'] = new_container
@@ -1318,7 +1695,7 @@ module HyperstackVM
 
       wait_for_ssh(state['public_ip'])
       if @config.guest_bootstrap_enabled? && state['bootstrapped_at'].nil?
-        bootstrap_guest(state['public_ip'])
+        @provisioner.bootstrap_guest(state['public_ip'])
         state['bootstrapped_at'] = Time.now.utc.iso8601
         @state_store.save(state)
       end
@@ -1327,7 +1704,7 @@ module HyperstackVM
       # model pulls until after the WireGuard tunnel is up so that the user
       # can monitor progress over the tunnel.
       if effective_ollama? && state['ollama_installed_at'].nil?
-        install_ollama_service(state['public_ip'])
+        @provisioner.install_ollama_service(state['public_ip'])
         state['ollama_installed_at'] = Time.now.utc.iso8601
         @state_store.save(state)
       end
@@ -1347,10 +1724,10 @@ module HyperstackVM
 
       # Pull and verify Ollama models after the tunnel is established.
       if ollama_setup_needed?(state)
-        pull_ollama_models(state['public_ip'])
+        @provisioner.pull_ollama_models(state['public_ip'])
         state['ollama_setup_at'] = Time.now.utc.iso8601
         state['ollama_models_dir'] = @config.ollama_models_dir
-        state['ollama_pulled_models'] = desired_ollama_models
+        state['ollama_pulled_models'] = @scripts.desired_ollama_models
         @state_store.save(state)
       end
 
@@ -1358,7 +1735,7 @@ module HyperstackVM
       # the tunnel is up so that model-download progress is visible locally.
       if vllm_setup_needed?(state)
         preset_cfg = effective_vllm_preset_config
-        setup_vllm_stack(state['public_ip'], preset_config: preset_cfg)
+        @provisioner.setup_vllm_stack(state['public_ip'], preset_config: preset_cfg)
         state['vllm_setup_at']       = Time.now.utc.iso8601
         state['vllm_model']          = preset_cfg&.dig('model')          || @config.vllm_model
         state['vllm_container_name'] = preset_cfg&.dig('container_name') || @config.vllm_container_name
@@ -1483,54 +1860,13 @@ module HyperstackVM
       end
     end
 
-    def bootstrap_guest(host)
-      info 'Bootstrapping Ubuntu guest over SSH...'
-      retries = 3
-      retries.times do |attempt|
-        stdout, stderr, status = run_ssh_command(host, guest_bootstrap_script)
-        return if status.success?
-
-        msg = stderr.strip.empty? ? stdout : stderr
-        raise Error, "Guest bootstrap failed after #{retries} attempts: #{msg}" if attempt == retries - 1
-
-        warn "Bootstrap attempt #{attempt + 1}/#{retries} failed (#{msg.lines.last&.strip}), retrying in 15s..."
-        sleep 15
-      end
-    end
-
     def ollama_setup_needed?(state)
       return false unless effective_ollama?
       # Re-run setup if state has no record, or if desired models changed
       return true if state['ollama_setup_at'].nil?
 
-      model_list_signature(desired_ollama_models) != model_list_signature(state['ollama_pulled_models'])
-    end
-
-    def install_ollama_service(host)
-      info "Installing and configuring Ollama on #{host}..."
-      output, status = run_ssh_command_streaming(host, ollama_install_script)
-      raise Error, "Ollama install failed: #{output.strip}" unless status.success?
-    end
-
-    def pull_ollama_models(host)
-      info "Pulling Ollama models on #{host}..."
-      output, status = run_ssh_command_streaming(host, ollama_pull_script)
-      raise Error, "Ollama model pull failed: #{output.strip}" unless status.success?
-
-      # Verify all models are actually present on the remote (belt-and-suspenders
-      # check in case ollama pull returned 0 without actually pulling the model)
-      verify_remote_models(host)
-    end
-
-    def verify_remote_models(host)
-      stdout, _stderr, status = run_ssh_command(host, 'ollama list')
-      return unless status.success?
-
-      remote_models = stdout.lines.drop(1).map { |l| l.split.first }.compact
-      missing = desired_ollama_models.reject { |m| remote_models.any? { |r| r.start_with?(m) } }
-      return if missing.empty?
-
-      raise Error, "Models missing after setup: #{missing.join(', ')}. Remote has: #{remote_models.join(', ')}"
+      @scripts.model_list_signature(@scripts.desired_ollama_models) !=
+        @scripts.model_list_signature(state['ollama_pulled_models'])
     end
 
     def wireguard_setup_needed?(state)
@@ -1844,13 +2180,14 @@ module HyperstackVM
       @out.puts(JSON.pretty_generate(payload))
       if @config.guest_bootstrap_enabled?
         info 'Guest bootstrap script:'
-        @out.puts(guest_bootstrap_script)
+        @out.puts(@scripts.guest_bootstrap_script)
       else
         info 'Guest bootstrap is disabled in config.'
       end
       if effective_ollama?
         info "Ollama will be installed with models stored under #{@config.ollama_models_dir}"
-        info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}" unless desired_ollama_models.empty?
+        models = @scripts.desired_ollama_models
+        info "Ollama models to pre-pull: #{models.join(', ')}" unless models.empty?
       end
       if effective_vllm?
         preset_cfg  = effective_vllm_preset_config
@@ -1880,11 +2217,12 @@ module HyperstackVM
       end
       if @config.guest_bootstrap_enabled?
         info 'Guest bootstrap script:'
-        @out.puts(guest_bootstrap_script)
+        @out.puts(@scripts.guest_bootstrap_script)
       end
       if ollama_setup_needed?(state)
         info "Ollama would be installed with models stored under #{@config.ollama_models_dir}"
-        info "Ollama models to pre-pull: #{desired_ollama_models.join(', ')}" unless desired_ollama_models.empty?
+        models = @scripts.desired_ollama_models
+        info "Ollama models to pre-pull: #{models.join(', ')}" unless models.empty?
       end
       if vllm_setup_needed?(state)
         info "vLLM would be installed: #{@config.vllm_model}"
@@ -1929,137 +2267,6 @@ module HyperstackVM
       ].join(', ')
     end
 
-    def guest_bootstrap_script
-      script = []
-      script << 'set -euo pipefail'
-
-      # Wait for any running unattended-upgrades or apt locks to release
-      # before attempting package operations (transient lock on fresh VMs)
-      script << 'echo "Waiting for apt locks to clear..."'
-      script << 'for i in $(seq 1 30); do'
-      script << '  if ! fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; then break; fi'
-      script << '  echo "  apt lock held, waiting ($i/30)..."; sleep 10'
-      script << 'done'
-      script << 'sudo systemctl stop unattended-upgrades.service 2>/dev/null || true'
-      script << 'sudo systemctl disable unattended-upgrades.service 2>/dev/null || true'
-
-      if @config.install_wireguard?
-        script << 'which wg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y wireguard)'
-      end
-
-      if @config.configure_ufw?
-        script << "sudo ufw allow #{@config.ssh_port}/tcp comment 'Allow SSH' >/dev/null 2>&1 || true"
-        script << 'sudo ufw --force enable >/dev/null 2>&1 || true'
-        script << "sudo ufw allow #{@config.wireguard_udp_port}/udp comment 'WireGuard #{@config.local_interface_name}' >/dev/null 2>&1 || true"
-        # Port 11434 is shared by Ollama and vLLM; open for both regardless of which is installed.
-        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.ollama_port} proto tcp comment 'Inference API (Ollama/vLLM) via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
-        # Port 4000: LiteLLM proxy (Anthropic API → vLLM); open alongside the inference port.
-        script << "sudo ufw allow from #{Shellwords.escape(@config.wireguard_subnet)} to any port #{@config.litellm_port} proto tcp comment 'LiteLLM proxy via #{@config.local_interface_name}' >/dev/null 2>&1 || true"
-      end
-
-      if @config.configure_ollama_host?
-        # Only write a minimal OLLAMA_HOST override if no override exists yet;
-        # ollama_setup_script writes the full override (OLLAMA_MODELS, GPU_OVERHEAD, etc.)
-        script << "if systemctl list-unit-files | grep -q '^ollama.service'; then"
-        script << '  if [ ! -f /etc/systemd/system/ollama.service.d/override.conf ]; then'
-        script << '    sudo mkdir -p /etc/systemd/system/ollama.service.d'
-        script << "    cat <<'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null"
-        script << '[Service]'
-        script << "Environment=\"OLLAMA_HOST=0.0.0.0:#{@config.ollama_port}\""
-        script << 'OVERRIDE'
-        script << '    sudo systemctl daemon-reload'
-        script << '    sudo systemctl restart ollama || true'
-        script << '  fi'
-        script << 'fi'
-      end
-
-      script << 'echo bootstrap-ok'
-      script.join("\n")
-    end
-
-    def desired_ollama_models
-      normalized_model_list(@config.ollama_pull_models)
-    end
-
-    def normalized_model_list(models)
-      Array(models).each_with_object([]) do |model, ordered|
-        normalized = model.to_s.strip
-        next if normalized.empty? || ordered.include?(normalized)
-
-        ordered << normalized
-      end
-    end
-
-    def model_list_signature(models)
-      normalized_model_list(models).sort
-    end
-
-    # Installs the Ollama binary, configures the systemd override (models dir,
-    # listen host, GPU overhead, parallelism), and starts the service.  Model
-    # pulls are handled separately by ollama_pull_script so that the WireGuard
-    # tunnel can be established first.
-    def ollama_install_script
-      models_dir = @config.ollama_models_dir
-      listen_host = @config.ollama_listen_host
-
-      script = []
-      script << 'set -euo pipefail'
-      script << 'sudo pkill -f unattended-upgrade >/dev/null 2>&1 || true'
-      script << 'if ! command -v ollama >/dev/null 2>&1; then curl -fsSL https://ollama.ai/install.sh | sh; fi'
-      if models_dir.start_with?('/ephemeral')
-        script << "mountpoint -q /ephemeral || { echo 'Expected /ephemeral mount is missing'; exit 1; }"
-      end
-      script << "sudo mkdir -p #{Shellwords.escape(models_dir)}"
-      script << "sudo chown -R ollama:ollama #{Shellwords.escape(File.dirname(models_dir))}"
-      script << 'sudo mkdir -p /etc/systemd/system/ollama.service.d'
-      script << "cat <<'OVERRIDE' | sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null"
-      script << '[Service]'
-      script << "Environment=\"OLLAMA_MODELS=#{models_dir}\""
-      script << "Environment=\"OLLAMA_GPU_OVERHEAD=#{@config.ollama_gpu_overhead_mb}\""
-      script << "Environment=\"OLLAMA_NUM_PARALLEL=#{@config.ollama_num_parallel}\""
-      script << "Environment=\"OLLAMA_CONTEXT_LENGTH=#{@config.ollama_context_length}\""
-      script << "Environment=\"OLLAMA_HOST=#{listen_host}\""
-      script << 'OVERRIDE'
-      script << 'sudo systemctl daemon-reload'
-      script << 'sudo systemctl enable --now ollama'
-      script << 'sudo systemctl restart ollama'
-      script << 'sleep 3'
-      script << 'systemctl is-active --quiet ollama'
-      script << 'echo ollama-install-ok'
-      script.join("\n")
-    end
-
-    # Pulls each configured model with retry and per-model + final verification.
-    # Run after WireGuard is up so the user can monitor progress over the tunnel.
-    def ollama_pull_script
-      models_dir = @config.ollama_models_dir
-      model_pulls = desired_ollama_models
-
-      script = []
-      script << 'set -euo pipefail'
-      # Pull each model with retry (transient network failures) and verify
-      # it is actually present afterwards
-      model_pulls.each do |model|
-        escaped = Shellwords.escape(model)
-        script << "echo \"Pulling model #{model}...\""
-        script << 'for attempt in 1 2 3; do'
-        script << "  if ollama pull #{escaped}; then break; fi"
-        script << "  if [ \"$attempt\" -eq 3 ]; then echo \"FATAL: failed to pull #{model} after 3 attempts\"; exit 1; fi"
-        script << '  echo "  pull attempt $attempt failed, retrying in 15s..."; sleep 15'
-        script << 'done'
-        script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} not found after pull\"; exit 1; }"
-      end
-      # Final verification: ensure all expected models are listed
-      script << 'echo "Verifying all models are present..."'
-      model_pulls.each do |model|
-        escaped = Shellwords.escape(model)
-        script << "ollama show #{escaped} --modelfile >/dev/null 2>&1 || { echo \"FATAL: model #{model} missing in final check\"; exit 1; }"
-      end
-      script << "echo ollama-models-dir=#{models_dir}"
-      script << 'echo ollama-ok'
-      script.join("\n")
-    end
-
     # Returns the effective Ollama flag: CLI override if set, else config default.
     def effective_ollama?
       defined?(@effective_ollama) ? @effective_ollama : @config.ollama_install_enabled?
@@ -2086,220 +2293,6 @@ module HyperstackVM
       # Re-run if the active model changed (direct config edit or --model preset flag).
       desired = effective_vllm_preset_config&.dig('model') || @config.vllm_model
       state['vllm_model'] != desired
-    end
-
-    # Generates a script that stops and removes a named Docker container.
-    # Used when switching to a preset whose container_name differs from the current one.
-    def vllm_stop_script(container_name)
-      script = []
-      script << 'set -euo pipefail'
-      script << "docker stop #{Shellwords.escape(container_name)} 2>/dev/null || true"
-      script << "docker rm #{Shellwords.escape(container_name)} 2>/dev/null || true"
-      script << 'echo vllm-stopped'
-      script.join("\n")
-    end
-
-    def setup_vllm_stack(host, preset_config: nil)
-      info "Setting up vLLM Docker container on #{host}..."
-      output, status = run_ssh_command_streaming(host, vllm_install_script(preset_config: preset_config))
-      raise Error, "vLLM install failed: #{output.strip}" unless status.success?
-
-      model = preset_config&.dig('model') || @config.vllm_model
-      info "Setting up LiteLLM Anthropic-API proxy on #{host}..."
-      output, status = run_ssh_command_streaming(host, litellm_install_script(model_override: model))
-      raise Error, "LiteLLM install failed: #{output.strip}" unless status.success?
-    end
-
-    # Generates the remote shell script that (optionally) pulls the vLLM Docker image,
-    # starts the container, and polls until the model is fully loaded (up to 10 minutes
-    # to cover the first-run ~45 GB model download).
-    # preset_config overrides individual fields; unset fields fall back to [vllm] defaults.
-    # pull_image: true on initial install; false on model switch (image already present,
-    # and pulling every switch can trigger a multi-GB download if the image was updated).
-    def vllm_install_script(preset_config: nil, pull_image: true)
-      cfg              = preset_config || {}
-      model            = cfg['model'] || @config.vllm_model
-      cache_dir        = @config.vllm_hug_cache_dir     # always use main config for shared HF cache
-      compile_cache    = @config.vllm_compile_cache_dir # persisted torch.compile artifacts
-      container        = cfg['container_name']         || @config.vllm_container_name
-      max_len          = Integer(cfg['max_model_len']  || @config.vllm_max_model_len)
-      gpu_util         = Float(cfg['gpu_memory_utilization'] || @config.vllm_gpu_memory_utilization)
-      tp_size          = Integer(cfg['tensor_parallel_size'] || @config.vllm_tensor_parallel_size)
-      parser           = cfg['tool_call_parser']
-      # parser is nil only when preset explicitly omits the key and config has no default;
-      # empty string means "disable tool calling" (e.g. gpt-oss reasoning models).
-      parser           = @config.vllm_tool_call_parser if parser.nil?
-      # Fall back to the top-level [vllm] config values when no preset is in use.
-      # This allows setting trust_remote_code / extra_vllm_args in the default [vllm] block
-      # (e.g. for nemotron on VM1) without requiring a --model preset flag at create time.
-      trust_remote     = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : @config.vllm_trust_remote_code
-      port             = @config.ollama_port # vLLM reuses the Ollama port for firewall compat
-
-      docker_args = [
-        'docker run -d',
-        '--gpus all', '--ipc=host', '--network host',
-        "--name #{Shellwords.escape(container)}",
-        '--restart always',
-        "-v #{Shellwords.escape(cache_dir)}:/root/.cache/huggingface",
-        # Mount torch.compile cache so CUDA kernel compilation is skipped on warm restarts.
-        # Without this, every container restart recompiles (~30-60 s extra).
-        "-v #{Shellwords.escape(compile_cache)}:/root/.cache/vllm",
-        'vllm/vllm-openai:latest',
-        "--model #{Shellwords.escape(model)}",
-        "--tensor-parallel-size #{tp_size}",
-        '--enable-prefix-caching',
-        "--gpu-memory-utilization #{gpu_util}",
-        "--max-model-len #{max_len}",
-        '--host 0.0.0.0',
-        "--port #{port}"
-      ]
-      # Tool calling is optional: empty/nil parser disables it (e.g. gpt-oss reasoning models
-      # crash vLLM's llama3_json parser due to the extra token_ids field in responses).
-      unless parser.nil? || parser.empty?
-        docker_args << '--enable-auto-tool-choice'
-        docker_args << "--tool-call-parser #{Shellwords.escape(parser)}"
-      end
-      docker_args << '--trust-remote-code' if trust_remote
-      # Append any extra flags verbatim (e.g. Mistral loader flags, reasoning parser).
-      # Preset extra_vllm_args take precedence; fall back to top-level [vllm].extra_vllm_args.
-      extra_args = cfg.key?('extra_vllm_args') ? Array(cfg['extra_vllm_args']) : @config.vllm_extra_args
-      extra_args.each { |arg| docker_args << arg }
-      docker_run = docker_args.join(' ')
-
-      script = []
-      script << 'set -euo pipefail'
-      script << "sudo mkdir -p #{Shellwords.escape(cache_dir)} #{Shellwords.escape(compile_cache)}"
-      script << "sudo chmod -R 0777 #{Shellwords.escape(cache_dir)} #{Shellwords.escape(compile_cache)}"
-      # Stop and remove any existing container so re-runs are idempotent.
-      script << "docker stop #{Shellwords.escape(container)} 2>/dev/null || true"
-      script << "docker rm #{Shellwords.escape(container)} 2>/dev/null || true"
-      # Pull the image only when explicitly requested (initial install / forced update).
-      # Skipping pull on model switches avoids surprise multi-GB downloads when the image
-      # has been updated upstream, which would otherwise add several minutes to a switch.
-      script << 'docker pull vllm/vllm-openai:latest' if pull_image
-      script << docker_run
-      # Poll until the model is loaded:
-      #   first run:    ~45 GB download (~2.5 min) + model load (~65 s) + CUDA graphs (~35 s) ≈ 4-5 min
-      #   warm restart: model load (~65 s) + CUDA graphs (~35 s, skipped if compile cache warm) ≈ 65-100 s
-      # Timeout: 120 × 5 s = 10 minutes
-      script << 'echo "Waiting for vLLM to become ready (up to 10 min for first model download)..."'
-      script << 'for i in $(seq 1 120); do'
-      script << "  if curl -sf http://localhost:#{port}/v1/models >/dev/null 2>&1; then echo vllm-ready; break; fi"
-      script << "  state=$(docker inspect --format='{{.State.Status}}' #{Shellwords.escape(container)} 2>/dev/null || echo unknown)"
-      script << '  echo "  vLLM not ready yet ($i/120, container=$state)..."'
-      script << '  sleep 5'
-      script << 'done'
-      script << "curl -sf http://localhost:#{port}/v1/models >/dev/null || { echo 'FATAL: vLLM did not become ready within 10 minutes'; exit 1; }"
-      script << 'echo vllm-install-ok'
-      script.join("\n")
-    end
-
-    # Generates the remote shell script that installs LiteLLM in a Python venv,
-    # writes a config mapping Claude model aliases to the vLLM endpoint, and
-    # starts the proxy as a systemd service on litellm_port.
-    # model_override replaces the HuggingFace model name in the generated YAML.
-    def litellm_install_script(model_override: nil)
-      port        = @config.litellm_port
-      vllm_port   = @config.ollama_port
-      model       = model_override || @config.vllm_model
-      claude_names = @config.litellm_claude_model_names
-      master_key = @config.litellm_master_key
-
-      # Build model_list YAML entries; each Claude alias maps to the vLLM model.
-      # "hosted_vllm/" prefix forces LiteLLM to use /v1/chat/completions (not /v1/responses).
-      model_entries = claude_names.flat_map do |name|
-        [
-          "  - model_name: \"#{name}\"",
-          '    litellm_params:',
-          "      model: \"hosted_vllm/#{model}\"",
-          "      api_base: \"http://localhost:#{vllm_port}/v1\"",
-          '      api_key: "EMPTY"'
-        ]
-      end
-
-      script = []
-      script << 'set -euo pipefail'
-      script << 'sudo apt-get install -y python3.12-venv'
-      script << 'sudo mkdir -p /ephemeral/litellm-env'
-      script << 'sudo chown ubuntu:ubuntu /ephemeral/litellm-env'
-      script << 'python3 -m venv /ephemeral/litellm-env'
-      script << '/ephemeral/litellm-env/bin/pip install --quiet "litellm[proxy]"'
-
-      # Write litellm-config.yaml via heredoc; drop_params silently discards
-      # Claude-specific params (e.g. context_management) that vLLM ignores.
-      script << "sudo tee /ephemeral/litellm-config.yaml > /dev/null << 'LITELLM_YAML'"
-      script << 'model_list:'
-      script.concat(model_entries)
-      script << ''
-      script << 'litellm_settings:'
-      script << '  drop_params: true'
-      script << ''
-      script << 'general_settings:'
-      script << "  master_key: \"#{master_key}\""
-      script << 'LITELLM_YAML'
-
-      # Write systemd unit via heredoc; restart on failure so transient crashes self-heal.
-      script << "sudo tee /etc/systemd/system/litellm.service > /dev/null << 'LITELLM_UNIT'"
-      script << '[Unit]'
-      script << 'Description=LiteLLM Proxy'
-      script << 'After=network.target docker.service'
-      script << 'Requires=docker.service'
-      script << ''
-      script << '[Service]'
-      script << 'Type=simple'
-      script << 'User=ubuntu'
-      script << "ExecStart=/ephemeral/litellm-env/bin/litellm --config /ephemeral/litellm-config.yaml --host 0.0.0.0 --port #{port}"
-      script << 'Restart=always'
-      script << 'RestartSec=5'
-      script << ''
-      script << '[Install]'
-      script << 'WantedBy=multi-user.target'
-      script << 'LITELLM_UNIT'
-
-      script << 'sudo systemctl daemon-reload'
-      script << 'sudo systemctl enable --now litellm'
-      script << 'sleep 5'
-      script << 'systemctl is-active --quiet litellm'
-      script << 'echo litellm-install-ok'
-      script.join("\n")
-    end
-
-    # Rewrites /ephemeral/litellm-config.yaml for a different model and restarts
-    # the service in place — faster than litellm_install_script because it skips
-    # the venv creation and apt-get steps that are already in place.
-    def litellm_reload_script(model)
-      @config.litellm_port
-      vllm_port = @config.ollama_port
-      claude_names = @config.litellm_claude_model_names
-      master_key = @config.litellm_master_key
-
-      model_entries = claude_names.flat_map do |name|
-        [
-          "  - model_name: \"#{name}\"",
-          '    litellm_params:',
-          "      model: \"hosted_vllm/#{model}\"",
-          "      api_base: \"http://localhost:#{vllm_port}/v1\"",
-          '      api_key: "EMPTY"'
-        ]
-      end
-
-      script = []
-      script << 'set -euo pipefail'
-      script << "sudo tee /ephemeral/litellm-config.yaml > /dev/null << 'LITELLM_YAML'"
-      script << 'model_list:'
-      script.concat(model_entries)
-      script << ''
-      script << 'litellm_settings:'
-      script << '  drop_params: true'
-      script << ''
-      script << 'general_settings:'
-      script << "  master_key: \"#{master_key}\""
-      script << 'LITELLM_YAML'
-      script << 'sudo systemctl restart litellm'
-      script << 'sleep 3'
-      script << 'systemctl is-active --quiet litellm'
-      script << 'echo litellm-reload-ok'
-      script.join("\n")
     end
 
     # Tests the vLLM OpenAI-compatible API: lists loaded models and runs a
