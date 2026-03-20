@@ -1904,7 +1904,14 @@ module HyperstackVM
       # /etc/hosts on the client. The Enter keystroke via stdin bypasses the interactive prompt.
       server_ip = @config.wireguard_gateway_ip
       wg_hostname = @config.wireguard_gateway_hostname
-      Open3.popen2e('bash', @config.wireguard_setup_script, host, server_ip, wg_hostname) do |stdin, output, wait_thr|
+      env = {
+        'HYPERSTACK_SSH_PORT' => @config.ssh_port.to_s,
+        'HYPERSTACK_SSH_CONNECT_TIMEOUT' => @config.ssh_connect_timeout.to_s,
+        'HYPERSTACK_SSH_KNOWN_HOSTS_PATH' => @config.ssh_known_hosts_path,
+        'HYPERSTACK_SSH_PRIVATE_KEY_PATH' => (File.exist?(@config.ssh_private_key_path) ? @config.ssh_private_key_path : '')
+      }
+
+      Open3.popen2e(env, 'bash', @config.wireguard_setup_script, host, server_ip, wg_hostname) do |stdin, output, wait_thr|
         stdin.sync = true
         stdin.puts
         stdin.close

@@ -74,6 +74,10 @@ DEFAULT_SERVER_WG_IP="192.168.3.1"
 CLIENT_WG_IP="192.168.3.2"
 SUBNET_MASK="24"
 SSH_USER="ubuntu"
+SSH_PORT="${HYPERSTACK_SSH_PORT:-22}"
+SSH_CONNECT_TIMEOUT="${HYPERSTACK_SSH_CONNECT_TIMEOUT:-10}"
+SSH_KNOWN_HOSTS_PATH="${HYPERSTACK_SSH_KNOWN_HOSTS_PATH:-}"
+SSH_PRIVATE_KEY_PATH="${HYPERSTACK_SSH_PRIVATE_KEY_PATH:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -104,6 +108,25 @@ retry_ssh() {
         attempt=$((attempt + 1))
         delay=$((delay + 5))
     done
+}
+
+SSH_BASE_OPTS=(-o "ConnectTimeout=${SSH_CONNECT_TIMEOUT}" -o BatchMode=yes -p "${SSH_PORT}")
+SCP_BASE_OPTS=(-o "ConnectTimeout=${SSH_CONNECT_TIMEOUT}" -o BatchMode=yes -P "${SSH_PORT}")
+if [[ -n "${SSH_KNOWN_HOSTS_PATH}" ]]; then
+    SSH_BASE_OPTS+=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${SSH_KNOWN_HOSTS_PATH}")
+    SCP_BASE_OPTS+=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${SSH_KNOWN_HOSTS_PATH}")
+fi
+if [[ -n "${SSH_PRIVATE_KEY_PATH}" && -f "${SSH_PRIVATE_KEY_PATH}" ]]; then
+    SSH_BASE_OPTS+=(-i "${SSH_PRIVATE_KEY_PATH}")
+    SCP_BASE_OPTS+=(-i "${SSH_PRIVATE_KEY_PATH}")
+fi
+
+ssh_vm() {
+    ssh "${SSH_BASE_OPTS[@]}" "${SSH_USER}@${VM_IP}" "$@"
+}
+
+scp_vm() {
+    scp "${SCP_BASE_OPTS[@]}" "$@"
 }
 
 # Updates or adds a [Peer] block in the existing /etc/wireguard/wg1.conf.
@@ -281,20 +304,20 @@ echo ""
 echo "=== Setting up hyperstack VM (${VM_IP}, tunnel IP ${SERVER_WG_IP}) ==="
 
 echo "Testing SSH connection..."
-retry_ssh ssh -o ConnectTimeout=10 -o BatchMode=yes "${SSH_USER}@${VM_IP}" "echo 'SSH OK'"
+retry_ssh ssh_vm "echo 'SSH OK'"
 print_success "SSH connection OK"
 
 echo "Installing WireGuard on hyperstack..."
-retry_ssh ssh "${SSH_USER}@${VM_IP}" "which wg >/dev/null 2>&1 || (sudo apt update && sudo apt install -y wireguard)"
+retry_ssh ssh_vm "which wg >/dev/null 2>&1 || (sudo apt update && sudo apt install -y wireguard)"
 print_success "WireGuard installed"
 
 echo "Copying wg1.conf to hyperstack..."
-retry_ssh scp "$TMPDIR/server-wg1.conf" "${SSH_USER}@${VM_IP}:/tmp/wg1.conf"
-retry_ssh ssh "${SSH_USER}@${VM_IP}" "sudo mv /tmp/wg1.conf /etc/wireguard/wg1.conf && sudo chmod 600 /etc/wireguard/wg1.conf"
+retry_ssh scp_vm "$TMPDIR/server-wg1.conf" "${SSH_USER}@${VM_IP}:/tmp/wg1.conf"
+retry_ssh ssh_vm "sudo mv /tmp/wg1.conf /etc/wireguard/wg1.conf && sudo chmod 600 /etc/wireguard/wg1.conf"
 print_success "Server config installed"
 
 echo "Configuring firewall (ufw) on hyperstack..."
-retry_ssh ssh "${SSH_USER}@${VM_IP}" bash -s << 'REMOTE_SCRIPT'
+retry_ssh ssh_vm bash -s << 'REMOTE_SCRIPT'
 sudo ufw allow ssh comment 'Allow SSH' 2>/dev/null || true
 sudo ufw --force enable >/dev/null 2>&1 || true
 sudo ufw allow 56710/udp comment 'WireGuard wg1' 2>/dev/null || true
@@ -304,7 +327,7 @@ REMOTE_SCRIPT
 print_success "Firewall configured"
 
 echo "Configuring Ollama to listen on 0.0.0.0 (if installed)..."
-retry_ssh ssh "${SSH_USER}@${VM_IP}" bash -s << 'REMOTE_SCRIPT'
+retry_ssh ssh_vm bash -s << 'REMOTE_SCRIPT'
 if [ -f /etc/systemd/system/ollama.service.d/override.conf ] && \
    grep -q 'OLLAMA_HOST' /etc/systemd/system/ollama.service.d/override.conf; then
   echo "Ollama override already configured, skipping"
@@ -321,7 +344,7 @@ REMOTE_SCRIPT
 print_success "Ollama configured"
 
 echo "Starting wg1 on hyperstack..."
-retry_ssh ssh "${SSH_USER}@${VM_IP}" "sudo systemctl start wg-quick@wg1 2>/dev/null || sudo wg-quick up wg1"
+retry_ssh ssh_vm "sudo systemctl start wg-quick@wg1 2>/dev/null || sudo wg-quick up wg1"
 print_success "wg1 started on hyperstack"
 
 echo ""
