@@ -82,6 +82,9 @@ module HyperstackVM
       'network' => {
         'wireguard_udp_port' => 56_710,
         'wireguard_subnet' => '192.168.3.0/24',
+        # Optional: explicit server-side WireGuard IP. When nil, derived as subnet + 1 (i.e. .1).
+        # Set to a different address (e.g. 192.168.3.3) for a second VM sharing the same wg1 tunnel.
+        'wireguard_server_ip' => nil,
         'ollama_port' => 11_434,
         'litellm_port' => 4_000,
         'allowed_ssh_cidrs' => ['0.0.0.0/0'],
@@ -154,6 +157,20 @@ module HyperstackVM
         IPAddr.new(cidr)
       rescue IPAddr::InvalidAddressError => e
         raise Error, "Invalid CIDR #{cidr.inspect}: #{e.message}"
+      end
+
+      server_ip = fetch('network', 'wireguard_server_ip')
+      if server_ip
+        # Validate that the explicit server WireGuard IP is within the configured subnet.
+        begin
+          subnet = IPAddr.new(fetch('network', 'wireguard_subnet'))
+          unless subnet.include?(IPAddr.new(server_ip))
+            raise Error,
+                  "wireguard_server_ip #{server_ip.inspect} is not in wireguard_subnet #{fetch('network', 'wireguard_subnet')}"
+          end
+        rescue IPAddr::InvalidAddressError => e
+          raise Error, "Invalid wireguard_server_ip #{server_ip.inspect}: #{e.message}"
+        end
       end
     end
 
@@ -305,15 +322,25 @@ module HyperstackVM
       Integer(fetch('network', 'litellm_port'))
     end
 
+    # Returns the server-side WireGuard IP for this VM.
+    # Uses the explicitly configured address when set; otherwise derives it as subnet_base + 1.
+    # Example: 192.168.3.0/24 → 192.168.3.1 (default VM1); VM2 sets wireguard_server_ip=192.168.3.3.
     def wireguard_gateway_ip
+      configured = fetch('network', 'wireguard_server_ip')
+      return configured.to_s if configured && !configured.to_s.strip.empty?
+
+      # Fall back to first usable address in the subnet.
       base = IPAddr.new(wireguard_subnet).to_s
       parts = base.split('.').map(&:to_i)
       parts[-1] += 1
       parts.join('.')
     end
 
+    # Returns the WireGuard hostname for this VM: e.g. hyperstack1.wg1 or hyperstack2.wg1.
+    # Used as the DNS name to reach the VM over the tunnel (must be in /etc/hosts on the client).
     def wireguard_gateway_hostname
-      "hyperstack.#{local_interface_name}"
+      host = vm_hostname || 'hyperstack'
+      "#{host}.#{local_interface_name}"
     end
 
     def allowed_ssh_cidrs
@@ -412,6 +439,17 @@ module HyperstackVM
 
     def litellm_master_key
       fetch('vllm', 'litellm_master_key')
+    end
+
+    # Whether to pass --trust-remote-code to vLLM for the default model.
+    # Required for architectures not yet in the vLLM upstream registry (e.g. nemotron_h).
+    def vllm_trust_remote_code
+      truthy?(fetch('vllm', 'trust_remote_code'))
+    end
+
+    # Extra vLLM CLI flags for the default model (e.g. reasoning-parser args).
+    def vllm_extra_args
+      Array(fetch('vllm', 'extra_vllm_args')).map(&:to_s)
     end
 
     def vllm_presets
@@ -695,10 +733,12 @@ module HyperstackVM
     end
 
     def status
+      endpoints = configured_endpoints
       {
         'service_state' => service_state,
         'config_path' => @config_path,
-        'endpoint' => configured_endpoint,
+        'endpoint' => endpoints.last,
+        'endpoints' => endpoints,
         'config_readable' => !config_contents.nil?
       }
     end
@@ -715,10 +755,40 @@ module HyperstackVM
     end
 
     def configured_endpoint
-      content = config_contents
-      return nil if content.nil?
+      configured_endpoints.last
+    end
 
-      parse_wireguard_config(content)['Endpoint']
+    def configured_endpoints
+      content = config_contents
+      return [] if content.nil?
+
+      parse_wireguard_peers(content).filter_map { |peer| peer['Endpoint'] }.uniq
+    end
+
+    def parse_wireguard_peers(content)
+      current_section = nil
+      current_peer = nil
+      peers = []
+
+      content.each_line do |line|
+        stripped = line.strip
+        next if stripped.empty? || stripped.start_with?('#')
+
+        if stripped.start_with?('[') && stripped.end_with?(']')
+          peers << current_peer if current_section == 'Peer' && current_peer && !current_peer.empty?
+          current_section = stripped[1..-2]
+          current_peer = current_section == 'Peer' ? {} : nil
+          next
+        end
+
+        key, value = stripped.split('=', 2).map { |part| part&.strip }
+        next unless current_section == 'Peer' && key && value
+
+        current_peer[key] = value
+      end
+
+      peers << current_peer if current_section == 'Peer' && current_peer && !current_peer.empty?
+      peers
     end
 
     def config_contents
@@ -729,37 +799,46 @@ module HyperstackVM
       stdout, _stderr, status = Open3.capture3('sudo', '-n', 'cat', @config_path)
       @config_contents = status.success? ? stdout : nil
     end
+  end
 
-    def parse_wireguard_config(content)
-      current_section = nil
-      peer = {}
+  # Thread-safe output wrapper that prepends a fixed prefix to each line.
+  # Used by create-both so interleaved output from VM1 and VM2 threads is distinguishable.
+  # #print buffers partial lines until a newline is received, then flushes with the prefix.
+  class PrefixedOutput
+    def initialize(prefix, delegate, mutex)
+      @prefix   = prefix
+      @delegate = delegate
+      @mutex    = mutex
+      @buffer   = +''
+    end
 
-      content.each_line do |line|
-        stripped = line.strip
-        next if stripped.empty? || stripped.start_with?('#')
+    def puts(msg = '')
+      @mutex.synchronize { @delegate.puts("#{@prefix}#{msg}") }
+    end
 
-        if stripped.start_with?('[') && stripped.end_with?(']')
-          current_section = stripped[1..-2]
-          next
-        end
-
-        key, value = stripped.split('=', 2).map { |part| part&.strip }
-        next unless current_section == 'Peer' && key && value
-
-        peer[key] = value
+    def print(msg)
+      @buffer << msg.to_s
+      while (idx = @buffer.index("\n"))
+        line = @buffer.slice!(0, idx + 1)
+        @mutex.synchronize { @delegate.print("#{@prefix}#{line}") }
       end
-
-      peer
     end
   end
 
   class Manager
-    def initialize(config:, client:, state_store:, local_wireguard:, out: $stdout)
+    # wg_setup_pre:  optional Proc called just before this VM's WireGuard setup step runs.
+    #                Used by create-both to block VM2 until VM1 has written the base wg1.conf.
+    # wg_setup_post: optional Proc called after the WireGuard step completes (or is skipped).
+    #                Used by create-both to signal that VM1's base config is ready for VM2.
+    def initialize(config:, client:, state_store:, local_wireguard:, out: $stdout,
+                   wg_setup_pre: nil, wg_setup_post: nil)
       @config = config
       @client = client
       @state_store = state_store
       @local_wireguard = local_wireguard
       @out = out
+      @wg_setup_pre  = wg_setup_pre
+      @wg_setup_post = wg_setup_post
     end
 
     def create(replace: false, dry_run: false, install_vllm: nil, install_ollama: nil, vllm_preset: nil)
@@ -847,7 +926,7 @@ module HyperstackVM
       raise
     end
 
-    def status
+    def status(include_local_wireguard: true)
       state = @state_store.load
       if state.nil?
         info "No tracked VM state file at #{@state_store.path}."
@@ -868,7 +947,12 @@ module HyperstackVM
         end
       end
 
-      print_local_wireguard_summary(state&.dig('public_ip'))
+      print_local_wireguard_summary(state&.dig('public_ip')) if include_local_wireguard
+      state&.dig('public_ip')
+    end
+
+    def show_local_wireguard(expected_ips = nil)
+      print_local_wireguard_summary(expected_ips)
     end
 
     # Lists configured model presets and marks the one currently running on the VM.
@@ -1004,11 +1088,18 @@ module HyperstackVM
         @state_store.save(state)
       end
 
+      # Call pre-hook before deciding whether WireGuard setup is needed; this allows a concurrent
+      # sibling VM (e.g. VM2 in create-both) to block here until the primary VM (VM1) has
+      # already written the base wg1.conf, which VM2's setup will then extend with its own peer.
+      @wg_setup_pre&.call
       if wireguard_setup_needed?(state)
         run_wireguard_setup(state['public_ip'])
         state['wireguard_setup_at'] = Time.now.utc.iso8601
         @state_store.save(state)
       end
+      # Always signal post-hook so that a waiting sibling VM is unblocked even when
+      # WireGuard setup was not needed (e.g. already done on a resume).
+      @wg_setup_post&.call
 
       # Pull and verify Ollama models after the tunnel is established.
       if ollama_setup_needed?(state)
@@ -1209,7 +1300,7 @@ module HyperstackVM
       return true if public_ip.empty?
 
       expected_endpoint = "#{public_ip}:#{@config.wireguard_udp_port}"
-      @local_wireguard.status['endpoint'] != expected_endpoint
+      !Array(@local_wireguard.status['endpoints']).include?(expected_endpoint)
     end
 
     def run_wireguard_setup(host)
@@ -1232,7 +1323,12 @@ module HyperstackVM
     end
 
     def run_wireguard_script(host)
-      Open3.popen2e('bash', @config.wireguard_setup_script, host) do |stdin, output, wait_thr|
+      # Pass server WireGuard IP and WireGuard hostname as positional args so that
+      # wg1-setup.sh can configure the correct server-side tunnel address and update
+      # /etc/hosts on the client. The Enter keystroke via stdin bypasses the interactive prompt.
+      server_ip = @config.wireguard_gateway_ip
+      wg_hostname = @config.wireguard_gateway_hostname
+      Open3.popen2e('bash', @config.wireguard_setup_script, host, server_ip, wg_hostname) do |stdin, output, wait_thr|
         stdin.sync = true
         stdin.puts
         stdin.close
@@ -1270,6 +1366,17 @@ module HyperstackVM
       mismatches << 'network.wireguard_udp_port must be 56710' unless @config.wireguard_udp_port == 56_710
       unless @config.wireguard_subnet == '192.168.3.0/24'
         mismatches << "network.wireguard_subnet must be '192.168.3.0/24'"
+      end
+
+      # Validate that the resolved server IP is actually within the configured subnet.
+      begin
+        subnet    = IPAddr.new(@config.wireguard_subnet)
+        server_ip = IPAddr.new(@config.wireguard_gateway_ip)
+        unless subnet.include?(server_ip)
+          mismatches << "wireguard_server_ip #{@config.wireguard_gateway_ip.inspect} is outside #{@config.wireguard_subnet}"
+        end
+      rescue IPAddr::InvalidAddressError => e
+        mismatches << "Invalid wireguard_server_ip: #{e.message}"
       end
 
       return if mismatches.empty?
@@ -1659,7 +1766,10 @@ module HyperstackVM
       # parser is nil only when preset explicitly omits the key and config has no default;
       # empty string means "disable tool calling" (e.g. gpt-oss reasoning models).
       parser           = @config.vllm_tool_call_parser if parser.nil?
-      trust_remote     = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : false
+      # Fall back to the top-level [vllm] config values when no preset is in use.
+      # This allows setting trust_remote_code / extra_vllm_args in the default [vllm] block
+      # (e.g. for nemotron on VM1) without requiring a --model preset flag at create time.
+      trust_remote     = cfg.key?('trust_remote_code') ? cfg['trust_remote_code'] : @config.vllm_trust_remote_code
       port             = @config.ollama_port # vLLM reuses the Ollama port for firewall compat
 
       docker_args = [
@@ -1688,7 +1798,9 @@ module HyperstackVM
       end
       docker_args << '--trust-remote-code' if trust_remote
       # Append any extra flags verbatim (e.g. Mistral loader flags, reasoning parser).
-      (cfg['extra_vllm_args'] || []).each { |arg| docker_args << arg }
+      # Preset extra_vllm_args take precedence; fall back to top-level [vllm].extra_vllm_args.
+      extra_args = cfg.key?('extra_vllm_args') ? Array(cfg['extra_vllm_args']) : @config.vllm_extra_args
+      extra_args.each { |arg| docker_args << arg }
       docker_run = docker_args.join(' ')
 
       script = []
@@ -1902,24 +2014,42 @@ module HyperstackVM
       value.nil? ? nil : Integer(value)
     end
 
-    def print_local_wireguard_summary(expected_ip)
+    def print_local_wireguard_summary(expected_ips)
       return unless @config.local_client_checks_enabled?
 
       wg_status = @local_wireguard.status
-      endpoint = wg_status['endpoint']
+      endpoints = Array(wg_status['endpoints']).compact.uniq
       info "Local WireGuard #{@config.local_interface_name}: #{wg_status['service_state']}"
-      if endpoint
-        info "Local WireGuard endpoint: #{endpoint}"
-        if expected_ip
-          host, = endpoint.split(':', 2)
-          if host == expected_ip
-            info 'Local WireGuard endpoint matches the managed VM IP.'
-          else
-            warn "Local WireGuard endpoint points to #{host}, expected #{expected_ip}."
-          end
-        end
-      else
+      if endpoints.empty?
         warn "Unable to read #{@config.local_wg_config_path} for local WireGuard endpoint validation."
+        return
+      end
+
+      label = endpoints.one? ? 'endpoint' : 'endpoints'
+      info "Local WireGuard #{label}: #{endpoints.join(', ')}"
+
+      expected = Array(expected_ips).compact.map(&:to_s).map(&:strip).reject(&:empty?).uniq
+      return if expected.empty?
+
+      expected_endpoints = expected.map { |ip| "#{ip}:#{@config.wireguard_udp_port}" }
+      missing = expected_endpoints.reject { |endpoint| endpoints.include?(endpoint) }
+
+      if expected_endpoints.one?
+        if missing.empty?
+          info 'Local WireGuard endpoint matches the managed VM IP.'
+        else
+          hosts = endpoints.map { |endpoint| endpoint.split(':', 2).first }.uniq
+          warn "Local WireGuard endpoints point to #{hosts.join(', ')}, expected #{expected.first}."
+        end
+        return
+      end
+
+      if missing.empty?
+        info 'Local WireGuard has peers for all managed VM IPs.'
+      else
+        present = expected_endpoints - missing
+        info "Local WireGuard has peers for: #{present.map { |endpoint| endpoint.split(':', 2).first }.join(', ')}" unless present.empty?
+        warn "Local WireGuard missing peers for: #{missing.map { |endpoint| endpoint.split(':', 2).first }.join(', ')}."
       end
     end
 
@@ -1936,6 +2066,7 @@ module HyperstackVM
     def initialize(argv)
       @argv = argv.dup
       @config_path = File.join(__dir__, 'hyperstack-vm.toml')
+      @config_explicit = false
     end
 
     def show_help
@@ -1943,7 +2074,13 @@ module HyperstackVM
       puts
       puts 'Commands:'
       puts '  create [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama] [--model PRESET]'
+      puts '  create-both [--replace] [--dry-run] [--vllm|--no-vllm] [--ollama|--no-ollama]'
+      puts '               Provision hyperstack-vm1.toml and hyperstack-vm2.toml concurrently.'
+      puts '               WireGuard setup is serialized: VM1 writes the base wg1.conf first,'
+      puts '               then VM2 adds its peer. Requires both TOML files next to the script.'
       puts '  delete [--vm-id ID] [--dry-run]'
+      puts '  delete-both [--dry-run]'
+      puts '               Delete the VMs tracked by hyperstack-vm1.toml and hyperstack-vm2.toml.'
       puts '  status'
       puts '  test'
       puts '  model list'
@@ -1955,6 +2092,7 @@ module HyperstackVM
         opts.banner = 'Usage: ruby hyperstack.rb [--config path] <create|delete|status> [options]'
         opts.on('--config PATH', "Path to TOML config (default: #{@config_path})") do |value|
           @config_path = value
+          @config_explicit = true
         end
         opts.on('-h', '--help', 'Show help') do
           show_help
@@ -1969,39 +2107,33 @@ module HyperstackVM
         exit 0
       end
 
+      # create-both loads its own config files and does not use the default config path.
+      # Parse it before building the manager so we avoid loading the default config needlessly.
+      if command == 'create-both'
+        opts = parse_create_options(@argv, include_model_preset: false)
+        run_create_both(**opts)
+        return
+      end
+
+      if command == 'delete-both'
+        opts = parse_delete_both_options(@argv)
+        run_delete_both(**opts)
+        return
+      end
+
+      if command == 'status'
+        run_status
+        return
+      end
+
+      # All other commands operate on a single VM defined by the --config path.
       config_loader = ConfigLoader.load(@config_path)
-      state_store = StateStore.new(config_loader.config.state_file)
-      client = HyperstackClient.new(base_url: config_loader.config.api_base_url, api_key: config_loader.config.api_key)
-      local_wireguard = LocalWireGuard.new(
-        interface_name: config_loader.config.local_interface_name,
-        config_path: config_loader.config.local_wg_config_path
-      )
-      manager = Manager.new(
-        config: config_loader.config,
-        client: client,
-        state_store: state_store,
-        local_wireguard: local_wireguard
-      )
+      manager       = build_manager(config_loader.config)
 
       case command
       when 'create'
-        replace = false
-        dry_run = false
-        install_vllm = nil
-        install_ollama = nil
-        vllm_preset = nil
-        parser = OptionParser.new do |opts|
-          opts.on('--replace', 'Delete the tracked VM before creating a new one') { replace = true }
-          opts.on('--dry-run', 'Resolve config and print the create plan without creating a VM') { dry_run = true }
-          opts.on('--vllm', 'Enable vLLM+LiteLLM setup (overrides config)') { install_vllm = true }
-          opts.on('--no-vllm', 'Disable vLLM+LiteLLM setup (overrides config)') { install_vllm = false }
-          opts.on('--ollama', 'Enable Ollama setup (overrides config)') { install_ollama = true }
-          opts.on('--no-ollama', 'Disable Ollama setup (overrides config)') { install_ollama = false }
-          opts.on('--model PRESET', 'Use a named vLLM model preset at create time') { |v| vllm_preset = v }
-        end
-        parser.parse!(@argv)
-        manager.create(replace: replace, dry_run: dry_run, install_vllm: install_vllm,
-                       install_ollama: install_ollama, vllm_preset: vllm_preset)
+        opts = parse_create_options(@argv)
+        manager.create(**opts)
       when 'delete'
         vm_id = nil
         dry_run = false
@@ -2013,8 +2145,6 @@ module HyperstackVM
         end
         parser.parse!(@argv)
         manager.delete(vm_id: vm_id, dry_run: dry_run)
-      when 'status'
-        manager.status
       when 'test'
         manager.test
       when 'model'
@@ -2035,8 +2165,173 @@ module HyperstackVM
           raise Error, "Unknown model subcommand #{sub.inspect}. Use list or switch."
         end
       else
-        raise Error, "Unknown command #{command.inspect}. Use create, delete, status, test, or model."
+        raise Error, "Unknown command #{command.inspect}. Use create, create-both, delete, delete-both, status, test, or model."
       end
+    end
+
+    private
+
+    # Parses the shared --replace / --dry-run / --vllm / --ollama / --model flags
+    # used by both 'create' and 'create-both'.  When include_model_preset is false
+    # (create-both), the --model flag is not registered because each VM uses its own
+    # TOML default.  Returns a hash suitable for splatting into Manager#create.
+    def parse_create_options(argv, include_model_preset: true)
+      opts = { replace: false, dry_run: false, install_vllm: nil, install_ollama: nil, vllm_preset: nil }
+      OptionParser.new do |o|
+        o.on('--replace',    'Delete the tracked VM before creating a new one')      { opts[:replace] = true }
+        o.on('--dry-run',    'Print the create plan without creating a VM')          { opts[:dry_run] = true }
+        o.on('--vllm',       'Enable vLLM+LiteLLM setup (overrides config)')         { opts[:install_vllm] = true }
+        o.on('--no-vllm',    'Disable vLLM+LiteLLM setup (overrides config)')        { opts[:install_vllm] = false }
+        o.on('--ollama',     'Enable Ollama setup (overrides config)')               { opts[:install_ollama] = true }
+        o.on('--no-ollama',  'Disable Ollama setup (overrides config)')              { opts[:install_ollama] = false }
+        o.on('--model PRESET', 'Use a named vLLM preset at create time') { |v| opts[:vllm_preset] = v } if include_model_preset
+      end.parse!(argv)
+      opts
+    end
+
+    def parse_delete_both_options(argv)
+      opts = { dry_run: false }
+      OptionParser.new do |o|
+        o.on('--dry-run', 'Show which VMs would be deleted without deleting them') { opts[:dry_run] = true }
+      end.parse!(argv)
+      opts
+    end
+
+    # Constructs a Manager and all its dependencies from a Config object.
+    # Accepts optional output destination and WireGuard concurrency hooks.
+    def build_manager(config, out: $stdout, wg_setup_pre: nil, wg_setup_post: nil)
+      state_store     = StateStore.new(config.state_file)
+      client          = HyperstackClient.new(base_url: config.api_base_url, api_key: config.api_key)
+      local_wireguard = LocalWireGuard.new(
+        interface_name: config.local_interface_name,
+        config_path:    config.local_wg_config_path
+      )
+      Manager.new(
+        config:          config,
+        client:          client,
+        state_store:     state_store,
+        local_wireguard: local_wireguard,
+        out:             out,
+        wg_setup_pre:    wg_setup_pre,
+        wg_setup_post:   wg_setup_post
+      )
+    end
+
+    def run_status
+      loaders = status_config_loaders
+      if loaders.one?
+        build_manager(loaders.first.config).status
+        return
+      end
+
+      expected_ips = []
+      loaders.each_with_index do |loader, index|
+        puts if index.positive?
+        puts "[#{File.basename(loader.path)}]"
+        expected_ip = build_manager(loader.config).status(include_local_wireguard: false)
+        expected_ips << expected_ip if expected_ip
+      end
+
+      puts
+      puts '[local-wireguard]'
+      build_manager(loaders.first.config).show_local_wireguard(expected_ips)
+    end
+
+    def status_config_loaders
+      return [ConfigLoader.load(@config_path)] if @config_explicit
+
+      candidates = [
+        @config_path,
+        File.join(__dir__, 'hyperstack-vm1.toml'),
+        File.join(__dir__, 'hyperstack-vm2.toml')
+      ].uniq.select { |path| File.exist?(path) }
+
+      loaders = candidates.map { |path| ConfigLoader.load(path) }
+      tracked = loaders.select { |loader| File.exist?(loader.config.state_file) }
+      tracked.empty? ? [ConfigLoader.load(@config_path)] : tracked
+    end
+
+    def pair_config_loaders
+      [
+        ConfigLoader.load(File.join(__dir__, 'hyperstack-vm1.toml')),
+        ConfigLoader.load(File.join(__dir__, 'hyperstack-vm2.toml'))
+      ]
+    end
+
+    # Provisions hyperstack-vm1 and hyperstack-vm2 concurrently in separate threads.
+    # WireGuard setup is serialized: VM1 runs first (replacing the base wg1.conf), then
+    # VM2 adds its peer. A Mutex+ConditionVariable acts as a one-shot latch between threads.
+    # If VM1 fails before reaching the WG step the latch is still released so VM2 doesn't hang.
+    # vllm_preset is accepted but ignored — each VM uses its own TOML default preset.
+    def run_create_both(replace:, dry_run:, install_vllm:, install_ollama:, vllm_preset: nil) # rubocop:disable Lint/UnusedMethodArgument
+      vm1_loader, vm2_loader = pair_config_loaders
+      vm1_config = vm1_loader.config
+      vm2_config = vm2_loader.config
+
+      out_mutex    = Mutex.new
+      wg_mutex     = Mutex.new
+      wg_cv        = ConditionVariable.new
+      vm1_wg_state = { done: false, error: nil }
+
+      # VM1 signals the latch after its WG step (whether WG ran or was already done).
+      vm1_wg_post = proc do
+        wg_mutex.synchronize { vm1_wg_state[:done] = true; wg_cv.broadcast }
+      end
+
+      # VM2 blocks here until VM1's WG step resolves, then raises if VM1 failed.
+      vm2_wg_pre = proc do
+        wg_mutex.synchronize { wg_cv.wait(wg_mutex) until vm1_wg_state[:done] || vm1_wg_state[:error] }
+        raise Error, "VM1 WireGuard setup failed; cannot add VM2 peer." if vm1_wg_state[:error]
+      end
+
+      manager1 = build_manager(vm1_config,
+                               out:            PrefixedOutput.new('[vm1] ', $stdout, out_mutex),
+                               wg_setup_post:  vm1_wg_post)
+      manager2 = build_manager(vm2_config,
+                               out:           PrefixedOutput.new('[vm2] ', $stdout, out_mutex),
+                               wg_setup_pre:  vm2_wg_pre)
+
+      errors = {}
+      create_opts = { replace: replace, dry_run: dry_run,
+                      install_vllm: install_vllm, install_ollama: install_ollama }
+
+      vm1_thread = Thread.new do
+        manager1.create(**create_opts)
+      rescue Error => e
+        errors[:vm1] = e.message
+        # Unblock VM2 even if VM1 failed so the process doesn't hang.
+        wg_mutex.synchronize { vm1_wg_state[:error] = e.message; wg_cv.broadcast }
+      end
+
+      vm2_thread = Thread.new do
+        manager2.create(**create_opts)
+      rescue Error => e
+        errors[:vm2] = e.message
+      end
+
+      [vm1_thread, vm2_thread].each(&:join)
+
+      errors.each { |vm, msg| $stderr.puts("ERROR [#{vm}]: #{msg}") }
+      exit 1 unless errors.empty?
+    end
+
+    def run_delete_both(dry_run:)
+      out_mutex = Mutex.new
+      errors = {}
+
+      pair_config_loaders.each_with_index do |loader, index|
+        label = "vm#{index + 1}"
+        manager = build_manager(loader.config, out: PrefixedOutput.new("[#{label}] ", $stdout, out_mutex))
+
+        begin
+          manager.delete(dry_run: dry_run)
+        rescue Error => e
+          errors[label.to_sym] = e.message
+        end
+      end
+
+      errors.each { |vm, msg| $stderr.puts("ERROR [#{vm}]: #{msg}") }
+      exit 1 unless errors.empty?
     end
   end
 end
