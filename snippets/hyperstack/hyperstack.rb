@@ -1514,11 +1514,11 @@ module HyperstackVM
       continue_create(state)
     end
 
-    def delete(vm_id: nil, preserve_state_on_failure: false, dry_run: false)
+    def delete(vm_id: nil, preserve_state_on_failure: false, dry_run: false, skip_local_cleanup: false)
       state = @state_store.load
       target_vm_id = vm_id || state&.dig('vm_id')
       raise Error, "No VM ID provided and no state file found at #{@state_store.path}." if target_vm_id.nil?
-      cleanup_local = state && target_vm_id == state['vm_id']
+      cleanup_local = !skip_local_cleanup && state && target_vm_id == state['vm_id']
 
       if dry_run
         print_delete_dry_run(target_vm_id, state, preserve_state_on_failure: preserve_state_on_failure)
@@ -2688,20 +2688,21 @@ module HyperstackVM
 
     def run_delete_both(dry_run:)
       out_mutex = Mutex.new
+      errors_mutex = Mutex.new
       errors = {}
       loaders = pair_config_loaders
       local_wg_out = PrefixedOutput.new('[local-wireguard] ', $stdout, out_mutex)
-
-      loaders.each_with_index do |loader, index|
+      threads = loaders.each_with_index.map do |loader, index|
         label = "vm#{index + 1}"
         manager = build_manager(loader.config, out: PrefixedOutput.new("[#{label}] ", $stdout, out_mutex))
 
-        begin
-          manager.delete(dry_run: dry_run)
+        Thread.new do
+          manager.delete(dry_run: dry_run, skip_local_cleanup: true)
         rescue Error => e
-          errors[label.to_sym] = e.message
+          errors_mutex.synchronize { errors[label.to_sym] = e.message }
         end
       end
+      threads.each(&:join)
 
       if errors.empty?
         allowed_ips = loaders.map { |loader| "#{loader.config.wireguard_gateway_ip}/32" }
