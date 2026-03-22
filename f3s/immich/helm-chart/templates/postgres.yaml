@@ -15,6 +15,23 @@ spec:
       labels:
         app: immich-postgres
     spec:
+      initContainers:
+      - name: wait-for-nfs
+        image: busybox:1.37
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for NFS mount..."
+          until [ -f /nfs-check/nfs.DO_NOT_REMOVE ]; do
+            echo "NFS not mounted yet, waiting..."
+            sleep 5
+          done
+          echo "NFS mount detected"
+        volumeMounts:
+        - name: nfs-check
+          mountPath: /nfs-check
+          readOnly: true
       containers:
       - name: postgres
         image: tensorchord/pgvecto-rs:pg16-v0.3.0
@@ -57,6 +74,10 @@ spec:
       - name: postgres-data
         persistentVolumeClaim:
           claimName: immich-postgres-pvc
+      - name: nfs-check
+        hostPath:
+          path: /data/nfs/k3svolumes
+          type: Directory
 ---
 apiVersion: v1
 kind: Service
