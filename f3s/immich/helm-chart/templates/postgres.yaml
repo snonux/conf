@@ -23,7 +23,7 @@ spec:
         - -c
         - |
           echo "Waiting for NFS mount..."
-          until [ -f /nfs-check/nfs.DO_NOT_REMOVE ]; do
+          until [ -f /nfs-check/k3svolumes.DO_NOT_REMOVE ]; do
             echo "NFS not mounted yet, waiting..."
             sleep 5
           done
