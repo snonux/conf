@@ -506,8 +506,8 @@ task 'dtail',
 desc 'Installing Gogios binary';
 # Configure the custom package repository on OpenBSD frontends.
 # Adds PKG_PATH to root's .profile so custom packages are available
-# alongside the official OpenBSD repo. Official packages still install
-# normally; custom (unsigned) packages require -D unsigned.
+# alongside the official OpenBSD repo. Packages are signed with signify;
+# the public key must be at /etc/signify/custom-pkg.pub on each host.
 desc 'Setup custom package repo on OpenBSD frontends';
 task 'pkgrepo_setup',
   group => 'frontends',
@@ -534,8 +534,8 @@ task 'gogios_install',
         run 'rm -f /usr/local/bin/gogios';
       }
 
-      # Install or update from custom repo (unsigned for now)
-      say run 'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -D unsigned -u gogios || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -D unsigned gogios';
+      # Install or update from custom repo (packages signed with signify)
+      say run 'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -u gogios || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add gogios';
     }
     elsif ( $os eq 'FreeBSD' ) {
       say run 'pkg update -r custom && pkg install -y gogios';

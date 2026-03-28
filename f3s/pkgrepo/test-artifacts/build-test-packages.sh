@@ -92,6 +92,18 @@ DESC
         -p / \
         "$OUTDIR/hello-test-1.0.tgz"
 
+    # Sign with signify if the key exists
+    if [ -f /etc/signify/custom-pkg.sec ]; then
+        mkdir -p "$OUTDIR/signed"
+        doas pkg_sign -s signify2 -s /etc/signify/custom-pkg.sec \
+            -o "$OUTDIR/signed" "$OUTDIR/hello-test-1.0.tgz"
+        mv "$OUTDIR/signed/hello-test-1.0.tgz" "$OUTDIR/hello-test-1.0.tgz"
+        rm -rf "$OUTDIR/signed"
+        echo "Package signed with signify"
+    else
+        echo "Warning: /etc/signify/custom-pkg.sec not found, package is unsigned"
+    fi
+
     rm -rf "$WORKDIR"
 
     echo ""
