@@ -23,7 +23,7 @@ spec:
         # Liveness probe: restart if nginx stops responding
         livenessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 8080
           periodSeconds: 30
           timeoutSeconds: 5
@@ -31,7 +31,7 @@ spec:
         # Readiness probe: remove from service if not ready
         readinessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 8080
           periodSeconds: 10
           timeoutSeconds: 3

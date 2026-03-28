@@ -29,6 +29,11 @@ data:
                 autoindex on;
             }
 
+            # Health check endpoint for k8s probes
+            location = /healthz {
+                return 200 "ok";
+            }
+
             location / {
                 return 404;
             }
