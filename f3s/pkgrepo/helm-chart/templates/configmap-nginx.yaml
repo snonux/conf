@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pkgrepo-nginx-config
+  namespace: infra
+data:
+  nginx.conf: |
+    worker_processes 1;
+    events {
+        worker_connections 256;
+    }
+    http {
+        include       mime.types;
+        default_type  application/octet-stream;
+        sendfile      on;
+        keepalive_timeout 65;
+
+        server {
+            listen 8080;
+            root /usr/share/nginx/html;
+
+            # FreeBSD pkg repository
+            location /freebsd/ {
+                autoindex on;
+            }
+
+            # OpenBSD pkg_add repository
+            location /openbsd/ {
+                autoindex on;
+            }
+
+            location / {
+                return 404;
+            }
+        }
+    }

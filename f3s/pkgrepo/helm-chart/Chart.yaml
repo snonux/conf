@@ -1,0 +1,5 @@
+apiVersion: v2
+name: pkgrepo
+description: A Helm chart for serving FreeBSD and OpenBSD package repositories.
+version: 0.1.0
+appVersion: "1.0"
