@@ -1,0 +1,5 @@
+*.qcow2
+*.iso
+*.pid
+custom-pkg.sec
+custom-pkg.pub

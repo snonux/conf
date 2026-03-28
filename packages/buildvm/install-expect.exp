@@ -1,0 +1,167 @@
+#!/usr/bin/expect -f
+# Automated OpenBSD installer via serial console.
+# Called by setup.sh — arguments: disk iso ram cpus ssh_port
+
+set timeout 600
+log_user 1
+
+set disk    [lindex $argv 0]
+set iso     [lindex $argv 1]
+set ram     [lindex $argv 2]
+set cpus    [lindex $argv 3]
+set sshport [lindex $argv 4]
+
+spawn qemu-system-x86_64 \
+    -machine accel=kvm \
+    -cpu host \
+    -m $ram \
+    -smp $cpus \
+    -drive file=$disk,format=qcow2,if=virtio \
+    -cdrom $iso \
+    -boot d \
+    -netdev user,id=net0,hostfwd=tcp::${sshport}-:22 \
+    -device virtio-net-pci,netdev=net0 \
+    -nographic
+
+# Redirect console to serial at boot prompt
+expect "boot>"
+send "set tty com0\r"
+expect "boot>"
+send "\r"
+
+# Installer menu
+expect "(I)nstall"
+send "i\r"
+
+# Terminal type — accept default vt220
+expect "Terminal type"
+send "\r"
+
+expect "System hostname"
+send "buildvm\r"
+
+# Network — accept default vio0
+expect "Network interface to configure"
+send "\r"
+
+# IPv4 — default is autoconf
+expect "IPv4 address"
+send "\r"
+
+expect "IPv6 address"
+send "none\r"
+
+# Done configuring interfaces
+expect "Network interface to configure"
+send "done\r"
+
+# DNS domain — installer may skip this prompt entirely.
+# Either way, wait for the password prompt.
+expect -re "will not echo.*$"
+sleep 2
+send "build123\r"
+
+expect -re "again.*$"
+sleep 2
+send "build123\r"
+
+expect "Start sshd"
+send "\r"
+
+expect "Do you expect to run the X"
+send "no\r"
+
+# Console redirect prompt (because we set tty com0)
+expect "Change the default console"
+send "yes\r"
+
+# Speed — accept default
+expect "Which speed"
+send "\r"
+
+# User setup — wait for full prompt to appear before sending
+expect -re "etup a user.*\\]"
+sleep 1
+send "pbuild\r"
+
+expect "Full name"
+send "\r"
+
+# User password — same serial console timing as root password
+expect -re "will not echo.*$"
+sleep 2
+send "build123\r"
+
+expect -re "again.*$"
+sleep 2
+send "build123\r"
+
+expect "Allow root ssh login"
+send "no\r"
+
+expect "timezone"
+send "UTC\r"
+
+expect "root disk"
+send "\r"
+
+# Disk encryption — decline (OpenBSD 7.8+)
+expect "Encrypt the root disk"
+send "\r"
+
+# Whole disk
+expect "Use (W)hole"
+send "w\r"
+
+# GPT or auto layout
+expect {
+    "Use (G)PT" { send "\r"; exp_continue }
+    "(A)uto layout" { send "a\r" }
+}
+
+expect "Location of sets"
+send "cd0\r"
+
+expect "Pathname to the sets"
+send "\r"
+
+expect "Set name"
+send -- "-game*\r"
+
+expect "Set name"
+send -- "-x*\r"
+
+expect "Set name"
+send "\r"
+
+expect "without verification"
+send "yes\r"
+
+# After sets install, installer asks if we want more sets — accept "done" default
+expect -timeout 600 "Location of sets"
+send "\r"
+
+# Wait for finalization
+expect -timeout 120 "CONGRATULATIONS"
+
+# Time may or may not appear wrong
+expect -re "Time appears wrong|Exit to"
+if {[string match "*Time*" $expect_out(0,string)]} {
+    send "\r"
+    expect "Exit to"
+}
+
+# Drop to installer shell instead of rebooting (CD is still attached,
+# reboot would boot the installer again). The installed system is at /mnt.
+send "s\r"
+expect "#"
+
+# Configure doas and wheel group on the installed system
+send "chroot /mnt usermod -G wheel pbuild\r"
+expect "#"
+send "echo 'permit nopass pbuild' > /mnt/etc/doas.conf\r"
+expect "#"
+
+# Shut down cleanly
+send "halt -p\r"
+expect -timeout 60 eof
