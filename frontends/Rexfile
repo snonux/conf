@@ -504,12 +504,47 @@ task 'dtail',
   };
 
 desc 'Installing Gogios binary';
+# Configure the custom package repository on OpenBSD frontends.
+# Adds PKG_PATH to root's .profile so custom packages are available
+# alongside the official OpenBSD repo. Official packages still install
+# normally; custom (unsigned) packages require -D unsigned.
+desc 'Setup custom package repo on OpenBSD frontends';
+task 'pkgrepo_setup',
+  group => 'frontends',
+  sub {
+    my $custom_repo = 'https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/';
+    my $profile_line = "export PKG_PATH=\"${custom_repo}\"";
+
+    append_if_no_such_line '/root/.profile', $profile_line;
+  };
+
+# Install or update gogios from the custom package repository.
+# FreeBSD hosts use pkg, OpenBSD hosts use pkg_add.
 task 'gogios_install',
   group => 'frontends',
   sub {
-    file '/usr/local/bin/gogios',
-      source => 'usr/local/bin/gogios',
-      mode   => '0755';
+    my $os = run 'uname -s';
+    chomp $os;
+
+    if ( $os eq 'OpenBSD' ) {
+      # Remove any previously manually deployed binary not managed by pkg
+      my $pkg_check = run 'pkg_info gogios 2>/dev/null';
+      if ( $? != 0 && is_file('/usr/local/bin/gogios') ) {
+        Rex::Logger::info('Removing manually installed gogios binary...');
+        run 'rm -f /usr/local/bin/gogios';
+      }
+
+      # Install or update from custom repo (unsigned for now)
+      say run 'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -D unsigned -u gogios || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -D unsigned gogios';
+    }
+    elsif ( $os eq 'FreeBSD' ) {
+      say run 'pkg update -r custom && pkg install -y gogios';
+    }
+    else {
+      Rex::Logger::info("Unsupported OS: $os", 'error');
+    }
+
+    say run 'gogios -version';
   };
 
 desc 'Setup Gogios monitoring system';
@@ -521,9 +556,8 @@ task 'gogios',
 
     my $gogios_path = '/usr/local/bin/gogios';
 
-    unless ( is_file($gogios_path) ) {
-        Rex::Logger::info( "Gogios not installed to $gogios_path! Run task 'gogios_install'", 'error' );
-    }
+    # Ensure gogios is installed from the package repo
+    run_task 'gogios_install';
 
     run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
     run 'usermod -d /var/run/gogios _gogios';
