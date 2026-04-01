@@ -114,31 +114,89 @@ spec:
     requests:
       storage: 20Gi
 ---
-# Immich External Library
+# Immich External Library - Albena (RW)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: immich-external-library-pv
+  name: immich-ext-albena-pv
 spec:
   capacity:
-    storage: 500Gi
+    storage: 200Gi
   volumeMode: Filesystem
   accessModes:
-    - ReadOnlyMany
+    - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   hostPath:
-    path: /data/nfs/k3svolumes/immich/external-library
+    path: /data/nfs/k3svolumes/immich/external-library/albena
     type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: immich-external-library-pvc
+  name: immich-ext-albena-pvc
   namespace: services
 spec:
   storageClassName: ""
   accessModes:
-    - ReadOnlyMany
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+---
+# Immich External Library - Paul (RW)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-ext-paul-pv
+spec:
+  capacity:
+    storage: 200Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/immich/external-library/paul
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-ext-paul-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+---
+# Immich External Library - Videos (RW for paul, mounted RO for albena)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-ext-videos-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/immich/external-library/videos
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-ext-videos-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
   resources:
     requests:
       storage: 500Gi

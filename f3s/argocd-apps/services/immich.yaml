@@ -41,12 +41,30 @@ spec:
                     image:
                       tag: v2.5.5
             persistence:
-              external:
+              ext-albena-rw:
                 enabled: true
                 type: persistentVolumeClaim
-                existingClaim: immich-external-library-pvc
+                existingClaim: immich-ext-albena-pvc
                 globalMounts:
-                  - path: /external
+                  - path: /external-albena-rw
+              ext-paul-rw:
+                enabled: true
+                type: persistentVolumeClaim
+                existingClaim: immich-ext-paul-pvc
+                globalMounts:
+                  - path: /external-paul-rw
+              ext-videos-rw:
+                enabled: true
+                type: persistentVolumeClaim
+                existingClaim: immich-ext-videos-pvc
+                globalMounts:
+                  - path: /external-videos-rw
+              ext-videos-ro:
+                enabled: true
+                type: persistentVolumeClaim
+                existingClaim: immich-ext-videos-pvc
+                globalMounts:
+                  - path: /external-videos-ro
                     readOnly: true
             ingress:
               main:
