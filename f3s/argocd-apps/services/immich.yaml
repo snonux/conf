@@ -41,13 +41,13 @@ spec:
                     image:
                       tag: v2.5.5
                     volumeMounts:
-                      - name: yoga-videos
-                        mountPath: /external/yoga-videos
+                      - name: external-library
+                        mountPath: /external
                         readOnly: true
                 volumes:
-                  - name: yoga-videos
+                  - name: external-library
                     persistentVolumeClaim:
-                      claimName: immich-yoga-videos-pvc
+                      claimName: immich-external-library-pvc
                       readOnly: true
             ingress:
               main:

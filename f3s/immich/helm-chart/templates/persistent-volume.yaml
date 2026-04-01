@@ -114,26 +114,26 @@ spec:
     requests:
       storage: 20Gi
 ---
-# Immich External Library - Yoga Videos (Syncthing source)
+# Immich External Library
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: immich-yoga-videos-pv
+  name: immich-external-library-pv
 spec:
   capacity:
-    storage: 100Gi
+    storage: 500Gi
   volumeMode: Filesystem
   accessModes:
     - ReadOnlyMany
   persistentVolumeReclaimPolicy: Retain
   hostPath:
-    path: /data/nfs/k3svolumes/syncthing/data/paul/earth/yoga
+    path: /data/nfs/k3svolumes/immich/external-library
     type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: immich-yoga-videos-pvc
+  name: immich-external-library-pvc
   namespace: services
 spec:
   storageClassName: ""
@@ -141,4 +141,4 @@ spec:
     - ReadOnlyMany
   resources:
     requests:
-      storage: 100Gi
+      storage: 500Gi
