@@ -56,13 +56,13 @@ spec:
               ext-videos-rw:
                 enabled: true
                 type: persistentVolumeClaim
-                existingClaim: immich-ext-videos-pvc
+                existingClaim: immich-ext-videos-rw-pvc
                 globalMounts:
                   - path: /external-videos-rw
               ext-videos-ro:
                 enabled: true
                 type: persistentVolumeClaim
-                existingClaim: immich-ext-videos-pvc
+                existingClaim: immich-ext-videos-ro-pvc
                 globalMounts:
                   - path: /external-videos-ro
                     readOnly: true

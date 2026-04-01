@@ -172,11 +172,11 @@ spec:
     requests:
       storage: 200Gi
 ---
-# Immich External Library - Videos (RW for paul, mounted RO for albena)
+# Immich External Library - Videos RW (paul)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: immich-ext-videos-pv
+  name: immich-ext-videos-rw-pv
 spec:
   capacity:
     storage: 500Gi
@@ -191,12 +191,41 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: immich-ext-videos-pvc
+  name: immich-ext-videos-rw-pvc
   namespace: services
 spec:
   storageClassName: ""
   accessModes:
     - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Gi
+---
+# Immich External Library - Videos RO (albena)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-ext-videos-ro-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/immich/external-library/videos
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-ext-videos-ro-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadOnlyMany
   resources:
     requests:
       storage: 500Gi
