@@ -40,15 +40,14 @@ spec:
                   main:
                     image:
                       tag: v2.5.5
-                    volumeMounts:
-                      - name: external-library
-                        mountPath: /external
-                        readOnly: true
-                volumes:
-                  - name: external-library
-                    persistentVolumeClaim:
-                      claimName: immich-external-library-pvc
-                      readOnly: true
+            persistence:
+              external:
+                enabled: true
+                type: persistentVolumeClaim
+                existingClaim: immich-external-library-pvc
+                globalMounts:
+                  - path: /external
+                    readOnly: true
             ingress:
               main:
                 enabled: true
