@@ -34,12 +34,24 @@ spec:
                 existingClaim: "immich-library-pvc"
           server:
             enabled: true
-            controllers:
-              main:
-                containers:
-                  main:
-                    image:
-                      tag: v2.5.5
+            resources:
+              requests:
+                cpu: 500m
+                memory: 512Mi
+              limits:
+                memory: 1Gi
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchExpressions:
+                          - key: app.kubernetes.io/name
+                            operator: In
+                            values:
+                              - machine-learning
+                      topologyKey: "kubernetes.io/hostname"
             persistence:
               ext-albena-rw:
                 enabled: true
@@ -82,12 +94,24 @@ spec:
                           port: 2283
           machine-learning:
             enabled: true
-            controllers:
-              main:
-                containers:
-                  main:
-                    image:
-                      tag: v2.5.5
+            resources:
+              requests:
+                cpu: 500m
+                memory: 512Mi
+              limits:
+                memory: 1Gi
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchExpressions:
+                          - key: app.kubernetes.io/name
+                            operator: In
+                            values:
+                              - server
+                      topologyKey: "kubernetes.io/hostname"
             persistence:
               cache:
                 enabled: true

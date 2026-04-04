@@ -19,9 +19,27 @@ immich:
     library:
       existingClaim: "immich-library-pvc"
 
-# Server component with ingress
+# Server component configuration
 server:
   enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - machine-learning
+            topologyKey: "kubernetes.io/hostname"
   ingress:
     main:
       enabled: true
@@ -38,9 +56,27 @@ server:
                 identifier: main
                 port: 2283
 
-# Machine Learning component with cache persistence
+# Machine Learning component configuration
 machine-learning:
   enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - server
+            topologyKey: "kubernetes.io/hostname"
   persistence:
     cache:
       enabled: true
@@ -49,8 +85,7 @@ machine-learning:
       storageClass: ""
       existingClaim: "immich-ml-cache-pvc"
 
-# PostgreSQL database configuration
-# Note: You'll need to configure database connection via environment variables
+# Global controller settings for main app
 controllers:
   main:
     containers:
