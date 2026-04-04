@@ -19,79 +19,27 @@ immich:
     library:
       existingClaim: "immich-library-pvc"
 
-# Main components using bjw-s common library structure (controllers key)
-controllers:
-  server:
-    strategy: RollingUpdate
-    containers:
-      main:
-        resources:
-          requests:
-            cpu: 500m
-            memory: 512Mi
-          limits:
-            memory: 4Gi
-    pod:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: app.kubernetes.io/name
-                      operator: In
-                      values:
-                        - machine-learning
-                topologyKey: "kubernetes.io/hostname"
-
-  machine-learning:
-    strategy: RollingUpdate
-    containers:
-      main:
-        resources:
-          requests:
-            cpu: 500m
-            memory: 512Mi
-          limits:
-            memory: 4Gi
-    pod:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: app.kubernetes.io/name
-                      operator: In
-                      values:
-                        - server
-                topologyKey: "kubernetes.io/hostname"
-    persistence:
-      cache:
-        enabled: true
-        type: persistentVolumeClaim
-        size: 10Gi
-        storageClass: ""
-        existingClaim: "immich-ml-cache-pvc"
-
-  main:
-    containers:
-      main:
-        env:
-          DB_HOSTNAME: immich-postgres
-          DB_DATABASE_NAME: immich
-          DB_USERNAME: immich
-          DB_PASSWORD:
-            valueFrom:
-              secretKeyRef:
-                name: immich-db-secret
-                key: password
-
-# Ingress and In-line components
+# Main components configuration (Both old and new style for safety)
 server:
   enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      memory: 4Gi
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - machine-learning
+            topologyKey: "kubernetes.io/hostname"
   persistence:
     ext-albena-rw:
       enabled: true
@@ -133,3 +81,90 @@ server:
               service:
                 identifier: main
                 port: 2283
+
+machine-learning:
+  enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      memory: 4Gi
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - server
+            topologyKey: "kubernetes.io/hostname"
+  persistence:
+    cache:
+      enabled: true
+      type: persistentVolumeClaim
+      size: 10Gi
+      storageClass: ""
+      existingClaim: "immich-ml-cache-pvc"
+
+# Structured controllers key for newer common library versions
+controllers:
+  server:
+    containers:
+      main:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - machine-learning
+                topologyKey: "kubernetes.io/hostname"
+  machine-learning:
+    containers:
+      main:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - server
+                topologyKey: "kubernetes.io/hostname"
+  main:
+    containers:
+      main:
+        env:
+          DB_HOSTNAME: immich-postgres
+          DB_DATABASE_NAME: immich
+          DB_USERNAME: immich
+          DB_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: immich-db-secret
+                key: password
