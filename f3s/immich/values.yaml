@@ -19,27 +19,105 @@ immich:
     library:
       existingClaim: "immich-library-pvc"
 
-# Server component configuration
+# Main components using bjw-s common library structure (controllers key)
+controllers:
+  server:
+    strategy: RollingUpdate
+    containers:
+      main:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - machine-learning
+                topologyKey: "kubernetes.io/hostname"
+
+  machine-learning:
+    strategy: RollingUpdate
+    containers:
+      main:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - server
+                topologyKey: "kubernetes.io/hostname"
+    persistence:
+      cache:
+        enabled: true
+        type: persistentVolumeClaim
+        size: 10Gi
+        storageClass: ""
+        existingClaim: "immich-ml-cache-pvc"
+
+  main:
+    containers:
+      main:
+        env:
+          DB_HOSTNAME: immich-postgres
+          DB_DATABASE_NAME: immich
+          DB_USERNAME: immich
+          DB_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: immich-db-secret
+                key: password
+
+# Ingress and In-line components
 server:
   enabled: true
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      memory: 4Gi
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: app.kubernetes.io/name
-                  operator: In
-                  values:
-                    - machine-learning
-            topologyKey: "kubernetes.io/hostname"
+  persistence:
+    ext-albena-rw:
+      enabled: true
+      type: persistentVolumeClaim
+      existingClaim: immich-ext-albena-pvc
+      globalMounts:
+        - path: /external-albena-rw
+    ext-paul-rw:
+      enabled: true
+      type: persistentVolumeClaim
+      existingClaim: immich-ext-paul-pvc
+      globalMounts:
+        - path: /external-paul-rw
+    ext-videos-rw:
+      enabled: true
+      type: persistentVolumeClaim
+      existingClaim: immich-ext-videos-rw-pvc
+      globalMounts:
+        - path: /external-videos-rw
+    ext-videos-ro:
+      enabled: true
+      type: persistentVolumeClaim
+      existingClaim: immich-ext-videos-ro-pvc
+      globalMounts:
+        - path: /external-videos-ro
+          readOnly: true
   ingress:
     main:
       enabled: true
@@ -55,47 +133,3 @@ server:
               service:
                 identifier: main
                 port: 2283
-
-# Machine Learning component configuration
-machine-learning:
-  enabled: true
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      memory: 4Gi
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: app.kubernetes.io/name
-                  operator: In
-                  values:
-                    - server
-            topologyKey: "kubernetes.io/hostname"
-  persistence:
-    cache:
-      enabled: true
-      type: persistentVolumeClaim
-      size: 10Gi
-      storageClass: ""
-      existingClaim: "immich-ml-cache-pvc"
-
-# Global controller settings for main app
-controllers:
-  main:
-    containers:
-      main:
-        env:
-          DB_HOSTNAME: immich-postgres
-          DB_DATABASE_NAME: immich
-          DB_USERNAME: immich
-          DB_PASSWORD:
-            valueFrom:
-              secretKeyRef:
-                name: immich-db-secret
-                key: password
