@@ -47,26 +47,32 @@ spec:
             secretKeyRef:
               name: immich-db-secret
               key: password
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            memory: 2Gi
         livenessProbe:
           exec:
             command:
             - /bin/sh
             - -c
             - pg_isready -U immich -d immich
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 6
         readinessProbe:
           exec:
             command:
             - /bin/sh
             - -c
             - pg_isready -U immich -d immich
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
