@@ -102,6 +102,15 @@ machine-learning:
                   values:
                     - server
             topologyKey: "kubernetes.io/hostname"
+        - weight: 80
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - immich-postgres
+            topologyKey: "kubernetes.io/hostname"
   persistence:
     cache:
       enabled: true
@@ -137,6 +146,10 @@ controllers:
   machine-learning:
     containers:
       main:
+        env:
+          MACHINE_LEARNING_MODEL_INTRA_OP_THREADS: "4"
+          MACHINE_LEARNING_MODEL_INTER_OP_THREADS: "1"
+          MACHINE_LEARNING_WORKER_TIMEOUT: "300"
         resources:
           requests:
             cpu: 500m
@@ -155,6 +168,15 @@ controllers:
                       operator: In
                       values:
                         - server
+                topologyKey: "kubernetes.io/hostname"
+            - weight: 80
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - immich-postgres
                 topologyKey: "kubernetes.io/hostname"
   main:
     containers:
