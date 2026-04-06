@@ -94,33 +94,44 @@ spec:
                           port: 2283
           machine-learning:
             enabled: true
-            resources:
-              requests:
-                cpu: 500m
-                memory: 512Mi
-              limits:
-                memory: 4Gi
-            affinity:
-              podAntiAffinity:
-                preferredDuringSchedulingIgnoredDuringExecution:
-                  - weight: 100
-                    podAffinityTerm:
-                      labelSelector:
-                        matchExpressions:
-                          - key: app.kubernetes.io/name
-                            operator: In
-                            values:
-                              - server
-                      topologyKey: "kubernetes.io/hostname"
-                  - weight: 80
-                    podAffinityTerm:
-                      labelSelector:
-                        matchExpressions:
-                          - key: app
-                            operator: In
-                            values:
-                              - immich-postgres
-                      topologyKey: "kubernetes.io/hostname"
+            controllers:
+              main:
+                containers:
+                  main:
+                    image:
+                      tag: v2.5.5
+                    env:
+                      MACHINE_LEARNING_MODEL_INTRA_OP_THREADS: "4"
+                      MACHINE_LEARNING_MODEL_INTER_OP_THREADS: "1"
+                      MACHINE_LEARNING_WORKER_TIMEOUT: "300"
+                    resources:
+                      requests:
+                        cpu: 500m
+                        memory: 512Mi
+                      limits:
+                        memory: 4Gi
+                pod:
+                  affinity:
+                    podAntiAffinity:
+                      preferredDuringSchedulingIgnoredDuringExecution:
+                        - weight: 100
+                          podAffinityTerm:
+                            labelSelector:
+                              matchExpressions:
+                                - key: app.kubernetes.io/name
+                                  operator: In
+                                  values:
+                                    - server
+                            topologyKey: "kubernetes.io/hostname"
+                        - weight: 80
+                          podAffinityTerm:
+                            labelSelector:
+                              matchExpressions:
+                                - key: app
+                                  operator: In
+                                  values:
+                                    - immich-postgres
+                            topologyKey: "kubernetes.io/hostname"
             persistence:
               cache:
                 enabled: true
@@ -152,43 +163,6 @@ spec:
                                 operator: In
                                 values:
                                   - machine-learning
-                          topologyKey: "kubernetes.io/hostname"
-            machine-learning:
-              containers:
-                main:
-                  image:
-                    tag: v2.5.5
-                  env:
-                    MACHINE_LEARNING_MODEL_INTRA_OP_THREADS: "4"
-                    MACHINE_LEARNING_MODEL_INTER_OP_THREADS: "1"
-                    MACHINE_LEARNING_WORKER_TIMEOUT: "300"
-                  resources:
-                    requests:
-                      cpu: 500m
-                      memory: 512Mi
-                    limits:
-                      memory: 4Gi
-              pod:
-                affinity:
-                  podAntiAffinity:
-                    preferredDuringSchedulingIgnoredDuringExecution:
-                      - weight: 100
-                        podAffinityTerm:
-                          labelSelector:
-                            matchExpressions:
-                              - key: app.kubernetes.io/name
-                                operator: In
-                                values:
-                                  - server
-                          topologyKey: "kubernetes.io/hostname"
-                      - weight: 80
-                        podAffinityTerm:
-                          labelSelector:
-                            matchExpressions:
-                              - key: app
-                                operator: In
-                                values:
-                                  - immich-postgres
                           topologyKey: "kubernetes.io/hostname"
             main:
               containers:
