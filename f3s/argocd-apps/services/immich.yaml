@@ -34,6 +34,12 @@ spec:
                 existingClaim: "immich-library-pvc"
           server:
             enabled: true
+            controllers:
+              main:
+                containers:
+                  main:
+                    image:
+                      tag: v2.5.5
             resources:
               requests:
                 cpu: 500m
@@ -140,30 +146,6 @@ spec:
                 storageClass: ""
                 existingClaim: "immich-ml-cache-pvc"
           controllers:
-            server:
-              containers:
-                main:
-                  image:
-                    tag: v2.5.5
-                  resources:
-                    requests:
-                      cpu: 500m
-                      memory: 512Mi
-                    limits:
-                      memory: 4Gi
-              pod:
-                affinity:
-                  podAntiAffinity:
-                    preferredDuringSchedulingIgnoredDuringExecution:
-                      - weight: 100
-                        podAffinityTerm:
-                          labelSelector:
-                            matchExpressions:
-                              - key: app.kubernetes.io/name
-                                operator: In
-                                values:
-                                  - machine-learning
-                          topologyKey: "kubernetes.io/hostname"
             main:
               containers:
                 main:
