@@ -1,0 +1,16 @@
+[metadata]
+path = "/var/db/garage/meta"
+auto_snapshot_interval = "6h"
+
+[data]
+path = [
+  { path = "/var/db/garage/data", capacity = "23G" }
+]
+
+[rpc]
+bind_addr = "[::]:3901"
+secret = "__RPC_SECRET__"
+
+[api]
+s3_bind_addr = "[::]:3900"
+admin_bind_addr = "[::]:3903"

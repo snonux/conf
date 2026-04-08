@@ -1,0 +1,69 @@
+# Deploy Garage config to FreeBSD hosts f0–f2.
+# Run from repository root: rex garage_deploy
+#
+# Requires secrets/rpc_secret (gitignored). Create with:
+#   just -f f3s/garage/Justfile init-secrets
+
+use Rex -feature => [ '1.14', 'exec_autodie' ];
+use Rex::Logger;
+use File::Basename qw(dirname);
+use File::Slurp qw(read_file);
+use File::Spec::Functions qw(catfile rel2abs);
+
+use constant GARAGE_ETC => '/usr/local/etc/garage.toml';
+
+my $GARAGE_DIR = dirname( rel2abs(__FILE__) );
+
+group garage_nodes => qw(
+  f0.lan.buetow.org
+  f1.lan.buetow.org
+  f2.lan.buetow.org
+);
+
+user 'paul';
+sudo FALSE;
+
+parallelism 1;
+
+sub _garage_host_suffix {
+    my $server = connection->server;
+    return 'f0' if $server =~ /^f0\./;
+    return 'f1' if $server =~ /^f1\./;
+    return 'f2' if $server =~ /^f2\./;
+    Rex::Logger::info( "Unknown garage host: $server", 'error' );
+    die "Cannot map $server to garage.fN.toml\n";
+}
+
+desc 'Deploy garage.toml to f0/f1/f2 (injects RPC secret from secrets/rpc_secret)';
+task 'garage_deploy',
+  group => 'garage_nodes',
+  sub {
+    my $suffix      = _garage_host_suffix();
+    my $toml_path   = catfile( $GARAGE_DIR, 'etc', "garage.$suffix.toml" );
+    my $secret_path = catfile( $GARAGE_DIR, 'secrets', 'rpc_secret' );
+
+    die "Missing $secret_path — run: just -f f3s/garage/Justfile init-secrets\n"
+      unless -f $secret_path;
+
+    my $secret = read_file($secret_path);
+    chomp $secret;
+    die "RPC secret in $secret_path is empty\n" unless length $secret;
+
+    my $content = read_file($toml_path);
+    my $replaced = ( $content =~ s/__RPC_SECRET__/$secret/g );
+    die "Placeholder __RPC_SECRET__ missing in $toml_path\n" unless $replaced;
+
+    my $tmp = '/tmp/garage.toml.rex.' . $$;
+
+    file $tmp,
+      content => $content,
+      owner   => 'paul',
+      group   => 'paul',
+      mode    => '600';
+
+    run "doas install -o root -g wheel -m 600 $tmp " . GARAGE_ETC;
+    run "rm -f $tmp";
+    run 'doas service garage restart';
+  };
+
+# vim: syntax=perl

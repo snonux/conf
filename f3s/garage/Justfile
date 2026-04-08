@@ -1,0 +1,27 @@
+# Garage cluster on FreeBSD f0–f2. Run rex from repo root unless noted.
+ssh_host := "paul@f0.lan.buetow.org"
+_garage_dir := justfile_directory()
+
+# Deploy TOML (RPC secret from secrets/rpc_secret) and restart garage on all nodes
+deploy:
+    cd "{{_garage_dir}}/../.." && rex garage_deploy
+
+# Ensure secrets/rpc_secret exists (openssl rand -hex 32)
+init-secrets:
+    mkdir -p "{{_garage_dir}}/secrets" && ( test -f "{{_garage_dir}}/secrets/rpc_secret" || openssl rand -hex 32 > "{{_garage_dir}}/secrets/rpc_secret" ) && chmod 600 "{{_garage_dir}}/secrets/rpc_secret"
+
+# garage service status on f0
+status:
+    ssh {{ssh_host}} 'doas service garage status'
+
+# Cluster layout (garage CLI on f0)
+layout:
+    ssh {{ssh_host}} garage layout show
+
+# Aggregated stats
+stats:
+    ssh {{ssh_host}} 'garage stats -a'
+
+# Create a bucket (usage: just bucket-create watchos-app)
+bucket-create name:
+    ssh {{ssh_host}} 'garage bucket create {{name}}'
