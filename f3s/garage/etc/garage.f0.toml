@@ -1,16 +1,21 @@
-[metadata]
-path = "/var/db/garage/meta"
-auto_snapshot_interval = "6h"
+replication_factor = 3
+consistency_mode = "consistent"
 
-[data]
-path = [
+metadata_dir = "/var/db/garage/meta"
+data_dir = [
   { path = "/var/db/garage/data", capacity = "23G" }
 ]
+metadata_auto_snapshot_interval = "6h"
 
-[rpc]
-bind_addr = "[::]:3901"
-secret = "__RPC_SECRET__"
+db_engine = "lmdb"
 
-[api]
-s3_bind_addr = "[::]:3900"
-admin_bind_addr = "[::]:3903"
+rpc_secret = "__RPC_SECRET__"
+rpc_bind_addr = "0.0.0.0:3901"
+rpc_public_addr = "192.168.1.130:3901"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+
+[admin]
+api_bind_addr = "[::]:3903"

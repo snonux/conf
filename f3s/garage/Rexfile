@@ -61,7 +61,8 @@ task 'garage_deploy',
       group   => 'paul',
       mode    => '600';
 
-    run "doas install -o root -g wheel -m 600 $tmp " . GARAGE_ETC;
+    # garage runs as user `garage` (see rc.d); config must be group-readable
+    run "doas install -o root -g garage -m 640 $tmp " . GARAGE_ETC;
     run "rm -f $tmp";
     run 'doas service garage restart';
   };
