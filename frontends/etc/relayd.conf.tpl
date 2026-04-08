@@ -57,6 +57,7 @@ http protocol "https" {
 
      # Enable WebSocket support
      http websockets
+     return error
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
@@ -110,7 +111,7 @@ relay "https4" {
     forward to <f3s> port 80 check tcp
     # Static landing page served from pi0/pi1 instead of k3s
     forward to <f3s_static> port 80 check tcp
-    forward to <localhost> port 8080
+    forward to <localhost> port 8080 check http "/" code 200
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
     # Jellyfin uses NodePorts (bypasses Traefik)
@@ -127,7 +128,7 @@ relay "https6" {
     forward to <f3s> port 80 check tcp
     # Static landing page served from pi0/pi1 instead of k3s
     forward to <f3s_static> port 80 check tcp
-    forward to <localhost> port 8080
+    forward to <localhost> port 8080 check http "/" code 200
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
     # Jellyfin uses NodePorts (bypasses Traefik)
