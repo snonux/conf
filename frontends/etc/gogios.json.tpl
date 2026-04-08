@@ -80,6 +80,25 @@
       "DependsOn": ["Check Ping4 <%= $host %>.buetow.org", "Check Ping6 <%= $host %>.buetow.org"]
     },
     <% } -%>
+    <% for my $host (qw(pi0 pi1)) { -%>
+    "Check HTTP <%= $host %>.lan.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "RandomSpread": 10,
+      "Args": ["<%= $host %>.lan.buetow.org", "-4"]
+    },
+    <% } -%>
+    <% for my $host (qw(pi2 pi3)) { -%>
+    "Check HTTP Admin <%= $host %>.lan.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "RandomSpread": 10,
+      "Args": ["<%= $host %>.lan.buetow.org", "-4", "-u", "/admin/"]
+    },
+    "Check DNS <%= $host %>.lan.buetow.org": {
+      "Plugin": "<%= $plugin_dir %>/check_dig",
+      "RandomSpread": 10,
+      "Args": ["-H", "<%= $host %>.lan.buetow.org", "-l", "google.com", "-4"]
+    },
+    <% } -%>
     <% for my $host (@$acme_hosts) {
          # Skip server hostnames - they have dedicated checks above without www/standby variants
          next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';

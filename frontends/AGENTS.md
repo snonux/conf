@@ -238,6 +238,20 @@ Without the skip, gogios generates checks for non-existent:
 
 Result: 12 false CRITICAL alerts (3 checks × 4 hostnames)
 
+### Raspberry Pi Service Split
+
+The PI phase 3 cluster now has a fixed role split:
+
+- `pi0.lan.buetow.org` and `pi1.lan.buetow.org` serve static HTTP content on port 80 with `lighttpd`
+- `pi2.lan.buetow.org` and `pi3.lan.buetow.org` run Pi-hole DNS on port 53 and the admin UI on port 80
+
+Monitoring should match that split:
+
+- HTTP checks should hit `http://pi0.lan.buetow.org` and `http://pi1.lan.buetow.org`
+- Pi-hole checks should verify DNS resolution against `pi2` and `pi3` and confirm the admin UI on port 80
+- `lighttpd` is intentionally used on the Pi HTTP nodes because the hardware is low-RAM and the workload is static content only
+- Firewall changes on the Pis are conditional: check `firewall-cmd --state` first and skip `firewall-cmd` rules entirely if `firewalld` is not running
+
 ## Configuration Testing
 
 Before deploying:
