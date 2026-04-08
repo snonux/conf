@@ -110,6 +110,13 @@ spec:
                     group_by: ['alertname', 'name', 'severity']
                     group_wait: 10s
                     repeat_interval: 6h
+                  # Container image CVEs from Trivy Operator (see trivy-operator ArgoCD app)
+                  - matchers:
+                      - component = "trivy"
+                    receiver: 'trivy-alerts'
+                    group_by: ['alertname', 'namespace', 'severity']
+                    group_wait: 2m
+                    repeat_interval: 24h
               receivers:
                 - name: 'null'
                 - name: 'default'
@@ -117,6 +124,8 @@ spec:
                 - name: 'argocd-alerts'
                   # ArgoCD-specific receiver - alerts visible in UI only
                   # Future: add email/slack/webhook configuration here
+                - name: 'trivy-alerts'
+                  # Trivy Operator CVE alerts - visible in Alertmanager UI; add webhook/email when desired
               inhibit_rules:
                 # Inhibit info alerts if warning or critical is firing
                 - source_matchers:

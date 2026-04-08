@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trivy-operator
+  namespace: cicd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://aquasecurity.github.io/helm-charts
+    chart: trivy-operator
+    targetRevision: 0.32.1
+    helm:
+      releaseName: trivy-operator
+      valuesObject:
+        # Scrape operator metrics with kube-prometheus-stack (release name: prometheus)
+        serviceMonitor:
+          enabled: true
+          namespace: monitoring
+          labels:
+            release: prometheus
+        operator:
+          scanJobsConcurrentLimit: 5
+          metricsFindingsEnabled: true
+        # System namespaces are tied to k3s upgrades; scanning them adds noise without actionable fixes.
+        excludeNamespaces: "kube-system,kube-public,kube-node-lease"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

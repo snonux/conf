@@ -1,0 +1,39 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: trivy-operator-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: trivy-operator
+      interval: 60s
+      rules:
+        - alert: TrivyContainerCriticalVulnerabilities
+          expr: |
+            sum by (namespace, resource_name, container_name, image_repository) (
+              trivy_image_vulnerabilities{severity="Critical"}
+            ) > 0
+          for: 30m
+          labels:
+            severity: critical
+            component: trivy
+          annotations:
+            summary: "Critical CVEs in container {{ $labels.container_name }} ({{ $labels.image_repository }})"
+            description: "Workload {{ $labels.resource_name }} in namespace {{ $labels.namespace }} has one or more Critical vulnerabilities. Inspect VulnerabilityReport CRs or Grafana/Prometheus metrics trivy_image_vulnerabilities."
+            action: "kubectl get vulnerabilityreports -A | grep -i {{ $labels.namespace }}\nkubectl describe vulnerabilityreport -n {{ $labels.namespace }} <name>"
+
+        - alert: TrivyContainerHighVulnerabilities
+          expr: |
+            sum by (namespace, resource_name, container_name, image_repository) (
+              trivy_image_vulnerabilities{severity="High"}
+            ) > 0
+          for: 3h
+          labels:
+            severity: warning
+            component: trivy
+          annotations:
+            summary: "High-severity CVEs in container {{ $labels.container_name }} ({{ $labels.image_repository }})"
+            description: "Workload {{ $labels.resource_name }} in namespace {{ $labels.namespace }} has High-severity vulnerabilities. Plan image upgrades or mitigations."
+            action: "kubectl get vulnerabilityreports -n {{ $labels.namespace }}"
