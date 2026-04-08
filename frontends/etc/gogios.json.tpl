@@ -41,7 +41,7 @@
     },
     <%   } -%>
     <% } -%>
-    <% for my $host (qw(f0 f1 f2 r0 r1 r2)) { -%>
+    <% for my $host (qw(f0 f1 f2 r0 r1 r2 pi0 pi1)) { -%>
     <%   for my $proto (4, 6) { -%>
     "Check Ping<%= $proto %> <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_ping",
