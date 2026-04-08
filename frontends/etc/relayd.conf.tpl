@@ -14,6 +14,12 @@ table <f3s_static> {
   192.168.2.204
 }
 
+# Local relayd hop for the static landing page, used to get a real localhost fallback
+table <f3s_static_proxy> {
+  127.0.0.1
+  ::1
+}
+
 # Same backends, separate table for registry service on port 30001
 table <f3s_registry> {
   192.168.2.120
@@ -57,7 +63,6 @@ http protocol "https" {
 
      # Enable WebSocket support
      http websockets
-     return error
 
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
@@ -83,7 +88,7 @@ http protocol "https" {
           for my $prefix (@prefixes) {
               if ($host eq 'f3s.buetow.org') {
     -%>
-    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_static>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_static_proxy>
     <%         } elsif ($host eq 'registry.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
@@ -109,8 +114,8 @@ relay "https4" {
     session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
-    # Static landing page served from pi0/pi1 instead of k3s
-    forward to <f3s_static> port 80 check tcp
+    # Static landing page is routed through a local relay so it can fall back to localhost
+    forward to <f3s_static_proxy> port 18080 check tcp
     forward to <localhost> port 8080 check http "/" code 200
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
@@ -126,8 +131,8 @@ relay "https6" {
     session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
-    # Static landing page served from pi0/pi1 instead of k3s
-    forward to <f3s_static> port 80 check tcp
+    # Static landing page is routed through a local relay so it can fall back to localhost
+    forward to <f3s_static_proxy> port 18080 check tcp
     forward to <localhost> port 8080 check http "/" code 200
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
@@ -184,4 +189,16 @@ relay "gemini6" {
     listen on <%= $ipv6address->($hostname) %> port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
+}
+
+relay "f3s_static_proxy4" {
+    listen on 127.0.0.1 port 18080
+    forward to <f3s_static> port 80 check tcp
+    forward to <localhost> port 8080 check http "/" code 200
+}
+
+relay "f3s_static_proxy6" {
+    listen on ::1 port 18080
+    forward to <f3s_static> port 80 check tcp
+    forward to <localhost> port 8080 check http "/" code 200
 }
