@@ -7,6 +7,8 @@
 192.168.2.130 f0.wg0.wan.buetow.org f0.wg0
 192.168.2.131 f1.wg0.wan.buetow.org f1.wg0
 192.168.2.132 f2.wg0.wan.buetow.org f2.wg0
+192.168.2.203 pi0.wg0.wan.buetow.org pi0.wg0
+192.168.2.204 pi1.wg0.wan.buetow.org pi1.wg0
 192.168.2.200 earth.wg0.wan.buetow.org earth.wg0
 192.168.2.201 pixel7pro.wg0.wan.buetow.org pixel7pro.wg0
 
@@ -18,5 +20,7 @@ fd42:beef:cafe:2::122 r2.wg0.wan.buetow.org r2.wg0
 fd42:beef:cafe:2::130 f0.wg0.wan.buetow.org f0.wg0
 fd42:beef:cafe:2::131 f1.wg0.wan.buetow.org f1.wg0
 fd42:beef:cafe:2::132 f2.wg0.wan.buetow.org f2.wg0
+fd42:beef:cafe:2::203 pi0.wg0.wan.buetow.org pi0.wg0
+fd42:beef:cafe:2::204 pi1.wg0.wan.buetow.org pi1.wg0
 fd42:beef:cafe:2::200 earth.wg0.wan.buetow.org earth.wg0
 fd42:beef:cafe:2::201 pixel7pro.wg0.wan.buetow.org pixel7pro.wg0

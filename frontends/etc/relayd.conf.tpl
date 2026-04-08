@@ -8,6 +8,12 @@ table <f3s> {
   192.168.2.122
 }
 
+# Static f3s landing page served from the Raspberry Pi HTTP nodes over WireGuard
+table <f3s_static> {
+  192.168.2.203
+  192.168.2.204
+}
+
 # Same backends, separate table for registry service on port 30001
 table <f3s_registry> {
   192.168.2.120
@@ -74,7 +80,10 @@ http protocol "https" {
     # Registry is special: needs explicit routing to port 30001
     <% for my $host (@$f3s_hosts) {
           for my $prefix (@prefixes) {
-              if ($host eq 'registry.f3s.buetow.org') {
+              if ($host eq 'f3s.buetow.org') {
+    -%>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_static>
+    <%         } elsif ($host eq 'registry.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_registry>
     <%         } elsif ($host eq 'jellyfin.f3s.buetow.org') {
@@ -99,6 +108,8 @@ relay "https4" {
     session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
+    # Static landing page served from pi0/pi1 instead of k3s
+    forward to <f3s_static> port 80 check tcp
     forward to <localhost> port 8080
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
@@ -114,6 +125,8 @@ relay "https6" {
     session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
+    # Static landing page served from pi0/pi1 instead of k3s
+    forward to <f3s_static> port 80 check tcp
     forward to <localhost> port 8080
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
