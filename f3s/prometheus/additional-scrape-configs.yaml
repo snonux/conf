@@ -12,6 +12,15 @@
       labels:
         os: openbsd
 
+- job_name: 'garage'
+  static_configs:
+    - targets:
+        - '192.168.2.130:3903'  # f0 via WireGuard
+        - '192.168.2.131:3903'  # f1 via WireGuard
+        - '192.168.2.132:3903'  # f2 via WireGuard
+      labels:
+        os: freebsd
+
 - job_name: 'pushgateway'
   honor_labels: true
   static_configs:
