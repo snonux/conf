@@ -22,6 +22,13 @@ table <f3s_jellyfin> {
   192.168.2.122
 }
 
+# Garage S3 API on f0/f1/f2 FreeBSD hosts (WireGuard)
+table <garage> {
+  192.168.2.130
+  192.168.2.131
+  192.168.2.132
+}
+
 # Local OpenBSD httpd
 table <localhost> {
   127.0.0.1
@@ -73,6 +80,9 @@ http protocol "https" {
     <%         } elsif ($host eq 'jellyfin.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_jellyfin>
+    <%         } elsif ($host eq 'garage.f3s.buetow.org') {
+    -%>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <garage>
     <%         }
           }
     } -%>
@@ -94,6 +104,8 @@ relay "https4" {
     forward to <f3s_registry> port 30001 check tcp
     # Jellyfin uses NodePorts (bypasses Traefik)
     forward to <f3s_jellyfin> port 30096 check tcp
+    # Garage S3 API on FreeBSD hosts
+    forward to <garage> port 3900 check tcp
 }
 
 relay "https6" {
@@ -107,6 +119,8 @@ relay "https6" {
     forward to <f3s_registry> port 30001 check tcp
     # Jellyfin uses NodePorts (bypasses Traefik)
     forward to <f3s_jellyfin> port 30096 check tcp
+    # Garage S3 API on FreeBSD hosts
+    forward to <garage> port 3900 check tcp
 }
 
 # Jellyfin alternative ports for Android app discovery
