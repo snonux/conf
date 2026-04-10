@@ -83,20 +83,9 @@
     <% for my $host (qw(pi0 pi1)) { -%>
     "Check HTTP <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_http",
+      "OnlyIfNotExists": "/tmp/f3s_taken_down",
       "RandomSpread": 10,
       "Args": ["<%= $host %>.wg0.wan.buetow.org", "-4"]
-    },
-    <% } -%>
-    <% for my $host (qw(pi2 pi3)) { -%>
-    "Check HTTP Admin <%= $host %>.lan.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_http",
-      "RandomSpread": 10,
-      "Args": ["<%= $host %>.lan.buetow.org", "-4", "-u", "/admin/"]
-    },
-    "Check DNS <%= $host %>.lan.buetow.org": {
-      "Plugin": "<%= $plugin_dir %>/check_dig",
-      "RandomSpread": 10,
-      "Args": ["-H", "<%= $host %>.lan.buetow.org", "-l", "google.com", "-4"]
     },
     <% } -%>
     <% for my $host (@$acme_hosts) {

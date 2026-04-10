@@ -149,6 +149,18 @@ task 'base',
       mode   => '755';
   };
 
+desc 'Append WireGuard mesh hostnames to /etc/hosts (IPv4 + IPv6)';
+task 'hosts_wg',
+  group => 'frontends',
+  sub {
+    my @lines = split /\n/, read_file('./etc/hosts.wg.append');
+    for my $line (@lines) {
+      next if $line =~ /^\s*#/;
+      next if $line =~ /^\s*$/;
+      append_if_no_such_line '/etc/hosts', $line;
+    }
+  };
+
 desc 'Setup uptimed';
 task 'uptimed',
   group => 'frontends',
@@ -748,6 +760,7 @@ task 'commons',
   group => 'frontends',
   sub {
     run_task 'base';
+    run_task 'hosts_wg';
     run_task 'pf';
     run_task 'nsd';
     run_task 'nsd_failover';
