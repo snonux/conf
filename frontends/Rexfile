@@ -108,6 +108,8 @@ our %wg0_ips = (
     'r0'         => { '4' => '192.168.2.120', '6' => 'fd42:beef:cafe:2::120' },
     'r1'         => { '4' => '192.168.2.121', '6' => 'fd42:beef:cafe:2::121' },
     'r2'         => { '4' => '192.168.2.122', '6' => 'fd42:beef:cafe:2::122' },
+    'pi0'        => { '4' => '192.168.2.203', '6' => 'fd42:beef:cafe:2::203' },
+    'pi1'        => { '4' => '192.168.2.204', '6' => 'fd42:beef:cafe:2::204' },
 );
 
 # UTILITY TASKS
@@ -553,8 +555,10 @@ task 'gogios',
 
     my $gogios_path = '/usr/local/bin/gogios';
 
-    # Ensure gogios is installed from the package repo
-    run_task 'gogios_install';
+    # Ensure gogios is installed from the package repo.
+    # Must pass on => connection->server so Rex runs the sub-task on the
+    # remote host instead of falling back to localhost (Linux).
+    run_task 'gogios_install', on => connection->server;
 
     run 'adduser -group _gogios -batch _gogios', unless => 'id _gogios';
     run 'usermod -d /var/run/gogios _gogios';

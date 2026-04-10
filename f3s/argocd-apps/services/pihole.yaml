@@ -3,8 +3,11 @@ kind: Application
 metadata:
   name: pihole
   namespace: cicd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/compare-options: Disabled
+  # finalizers removed so ArgoCD won't block deletion
+  # finalizers:
+  #   - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   sources:
@@ -46,15 +49,16 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: services
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=false
-    retry:
-      limit: 3
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 1m
+  # syncPolicy disabled - pihole moved to Raspberry Pis
+  # syncPolicy:
+  #   automated:
+  #     prune: true
+  #     selfHeal: true
+  #   syncOptions:
+  #     - CreateNamespace=false
+  #   retry:
+  #     limit: 3
+  #     backoff:
+  #       duration: 5s
+  #       factor: 2
+  #       maxDuration: 1m
