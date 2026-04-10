@@ -48,10 +48,12 @@ handle_cert <%= $host %>
 if [ $? -eq 0 ]; then
     has_update=yes
 fi
+<% unless ($host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org') { -%>
 handle_cert standby.<%= $host %>
 if [ $? -eq 0 ]; then
     has_update=yes
 fi
+<% } -%>
 <% } -%>
 
 # Current server's FQDN (e.g. for mail server certs)
@@ -65,6 +67,6 @@ if [ $has_update = yes ]; then
     # TLS offloading fully moved to relayd now
     # /usr/sbin/rcctl reload httpd
 
-    /usr/sbin/rcctl reload relayd
+    /usr/sbin/rcctl check relayd && /usr/sbin/rcctl reload relayd || /usr/sbin/rcctl restart relayd
     /usr/sbin/rcctl restart smtpd
 fi
