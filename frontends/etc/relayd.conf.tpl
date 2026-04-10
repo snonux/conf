@@ -78,6 +78,7 @@ http protocol "https" {
     # Explicitly route non-f3s hosts to localhost to prevent them from trying f3s backends
     <% for my $host (@$acme_hosts) {
          next if grep { $_ eq $host } @$f3s_hosts;
+         next if $host eq 'snonux.foo';
          for my $prefix (@prefixes) { -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <localhost>
     <%   } } -%>
@@ -101,6 +102,15 @@ http protocol "https" {
     <%         }
           }
     } -%>
+
+    # www.snonux.foo: redirect to snonux.foo via localhost httpd
+    match request header "Host" value "www.snonux.foo" forward to <localhost>
+    # snonux.foo: same relay hop as f3s.buetow.org (Pis then localhost f3s_fallback). relayd cannot rewrite
+    # URL paths; use https://snonux.foo/snonux/... or map Host on the static servers so / serves that tree.
+    <% for my $host (qw/snonux.foo/) {
+         for my $prefix ('', 'standby.') { -%>
+    match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_static_proxy>
+    <%   } } -%>
 
     # Add cache-control headers to f3s fallback pages (served from localhost when cluster is down)
     match response header set "Cache-Control" value "no-cache, no-store, must-revalidate"

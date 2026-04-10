@@ -102,9 +102,15 @@ server "<%= $prefix %>blog.buetow.org" {
 
 server "<%= $prefix %>snonux.foo" {
   listen on * port 8080
-  log style forwarded 
+  log style forwarded
   location * {
-    block return 302 "https://foo.zone/about$REQUEST_URI"
+    <% if ($prefix eq 'www.') { -%>
+    block return 302 "https://snonux.foo$REQUEST_URI"
+    <% } else { -%>
+    # Same fallback as f3s.buetow.org when static Pis are unreachable (via f3s_static_proxy chain)
+    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+    <% } -%>
   }
 }
 

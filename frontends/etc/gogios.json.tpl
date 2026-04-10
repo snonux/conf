@@ -81,10 +81,10 @@
     },
     <% } -%>
     <% for my $host (qw(pi0 pi1)) { -%>
-    "Check HTTP <%= $host %>.lan.buetow.org": {
+    "Check HTTP <%= $host %>.wg0.wan.buetow.org": {
       "Plugin": "<%= $plugin_dir %>/check_http",
       "RandomSpread": 10,
-      "Args": ["<%= $host %>.lan.buetow.org", "-4"]
+      "Args": ["<%= $host %>.wg0.wan.buetow.org", "-4"]
     },
     <% } -%>
     <% for my $host (qw(pi2 pi3)) { -%>

@@ -252,6 +252,17 @@ Monitoring should match that split:
 - `lighttpd` is intentionally used on the Pi HTTP nodes because the hardware is low-RAM and the workload is static content only
 - Firewall changes on the Pis are conditional: check `firewall-cmd --state` first and skip `firewall-cmd` rules entirely if `firewalld` is not running
 
+### Pi lighttpd Host-Based Virtual Hosting
+
+`relayd` cannot rewrite URL paths — it can only route based on Host header to different backend tables. To serve a subdirectory as the root for a domain, lighttpd on the Pis uses Host-based virtual hosting to remap the document root.
+
+Config: `/etc/lighttpd/lighttpd.conf` on pi0/pi1 (managed directly, not in a config repo).
+
+Current vhost mappings:
+- `snonux.foo` / `www.snonux.foo` → `/var/www/html/snonux`
+
+The `Host` header is passed through by relayd unchanged, so lighttpd can match on it directly.
+
 ## Configuration Testing
 
 Before deploying:
