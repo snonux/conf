@@ -27,7 +27,8 @@ spec:
             existingClaim: "pihole-config-pvc"
           dnsmasq:
             customDnsEntries:
-              - address=/f3s.lan.buetow.org/192.168.1.138
+              # Match Pi docker hosts: f3s/pihole/docker-pi/dnsmasq.d/99-f3s-lan-wildcard.conf
+              - address=/.f3s.lan.buetow.org/192.168.1.138
             customVolumeMounts:
               - name: dnsmasq-config
                 mountPath: /etc/dnsmasq.d

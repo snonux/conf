@@ -4,7 +4,12 @@ Network-wide ad blocking for the f3s cluster.
 
 ## Deployment
 
-Pi-hole is deployed via ArgoCD using a combination of a local Helm chart (for PVs/PVCs/Ingress) and the official upstream chart.
+**Production DNS** runs on the Raspberry Pis **`pi2.lan.buetow.org`** and **`pi3.lan.buetow.org`**: Docker Compose with `network_mode: host` (see `f3s/docs/pi-phase-2-2.md`). Tracked extras live under **`docker-pi/`**:
+
+- `docker-pi/dnsmasq.d/99-f3s-lan-wildcard.conf` — resolves `*.f3s.lan.buetow.org` to the CARP VIP **192.168.1.138** (on pi2/pi3 this file lives in **`~/pihole/etc-dnsmasq.d/`**, which is bind-mounted to `/etc/dnsmasq.d` in compose; then `docker compose restart`).
+- `docker-pi/docker-compose.example.yml` — reference `volumes` snippet to merge with your host-local compose.
+
+An ArgoCD Application for Pi-hole on k3s remains in **`f3s/argocd-apps/services/pihole.yaml`** but sync is disabled; the chart values are kept aligned with the Pis’ dnsmasq wildcard.
 
 ### Manual Secret Requirement
 
@@ -23,9 +28,7 @@ kubectl create secret generic pihole-admin-password \
 
 ## DNS Service
 
-Pi-hole DNS is available on both the Wireguard mesh and LAN networks:
-- **Wireguard mesh**: 192.168.2.120 (port 53 UDP/TCP)
-- **LAN IPs**: 192.168.1.120, 192.168.1.121, 192.168.1.122 (port 53 UDP/TCP)
+Pi-hole answers on **`pi2` / `pi3`** (LAN **192.168.1.127**, **192.168.1.128**, port 53 UDP/TCP). Older docs referred to k3s LoadBalancer IPs on r0–r2; those are not the live Pi-hole path anymore.
 
 ### Client Configuration
 
@@ -56,7 +59,7 @@ Configure your network connection to use Pi-hole with automatic failover:
 nmcli connection show --active
 
 # Configure DNS servers (replace CONNECTION_NAME with your actual connection name from above)
-nmcli con mod "CONNECTION_NAME" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
+nmcli con mod "CONNECTION_NAME" ipv4.dns "192.168.1.127 192.168.1.128 192.168.1.1"
 nmcli con mod "CONNECTION_NAME" ipv4.ignore-auto-dns yes
 nmcli con up "CONNECTION_NAME"
 ```
@@ -64,16 +67,15 @@ nmcli con up "CONNECTION_NAME"
 Example for a WiFi connection named `www_irregular_ninja`:
 
 ```bash
-nmcli con mod "www_irregular_ninja" ipv4.dns "192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.1"
+nmcli con mod "www_irregular_ninja" ipv4.dns "192.168.1.127 192.168.1.128 192.168.1.1"
 nmcli con mod "www_irregular_ninja" ipv4.ignore-auto-dns yes
 nmcli con up "www_irregular_ninja"
 ```
 
 DNS servers are tried in order:
-1. Primary: 192.168.1.120 (r0)
-2. Fallback: 192.168.1.121 (r1)
-3. Fallback: 192.168.1.122 (r2)
-4. Last resort: 192.168.1.1 (router)
+1. Primary: 192.168.1.127 (pi2)
+2. Fallback: 192.168.1.128 (pi3)
+3. Last resort: 192.168.1.1 (router)
 
 #### Verify Configuration
 
@@ -85,7 +87,7 @@ nmcli dev show | grep DNS
 cat /etc/resolv.conf
 
 # Test DNS resolution through Pi-hole
-dig @192.168.1.120 google.com +short
+dig @192.168.1.127 google.com +short
 
 # Test ad blocking (should return 0.0.0.0)
 dig doubleclick.net +short
@@ -103,21 +105,15 @@ This allows Firefox to use the system DNS (Pi-hole) instead of bypassing it with
 #### Router Configuration (Alternative)
 
 For network-wide Pi-hole usage, configure your router's DHCP server to hand out Pi-hole as the DNS server:
-- Primary DNS: 192.168.1.120
-- Secondary DNS: 192.168.1.121 (or 192.168.1.1 for fallback to router)
+- Primary DNS: 192.168.1.127 (pi2)
+- Secondary DNS: 192.168.1.128 (pi3) or 192.168.1.1 (router)
 
 ## Storage
 
-Configuration is persisted on NFS at:
-- `/data/nfs/k3svolumes/pihole/config`
-- `/data/nfs/k3svolumes/pihole/dnsmasq`
+On **pi2 / pi3**, Pi-hole state is in the Docker volumes / bind mounts under each host’s `~/pihole` (not NFS). The historical k3s NFS paths (`/data/nfs/k3svolumes/pihole/…`) apply only if the cluster chart is used again.
 
 ## Management
 
-Use the provided `Justfile` for common operations:
+On the Pis: `cd ~/pihole && docker compose ps|logs|restart`.
 
-```bash
-just status    # Check pod and service status
-just logs      # Follow logs
-just sync      # Trigger ArgoCD refresh
-```
+For the dormant k3s deployment, use the `Justfile` (`just status`, `just logs`, `just sync`).
