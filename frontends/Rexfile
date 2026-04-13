@@ -85,7 +85,7 @@ our $secrets = sub { read_file './secrets/' . shift };
 
 # k3s cluster running on FreeBSD in my LAN
 our @f3s_hosts =
-  qw/f3s.buetow.org pihole.f3s.buetow.org jellyfin.f3s.buetow.org navidrome.f3s.buetow.org git.f3s.buetow.org cgit.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org garage.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org syncthing.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org pkgrepo.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
+  qw/f3s.buetow.org pihole.f3s.buetow.org jellyfin.f3s.buetow.org navidrome.f3s.buetow.org git.f3s.buetow.org cgit.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org garage.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org syncthing.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org pkgrepo.f3s.buetow.org goprecords.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
 
 # optionally, only enable manually for temp time, as no password protection yet
 # push @f3s_hosts, 'registry.f3s.buetow.org';
@@ -155,9 +155,9 @@ task 'hosts_wg',
   sub {
     my @lines = split /\n/, read_file('./etc/hosts.wg.append');
     for my $line (@lines) {
-      next if $line =~ /^\s*#/;
-      next if $line =~ /^\s*$/;
-      append_if_no_such_line '/etc/hosts', $line;
+        next if $line =~ /^\s*#/;
+        next if $line =~ /^\s*$/;
+        append_if_no_such_line '/etc/hosts', $line;
     }
   };
 
@@ -485,16 +485,17 @@ task 'dtail_install',
     # Remove any previously manually deployed binaries not managed by pkg
     my $pkg_check = run 'pkg_info dtail 2>/dev/null';
     if ( $? != 0 ) {
-      for my $bin (qw(dserver dcat dgrep dmap dtail dtailhealth)) {
-        if ( is_file("/usr/local/bin/$bin") ) {
-          Rex::Logger::info("Removing manually installed $bin binary...");
-          run "rm -f /usr/local/bin/$bin";
+        for my $bin (qw(dserver dcat dgrep dmap dtail dtailhealth)) {
+            if ( is_file("/usr/local/bin/$bin") ) {
+                Rex::Logger::info("Removing manually installed $bin binary...");
+                run "rm -f /usr/local/bin/$bin";
+            }
         }
-      }
     }
 
     # Install or update from custom repo (packages signed with signify)
-    say run 'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -u dtail || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add dtail';
+    say run
+'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -u dtail || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add dtail';
   };
 
 # Set up the dserver service user, daily key cache cron, and start dserver.
@@ -515,6 +516,7 @@ task 'dtail',
   };
 
 desc 'Installing Gogios binary';
+
 # Configure the custom package repository on OpenBSD frontends.
 # Adds PKG_PATH to root's .profile so custom packages are available
 # alongside the official OpenBSD repo. Packages are signed with signify;
@@ -523,7 +525,7 @@ desc 'Setup custom package repo on OpenBSD frontends';
 task 'pkgrepo_setup',
   group => 'frontends',
   sub {
-    my $custom_repo = 'https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/';
+    my $custom_repo  = 'https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/';
     my $profile_line = "export PKG_PATH=\"${custom_repo}\"";
 
     append_if_no_such_line '/root/.profile', $profile_line;
@@ -538,21 +540,23 @@ task 'gogios_install',
     chomp $os;
 
     if ( $os eq 'OpenBSD' ) {
-      # Remove any previously manually deployed binary not managed by pkg
-      my $pkg_check = run 'pkg_info gogios 2>/dev/null';
-      if ( $? != 0 && is_file('/usr/local/bin/gogios') ) {
-        Rex::Logger::info('Removing manually installed gogios binary...');
-        run 'rm -f /usr/local/bin/gogios';
-      }
 
-      # Install or update from custom repo (packages signed with signify)
-      say run 'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -u gogios || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add gogios';
+        # Remove any previously manually deployed binary not managed by pkg
+        my $pkg_check = run 'pkg_info gogios 2>/dev/null';
+        if ( $? != 0 && is_file('/usr/local/bin/gogios') ) {
+            Rex::Logger::info('Removing manually installed gogios binary...');
+            run 'rm -f /usr/local/bin/gogios';
+        }
+
+        # Install or update from custom repo (packages signed with signify)
+        say run
+'PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add -u gogios || PKG_PATH="https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/" pkg_add gogios';
     }
     elsif ( $os eq 'FreeBSD' ) {
-      say run 'pkg update -r custom && pkg install -y gogios';
+        say run 'pkg update -r custom && pkg install -y gogios';
     }
     else {
-      Rex::Logger::info("Unsupported OS: $os", 'error');
+        Rex::Logger::info( "Unsupported OS: $os", 'error' );
     }
 
     say run 'gogios -version';

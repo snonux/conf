@@ -124,9 +124,11 @@ relay "https4" {
     session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
-    # Static landing page is routed through a local relay so it can fall back to localhost
-    forward to <f3s_static_proxy> port 18080 check tcp
     forward to <localhost> port 8080 check http "/" code 200
+    # Static landing page is routed through a local relay so it can fall back to localhost.
+    # Listed after localhost so it does NOT become a general fallback for k3s failures;
+    # only reached via explicit "match ... forward to <f3s_static_proxy>" rules.
+    forward to <f3s_static_proxy> port 18080 check tcp
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
     # Jellyfin uses NodePorts (bypasses Traefik)
@@ -141,9 +143,11 @@ relay "https6" {
     session timeout 300
     # Primary: f3s cluster (with health checks) - Falls back to localhost when all hosts down
     forward to <f3s> port 80 check tcp
-    # Static landing page is routed through a local relay so it can fall back to localhost
-    forward to <f3s_static_proxy> port 18080 check tcp
     forward to <localhost> port 8080 check http "/" code 200
+    # Static landing page is routed through a local relay so it can fall back to localhost.
+    # Listed after localhost so it does NOT become a general fallback for k3s failures;
+    # only reached via explicit "match ... forward to <f3s_static_proxy>" rules.
+    forward to <f3s_static_proxy> port 18080 check tcp
     # Registry uses separate port and table
     forward to <f3s_registry> port 30001 check tcp
     # Jellyfin uses NodePorts (bypasses Traefik)

@@ -7,6 +7,7 @@
 #
 # Multi-binary / CGo packages (built natively on OpenBSD build VM):
 #   make dtail-openbsd                                       # DTail for OpenBSD
+#   make dtail-rocky                                         # DTail RPM repo for Rocky Linux 9 (x86_64 + aarch64)
 #
 # Build VM management:
 #   make buildvm-start   # boot the OpenBSD build VM
@@ -34,6 +35,9 @@ FREEBSD_SCP  := scp -P 22
 OPENBSD_HOST := rex@fishfinger.buetow.org
 OPENBSD_SSH  := ssh
 OPENBSD_SCP  := scp
+ROCKY_ARM_BUILD_HOST := paul@pi0.lan.buetow.org
+ROCKY_ARM_SSH := ssh -p 22
+ROCKY_ARM_SCP := scp -P 22
 
 # Local OpenBSD build VM (QEMU/KVM) for native compilation
 BUILDVM_SSH  := ssh -o StrictHostKeyChecking=no -p 2222
@@ -46,6 +50,9 @@ PV_BASE         := /data/nfs/k3svolumes/pkgrepo
 FREEBSD_REPO    := freebsd/FreeBSD:15:amd64/latest
 OPENBSD_VERSION := 7.8
 OPENBSD_REPO    := openbsd/$(OPENBSD_VERSION)/packages/amd64
+ROCKY_VERSION   := 9
+ROCKY_REPO      := rockylinux/$(ROCKY_VERSION)
+CONTAINER_ENGINE ?= podman
 
 # Defaults for package metadata
 COMMENT    ?= $(NAME)
@@ -64,8 +71,9 @@ DTAIL_SRC      := /home/paul/git/dtail
 DTAIL_VERSION   = $(shell grep 'Version string' $(DTAIL_SRC)/internal/version/version.go | sed 's/.*"\(.*\)"/\1/')
 DTAIL_BINARIES := dserver dcat dgrep dmap dtail dtailhealth
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
+DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
-.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd check-vars clean
+.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-rocky check-vars clean
 .PHONY: buildvm-start buildvm-stop buildvm-ensure
 
 # --- Build VM management ---
@@ -177,6 +185,40 @@ dtail-openbsd: /tmp/dtail-binaries/.built
 	rm -rf /tmp/dtail-binaries /tmp/dtail-$(DTAIL_VERSION).tgz
 	@echo "OpenBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
 
+# Build RPMs for Rocky Linux 9 (x86_64 + aarch64), generate repodata, and upload to the PV.
+dtail-rocky:
+	@echo "Packaging dtail $(DTAIL_VERSION) for Rocky Linux $(ROCKY_VERSION)..."
+	rm -rf /tmp/dtail-rocky-repo /tmp/dtail-rocky-upload /tmp/dtail-rocky-aarch64-root
+	mkdir -p /tmp/dtail-rocky-repo/x86_64 /tmp/dtail-rocky-repo/aarch64
+	$(SCRIPTS)/pkg-dtail-rpm.sh x86_64 '$(DTAIL_VERSION)' '$(DTAIL_SRC)' '$(DTAIL_RPM_FILES)' /tmp/dtail-rocky-repo/x86_64
+	mkdir -p /tmp/dtail-rocky-aarch64-root/usr/local/bin /tmp/dtail-rocky-aarch64-root/etc/dserver /tmp/dtail-rocky-aarch64-root/usr/lib/systemd/system /tmp/dtail-rocky-aarch64-root/usr/share/licenses/dtail
+	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
+		CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags nozstd -o /tmp/dtail-rocky-aarch64-root/usr/local/bin/$$bin ./cmd/$$bin/main.go || exit 1; \
+	done
+	install -m 0644 $(DTAIL_RPM_FILES)/dtail.json /tmp/dtail-rocky-aarch64-root/etc/dserver/dtail.json
+	install -m 0755 $(DTAIL_RPM_FILES)/dserver-update-key-cache.sh /tmp/dtail-rocky-aarch64-root/usr/local/bin/dserver-update-key-cache.sh
+	install -m 0644 $(DTAIL_RPM_FILES)/dserver.service /tmp/dtail-rocky-aarch64-root/usr/lib/systemd/system/dserver.service
+	install -m 0644 $(DTAIL_RPM_FILES)/dserver-update-keycache.service /tmp/dtail-rocky-aarch64-root/usr/lib/systemd/system/dserver-update-keycache.service
+	install -m 0644 $(DTAIL_RPM_FILES)/dserver-update-keycache.timer /tmp/dtail-rocky-aarch64-root/usr/lib/systemd/system/dserver-update-keycache.timer
+	install -m 0644 $(DTAIL_SRC)/LICENSE /tmp/dtail-rocky-aarch64-root/usr/share/licenses/dtail/LICENSE
+	$(ROCKY_ARM_SSH) $(ROCKY_ARM_BUILD_HOST) "rm -rf /tmp/dtail-rocky-aarch64-root /tmp/dtail-rocky-aarch64-out /tmp/pkg-dtail-rpm.sh"
+	$(ROCKY_ARM_SCP) -r /tmp/dtail-rocky-aarch64-root $(ROCKY_ARM_BUILD_HOST):/tmp/dtail-rocky-aarch64-root
+	$(ROCKY_ARM_SCP) $(SCRIPTS)/pkg-dtail-rpm.sh $(ROCKY_ARM_BUILD_HOST):/tmp/pkg-dtail-rpm.sh
+	$(ROCKY_ARM_SSH) $(ROCKY_ARM_BUILD_HOST) "chmod +x /tmp/pkg-dtail-rpm.sh && mkdir -p /tmp/dtail-rocky-aarch64-out && DTAIL_PREBUILT_ROOT=/tmp/dtail-rocky-aarch64-root /tmp/pkg-dtail-rpm.sh aarch64 '$(DTAIL_VERSION)' '$(DTAIL_SRC)' '$(DTAIL_RPM_FILES)' /tmp/dtail-rocky-aarch64-out"
+	$(ROCKY_ARM_SCP) $(ROCKY_ARM_BUILD_HOST):/tmp/dtail-rocky-aarch64-out/*.rpm /tmp/dtail-rocky-repo/aarch64/
+	$(ROCKY_ARM_SSH) $(ROCKY_ARM_BUILD_HOST) "rm -rf /tmp/dtail-rocky-aarch64-root /tmp/dtail-rocky-aarch64-out /tmp/pkg-dtail-rpm.sh"
+	rm -rf /tmp/dtail-rocky-aarch64-root
+	$(CONTAINER_ENGINE) run --rm -v /tmp/dtail-rocky-repo:/repo:Z docker.io/library/rockylinux:9 \
+		bash -lc 'dnf -qy install createrepo_c >/dev/null && createrepo_c /repo/x86_64 >/dev/null && createrepo_c /repo/aarch64 >/dev/null'
+	mkdir -p /tmp/dtail-rocky-upload/$(ROCKY_VERSION)
+	cp -R /tmp/dtail-rocky-repo/x86_64 /tmp/dtail-rocky-upload/$(ROCKY_VERSION)/
+	cp -R /tmp/dtail-rocky-repo/aarch64 /tmp/dtail-rocky-upload/$(ROCKY_VERSION)/
+	$(FREEBSD_SCP) -r /tmp/dtail-rocky-upload $(FREEBSD_HOST):/tmp/dtail-rocky-upload
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/rockylinux && doas rm -rf $(PV_BASE)/$(ROCKY_REPO) && doas cp -R /tmp/dtail-rocky-upload/$(ROCKY_VERSION) $(PV_BASE)/rockylinux/ && rm -rf /tmp/dtail-rocky-upload"
+	rm -rf /tmp/dtail-rocky-repo /tmp/dtail-rocky-upload
+	@echo "Rocky Linux repo updated at $(PV_BASE)/$(ROCKY_REPO)"
+
 clean:
 	rm -f /tmp/$(NAME)-freebsd /tmp/$(NAME)-openbsd /tmp/$(NAME)-*.tgz
 	rm -rf /tmp/dtail-binaries /tmp/dtail-*.tgz
+	rm -rf /tmp/dtail-rocky-repo /tmp/dtail-rocky-upload /tmp/dtail-rocky-aarch64-root
