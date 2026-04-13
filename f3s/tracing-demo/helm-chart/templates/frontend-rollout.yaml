@@ -38,7 +38,7 @@ spec:
       containers:
       - name: frontend
         image: registry.lan.buetow.org:30001/tracing-demo-frontend:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 5000
           name: http

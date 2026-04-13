@@ -22,7 +22,7 @@ spec:
       containers:
       - name: backend
         image: registry.lan.buetow.org:30001/tracing-demo-backend:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 5002
           name: http

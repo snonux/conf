@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: prom/pushgateway
   tag: v1.10.0
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 service:
   type: ClusterIP

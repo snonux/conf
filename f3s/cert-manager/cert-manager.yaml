@@ -5563,7 +5563,7 @@ spec:
       containers:
         - name: cert-manager-cainjector
           image: "quay.io/jetstack/cert-manager-cainjector:v1.14.4"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
           - --v=2
           - --leader-election-namespace=kube-system
@@ -5622,7 +5622,7 @@ spec:
       containers:
         - name: cert-manager-controller
           image: "quay.io/jetstack/cert-manager-controller:v1.14.4"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
           - --v=2
           - --cluster-resource-namespace=$(POD_NAMESPACE)
@@ -5700,7 +5700,7 @@ spec:
       containers:
         - name: cert-manager-webhook
           image: "quay.io/jetstack/cert-manager-webhook:v1.14.4"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
           - --v=2
           - --secure-port=10250

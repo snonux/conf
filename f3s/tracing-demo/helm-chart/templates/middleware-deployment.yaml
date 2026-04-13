@@ -22,7 +22,7 @@ spec:
       containers:
       - name: middleware
         image: registry.lan.buetow.org:30001/tracing-demo-middleware:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 5001
           name: http
