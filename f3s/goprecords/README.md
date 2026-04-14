@@ -13,11 +13,11 @@ just build-push
 
 The image is pushed as:
 
-- `r0.lan.buetow.org:30001/goprecords:0.3.1`
+- `r0.lan.buetow.org:30001/goprecords:0.4.0`
 
 The deployment pulls from:
 
-- `registry.lan.buetow.org:30001/goprecords:0.3.1`
+- `registry.lan.buetow.org:30001/goprecords:0.4.0`
 
 ## Runtime config
 
