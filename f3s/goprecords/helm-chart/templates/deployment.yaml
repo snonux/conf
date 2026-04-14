@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: goprecords
-        image: registry.lan.buetow.org:30001/goprecords:0.4.0
+        image: registry.lan.buetow.org:30001/goprecords:0.4.1
         imagePullPolicy: Always
         args:
           - -daemon
