@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goprecords
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goprecords
+  template:
+    metadata:
+      labels:
+        app: goprecords
+    spec:
+      containers:
+      - name: goprecords
+        image: registry.lan.buetow.org:30001/goprecords:0.3.0
+        imagePullPolicy: Always
+        args:
+          - -daemon
+          - -listen=:8080
+          - -stats-dir=/data/stats
+        ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+          runAsGroup: 0
+        volumeMounts:
+          - name: goprecords-stats
+            mountPath: /data/stats
+      volumes:
+        - name: goprecords-stats
+          persistentVolumeClaim:
+            claimName: goprecords-stats-pvc

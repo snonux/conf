@@ -21,6 +21,7 @@ argocd-apps/
 │   ├── filebrowser.yaml         # Web-based file browser
 │   ├── freshrss.yaml            # RSS feed reader
 │   ├── immich.yaml              # Photo management
+│   ├── goprecords.yaml          # Uptime report daemon and API
 │   ├── keybr.yaml               # Typing practice
 │   ├── kobo-sync-server.yaml    # KOReader sync server
 │   ├── miniflux.yaml            # Minimalist RSS reader
@@ -40,11 +41,11 @@ argocd-apps/
 ## Application Count by Namespace
 
 - **monitoring**: 6 applications
-- **services**: 13 applications
+- **services**: 14 applications
 - **infra**: 1 application
 - **test**: 1 application
 
-**Total**: 21 applications
+**Total**: 22 applications
 
 ## Usage
 
@@ -168,7 +169,7 @@ kubectl create namespace test
 kubectl apply -f argocd-apps/ -R
 ```
 
-5. ArgoCD automatically deploys all 21 applications
+5. ArgoCD automatically deploys all 22 applications
 
 Total recovery time: ~30 minutes.
 

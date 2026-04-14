@@ -1,0 +1,46 @@
+NAMESPACE := "services"
+APP_NAME := "goprecords"
+
+build:
+	just -f docker-image/Justfile build
+
+push:
+	just -f docker-image/Justfile push
+
+build-push: build push
+
+status:
+	@echo "=== Pods ==="
+	@kubectl get pods -n {{NAMESPACE}} | grep goprecords
+	@echo ""
+	@echo "=== Service ==="
+	@kubectl get svc -n {{NAMESPACE}} goprecords-service
+	@echo ""
+	@echo "=== Ingress ==="
+	@kubectl get ingress -n {{NAMESPACE}} goprecords-ingress
+	@echo ""
+	@echo "=== PVC ==="
+	@kubectl get pvc -n {{NAMESPACE}} goprecords-stats-pvc
+	@echo ""
+	@echo "=== ArgoCD Status ==="
+	@kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
+
+logs lines="100":
+	kubectl logs -n {{NAMESPACE}} -l app=goprecords --tail={{lines}} -f
+
+port-forward port="8080":
+	@echo "Forwarding goprecords to localhost:{{port}}"
+	kubectl port-forward -n {{NAMESPACE}} svc/goprecords-service {{port}}:80
+
+sync:
+	@echo "Triggering ArgoCD sync..."
+	@kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+	@sleep 2
+	@kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+	argocd app get {{APP_NAME}} --core
+
+restart:
+	@echo "Restarting goprecords..."
+	kubectl rollout restart -n {{NAMESPACE}} deployment/goprecords

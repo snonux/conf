@@ -1,0 +1,13 @@
+REGISTRY := "r0.lan.buetow.org:30001"
+IMAGE := "goprecords"
+TAG := "0.3.0"
+SRC := "/home/paul/git/goprecords"
+
+build:
+	docker build -t {{IMAGE}}:{{TAG}} {{SRC}}
+
+push:
+	docker tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+	docker push {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+
+all: build push

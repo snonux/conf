@@ -1,0 +1,5 @@
+apiVersion: v2
+name: goprecords
+description: A Helm chart for deploying goprecords daemon API.
+version: 0.1.0
+appVersion: "0.3.0"
