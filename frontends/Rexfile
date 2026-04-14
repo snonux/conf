@@ -169,6 +169,51 @@ task 'uptimed',
     service 'uptimed', ensure => 'started';
   };
 
+desc 'Upload uptimed stats to goprecords.f3s (daily.local; tokens in geheim secrets/etc/goprecords/)';
+task 'goprecords_upload',
+  group => 'frontends',
+  sub {
+    pkg 'curl', ensure => present;
+
+    my $srv = connection->server;
+    my ($short) = $srv =~ /^([^.]+)\./;
+    unless ($short) {
+        Rex::Logger::info( "goprecords_upload: cannot parse short hostname from $srv", 'error' );
+        return;
+    }
+
+    my $token_path = "etc/goprecords/${short}.token";
+    my $full       = "./secrets/$token_path";
+    unless ( -f $full ) {
+        Rex::Logger::info( "goprecords_upload: skip (missing $full; add via geheim)", 'warn' );
+        return;
+    }
+    my $token = $secrets->($token_path);
+    chomp $token;
+    unless ($token) {
+        Rex::Logger::info( "goprecords_upload: empty secrets/$token_path", 'error' );
+        return;
+    }
+
+    file '/usr/local/bin/goprecords-upload.sh',
+      content => template(
+        './scripts/goprecords-upload.sh.tpl',
+        goprecords_host  => $short,
+        goprecords_token => $token,
+      ),
+      owner => 'root',
+      group => 'wheel',
+      mode  => '500';
+
+    file '/etc/daily.local',
+      ensure => 'present',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '644';
+
+    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/goprecords-upload.sh';
+  };
+
 desc 'Setup rsync';
 task 'rsync',
   group => 'frontends',
@@ -769,6 +814,7 @@ task 'commons',
     run_task 'nsd';
     run_task 'nsd_failover';
     run_task 'uptimed';
+    run_task 'goprecords_upload';
     run_task 'httpd';
     run_task 'gemtexter';
     run_task 'taskwarrior';
