@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: goprecords-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: goprecords
+      interval: 5m
+      rules:
+        - alert: GoprecordsHostNotReporting
+          expr: |
+            (time() - goprecords_host_records_last_update_timestamp_seconds{excluded="false"})
+            > (5 * 30 * 24 * 3600)
+          for: 1h
+          labels:
+            severity: warning
+            component: goprecords
+          annotations:
+            summary: "Host {{ $labels.host }} has not reported uptimed stats for >5 months"
+            description: >
+              Host {{ $labels.host }} last updated its records
+              {{ $value | humanizeDuration }} ago.
+              Expected at most every 5 months.
+            action: >
+              Check whether uptimed is running and the upload script is scheduled on {{ $labels.host }}.
+              To silence permanently: kubectl exec -n services deployment/goprecords --
+              goprecords exclude -db=/data/stats/goprecords-auth.db
+              -reason="decommissioned" {{ $labels.host }}
