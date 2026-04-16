@@ -195,15 +195,19 @@ task 'goprecords_upload',
         return;
     }
 
-    file '/usr/local/bin/goprecords-upload.sh',
-      content => template(
-        './scripts/goprecords-upload.sh.tpl',
-        goprecords_host  => $short,
-        goprecords_token => $token,
-      ),
-      owner => 'root',
-      group => 'wheel',
-      mode  => '500';
+    file '/etc/goprecords-upload.token',
+      content => "$token\n",
+      owner   => 'root',
+      group   => 'wheel',
+      mode    => '600';
+
+    file '/usr/local/bin/goprecords-upload-client.sh',
+      source => './scripts/goprecords-upload-client.sh',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '755';
+
+    file '/usr/local/bin/goprecords-upload.sh', ensure => 'absent';
 
     file '/etc/daily.local',
       ensure => 'present',
@@ -211,7 +215,9 @@ task 'goprecords_upload',
       group  => 'wheel',
       mode   => '644';
 
-    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/goprecords-upload.sh';
+    run q{perl -ni -e 'print unless m{^/usr/local/bin/goprecords-upload\.sh$}' /etc/daily.local};
+
+    append_if_no_such_line '/etc/daily.local', "GOPRECORDS_HOST=${short} /usr/local/bin/goprecords-upload-client.sh";
   };
 
 desc 'Setup rsync';
