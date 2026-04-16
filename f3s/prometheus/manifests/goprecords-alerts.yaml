@@ -14,7 +14,7 @@ spec:
           expr: |
             (time() - goprecords_host_records_last_update_timestamp_seconds{excluded="false"})
             > (5 * 30 * 24 * 3600)
-          for: 1h
+          for: 1m
           labels:
             severity: warning
             component: goprecords
