@@ -13,3 +13,26 @@ spec:
       targetPort: 8080
   selector:
     app: anki-sync-server
+---
+# Debug NodePort: exposes anki-sync-server directly on all k3s nodes at port
+# 30800, bypassing Traefik entirely. Used to isolate whether stream failures
+# (reported by the Anki client as HTTP 303) occur in the Traefik layer or in
+# the pod itself. Test from blowfish:
+#   doas curl -v http://192.168.2.120:30800/sync/hostKey -F 'u=paul' -F 'p=...'
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: anki-sync-server
+  name: anki-sync-server-nodeport
+  namespace: services
+spec:
+  type: NodePort
+  ports:
+    - name: web
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+      nodePort: 30800
+  selector:
+    app: anki-sync-server
