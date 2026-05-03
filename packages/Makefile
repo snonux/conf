@@ -7,6 +7,7 @@
 #
 # Multi-binary / CGo packages (built natively on OpenBSD build VM):
 #   make dtail-openbsd                                       # DTail for OpenBSD
+#   make dtail-freebsd                                       # DTail for FreeBSD (cross-compiled, nozstd)
 #   make dtail-rocky                                         # DTail RPM repo for Rocky Linux 9 (x86_64 + aarch64)
 #
 # Build VM management:
@@ -73,7 +74,7 @@ DTAIL_BINARIES := dserver dcat dgrep dmap dtail dtailhealth
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
 DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
-.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-rocky check-vars clean
+.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-freebsd dtail-rocky check-vars clean
 .PHONY: buildvm-start buildvm-stop buildvm-ensure
 
 # --- Build VM management ---
@@ -185,6 +186,27 @@ dtail-openbsd: /tmp/dtail-binaries/.built
 	rm -rf /tmp/dtail-binaries /tmp/dtail-$(DTAIL_VERSION).tgz
 	@echo "OpenBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
 
+# Cross-compile dtail for FreeBSD/amd64 (CGO_ENABLED=0, nozstd), package on f0, upload to PV.
+# .zst log files are not supported in this binary; gzip still works.
+dtail-freebsd:
+	@echo "Building DTail $(DTAIL_VERSION) for FreeBSD/amd64..."
+	rm -rf /tmp/dtail-freebsd-binaries
+	mkdir -p /tmp/dtail-freebsd-binaries
+	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
+		echo "  Cross-compiling $$bin for FreeBSD..."; \
+		CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -tags nozstd \
+			-o /tmp/dtail-freebsd-binaries/$$bin ./cmd/$$bin/main.go || exit 1; \
+	done
+	cp $(CONF_FRONTENDS)/etc/dserver/dtail-freebsd.json.tpl /tmp/dtail-freebsd-binaries/dtail.json
+	cp $(CONF_FRONTENDS)/scripts/dserver-update-key-cache-freebsd.sh.tpl /tmp/dtail-freebsd-binaries/dserver-update-key-cache.sh
+	cp $(CONF_FRONTENDS)/etc/rc.d/dserver-freebsd.tpl /tmp/dtail-freebsd-binaries/dserver.rc
+	@echo "Packaging dtail $(DTAIL_VERSION) for FreeBSD..."
+	$(FREEBSD_SCP) -r /tmp/dtail-freebsd-binaries $(FREEBSD_HOST):/tmp/dtail-freebsd-binaries
+	$(FREEBSD_SCP) $(SCRIPTS)/pkg-dtail-freebsd.sh $(FREEBSD_HOST):/tmp/pkg-dtail-freebsd.sh
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "/bin/sh /tmp/pkg-dtail-freebsd.sh '$(DTAIL_VERSION)' '$(PV_BASE)/$(FREEBSD_REPO)'"
+	rm -rf /tmp/dtail-freebsd-binaries
+	@echo "FreeBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
+
 # Build RPMs for Rocky Linux 9 (x86_64 + aarch64), generate repodata, and upload to the PV.
 dtail-rocky:
 	@echo "Packaging dtail $(DTAIL_VERSION) for Rocky Linux $(ROCKY_VERSION)..."
@@ -221,4 +243,5 @@ dtail-rocky:
 clean:
 	rm -f /tmp/$(NAME)-freebsd /tmp/$(NAME)-openbsd /tmp/$(NAME)-*.tgz
 	rm -rf /tmp/dtail-binaries /tmp/dtail-*.tgz
+	rm -rf /tmp/dtail-freebsd-binaries
 	rm -rf /tmp/dtail-rocky-repo /tmp/dtail-rocky-upload /tmp/dtail-rocky-aarch64-root
