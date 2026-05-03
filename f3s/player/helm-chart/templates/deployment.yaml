@@ -20,7 +20,7 @@ spec:
         fsGroup: 65534
       containers:
         - name: player
-          image: registry.lan.buetow.org:30001/player:deba845
+          image: registry.lan.buetow.org:30001/player:c4de92d
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
