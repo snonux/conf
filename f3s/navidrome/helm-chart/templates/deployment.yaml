@@ -26,7 +26,8 @@ spec:
         kubernetes.io/hostname: r1.lan.buetow.org
       containers:
       - name: navidrome
-        image: deluan/navidrome:latest
+        image: deluan/navidrome:0.61.2
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4533
         env:
