@@ -2,6 +2,9 @@
 # Triggered by nfs-mount-monitor.timer (every 10 seconds).
 # Logs to the journal: journalctl -u nfs-mount-monitor
 #
+# NFS_FAIL_THRESHOLD (consecutive failures before auto-reboot) is tunable
+# via /etc/default/nfs-mount-monitor without touching this unit or the script.
+#
 # Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
 
 [Unit]
@@ -10,6 +13,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+EnvironmentFile=-/etc/default/nfs-mount-monitor
 ExecStart=/usr/local/bin/check-nfs-mount.sh
 StandardOutput=journal
 StandardError=journal

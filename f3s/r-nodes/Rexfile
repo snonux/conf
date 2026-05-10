@@ -10,8 +10,14 @@ use Rex -feature => [ '1.14', 'exec_autodie' ];
 use Rex::Logger;
 use File::Basename qw(dirname);
 use File::Spec::Functions qw(catfile rel2abs);
+use Cwd qw(realpath);
 
-my $RNODES_DIR = dirname( rel2abs(__FILE__) );
+# Rex loads the Rexfile as a synthetic module (__Rexfile__.pm) via @INC, so
+# __FILE__ resolves to the internal Rex loader path rather than this file.
+# $::rexfile is set to $0 (the -f argument) in Rex::CLI before any tasks run;
+# realpath() resolves any relative component against the CWD at load time so
+# the path remains valid even when Rex forks worker processes for parallelism.
+my $RNODES_DIR = dirname( realpath($::rexfile) );
 
 # All three k3s Rocky Linux VMs; root SSH is configured via authorized_keys.
 group r_nodes => qw(
@@ -26,14 +32,16 @@ sudo FALSE;
 # Deploy in parallel — tasks are idempotent and independent per node.
 parallelism 3;
 
-# Deploy the NFS mount health-monitor script and its systemd units to
-# all three r-nodes, then reload systemd and restart the timer so the
-# new files take effect immediately.
+# Deploy the NFS mount health-monitor script, its systemd units, and the
+# tunable configuration file to all three r-nodes, then reload systemd and
+# restart the timer so the new files take effect immediately.
 #
 # Files managed:
 #   /usr/local/bin/check-nfs-mount.sh       (monitor + auto-repair script)
+#   /etc/default/nfs-mount-monitor          (tunable: NFS_FAIL_THRESHOLD)
 #   /etc/systemd/system/nfs-mount-monitor.service
 #   /etc/systemd/system/nfs-mount-monitor.timer
+#   /var/lib/nfs-mount-monitor/             (state dir for fail-count file)
 #
 # Idempotent: Rex only writes the file when content changes; the
 # on_change handler reloads systemd and restarts the timer only when
@@ -47,12 +55,31 @@ task 'nfs_mount_monitor',
     # Reload flag — set to 1 if any file changed, so we only reload once.
     my $changed = 0;
 
+    # Ensure the state directory for the fail counter exists with tight
+    # permissions (only root should read/write the counter).
+    file '/var/lib/nfs-mount-monitor',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '700';
+
     # Deploy the health-monitor script.
     file '/usr/local/bin/check-nfs-mount.sh',
       source    => catfile( $monitor_dir, 'check-nfs-mount.sh' ),
       owner     => 'root',
       group     => 'root',
       mode      => '755',
+      on_change => sub { $changed = 1 };
+
+    # Deploy the tunable configuration (NFS_FAIL_THRESHOLD).
+    # The leading '-' in EnvironmentFile=-/etc/default/... means systemd
+    # tolerates the file being absent, but we deploy it so the threshold
+    # is explicitly documented on each node.
+    file '/etc/default/nfs-mount-monitor',
+      source    => catfile( $monitor_dir, 'nfs-mount-monitor.default' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
       on_change => sub { $changed = 1 };
 
     # Deploy the systemd service unit.

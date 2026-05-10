@@ -1,0 +1,13 @@
+# /etc/default/nfs-mount-monitor
+# Configuration for the NFS mount health monitor.
+# Sourced by /usr/local/bin/check-nfs-mount.sh on each invocation.
+# Changes take effect on the next timer firing (within 10 seconds).
+#
+# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+
+# NFS_FAIL_THRESHOLD — number of consecutive fix_mount failures before the
+# node is cordoned and rebooted.  The timer fires every 10 seconds, so the
+# default of 5 means ~50 seconds of continuously broken NFS before escalation.
+# A clean Rocky Linux VM reboot takes ~30s; the cluster is HA across r0/r1/r2
+# so losing one node for that window is safe.
+NFS_FAIL_THRESHOLD=5

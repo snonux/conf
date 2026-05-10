@@ -28,10 +28,32 @@
 # A hard 60-second deadline is enforced so the function can never outlast
 # its own timer interval (10s) by more than 6x, preventing timer pile-up.
 #
+# Consecutive-failure escalation:
+#   Each fix_mount failure increments a counter persisted to
+#   /var/lib/nfs-mount-monitor/fail-count.  A successful repair resets
+#   the counter to 0.  When the counter reaches NFS_FAIL_THRESHOLD (default
+#   5, configurable via /etc/default/nfs-mount-monitor), the node is cordoned
+#   via kubectl so the scheduler stops placing new pods here, a loud message
+#   is written to the journal, and 'systemctl reboot' is issued.
+#   With the timer firing every 10s, threshold=5 means ~50s of continuously
+#   broken NFS before an auto-reboot — safe because r0/r1/r2 form an HA
+#   cluster and a Rocky Linux VM reboots in ~30s.
+#
 # Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
 
 MOUNT_POINT="/data/nfs/k3svolumes"
 LOCK_FILE="/var/run/nfs-mount-check.lock"
+
+# State directory for the fail counter; created if absent.
+STATE_DIR="/var/lib/nfs-mount-monitor"
+FAIL_COUNT_FILE="$STATE_DIR/fail-count"
+
+# Load tunable configuration (NFS_FAIL_THRESHOLD) from the EnvironmentFile
+# deployed alongside this script.  Defaults are defined here so the script
+# works even if the file is absent.
+NFS_FAIL_THRESHOLD=5
+# shellcheck source=/etc/default/nfs-mount-monitor
+[ -f /etc/default/nfs-mount-monitor ] && . /etc/default/nfs-mount-monitor
 
 # Use a lock file to prevent concurrent runs (timer fires every 10 s)
 if [ -f "$LOCK_FILE" ]; then
@@ -41,6 +63,26 @@ touch "$LOCK_FILE"
 trap "rm -f $LOCK_FILE" EXIT
 
 MOUNT_FIXED=0
+
+# read_fail_count — return the current consecutive-failure counter.
+# Returns 0 if the file is absent or contains a non-integer.
+read_fail_count() {
+    local count=0
+    if [ -f "$FAIL_COUNT_FILE" ]; then
+        count=$(< "$FAIL_COUNT_FILE")
+        # Guard against corrupt file contents
+        [[ "$count" =~ ^[0-9]+$ ]] || count=0
+    fi
+    echo "$count"
+}
+
+# write_fail_count — persist COUNT to the state file, creating the
+# directory if it does not yet exist.
+write_fail_count() {
+    local count="$1"
+    mkdir -p "$STATE_DIR"
+    echo "$count" > "$FAIL_COUNT_FILE"
+}
 
 # kill_pinning_processes — send SIGKILL to any process whose wchan starts
 # with "nfs_" AND whose open file descriptors or cwd point into MOUNT_POINT.
@@ -174,14 +216,68 @@ fix_mount () {
     return 1
 }
 
+# escalate_reboot — cordon the k3s node so the scheduler stops placing new
+# pods here, log loudly to the journal, then trigger a clean reboot.
+# Called only after NFS_FAIL_THRESHOLD consecutive fix_mount failures.
+escalate_reboot() {
+    local node
+    node=$(hostname)
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+    echo "CRITICAL: NFS mount $MOUNT_POINT has failed $NFS_FAIL_THRESHOLD" \
+         "consecutive repair attempts — escalating to reboot"
+
+    # Cordon the node so the scheduler will not place new pods here while
+    # the reboot is in progress.  Failure to cordon is non-fatal: we still
+    # reboot because a broken NFS node is worse than an uncordoned one.
+    if kubectl cordon "$node" 2>&1; then
+        echo "Node $node cordoned successfully"
+    else
+        echo "kubectl cordon failed (will reboot anyway)"
+    fi
+
+    # systemd-journald flushes on SIGTERM, which systemctl reboot sends to
+    # all services before the node goes down — the message above will survive.
+    echo "Initiating systemctl reboot to recover broken NFS mount"
+    systemctl reboot
+}
+
+# run_fix_mount_with_counter — call fix_mount and update the consecutive-
+# failure counter.  On success, counter is reset to 0.  On failure, counter
+# is incremented; if it reaches NFS_FAIL_THRESHOLD, escalate_reboot is called.
+run_fix_mount_with_counter() {
+    if fix_mount; then
+        # Repair succeeded — reset the failure streak.
+        write_fail_count 0
+        echo "NFS repair succeeded; consecutive-failure counter reset to 0"
+    else
+        # Repair failed — increment the counter and check the threshold.
+        local count
+        count=$(read_fail_count)
+        (( count++ ))
+        write_fail_count "$count"
+        echo "NFS repair failed; consecutive failures: $count / $NFS_FAIL_THRESHOLD"
+
+        if (( count >= NFS_FAIL_THRESHOLD )); then
+            escalate_reboot
+        fi
+    fi
+}
+
+# PROBE_FAILED tracks whether any probe fired run_fix_mount_with_counter.
+# If no probe fires, all checks passed cleanly and we can reset the counter.
+PROBE_FAILED=0
+
 if ! mountpoint "$MOUNT_POINT" >/dev/null 2>&1; then
     echo "NFS mount $MOUNT_POINT not found"
-    fix_mount
+    run_fix_mount_with_counter
+    PROBE_FAILED=1
 fi
 
 if ! timeout 2s stat "$MOUNT_POINT" >/dev/null 2>&1; then
     echo "NFS mount $MOUNT_POINT appears to be unresponsive"
-    fix_mount
+    run_fix_mount_with_counter
+    PROBE_FAILED=1
 fi
 
 # Write-probe: detect the "reads OK, writes hang" failure mode.
@@ -191,7 +287,19 @@ fi
 HEALTHCHECK_FILE="$MOUNT_POINT/.healthcheck.$(hostname)"
 if ! timeout 5s sh -c "echo \$\$ > '$HEALTHCHECK_FILE' && rm -f '$HEALTHCHECK_FILE'" 2>/dev/null; then
     echo "NFS writes hanging on $MOUNT_POINT"
-    fix_mount
+    run_fix_mount_with_counter
+    PROBE_FAILED=1
+fi
+
+# If all three probes passed cleanly (no repair attempt needed), reset the
+# consecutive-failure counter so a previous partial failure streak does not
+# lower the effective reboot threshold.  We only write the file when the
+# counter is non-zero to avoid unnecessary writes on every healthy run.
+if [ "$PROBE_FAILED" -eq 0 ]; then
+    if [ "$(read_fail_count)" -ne 0 ]; then
+        write_fail_count 0
+        echo "All probes passed; consecutive-failure counter reset to 0"
+    fi
 fi
 
 # After a successful remount, delete pods stuck on this node
@@ -212,4 +320,8 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
         echo "Deleting stuck pod $ns/$pod"
         kubectl delete pod -n "$ns" "$pod" --grace-period=0 --force 2>&1
       done
+
+    # On a healthy remount, also ensure the fail counter is reset.
+    write_fail_count 0
+    echo "Stuck-pod cleanup done; consecutive-failure counter reset to 0"
 fi
