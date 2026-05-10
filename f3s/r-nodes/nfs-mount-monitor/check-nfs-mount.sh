@@ -3,7 +3,16 @@
 # (nfs-mount-monitor.timer / nfs-mount-monitor.service)
 #
 # Checks whether /data/nfs/k3svolumes is mounted and responsive.
-# If the mount is stale or missing it attempts a remount, then a
+# Three probes are run in order:
+#   1. mountpoint — detects completely missing mounts
+#   2. stat        — detects read hangs / stale cache misses
+#   3. write-probe — detects the "reads OK, writes hang" failure mode
+#      (stunnel-wrapped NFSv4 can enter a state where stat returns from
+#      cache but ALL writes block indefinitely; only the write probe
+#      catches this — mount timeo=10 deciseconds = 1s, so 5s gives one
+#      full retransmit window plus margin)
+#
+# If any probe fails, fix_mount is called to attempt a remount, then a
 # fresh umount+mount cycle.  On a successful repair it force-deletes
 # any pods on this node that are stuck in Unknown/Pending/ContainerCreating,
 # allowing the kubelet to reschedule them against the now-healthy volume.
@@ -71,6 +80,16 @@ fi
 
 if ! timeout 2s stat "$MOUNT_POINT" >/dev/null 2>&1; then
     echo "NFS mount $MOUNT_POINT appears to be unresponsive"
+    fix_mount
+fi
+
+# Write-probe: detect the "reads OK, writes hang" failure mode.
+# A per-host filename prevents r0/r1/r2 from racing on the same file.
+# Timeout of 5s covers one full NFS retransmit window (timeo=10 = 1s,
+# retrans=2) plus margin, without making the 10-second cron run too long.
+HEALTHCHECK_FILE="$MOUNT_POINT/.healthcheck.$(hostname)"
+if ! timeout 5s sh -c "echo \$\$ > '$HEALTHCHECK_FILE' && rm -f '$HEALTHCHECK_FILE'" 2>/dev/null; then
+    echo "NFS writes hanging on $MOUNT_POINT"
     fix_mount
 fi
 
