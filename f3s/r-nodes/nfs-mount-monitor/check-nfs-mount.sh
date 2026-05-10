@@ -110,6 +110,8 @@ write_textfile_metric() {
     printf '# HELP nfs_mount_monitor_consecutive_failures Consecutive NFS fix_mount failure count\n' > "$tmp_file"
     printf '# TYPE nfs_mount_monitor_consecutive_failures gauge\n' >> "$tmp_file"
     printf 'nfs_mount_monitor_consecutive_failures{host="%s"} %s\n' "$host" "$count" >> "$tmp_file"
+    # Make the file world-readable so node_exporter (uid 65534) can scrape it.
+    chmod 644 "$tmp_file"
     mv "$tmp_file" "$TEXTFILE_PROM"
 }
 
