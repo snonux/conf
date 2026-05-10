@@ -25,6 +25,29 @@ spec:
           value: "info"
         - name: ND_BASEURL
           value: ""
+        startupProbe:
+          httpGet:
+            path: /ping
+            port: 4533
+          # Allow up to 5 min for cold start (NFS cache warm-up, scan, etc.)
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 4533
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 4533
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 5
         volumeMounts:
         - name: navidrome-data
           mountPath: /data
