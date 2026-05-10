@@ -1,31 +1,33 @@
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: navidrome-data-pv
-spec:
-  capacity:
-    storage: 10Gi
-  volumeMode: Filesystem
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  hostPath:
-    path: /data/nfs/k3svolumes/navidrome/data
-    type: Directory
----
+# navidrome-data: local-path PVC (dynamic provisioning).
+# The SQLite DB, image cache, and artwork cache must NOT live on NFS because:
+#   1. SQLite file-lock semantics are fragile over NFS: under concurrent
+#      access (e.g. rolling restart) the new pod blocks on fcntl() until
+#      the old pod fully releases its locks.
+#   2. Every image/background cache read traverses the stunnel TLS tunnel,
+#      adding latency to every UI thumbnail and a 19 s "Image cache" init
+#      at startup.
+# The local-path storageClass provisions a directory on the node's own disk
+# (/var/lib/rancher/k3s/storage), eliminating both problems. The deployment
+# pins the pod to r1 via nodeSelector so the local PV is always reachable.
+# Trade-off: if r1 is down and the pod reschedules, it starts with a fresh
+# DB (loses play counts / scrobble queue) — acceptable for a home server.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: navidrome-data-pvc
   namespace: services
 spec:
-  storageClassName: ""
+  # local-path is the k3s default dynamic provisioner; WaitForFirstConsumer
+  # means the PV is created on the node where the pod is first scheduled.
+  storageClassName: local-path
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
 ---
+# navidrome-music: keep on NFS — 200 GB library shared across nodes.
+# This is a static PV backed by hostPath at the NFS mount point.
 apiVersion: v1
 kind: PersistentVolume
 metadata:

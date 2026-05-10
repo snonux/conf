@@ -18,6 +18,12 @@ spec:
       labels:
         app: navidrome
     spec:
+      # Pin to r1 so the local-path PVC (which lives on r1's disk at
+      # /var/lib/rancher/k3s/storage) is always reachable. Without this, if
+      # the pod reschedules to a different node it would not find the data
+      # volume and Navidrome would start with an empty DB.
+      nodeSelector:
+        kubernetes.io/hostname: r1.lan.buetow.org
       containers:
       - name: navidrome
         image: deluan/navidrome:latest
@@ -34,7 +40,7 @@ spec:
           httpGet:
             path: /ping
             port: 4533
-          # Allow up to 5 min for cold start (NFS cache warm-up, scan, etc.)
+          # Allow up to 5 min for cold start (DB open, first scan, etc.)
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
