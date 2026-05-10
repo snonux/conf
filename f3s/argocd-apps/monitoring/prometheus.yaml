@@ -61,21 +61,18 @@ spec:
           # Enable the textfile collector in the node_exporter DaemonSet so
           # check-nfs-mount.sh can expose nfs_mount_monitor_consecutive_failures
           # as a Prometheus metric without needing a separate exporter.
-          # The hostPath mount maps /var/lib/node_exporter/textfile_collector
-          # on the node into the container; the extra arg tells node_exporter
-          # to scan that directory for .prom files.
+          # extraHostVolumeMounts is the prometheus-node-exporter sub-chart key
+          # for mounting host paths into the container; extraArgs adds the
+          # --collector.textfile.directory flag to enable the textfile scraper.
           prometheus-node-exporter:
             extraArgs:
               - --collector.textfile.directory=/host/textfile_collector
-            extraVolumes:
+            extraHostVolumeMounts:
               - name: textfile-collector
-                hostPath:
-                  path: /var/lib/node_exporter/textfile_collector
-                  type: DirectoryOrCreate
-            extraVolumeMounts:
-              - name: textfile-collector
+                hostPath: /var/lib/node_exporter/textfile_collector
                 mountPath: /host/textfile_collector
                 readOnly: true
+                mountPropagation: None
 
           prometheus:
             prometheusSpec:
