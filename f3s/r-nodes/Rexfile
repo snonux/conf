@@ -1,0 +1,87 @@
+# Rex tasks for Rocky Linux r-nodes (r0, r1, r2) — k3s cluster VMs.
+#
+# Run from repository root:
+#   rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+#
+# All tasks connect as root (r-nodes require root for systemd and
+# /usr/local/bin writes; paul user has no sudo configured on these VMs).
+
+use Rex -feature => [ '1.14', 'exec_autodie' ];
+use Rex::Logger;
+use File::Basename qw(dirname);
+use File::Spec::Functions qw(catfile rel2abs);
+
+my $RNODES_DIR = dirname( rel2abs(__FILE__) );
+
+# All three k3s Rocky Linux VMs; root SSH is configured via authorized_keys.
+group r_nodes => qw(
+  192.168.1.120
+  192.168.1.121
+  192.168.1.122
+);
+
+user 'root';
+sudo FALSE;
+
+# Deploy in parallel — tasks are idempotent and independent per node.
+parallelism 3;
+
+# Deploy the NFS mount health-monitor script and its systemd units to
+# all three r-nodes, then reload systemd and restart the timer so the
+# new files take effect immediately.
+#
+# Files managed:
+#   /usr/local/bin/check-nfs-mount.sh       (monitor + auto-repair script)
+#   /etc/systemd/system/nfs-mount-monitor.service
+#   /etc/systemd/system/nfs-mount-monitor.timer
+#
+# Idempotent: Rex only writes the file when content changes; the
+# on_change handler reloads systemd and restarts the timer only when
+# something actually changed.
+desc 'Deploy NFS mount monitor script and systemd units to r0/r1/r2';
+task 'nfs_mount_monitor',
+  group => 'r_nodes',
+  sub {
+    my $monitor_dir = catfile( $RNODES_DIR, 'nfs-mount-monitor' );
+
+    # Reload flag — set to 1 if any file changed, so we only reload once.
+    my $changed = 0;
+
+    # Deploy the health-monitor script.
+    file '/usr/local/bin/check-nfs-mount.sh',
+      source    => catfile( $monitor_dir, 'check-nfs-mount.sh' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '755',
+      on_change => sub { $changed = 1 };
+
+    # Deploy the systemd service unit.
+    file '/etc/systemd/system/nfs-mount-monitor.service',
+      source    => catfile( $monitor_dir, 'nfs-mount-monitor.service' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
+    # Deploy the systemd timer unit.
+    file '/etc/systemd/system/nfs-mount-monitor.timer',
+      source    => catfile( $monitor_dir, 'nfs-mount-monitor.timer' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
+    if ($changed) {
+        Rex::Logger::info('Files changed — reloading systemd and restarting timer');
+        run 'systemctl daemon-reload';
+        run 'systemctl restart nfs-mount-monitor.timer';
+    }
+
+    # Ensure the timer is enabled and running regardless of whether files changed.
+    service 'nfs-mount-monitor.timer', ensure => 'started';
+    run 'systemctl enable nfs-mount-monitor.timer';
+  };
+
+1;
+
+# vim: syntax=perl

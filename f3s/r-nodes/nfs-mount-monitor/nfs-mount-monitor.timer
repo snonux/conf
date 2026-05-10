@@ -1,0 +1,18 @@
+# systemd timer that fires nfs-mount-monitor.service every 10 seconds.
+# AccuracySec=1s keeps the interval tight (default 1m would be too coarse).
+# OnBootSec=30s gives the network and NFS client time to come up before
+# the first check fires.
+#
+# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+
+[Unit]
+Description=Run NFS Mount Health Monitor every 10 seconds
+Requires=nfs-mount-monitor.service
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=10s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

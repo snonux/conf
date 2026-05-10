@@ -1,0 +1,15 @@
+# systemd one-shot service that runs check-nfs-mount.sh once per invocation.
+# Triggered by nfs-mount-monitor.timer (every 10 seconds).
+# Logs to the journal: journalctl -u nfs-mount-monitor
+#
+# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+
+[Unit]
+Description=NFS Mount Health Monitor
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/check-nfs-mount.sh
+StandardOutput=journal
+StandardError=journal
