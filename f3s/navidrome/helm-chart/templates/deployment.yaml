@@ -5,6 +5,11 @@ metadata:
   namespace: services
 spec:
   replicas: 1
+  # SQLite DB on RWO PVC: only one writer at a time. Use Recreate so the
+  # old pod releases the DB lock before the new pod starts; otherwise the
+  # new pod blocks indefinitely on the SQLite open.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: navidrome
