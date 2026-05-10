@@ -58,6 +58,25 @@ spec:
               kubeSchedulerRecording: false
               kubeScheduler: false
 
+          # Enable the textfile collector in the node_exporter DaemonSet so
+          # check-nfs-mount.sh can expose nfs_mount_monitor_consecutive_failures
+          # as a Prometheus metric without needing a separate exporter.
+          # The hostPath mount maps /var/lib/node_exporter/textfile_collector
+          # on the node into the container; the extra arg tells node_exporter
+          # to scan that directory for .prom files.
+          prometheus-node-exporter:
+            extraArgs:
+              - --collector.textfile.directory=/host/textfile_collector
+            extraVolumes:
+              - name: textfile-collector
+                hostPath:
+                  path: /var/lib/node_exporter/textfile_collector
+                  type: DirectoryOrCreate
+            extraVolumeMounts:
+              - name: textfile-collector
+                mountPath: /host/textfile_collector
+                readOnly: true
+
           prometheus:
             prometheusSpec:
               additionalArgs:
@@ -110,6 +129,16 @@ spec:
                     group_by: ['alertname', 'name', 'severity']
                     group_wait: 10s
                     repeat_interval: 6h
+                  # NFS auto-repair alerts from r0/r1/r2 — short group_wait so
+                  # operators are notified quickly when the mount breaks.
+                  # repeat_interval is short: NFS outages are urgent and
+                  # the auto-reboot cycle takes only ~30 s per node.
+                  - matchers:
+                      - component = "nfs"
+                    receiver: 'nfs-alerts'
+                    group_by: ['alertname', 'host', 'severity']
+                    group_wait: 10s
+                    repeat_interval: 30m
                   # Container image CVEs from Trivy Operator (see trivy-operator ArgoCD app)
                   - matchers:
                       - component = "trivy"
@@ -124,6 +153,9 @@ spec:
                 - name: 'argocd-alerts'
                   # ArgoCD-specific receiver - alerts visible in UI only
                   # Future: add email/slack/webhook configuration here
+                - name: 'nfs-alerts'
+                  # NFS auto-repair alerts — visible in Alertmanager UI
+                  # Future: add webhook/email for on-call paging here
                 - name: 'trivy-alerts'
                   # Trivy Operator CVE alerts - visible in Alertmanager UI; add webhook/email when desired
               inhibit_rules:

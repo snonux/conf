@@ -48,6 +48,12 @@ LOCK_FILE="/var/run/nfs-mount-check.lock"
 STATE_DIR="/var/lib/nfs-mount-monitor"
 FAIL_COUNT_FILE="$STATE_DIR/fail-count"
 
+# Textfile collector output for node_exporter.
+# Written on every run so Prometheus always has a current sample.
+# The DaemonSet mounts /var/lib/node_exporter/textfile_collector from the host.
+TEXTFILE_DIR="/var/lib/node_exporter/textfile_collector"
+TEXTFILE_PROM="$TEXTFILE_DIR/nfs_mount_monitor.prom"
+
 # Load tunable configuration (NFS_FAIL_THRESHOLD) from the EnvironmentFile
 # deployed alongside this script.  Defaults are defined here so the script
 # works even if the file is absent.
@@ -82,6 +88,29 @@ write_fail_count() {
     local count="$1"
     mkdir -p "$STATE_DIR"
     echo "$count" > "$FAIL_COUNT_FILE"
+    # Also export the current count to the node_exporter textfile collector
+    # so Prometheus can alert directly without parsing journal logs.
+    write_textfile_metric "$count"
+}
+
+# write_textfile_metric — write the consecutive-failure gauge to the
+# node_exporter textfile_collector directory.  The metric name follows the
+# node_exporter convention: lowercase, underscores, no units suffix for counts.
+# The host label lets Prometheus distinguish r0/r1/r2 even before
+# relabelling resolves the instance IP to a hostname.
+# We write atomically (tmp + mv) to avoid node_exporter reading a partial file.
+write_textfile_metric() {
+    local count="$1"
+    local host
+    host=$(hostname -s)
+    mkdir -p "$TEXTFILE_DIR"
+    local tmp_file
+    tmp_file="$(mktemp "$TEXTFILE_DIR/nfs_mount_monitor.prom.XXXXXX")"
+    # Write metric with HELP/TYPE headers for valid exposition format
+    printf '# HELP nfs_mount_monitor_consecutive_failures Consecutive NFS fix_mount failure count\n' > "$tmp_file"
+    printf '# TYPE nfs_mount_monitor_consecutive_failures gauge\n' >> "$tmp_file"
+    printf 'nfs_mount_monitor_consecutive_failures{host="%s"} %s\n' "$host" "$count" >> "$tmp_file"
+    mv "$tmp_file" "$TEXTFILE_PROM"
 }
 
 # kill_pinning_processes — send SIGKILL to any process whose wchan starts
@@ -293,12 +322,16 @@ fi
 
 # If all three probes passed cleanly (no repair attempt needed), reset the
 # consecutive-failure counter so a previous partial failure streak does not
-# lower the effective reboot threshold.  We only write the file when the
-# counter is non-zero to avoid unnecessary writes on every healthy run.
+# lower the effective reboot threshold.  write_fail_count also refreshes the
+# textfile metric so Prometheus always has a current sample.
 if [ "$PROBE_FAILED" -eq 0 ]; then
     if [ "$(read_fail_count)" -ne 0 ]; then
         write_fail_count 0
         echo "All probes passed; consecutive-failure counter reset to 0"
+    else
+        # Counter is already zero; update the textfile metric timestamp
+        # so node_exporter sees a fresh scrape on every healthy run.
+        write_textfile_metric 0
     fi
 fi
 

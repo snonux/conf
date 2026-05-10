@@ -63,6 +63,23 @@ task 'nfs_mount_monitor',
       group  => 'root',
       mode   => '700';
 
+    # Ensure the node_exporter textfile_collector directory exists.
+    # The check-nfs-mount.sh script writes nfs_mount_monitor.prom here;
+    # node_exporter reads it when --collector.textfile.directory is set.
+    # world-readable so the node_exporter process (root or dedicated user)
+    # can pick up the file without special ACLs.
+    file '/var/lib/node_exporter',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '755';
+
+    file '/var/lib/node_exporter/textfile_collector',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '755';
+
     # Deploy the health-monitor script.
     file '/usr/local/bin/check-nfs-mount.sh',
       source    => catfile( $monitor_dir, 'check-nfs-mount.sh' ),

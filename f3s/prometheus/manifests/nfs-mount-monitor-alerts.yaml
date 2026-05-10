@@ -1,0 +1,68 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nfs-mount-monitor-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # Prometheus alerting rules for the NFS auto-repair monitor running on
+    # r0/r1/r2 (k3s Rocky Linux VMs).  The metric is produced by
+    # check-nfs-mount.sh writing a textfile_collector .prom file that the
+    # node_exporter DaemonSet scrapes.
+    #
+    # Metric: nfs_mount_monitor_consecutive_failures{host="rN"}
+    #   0     = all probes passed, mount healthy
+    #   1-4   = fix_mount was called but repair succeeded or is in progress
+    #   >= 3  = warning: auto-repair is struggling (threshold: 3)
+    #   >= 5  = critical: at or above auto-reboot threshold (NFS_FAIL_THRESHOLD)
+    - name: nfs-mount-monitor
+      interval: 30s
+      rules:
+        # Warning: three or more consecutive fix_mount failures.
+        # The auto-repair is struggling; a human should watch this node.
+        # At NFS_FAIL_THRESHOLD=5 the node will auto-reboot, so three
+        # failures gives ~30 s lead time to investigate.
+        - alert: NfsMountAutoRepairWarning
+          expr: |
+            nfs_mount_monitor_consecutive_failures >= 3
+          for: 0s
+          labels:
+            severity: warning
+            component: nfs
+          annotations:
+            summary: "NFS auto-repair struggling on {{ $labels.host }}"
+            description: >
+              Host {{ $labels.host }} has {{ $value }} consecutive NFS
+              fix_mount failures. The auto-repair script (check-nfs-mount.sh)
+              is running but has not yet recovered the mount at
+              /data/nfs/k3svolumes. The node will auto-reboot at
+              NFS_FAIL_THRESHOLD=5 failures (~50 s from first failure).
+            action: >
+              Check journal: ssh root@{{ $labels.host }} "journalctl -u nfs-mount-monitor.service -n 30 --no-pager"
+              Check mount:   ssh root@{{ $labels.host }} "mountpoint /data/nfs/k3svolumes && stat /data/nfs/k3svolumes"
+              Check stunnel: ssh root@{{ $labels.host }} "systemctl status stunnel"
+
+        # Critical: at or above NFS_FAIL_THRESHOLD (default 5).
+        # The node is about to be rebooted (or the counter is stuck above
+        # threshold if escalate_reboot itself failed).
+        - alert: NfsMountAutoRepairCritical
+          expr: |
+            nfs_mount_monitor_consecutive_failures >= 5
+          for: 0s
+          labels:
+            severity: critical
+            component: nfs
+          annotations:
+            summary: "NFS auto-repair failed on {{ $labels.host }} — reboot imminent"
+            description: >
+              Host {{ $labels.host }} has {{ $value }} consecutive NFS
+              fix_mount failures (NFS_FAIL_THRESHOLD=5). The node has been
+              cordoned and systemctl reboot issued. If the node is still up,
+              the reboot may have stalled or escalate_reboot failed.
+            action: >
+              Check node status: kubectl get node {{ $labels.host }}.lan.buetow.org
+              Check journal:     ssh root@{{ $labels.host }} "journalctl -u nfs-mount-monitor.service -n 50 --no-pager"
+              Manual recovery:   ssh root@{{ $labels.host }} "systemctl restart stunnel && mount /data/nfs/k3svolumes"
+              Uncordon after fix: kubectl uncordon {{ $labels.host }}.lan.buetow.org

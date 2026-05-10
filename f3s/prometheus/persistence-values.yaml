@@ -24,6 +24,22 @@ kubeControllerManager:
     https: true
     insecureSkipVerify: true
 
+# Enable the textfile collector in the node_exporter DaemonSet so
+# check-nfs-mount.sh can expose nfs_mount_monitor_consecutive_failures
+# as a Prometheus metric without needing a separate exporter.
+prometheus-node-exporter:
+  extraArgs:
+    - --collector.textfile.directory=/host/textfile_collector
+  extraVolumes:
+    - name: textfile-collector
+      hostPath:
+        path: /var/lib/node_exporter/textfile_collector
+        type: DirectoryOrCreate
+  extraVolumeMounts:
+    - name: textfile-collector
+      mountPath: /host/textfile_collector
+      readOnly: true
+
 prometheus:
   prometheusSpec:
     # Enable remote write receiver for accepting historic data with custom timestamps
