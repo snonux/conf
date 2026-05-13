@@ -83,8 +83,12 @@ spec:
                   $BEET fetchart || echo "fetchart returned non-zero (continuing)"
 
                   # 3. Embed art into audio files where missing.
+                  # `beet embedart` (no -f) prompts "Modify artwork for N
+                  # albums (Y/n)?" with no flag to bypass; pipe `yes` so
+                  # it proceeds non-interactively. embedart still respects
+                  # ifempty: no and compare_threshold: 50 from config.
                   echo "--- embedart (backfill) ---"
-                  $BEET embedart || echo "embedart returned non-zero (continuing)"
+                  yes | $BEET embedart || echo "embedart returned non-zero (continuing)"
 
                   echo "=== $(date -u) beets-art sweep finished ==="
               volumeMounts:
