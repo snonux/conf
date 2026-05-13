@@ -22,9 +22,9 @@ metadata:
   name: beets-art
   namespace: services
 spec:
-  # 03:30 UTC nightly: off-peak, well before Navidrome's next scan slot,
-  # leaves headroom for a long first-run backfill.
-  schedule: "30 3 * * *"
+  # Noon local time. timeZone is GA in k8s 1.27+; k3s 1.32 supports it.
+  schedule: "0 12 * * *"
+  timeZone: Europe/Sofia
   # Forbid stacking: a long backfill run must not get a second worker on
   # top of it (would race on the SQLite library DB).
   concurrencyPolicy: Forbid

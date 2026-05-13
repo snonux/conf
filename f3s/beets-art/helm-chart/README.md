@@ -8,8 +8,8 @@ then picks the new art up.
 
 ## What it does
 
-Every night at 03:30 UTC the CronJob runs three idempotent steps inside a
-single short-lived pod on r1:
+Every day at 12:00 Europe/Sofia (noon local) the CronJob runs three
+idempotent steps inside a single short-lived pod on r1:
 
 1. `beet import -A -q --quiet-fallback=asis /music` — registers any new
    albums in the beets library (`incremental: yes` skips already-known
