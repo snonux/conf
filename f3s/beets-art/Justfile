@@ -1,0 +1,66 @@
+NAMESPACE := "services"
+APP_NAME := "beets-art"
+CRONJOB := "beets-art"
+
+# Show CronJob + recent Job status
+status:
+    @echo "=== CronJob ==="
+    @kubectl get cronjob -n {{NAMESPACE}} {{CRONJOB}}
+    @echo ""
+    @echo "=== Recent Jobs ==="
+    @kubectl get jobs -n {{NAMESPACE}} -l app.kubernetes.io/name={{APP_NAME}} --sort-by=.metadata.creationTimestamp 2>/dev/null || \
+        kubectl get jobs -n {{NAMESPACE}} | grep {{CRONJOB}} || true
+    @echo ""
+    @echo "=== State PVC ==="
+    @kubectl get pvc -n {{NAMESPACE}} beets-art-state-pvc
+    @echo ""
+    @echo "=== ArgoCD ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
+
+# Logs of the most recent Job (follow if still running)
+logs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    job=$(kubectl get jobs -n {{NAMESPACE}} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.creationTimestamp}{"\n"}{end}' \
+        | grep '^{{CRONJOB}}-' | sort -k2 | tail -1 | cut -f1)
+    if [ -z "$job" ]; then
+        echo "No {{CRONJOB}} jobs yet."
+        exit 0
+    fi
+    echo "=== logs for $job ==="
+    kubectl logs -n {{NAMESPACE}} job/"$job" -f
+
+# Trigger an ad-hoc run *right now* (does not affect the schedule).
+# Useful for the initial backfill: the first run will be the slow one.
+run-now:
+    @ts=$$(date +%s); \
+    kubectl create job --from=cronjob/{{CRONJOB}} -n {{NAMESPACE}} {{CRONJOB}}-manual-$$ts; \
+    echo "Created job {{CRONJOB}}-manual-$$ts. Tail with: just logs"
+
+# Pause the schedule (e.g. while debugging or doing a one-off pass)
+suspend:
+    kubectl patch cronjob -n {{NAMESPACE}} {{CRONJOB}} -p '{"spec":{"suspend":true}}'
+
+# Resume the schedule
+resume:
+    kubectl patch cronjob -n {{NAMESPACE}} {{CRONJOB}} -p '{"spec":{"suspend":false}}'
+
+# Trigger ArgoCD sync
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+# Show ArgoCD application details
+argocd-status:
+    argocd app get {{APP_NAME}} --core
+
+# Open a transient interactive beets shell in a pod that mounts the same
+# music + state volumes. Handy for debugging (e.g. `beet ls`,
+# `beet fetchart -- album:Foo`, `beet embedart -f cover.jpg -- album:Foo`).
+shell:
+    kubectl run beets-art-shell -n {{NAMESPACE}} \
+        --rm -it --restart=Never \
+        --image=lscr.io/linuxserver/beets:latest \
+        --overrides='{"spec":{"nodeSelector":{"kubernetes.io/hostname":"r1.lan.buetow.org"},"containers":[{"name":"beets","image":"lscr.io/linuxserver/beets:latest","stdin":true,"tty":true,"command":["/bin/sh"],"env":[{"name":"BEETSDIR","value":"/etc/beets"}],"volumeMounts":[{"name":"music","mountPath":"/music"},{"name":"state","mountPath":"/state"},{"name":"config","mountPath":"/etc/beets","readOnly":true}]}],"volumes":[{"name":"music","persistentVolumeClaim":{"claimName":"navidrome-music-pvc"}},{"name":"state","persistentVolumeClaim":{"claimName":"beets-art-state-pvc"}},{"name":"config","configMap":{"name":"beets-art-config"}}]}}'

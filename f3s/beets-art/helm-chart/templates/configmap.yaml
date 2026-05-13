@@ -1,0 +1,59 @@
+# Beets configuration injected as /etc/beets/config.yaml inside the CronJob
+# container (BEETSDIR=/etc/beets). The library DB lives on the PVC at
+# /state/library.db so it survives across runs while the config itself stays
+# declarative in git.
+#
+# Design notes:
+#   - directory: /music is the same path Navidrome sees (hostPath PV mount).
+#   - import.copy/move: no -> never relocate Navidrome's tree; only register
+#     paths and (with auto fetchart/embedart) attach art.
+#   - import.write: yes -> let beets write tags it learns (mostly a no-op
+#     here because we pass -A on the CLI to skip autotagging).
+#   - import.incremental: yes -> beets remembers which directories it has
+#     already imported, so subsequent runs only touch new albums.
+#   - fetchart/embedart auto: yes -> the import pass alone covers new music.
+#     The explicit `beet fetchart`/`beet embedart` invocations in the
+#     CronJob command are the *backfill* sweep for albums that previously
+#     failed art lookup.
+#   - embedart.compare_threshold: 50 -> refuse to overwrite an existing
+#     embed that diverges wildly from the new candidate (guards against
+#     accidental "wrong cover stomps right cover").
+#   - embedart.remove_art_file: no -> keep cover.jpg in the album folder
+#     too; Navidrome serves it directly without decoding tags, and cmus /
+#     file managers benefit.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beets-art-config
+  namespace: services
+data:
+  config.yaml: |
+    directory: /music
+    library: /state/library.db
+
+    plugins: fetchart embedart
+
+    import:
+      copy: no
+      move: no
+      write: yes
+      incremental: yes
+      quiet_fallback: asis
+      detail: no
+      log: /state/import.log
+
+    fetchart:
+      auto: yes
+      cautious: yes
+      cover_names: cover front folder album
+      sources: coverart itunes amazon albumart
+      maxwidth: 1200
+      enforce_ratio: no
+      store_source: yes
+
+    embedart:
+      auto: yes
+      maxwidth: 1200
+      compare_threshold: 50
+      ifempty: no
+      remove_art_file: no

@@ -1,0 +1,117 @@
+# beets-art: nightly sweep that fetches and embeds cover art for every
+# album in the Navidrome music library, then lets Navidrome's own hourly
+# scan (ND_SCANSCHEDULE=1h) pick the changes up.
+#
+# Why this works alongside Navidrome:
+#   - The music PVC is RWO. Kubernetes RWO permits multi-pod mounts as long
+#     as all pods land on the *same node*. Both Navidrome and this CronJob
+#     pin to r1 via nodeSelector, so concurrent mounts are fine.
+#   - Navidrome and beets only conflict on file *write* if they touch the
+#     same file at the same instant. Navidrome writes nothing under /music
+#     (read-only consumer); beets writes art into album folders and embeds
+#     into audio files. No real contention.
+#
+# Why it is safe to re-run forever:
+#   - import.incremental: yes -> already-imported album folders are skipped.
+#   - fetchart skips albums that already have a cover image.
+#   - embedart with ifempty: no + compare_threshold: 50 only embeds where
+#     missing, and refuses risky overwrites.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: beets-art
+  namespace: services
+spec:
+  # 03:30 UTC nightly: off-peak, well before Navidrome's next scan slot,
+  # leaves headroom for a long first-run backfill.
+  schedule: "30 3 * * *"
+  # Forbid stacking: a long backfill run must not get a second worker on
+  # top of it (would race on the SQLite library DB).
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Do not auto-retry: art-fetch failures are usually rate-limit or
+      # network blips that resolve by the next nightly run. Spamming
+      # retries would just hammer Cover Art Archive.
+      backoffLimit: 0
+      # Cap a runaway run at 6h. The first backfill of a 200 GB library
+      # may take a few hours; steady state is minutes.
+      activeDeadlineSeconds: 21600
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: r1.lan.buetow.org
+          containers:
+            - name: beets
+              image: lscr.io/linuxserver/beets:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                # Tell beets to read config from the ConfigMap mount instead
+                # of its default ~/.config/beets, so the PVC only stores
+                # mutable state (library.db, logs).
+                - name: BEETSDIR
+                  value: /etc/beets
+              # Override the linuxserver s6 entrypoint; we just need the
+              # `beet` CLI for a one-shot job. Running as root (the image
+              # default when s6 is bypassed) so we can write into the NFS
+              # music tree, which Navidrome also writes as root.
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -u
+                  echo "=== $(date -u) beets-art sweep starting ==="
+
+                  # 1. Register any new albums. -A skips autotag (we trust
+                  #    the existing tags); auto fetchart/embedart fire here
+                  #    for newly imported albums via config.
+                  echo "--- import (incremental) ---"
+                  beet import -A -q --quiet-fallback=asis /music || \
+                    echo "import returned non-zero (continuing)"
+
+                  # 2. Backfill external cover.jpg for albums missing it.
+                  echo "--- fetchart (backfill) ---"
+                  beet fetchart || echo "fetchart returned non-zero (continuing)"
+
+                  # 3. Embed art into audio files where missing.
+                  echo "--- embedart (backfill) ---"
+                  beet embedart || echo "embedart returned non-zero (continuing)"
+
+                  echo "=== $(date -u) beets-art sweep finished ==="
+              volumeMounts:
+                - name: music
+                  mountPath: /music
+                - name: state
+                  mountPath: /state
+                - name: config
+                  mountPath: /etc/beets
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                # Generous because ImageMagick + ffprobe + SQLite scans can
+                # spike. Tighten after observing real usage.
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: music
+              persistentVolumeClaim:
+                # Reuse the existing Navidrome music PVC — single source of
+                # truth for the library tree. RWO is OK because both pods
+                # are pinned to r1.
+                claimName: navidrome-music-pvc
+            - name: state
+              persistentVolumeClaim:
+                claimName: beets-art-state-pvc
+            - name: config
+              configMap:
+                name: beets-art-config
+            - name: tmp
+              emptyDir: {}

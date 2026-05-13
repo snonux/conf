@@ -1,0 +1,5 @@
+apiVersion: v2
+name: beets-art
+description: Nightly beets fetchart + embedart sweep for the Navidrome music library.
+version: 0.1.0
+appVersion: "latest"
