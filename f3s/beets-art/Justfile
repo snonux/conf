@@ -33,9 +33,11 @@ logs:
 # Trigger an ad-hoc run *right now* (does not affect the schedule).
 # Useful for the initial backfill: the first run will be the slow one.
 run-now:
-    @ts=$$(date +%s); \
-    kubectl create job --from=cronjob/{{CRONJOB}} -n {{NAMESPACE}} {{CRONJOB}}-manual-$$ts; \
-    echo "Created job {{CRONJOB}}-manual-$$ts. Tail with: just logs"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ts=$(date +%s)
+    kubectl create job --from=cronjob/{{CRONJOB}} -n {{NAMESPACE}} {{CRONJOB}}-manual-$ts
+    echo "Created job {{CRONJOB}}-manual-$ts. Tail with: just logs"
 
 # Pause the schedule (e.g. while debugging or doing a one-off pass)
 suspend:

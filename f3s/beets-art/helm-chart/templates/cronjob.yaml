@@ -50,11 +50,14 @@ spec:
               image: lscr.io/linuxserver/beets:latest
               imagePullPolicy: IfNotPresent
               env:
-                # Tell beets to read config from the ConfigMap mount instead
-                # of its default ~/.config/beets, so the PVC only stores
-                # mutable state (library.db, logs).
+                # BEETSDIR must be writable: beets stores its incremental
+                # import state (state.pickle) there alongside the config.
+                # The ConfigMap mount at /etc/beets is read-only (kernel-
+                # enforced for ConfigMap volumes), so point BEETSDIR at the
+                # state PVC and pass `-c` on each command to load the
+                # ConfigMap-supplied config.yaml.
                 - name: BEETSDIR
-                  value: /etc/beets
+                  value: /state
               # Override the linuxserver s6 entrypoint; we just need the
               # `beet` CLI for a one-shot job. Running as root (the image
               # default when s6 is bypassed) so we can write into the NFS
@@ -65,20 +68,23 @@ spec:
                   set -u
                   echo "=== $(date -u) beets-art sweep starting ==="
 
+                  CONF=/etc/beets/config.yaml
+                  BEET="beet -c $CONF"
+
                   # 1. Register any new albums. -A skips autotag (we trust
                   #    the existing tags); auto fetchart/embedart fire here
                   #    for newly imported albums via config.
                   echo "--- import (incremental) ---"
-                  beet import -A -q --quiet-fallback=asis /music || \
+                  $BEET import -A -q --quiet-fallback=asis /music || \
                     echo "import returned non-zero (continuing)"
 
                   # 2. Backfill external cover.jpg for albums missing it.
                   echo "--- fetchart (backfill) ---"
-                  beet fetchart || echo "fetchart returned non-zero (continuing)"
+                  $BEET fetchart || echo "fetchart returned non-zero (continuing)"
 
                   # 3. Embed art into audio files where missing.
                   echo "--- embedart (backfill) ---"
-                  beet embedart || echo "embedart returned non-zero (continuing)"
+                  $BEET embedart || echo "embedart returned non-zero (continuing)"
 
                   echo "=== $(date -u) beets-art sweep finished ==="
               volumeMounts:
