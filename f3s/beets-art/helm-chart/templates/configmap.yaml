@@ -45,8 +45,20 @@ data:
     fetchart:
       auto: yes
       cautious: yes
-      cover_names: cover front folder album
-      sources: coverart itunes amazon albumart
+      # YAML lists, not space-separated strings: beets 2.x rejects
+      # `sources: coverart itunes ...` with UnknownPairError and the
+      # whole fetchart plugin fails to load (silently degrades to "no art
+      # ever fetched"). Same shape used for cover_names defensively.
+      cover_names:
+        - cover
+        - front
+        - folder
+        - album
+      sources:
+        - coverart
+        - itunes
+        - amazon
+        - albumart
       maxwidth: 1200
       enforce_ratio: no
       store_source: yes
