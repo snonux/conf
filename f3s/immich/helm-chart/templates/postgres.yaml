@@ -7,6 +7,14 @@ metadata:
   namespace: services
 spec:
   replicas: 1
+  # Recreate (not RollingUpdate) so the old pod is fully terminated before
+  # the new one starts. The hostPath PV points at an NFS-backed directory
+  # mounted on every r-node, so RWO is not actually enforced across nodes:
+  # under RollingUpdate the new pod can start on a different node and grab
+  # the same data dir while the old pod still holds postgres' file locks,
+  # producing "could not write to file postmaster.pid: Unknown error 512".
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: immich-postgres

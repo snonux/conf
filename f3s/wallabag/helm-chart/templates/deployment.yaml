@@ -5,6 +5,10 @@ metadata:
   namespace: services
 spec:
   replicas: 1
+  # Recreate so the old pod fully terminates before the new one starts —
+  # avoids NFS-lock races on the hostPath-backed PVC during rolling updates.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: wallabag
