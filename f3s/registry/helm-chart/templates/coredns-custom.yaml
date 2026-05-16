@@ -1,0 +1,23 @@
+---
+# Make `registry.lan.buetow.org` resolvable from inside the cluster so that
+# pods (notably trivy-operator scan jobs) can pull/inspect images from the
+# in-cluster Docker Registry NodePort.
+#
+# The k3s registries.yaml on each node mirrors `registry.lan.buetow.org:30001`
+# to `r0.lan.buetow.org:30001`, so containerd image pulls work without DNS.
+# Pods that issue their own image-name DNS lookups (trivy) still need an
+# A record. We point them at r0's WireGuard IP, which is what NodeHosts
+# uses for r0.lan.buetow.org and what the registries.yaml mirror targets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  registry.server: |
+    registry.lan.buetow.org:53 {
+        hosts {
+            192.168.2.120 registry.lan.buetow.org
+            fallthrough
+        }
+    }
