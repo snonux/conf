@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh DServer SSH key cache every 30 minutes
+
+[Timer]
+OnBootSec=2m
+OnCalendar=*:0/30
+Persistent=true
+Unit=dserver-update-keycache.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,22 @@
+[Unit]
+Description=DTail server
+After=network.target
+
+[Service]
+Slice=dserver.slice
+User=dserver
+Group=dserver
+ExecStart=/usr/local/bin/dserver -cfg /etc/dserver/dtail.json
+WorkingDirectory=/var/run/dserver
+RuntimeDirectory=dserver
+RuntimeDirectoryMode=0755
+ExecStartPre=/usr/bin/mkdir -p /var/run/dserver/cache /var/run/dserver/log
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+CPUAccounting=true
+MemoryAccounting=true
+BlockIOAccounting=true
+
+[Install]
+WantedBy=multi-user.target
