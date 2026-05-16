@@ -24,7 +24,7 @@ spec:
         fsGroup: 65534
       containers:
         - name: player
-          image: registry.lan.buetow.org:30001/player:df224ef
+          image: registry.lan.buetow.org:30001/player:0a9660a
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
