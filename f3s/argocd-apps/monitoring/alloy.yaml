@@ -15,101 +15,14 @@ spec:
       releaseName: alloy
       valuesObject:
         alloy:
-          service:
-            ports:
-              otlp-grpc:
-                enabled: true
-                port: 4317
-                targetPort: 4317
-                protocol: TCP
-              otlp-http:
-                enabled: true
-                port: 4318
-                targetPort: 4318
-                protocol: TCP
-
+          # Log shipping (to Loki) and trace forwarding (to Tempo) are
+          # disabled — Loki and Tempo apps are off. The DaemonSet stays
+          # deployed with a no-op config so the chart can be re-enabled
+          # by restoring the discovery/loki/otelcol blocks here.
           configMap:
             content: |
-              discovery.kubernetes "pods" {
-                role = "pod"
-              }
-
-              discovery.relabel "pods" {
-                targets = discovery.kubernetes.pods.targets
-
-                rule {
-                  source_labels = ["__meta_kubernetes_namespace"]
-                  target_label  = "namespace"
-                }
-
-                rule {
-                  source_labels = ["__meta_kubernetes_pod_name"]
-                  target_label  = "pod"
-                }
-
-                rule {
-                  source_labels = ["__meta_kubernetes_pod_container_name"]
-                  target_label  = "container"
-                }
-
-                rule {
-                  source_labels = ["__meta_kubernetes_pod_label_app"]
-                  target_label  = "app"
-                }
-              }
-
-              loki.source.kubernetes "pods" {
-                targets    = discovery.relabel.pods.output
-                forward_to = [loki.write.default.receiver]
-              }
-
-              loki.write "default" {
-                endpoint {
-                  url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
-                }
-              }
-
-              // ========================================
-              // TRACES COLLECTION
-              // ========================================
-
-              // OTLP receiver for traces via gRPC and HTTP
-              otelcol.receiver.otlp "default" {
-                grpc {
-                  endpoint = "0.0.0.0:4317"
-                }
-
-                http {
-                  endpoint = "0.0.0.0:4318"
-                }
-
-                output {
-                  traces = [otelcol.processor.batch.default.input]
-                }
-              }
-
-              // Batch processor for efficient trace forwarding
-              otelcol.processor.batch "default" {
-                timeout = "5s"
-                send_batch_size = 100
-                send_batch_max_size = 200
-
-                output {
-                  traces = [otelcol.exporter.otlp.tempo.input]
-                }
-              }
-
-              // OTLP exporter to send traces to Tempo
-              otelcol.exporter.otlp "tempo" {
-                client {
-                  endpoint = "tempo.monitoring.svc.cluster.local:4317"
-
-                  tls {
-                    insecure = true
-                  }
-
-                  compression = "gzip"
-                }
+              logging {
+                level = "info"
               }
 
   destination:

@@ -169,6 +169,12 @@ spec:
                   equal: ['namespace', 'alertname']
 
           grafana:
+            # Disabled: SQLite-on-NFS is unreliable across restarts (lock
+            # state cannot be reacquired cleanly), and Loki + Tempo are
+            # also disabled, so there's nothing to visualize. Prometheus
+            # alone is kept for metrics + alerting.
+            enabled: false
+
             persistence:
               enabled: true
               type: pvc
