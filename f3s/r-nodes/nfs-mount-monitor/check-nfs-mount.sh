@@ -23,7 +23,15 @@
 #   3. umount -f            (force unmount)
 #   4. umount -l            (lazy detach VFS node if -f failed)
 #   5. systemctl restart stunnel + 2s sleep (refresh the TLS transport)
-#   6. mount                (fresh mount via stunnel)
+#   6. mount with soft+short-timeo (NFS-specific; avoids infinite kernel D-state)
+#
+# Step 6 uses explicit soft NFS options instead of `mount $MOUNT_POINT`
+# (which would read the fstab `hard` flag).  A `hard` NFS mount that fails
+# to reach the server enters uninterruptible kernel sleep (D-state), and
+# SIGKILL cannot wake a D-state process on Linux — the script would hang
+# indefinitely, leaving the lock file stale.  With `soft,timeo=50,retrans=3`
+# the kernel gives up after ~15s and returns ETIMEDOUT, allowing the fail
+# counter to increment and eventually trigger the reboot escalation.
 #
 # A hard 60-second deadline is enforced so the function can never outlast
 # its own timer interval (10s) by more than 6x, preventing timer pile-up.
@@ -61,9 +69,19 @@ NFS_FAIL_THRESHOLD=5
 # shellcheck source=/etc/default/nfs-mount-monitor
 [ -f /etc/default/nfs-mount-monitor ] && . /etc/default/nfs-mount-monitor
 
-# Use a lock file to prevent concurrent runs (timer fires every 10 s)
+# Use a lock file to prevent concurrent runs (timer fires every 10 s).
+# If the lock is older than MAX_LOCK_AGE_SECS it was left by a run that was
+# SIGKILL'd before its EXIT trap could clean up (e.g. systemd kills the
+# process after its own timeout, bypassing the trap).  Remove the stale lock
+# and continue rather than silently skipping all health checks forever.
+MAX_LOCK_AGE_SECS=90
 if [ -f "$LOCK_FILE" ]; then
-    exit 0
+    lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK_FILE") ))
+    if (( lock_age < MAX_LOCK_AGE_SECS )); then
+        exit 0
+    fi
+    echo "Stale lock file detected (age=${lock_age}s > ${MAX_LOCK_AGE_SECS}s) — removing and continuing"
+    rm -f "$LOCK_FILE"
 fi
 touch "$LOCK_FILE"
 trap "rm -f $LOCK_FILE" EXIT
@@ -187,7 +205,8 @@ fix_mount () {
         echo "$MOUNT_POINT is still a valid mountpoint after remount; trying fresh mount"
     else
         echo "$MOUNT_POINT is not a valid mountpoint — attempting direct mount"
-        if mount "$MOUNT_POINT" 2>/dev/null; then
+        if mount -t nfs4 -o port=2323,soft,timeo=50,retrans=3 \
+               127.0.0.1:/k3svolumes "$MOUNT_POINT" 2>/dev/null; then
             echo "Successfully mounted $MOUNT_POINT"
             MOUNT_FIXED=1
             return 0
@@ -235,9 +254,10 @@ fix_mount () {
 
     check_deadline || return 1
 
-    # --- Step 6: fresh mount ---
+    # --- Step 6: fresh mount (soft options — see top comment for rationale) ---
     echo "Attempting to mount $MOUNT_POINT"
-    if mount "$MOUNT_POINT" 2>/dev/null; then
+    if mount -t nfs4 -o port=2323,soft,timeo=50,retrans=3 \
+           127.0.0.1:/k3svolumes "$MOUNT_POINT" 2>/dev/null; then
         echo "NFS mount $MOUNT_POINT mounted successfully"
         MOUNT_FIXED=1
         return 0
