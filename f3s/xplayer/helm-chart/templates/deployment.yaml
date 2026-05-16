@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: player
+  name: xplayer
   namespace: services
 spec:
   replicas: 1
@@ -11,11 +11,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: player
+      app: xplayer
   template:
     metadata:
       labels:
-        app: player
+        app: xplayer
     spec:
       securityContext:
         runAsNonRoot: true
@@ -23,7 +23,7 @@ spec:
         runAsGroup: 65534
         fsGroup: 65534
       containers:
-        - name: player
+        - name: xplayer
           image: registry.lan.buetow.org:30001/player:df224ef
           imagePullPolicy: IfNotPresent
           securityContext:
@@ -64,18 +64,18 @@ spec:
               memory: 512Mi
               cpu: "1"
           volumeMounts:
-            - name: player-data
+            - name: xplayer-data
               mountPath: /data
-            - name: player-media
+            - name: xplayer-media
               mountPath: /media
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: player-data
+        - name: xplayer-data
           persistentVolumeClaim:
-            claimName: player-data-pvc
-        - name: player-media
+            claimName: xplayer-data-pvc
+        - name: xplayer-media
           persistentVolumeClaim:
-            claimName: player-media-pvc
+            claimName: xplayer-media-pvc
         - name: tmp
           emptyDir: {}

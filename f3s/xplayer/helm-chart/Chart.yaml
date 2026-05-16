@@ -1,6 +1,6 @@
 apiVersion: v2
-name: player
-description: Player media app for f3s
+name: xplayer
+description: Extra Player media app instance for f3s
 type: application
 version: 0.1.0
 appVersion: "df224ef"
