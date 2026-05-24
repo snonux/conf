@@ -39,7 +39,7 @@ spec:
                 containers:
                   main:
                     image:
-                      tag: v2.5.5
+                      tag: v2.7.5
             resources:
               requests:
                 cpu: 500m
@@ -105,7 +105,7 @@ spec:
                 containers:
                   main:
                     image:
-                      tag: v2.5.5
+                      tag: v2.7.5
                     env:
                       MACHINE_LEARNING_MODEL_INTRA_OP_THREADS: "4"
                       MACHINE_LEARNING_MODEL_INTER_OP_THREADS: "1"
