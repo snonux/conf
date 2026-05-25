@@ -19,6 +19,23 @@ spec:
       labels:
         app: pkgrepo
     spec:
+      initContainers:
+      - name: nfs-check-pkgrepo
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: pkgrepo-storage
+          mountPath: /mnt
+          readOnly: true
       containers:
       - name: nginx
         image: nginx:1.27-alpine
