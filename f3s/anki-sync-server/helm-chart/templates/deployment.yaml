@@ -17,6 +17,23 @@ spec:
       labels:
         app: anki-sync-server
     spec:
+      initContainers:
+      - name: nfs-check-anki-data
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: anki-data
+          mountPath: /mnt
+          readOnly: true
       containers:
       - name: anki-sync-server
         image: registry.lan.buetow.org:30001/anki-sync-server:25.07.5b
