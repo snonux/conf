@@ -17,6 +17,55 @@ spec:
       labels:
         app: jellyfin-server
     spec:
+      initContainers:
+        - name: nfs-check-config
+          image: busybox:stable
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: jellyfin-config
+              mountPath: /mnt
+              readOnly: true
+        - name: nfs-check-libraries
+          image: busybox:stable
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: jellyfin-libraries
+              mountPath: /mnt
+              readOnly: true
+        - name: nfs-check-data
+          image: busybox:stable
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: jellyfin-data
+              mountPath: /mnt
+              readOnly: true
       containers:
         - name: jellyfin
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
