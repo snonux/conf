@@ -16,6 +16,39 @@ spec:
       labels:
         app: syncthing
     spec:
+      initContainers:
+      - name: nfs-check-config
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: syncthing-config
+          mountPath: /mnt
+          readOnly: true
+      - name: nfs-check-data
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: syncthing-data
+          mountPath: /mnt
+          readOnly: true
       containers:
       - name: syncthing
         image: lscr.io/linuxserver/syncthing:latest
