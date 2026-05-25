@@ -22,6 +22,23 @@ spec:
       securityContext:
         fsGroup: 33
       initContainers:
+      - name: nfs-check-repos
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: repos
+          mountPath: /mnt
+          readOnly: true
+
       - name: setup
         image: alpine:3.19
         command:
