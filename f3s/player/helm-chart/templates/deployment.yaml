@@ -22,6 +22,39 @@ spec:
         runAsUser: 65534
         runAsGroup: 65534
         fsGroup: 65534
+      initContainers:
+        - name: nfs-check-data
+          image: busybox:stable
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: player-data
+              mountPath: /mnt
+              readOnly: true
+        - name: nfs-check-media
+          image: busybox:stable
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: player-media
+              mountPath: /mnt
+              readOnly: true
       containers:
         - name: player
           image: registry.lan.buetow.org:30001/player:dd3a961
