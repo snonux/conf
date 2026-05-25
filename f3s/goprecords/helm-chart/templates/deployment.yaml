@@ -17,6 +17,23 @@ spec:
       labels:
         app: goprecords
     spec:
+      initContainers:
+      - name: nfs-check-stats
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: goprecords-stats
+          mountPath: /mnt
+          readOnly: true
       containers:
       - name: goprecords
         image: registry.lan.buetow.org:30001/goprecords:0.5.1
