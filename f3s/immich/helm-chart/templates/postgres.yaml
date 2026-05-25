@@ -24,21 +24,21 @@ spec:
         app: immich-postgres
     spec:
       initContainers:
-      - name: wait-for-nfs
-        image: busybox:1.37
+      - name: nfs-check-data
+        image: busybox:stable
         command:
-        - /bin/sh
+        - sh
         - -c
         - |
-          echo "Waiting for NFS mount..."
-          until [ -f /nfs-check/k3svolumes.DO_NOT_REMOVE ]; do
-            echo "NFS not mounted yet, waiting..."
-            sleep 5
-          done
-          echo "NFS mount detected"
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
         volumeMounts:
-        - name: nfs-check
-          mountPath: /nfs-check
+        - name: postgres-data
+          mountPath: /mnt
           readOnly: true
       containers:
       - name: postgres
@@ -88,10 +88,6 @@ spec:
       - name: postgres-data
         persistentVolumeClaim:
           claimName: immich-postgres-pvc
-      - name: nfs-check
-        hostPath:
-          path: /data/nfs/k3svolumes
-          type: Directory
 ---
 apiVersion: v1
 kind: Service
