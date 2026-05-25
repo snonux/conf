@@ -18,6 +18,38 @@ spec:
         app: radicale
     spec:
       initContainers:
+      - name: nfs-check-collections
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: radicale-collections
+          mountPath: /mnt
+          readOnly: true
+      - name: nfs-check-auth
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: radicale-auth
+          mountPath: /mnt
+          readOnly: true
       - name: debug-auth-and-mounts
         image: busybox:1.36
         command: ["/bin/sh", "-c"]
