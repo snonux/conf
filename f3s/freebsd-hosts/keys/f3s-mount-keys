@@ -1,0 +1,110 @@
+#!/bin/sh
+
+set -u
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+
+MOUNTPOINT="${F3S_KEYS_MOUNTPOINT:-/keys}"
+LABEL="${F3S_KEYS_LABEL:-F3S_KEYS}"
+DEVICES="${F3S_KEYS_DEVICES:-/dev/ufs/${LABEL} /dev/da0}"
+WAIT_SECONDS="${F3S_KEYS_WAIT_SECONDS:-10}"
+MOUNT_OPTIONS="${F3S_KEYS_MOUNT_OPTIONS:-ro}"
+LOGTAG="f3s-mount-keys"
+STRICT="NO"
+
+if [ "${1:-}" = "--strict" ]; then
+    STRICT="YES"
+fi
+
+log()
+{
+    logger -t "$LOGTAG" "$*"
+    echo "$LOGTAG: $*"
+}
+
+fail()
+{
+    log "$*"
+    if [ "$STRICT" = "YES" ]; then
+        exit 1
+    fi
+    exit 0
+}
+
+is_mounted()
+{
+    mount | grep -Eq " on ${MOUNTPOINT} \\("
+}
+
+find_device()
+{
+    for dev in $DEVICES; do
+        if [ -e "$dev" ]; then
+            echo "$dev"
+            return 0
+        fi
+    done
+    return 1
+}
+
+validate_keys()
+{
+    missing="$(
+        zfs get -H -t filesystem,volume -s local -o value,name keylocation 2>/dev/null |
+        while IFS="$(printf '\t')" read -r keylocation dataset; do
+            case "$keylocation" in
+                file://"$MOUNTPOINT"/*)
+                    keyfile="${keylocation#file://}"
+                    if [ ! -s "$keyfile" ] || [ ! -r "$keyfile" ]; then
+                        echo "${dataset}:${keyfile}"
+                    fi
+                    ;;
+            esac
+        done
+    )"
+
+    if [ -n "$missing" ]; then
+        echo "$missing" | while IFS=: read -r dataset keyfile; do
+            log "key file for ${dataset} is missing or unreadable: ${keyfile}"
+        done
+        return 1
+    fi
+
+    return 0
+}
+
+if is_mounted; then
+    log "$MOUNTPOINT is already mounted"
+    validate_keys || true
+    exit 0
+fi
+
+mkdir -p "$MOUNTPOINT" || fail "could not create $MOUNTPOINT"
+chmod 700 "$MOUNTPOINT" 2>/dev/null || true
+
+i=0
+dev=""
+while [ "$i" -le "$WAIT_SECONDS" ]; do
+    if dev="$(find_device)"; then
+        break
+    fi
+    sleep 1
+    i=$((i + 1))
+done
+
+if [ -z "$dev" ]; then
+    fail "no USB key device found; checked: $DEVICES"
+fi
+
+if ! fsck_ufs -p "$dev"; then
+    fail "fsck_ufs failed for $dev; leaving $MOUNTPOINT unmounted"
+fi
+
+if ! mount -t ufs -o "$MOUNT_OPTIONS" "$dev" "$MOUNTPOINT"; then
+    fail "could not mount $dev on $MOUNTPOINT"
+fi
+
+log "mounted $dev on $MOUNTPOINT with options $MOUNT_OPTIONS"
+validate_keys || true
+
+exit 0

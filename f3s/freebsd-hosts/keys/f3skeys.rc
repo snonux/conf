@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# PROVIDE: f3skeys
+# REQUIRE: zpool
+# BEFORE: zfskeys zfs zvol
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="f3skeys"
+desc="Mount f3s USB key stick before ZFS encrypted dataset keys are loaded"
+rcvar="f3skeys_enable"
+start_cmd="f3skeys_start"
+stop_cmd=":"
+
+: ${f3skeys_enable:="NO"}
+: ${f3skeys_flags:=""}
+
+f3skeys_start()
+{
+    if [ -x /usr/local/sbin/f3s-mount-keys ]; then
+        /usr/local/sbin/f3s-mount-keys $f3skeys_flags || true
+    else
+        logger -t f3skeys "/usr/local/sbin/f3s-mount-keys is missing"
+    fi
+}
+
+load_rc_config "$name"
+run_rc_command "$1"

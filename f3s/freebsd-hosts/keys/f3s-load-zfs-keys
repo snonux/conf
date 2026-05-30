@@ -1,0 +1,88 @@
+#!/bin/sh
+
+set -u
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+
+LOGTAG="f3s-load-zfs-keys"
+TIMEOUT="${F3S_ZFSKEYS_TIMEOUT:-10}"
+
+log()
+{
+    logger -t "$LOGTAG" "$*"
+    echo "$LOGTAG: $*"
+}
+
+datasets_from_rc()
+{
+    sysrc -n zfskeys_datasets 2>/dev/null || true
+}
+
+load_one()
+{
+    dataset="$1"
+
+    if ! zfs list -H "$dataset" >/dev/null 2>&1; then
+        log "dataset does not exist: $dataset"
+        return 0
+    fi
+
+    keystatus="$(zfs get -H -o value keystatus "$dataset" 2>/dev/null || true)"
+    if [ "$keystatus" = "available" ]; then
+        log "key already loaded for $dataset"
+        return 0
+    fi
+
+    keylocation="$(zfs get -H -o value keylocation "$dataset" 2>/dev/null || true)"
+    case "$keylocation" in
+        file://*)
+            keyfile="${keylocation#file://}"
+            if [ ! -s "$keyfile" ] || [ ! -r "$keyfile" ]; then
+                log "key file is missing or unreadable for $dataset: $keyfile"
+                return 1
+            fi
+            ;;
+        *)
+            log "keylocation for $dataset is not a file key: $keylocation"
+            return 0
+            ;;
+    esac
+
+    if ! zfs load-key -n "$dataset" >/dev/null 2>&1; then
+        log "key verification failed for $dataset"
+        return 1
+    fi
+
+    if timeout "$TIMEOUT" zfs load-key "$dataset"; then
+        log "loaded key for $dataset"
+    else
+        log "failed to load key for $dataset"
+        return 1
+    fi
+
+    mounted="$(zfs get -H -o value mounted "$dataset" 2>/dev/null || true)"
+    canmount="$(zfs get -H -o value canmount "$dataset" 2>/dev/null || true)"
+    if [ "$mounted" = "no" ] && [ "$canmount" != "off" ] && [ "$canmount" != "noauto" ]; then
+        zfs mount "$dataset" >/dev/null 2>&1 || true
+    fi
+}
+
+/usr/local/sbin/f3s-mount-keys --strict || exit 1
+
+if [ "$#" -gt 0 ]; then
+    DATASETS="$*"
+else
+    DATASETS="$(datasets_from_rc)"
+fi
+
+if [ -z "$DATASETS" ]; then
+    log "no datasets supplied and zfskeys_datasets is empty"
+    exit 0
+fi
+
+rc=0
+for dataset in $DATASETS; do
+    load_one "$dataset" || rc=1
+done
+
+exit "$rc"
