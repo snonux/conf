@@ -11,14 +11,14 @@ Self-hosted git server for the f3s Kubernetes cluster with SSH access, HTTP git-
 - **Image**: `registry.lan.buetow.org:30001/git-server:1.0`
 
 ### 2. cgit Web UI
-- **URL**: https://cgit.f3s.buetow.org
+- **URL**: https://c-git.f3s.buetow.org
 - **Port**: 80 (HTTP, proxied via Traefik)
 - **Image**: `joseluisq/alpine-cgit:latest`
 - **Features**: Repository browsing, syntax highlighting
 
 ### 3. git-http-backend
 - **Internal**: `http://git-server.cicd.svc.cluster.local/<repo>.git`
-- **External**: `https://cgit.f3s.buetow.org/<repo>.git`
+- **External**: `https://c-git.f3s.buetow.org/<repo>.git`
 - **Used by**: ArgoCD for syncing applications
 - **FastCGI**: nginx + fcgiwrap + git-http-backend
 
@@ -74,12 +74,12 @@ git clone http://git-server.cicd.svc.cluster.local/<repo>.git
 
 **External** (via Traefik ingress):
 ```bash
-git clone https://cgit.f3s.buetow.org/<repo>.git
+git clone https://c-git.f3s.buetow.org/<repo>.git
 ```
 
 ### Web UI
 
-**Browse repositories**: https://cgit.f3s.buetow.org
+**Browse repositories**: https://c-git.f3s.buetow.org
 
 Features:
 - Repository listing with descriptions

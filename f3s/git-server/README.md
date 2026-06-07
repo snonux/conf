@@ -5,7 +5,7 @@ A self-hosted git repository solution for the f3s k3s cluster, replacing externa
 ## Components
 
 - **SSH Git Server**: Alpine-based container with OpenSSH and git for repository access
-- **CGit Web UI**: Browse repositories at `http://cgit.f3s.buetow.org`
+- **CGit Web UI**: Browse repositories at `http://c-git.f3s.buetow.org`
 - **Single Pod Design**: Both containers share storage via ReadWriteMany PVC
 - **Persistent SSH Host Keys**: Keys are stored in NFS and persist across pod restarts
 
@@ -31,7 +31,7 @@ A self-hosted git repository solution for the f3s k3s cluster, replacing externa
 
 - **Internal (ArgoCD)**: `git-server.cicd.svc.cluster.local:22`
 - **External SSH**: NodePort 30022 on any cluster node
-- **Web UI**: `http://cgit.f3s.buetow.org`
+- **Web UI**: `http://c-git.f3s.buetow.org`
 
 ## Initial Setup
 
@@ -135,7 +135,7 @@ kubectl logs -n cicd -l app=git-server -c git-server --tail=50
 kubectl logs -n cicd -l app=git-server -c cgit --tail=50
 
 # Test cgit web UI
-curl -I http://cgit.f3s.buetow.org
+curl -I http://c-git.f3s.buetow.org
 ```
 
 ## Repository URLs

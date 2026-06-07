@@ -1,5 +1,5 @@
 # CGit Web UI Ingress
-# Exposes cgit web interface at cgit.f3s.buetow.org
+# Exposes cgit web interface at c-git.f3s.buetow.org
 # Following f3s cluster ingress pattern (Traefik)
 
 apiVersion: networking.k8s.io/v1
@@ -12,7 +12,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
-    - host: cgit.f3s.buetow.org
+    - host: c-git.f3s.buetow.org
       http:
         paths:
           - path: /
