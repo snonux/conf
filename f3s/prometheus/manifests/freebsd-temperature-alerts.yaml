@@ -1,0 +1,49 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freebsd-temperature-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # CPU temperature alerting for the FreeBSD bhyve hosts (f0, f1, f2).
+    #
+    # Metric: node_cpu_temperature_celsius{os="freebsd", cpu="N"}
+    #   One reading per CPU core, exported by node_exporter (built with the
+    #   FreeBSD temperature collector). f3 is NOT covered — it is a standalone
+    #   host that is not in the node-exporter scrape target list.
+    #
+    # The expression takes the hottest core per host (max by instance) and
+    # joins node_uname_info to attach a friendly `nodename` label (f0/f1/f2)
+    # for the alert summary, since the raw series is only labelled by the
+    # WireGuard instance address.
+    - name: freebsd-temperature
+      interval: 30s
+      rules:
+        # Warning: hottest core at or above 80 C, sustained for 5 minutes.
+        # The Intel N100 throttles near ~100 C (TjMax 105 C), so 80 C is a
+        # "running hot" early warning, not an emergency. The 5m `for` avoids
+        # noise from brief load spikes (e.g. Prometheus TSDB compaction).
+        - alert: FreebsdCpuTemperatureHigh
+          expr: |
+            max by (instance) (node_cpu_temperature_celsius{os="freebsd"})
+              * on (instance) group_left(nodename) node_uname_info{os="freebsd"}
+              >= 80
+          for: 5m
+          labels:
+            severity: warning
+            component: thermal
+          annotations:
+            summary: "CPU temperature high on {{ $labels.nodename }} ({{ $value | printf \"%.0f\" }}C)"
+            description: >
+              FreeBSD host {{ $labels.nodename }} ({{ $labels.instance }}) has a
+              CPU core at {{ $value | printf "%.1f" }}C, at or above the 80C
+              warning threshold for more than 5 minutes. The Intel N100 throttles
+              near 100C, so this is an early warning that the host is running hot.
+            action: >
+              Check load:  ssh paul@{{ $labels.nodename }} "sh -c 'sysctl dev.cpu | grep temperature; uptime; top -b -n1 | head -12'"
+              The usual cause is the host's bhyve guest (k3s node) carrying more
+              CPU than its peers. Rebalance heavy pods off the busiest k3s node
+              (cordon the node, delete the heavy pods so they reschedule, then
+              uncordon) to even out load and lower the temperature.
