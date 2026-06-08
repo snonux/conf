@@ -4,6 +4,7 @@
 192.168.2.120 r0.wg0.wan.buetow.org r0.wg0
 192.168.2.121 r1.wg0.wan.buetow.org r1.wg0
 192.168.2.122 r2.wg0.wan.buetow.org r2.wg0
+192.168.2.123 rocky.wg0.wan.buetow.org rocky.wg0
 192.168.2.130 f0.wg0.wan.buetow.org f0.wg0
 192.168.2.131 f1.wg0.wan.buetow.org f1.wg0
 192.168.2.132 f2.wg0.wan.buetow.org f2.wg0
@@ -17,6 +18,7 @@ fd42:beef:cafe:2::111 fishfinger.wg0.wan.buetow.org fishfinger.wg0
 fd42:beef:cafe:2::120 r0.wg0.wan.buetow.org r0.wg0
 fd42:beef:cafe:2::121 r1.wg0.wan.buetow.org r1.wg0
 fd42:beef:cafe:2::122 r2.wg0.wan.buetow.org r2.wg0
+fd42:beef:cafe:2::123 rocky.wg0.wan.buetow.org rocky.wg0
 fd42:beef:cafe:2::130 f0.wg0.wan.buetow.org f0.wg0
 fd42:beef:cafe:2::131 f1.wg0.wan.buetow.org f1.wg0
 fd42:beef:cafe:2::132 f2.wg0.wan.buetow.org f2.wg0
