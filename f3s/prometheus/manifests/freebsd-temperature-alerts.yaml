@@ -7,15 +7,14 @@ metadata:
     release: prometheus
 spec:
   groups:
-    # CPU temperature alerting for the FreeBSD bhyve hosts (f0, f1, f2).
+    # CPU temperature alerting for the FreeBSD bhyve hosts (f0, f1, f2, f3).
     #
     # Metric: node_cpu_temperature_celsius{os="freebsd", cpu="N"}
     #   One reading per CPU core, exported by node_exporter (built with the
-    #   FreeBSD temperature collector). f3 is NOT covered — it is a standalone
-    #   host that is not in the node-exporter scrape target list.
+    #   FreeBSD temperature collector).
     #
     # The expression takes the hottest core per host (max by instance) and
-    # joins node_uname_info to attach a friendly `nodename` label (f0/f1/f2)
+    # joins node_uname_info to attach a friendly `nodename` label (f0/f1/f2/f3)
     # for the alert summary, since the raw series is only labelled by the
     # WireGuard instance address.
     - name: freebsd-temperature
