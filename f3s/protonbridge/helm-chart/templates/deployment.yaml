@@ -36,13 +36,49 @@ spec:
           readOnly: true
       containers:
       - name: protonbridge
-        # shenxn/protonmail-bridge runs the bridge in headless/noninteractive mode.
-        # On first start, authenticate interactively:
-        #   kubectl exec -it <pod> -n services -- bridge --cli
+        # shenxn/protonmail-bridge: headless Proton Bridge with CLI.
+        # Startup script initializes GPG+pass on first run (persisted to PVC),
+        # then starts bridge. pass is required by Bridge v3 as the keychain store.
+        #
+        # FIRST-TIME SETUP (run once after pod starts for the first time):
+        #   kubectl exec -it -n services <pod> -- bridge --cli
         #   > login
-        # Credentials and session tokens are persisted to the data PVC so
-        # subsequent restarts reconnect automatically without re-login.
+        # Enter ProtonMail credentials when prompted. The bridge token and IMAP/SMTP
+        # passwords are stored in pass (encrypted to the auto-generated GPG key on PVC),
+        # so subsequent pod restarts reconnect automatically without re-login.
+        #
+        # EMAIL CLIENT SETUP:
+        #   After login, run 'info' in bridge --cli to get the per-account IMAP password.
+        #   IMAP: <r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
+        #   SMTP: <r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
+        #   Username: your ProtonMail address
+        #   Password: bridge-generated password (shown by 'info' in bridge --cli)
         image: shenxn/protonmail-bridge:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          # Initialize GPG + pass on first run. Reuses existing keys on restart.
+          if [ ! -d /home/protonmail/.gnupg ] || ! gpg --list-secret-keys 2>/dev/null | grep -q fpr; then
+            echo "First run: generating GPG key and initializing pass..."
+            gpg --batch --gen-key <<'GPGEOF'
+          Key-Type: RSA
+          Key-Length: 4096
+          Name-Real: protonbridge
+          Name-Email: protonbridge@local
+          Expire-Date: 0
+          %no-passphrase
+          %commit
+          GPGEOF
+          fi
+          FINGERPRINT=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep fpr | head -1 | cut -d: -f10)
+          if [ -n "$FINGERPRINT" ] && [ ! -d /home/protonmail/.password-store ]; then
+            echo "Initializing pass with fingerprint $FINGERPRINT..."
+            pass init "$FINGERPRINT"
+          fi
+          echo "Starting Proton Bridge..."
+          exec bridge --noninteractive
         ports:
         - name: imap
           containerPort: 1143
@@ -52,8 +88,8 @@ spec:
           protocol: TCP
         volumeMounts:
         - name: protonbridge-data
-          # Bridge stores its config (tokens, keychain) under ~/.config/protonmail
-          mountPath: /home/protonmail/.config
+          # Mount full home dir so GPG keys, pass store, and bridge config all persist
+          mountPath: /home/protonmail
         readinessProbe:
           tcpSocket:
             port: 1143
