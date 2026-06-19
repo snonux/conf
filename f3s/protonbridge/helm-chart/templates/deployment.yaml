@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: protonbridge
+  namespace: services
+spec:
+  replicas: 1
+  # Recreate so the old pod fully terminates before the new one starts —
+  # prevents two bridge instances racing for the same config/keychain on NFS.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: protonbridge
+  template:
+    metadata:
+      labels:
+        app: protonbridge
+    spec:
+      initContainers:
+      - name: nfs-check-data
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: protonbridge-data
+          mountPath: /mnt
+          readOnly: true
+      containers:
+      - name: protonbridge
+        # shenxn/protonmail-bridge runs the bridge in headless/noninteractive mode.
+        # On first start, authenticate interactively:
+        #   kubectl exec -it <pod> -n services -- bridge --cli
+        #   > login
+        # Credentials and session tokens are persisted to the data PVC so
+        # subsequent restarts reconnect automatically without re-login.
+        image: shenxn/protonmail-bridge:latest
+        ports:
+        - name: imap
+          containerPort: 1143
+          protocol: TCP
+        - name: smtp
+          containerPort: 1025
+          protocol: TCP
+        volumeMounts:
+        - name: protonbridge-data
+          # Bridge stores its config (tokens, keychain) under ~/.config/protonmail
+          mountPath: /home/protonmail/.config
+        readinessProbe:
+          tcpSocket:
+            port: 1143
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 1143
+          initialDelaySeconds: 60
+          periodSeconds: 30
+      volumes:
+      - name: protonbridge-data
+        persistentVolumeClaim:
+          claimName: protonbridge-data-pvc

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: protonbridge
+  namespace: services
+spec:
+  selector:
+    app: protonbridge
+  type: NodePort
+  ports:
+  - name: imap
+    protocol: TCP
+    port: 1143
+    targetPort: 1143
+    # NodePort 30143 — configure email clients as:
+    # IMAP server: <any-r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
+    nodePort: 30143
+  - name: smtp
+    protocol: TCP
+    port: 1025
+    targetPort: 1025
+    # NodePort 30025 — configure email clients as:
+    # SMTP server: <any-r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
+    nodePort: 30025

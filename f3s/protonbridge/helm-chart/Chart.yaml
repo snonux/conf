@@ -1,0 +1,5 @@
+apiVersion: v2
+name: protonbridge
+description: A Helm chart for deploying Proton Bridge in headless mode.
+version: 0.1.0
+appVersion: "latest"
