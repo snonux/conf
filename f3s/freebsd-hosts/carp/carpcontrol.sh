@@ -25,6 +25,12 @@ fi
 case "$2" in
     MASTER)
         logger "CARP state changed to MASTER, starting services"
+        # On the BACKUP host (f1), the sink dataset is kept readonly=on so
+        # zrepl can write incoming snapshots. On MASTER takeover we flip it
+        # read-write so NFS clients can write to it.
+        if [ "$HOSTNAME" != 'f0.lan.buetow.org' ]; then
+            zfs set readonly=off zdata/sink/f0/zdata/enc/nfsdata
+        fi
         service rpcbind start >/dev/null 2>&1
         service mountd start >/dev/null 2>&1
         service nfsd start >/dev/null 2>&1
@@ -38,6 +44,11 @@ case "$2" in
         service nfsd stop >/dev/null 2>&1
         service mountd stop >/dev/null 2>&1
         service nfsuserd stop >/dev/null 2>&1
+        # Restore readonly=on on the sink dataset so that zrepl can resume
+        # writing incoming snapshot data from f0.
+        if [ "$HOSTNAME" != 'f0.lan.buetow.org' ]; then
+            zfs set readonly=on zdata/sink/f0/zdata/enc/nfsdata
+        fi
         logger "CARP BACKUP: NFS and stunnel services stopped"
         ;;
     *)
