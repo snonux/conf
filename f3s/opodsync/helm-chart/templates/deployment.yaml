@@ -37,6 +37,13 @@ spec:
       containers:
       - name: opodsync
         image: ganeshlab/opodsync
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/var/www/server/data/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         env:
         - name: GPODDER_BASE_URL
           value: "https://gpodder.f3s.buetow.org/gpodder"

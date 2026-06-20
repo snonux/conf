@@ -38,6 +38,13 @@ spec:
           image: koreader/kosync:latest
           ports:
             - containerPort: 17200
+          livenessProbe:
+            exec:
+              command: ["test", "-f", "/var/lib/redis/.nfs-sentinel"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
           volumeMounts:
             - name: data
               mountPath: /var/lib/redis

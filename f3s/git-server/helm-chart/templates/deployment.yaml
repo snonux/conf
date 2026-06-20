@@ -122,6 +122,15 @@ spec:
         - containerPort: 22
           name: ssh
           protocol: TCP
+        livenessProbe:
+          exec:
+            # /repos is the NFS-backed repos subPath; test -d catches stale
+            # NFS file handles (ESTALE) after an NFS server restart.
+            command: ["test", "-d", "/repos"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         volumeMounts:
         - name: repos
           mountPath: /repos
@@ -147,6 +156,13 @@ spec:
       # Container 2: CGit Web UI + git-http-backend
       - name: cgit
         image: joseluisq/alpine-cgit:latest
+        livenessProbe:
+          exec:
+            command: ["test", "-d", "/repos"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         command: ["/bin/sh", "-c"]
         args:
         - |

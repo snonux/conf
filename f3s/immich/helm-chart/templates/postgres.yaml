@@ -66,7 +66,9 @@ spec:
             command:
             - /bin/sh
             - -c
-            - pg_isready -U immich -d immich
+            # pg_isready only checks the TCP port; the NFS check catches stale
+            # file handles on the data directory after an NFS server restart.
+            - pg_isready -U immich -d immich && test -f /var/lib/postgresql/data/global/pg_filenode.map
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10

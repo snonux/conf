@@ -39,6 +39,13 @@ spec:
         image: registry.lan.buetow.org:30001/anki-sync-server:25.07.5b
         ports:
         - containerPort: 8080
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/anki_data/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         env:
         - name: SYNC_PORT
           value: "8080"

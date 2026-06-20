@@ -75,6 +75,13 @@ spec:
         image: filebrowser/filebrowser:latest
         ports:
         - containerPort: 80
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/srv/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         env:
         - name: PUID
           value: "65534"

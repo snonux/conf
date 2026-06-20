@@ -45,6 +45,13 @@ spec:
           allowPrivilegeEscalation: false
         ports:
         - containerPort: 3000
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/data/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         env:
         - name: APP_URL
           value: "http://keybr.f3s.buetow.org/"

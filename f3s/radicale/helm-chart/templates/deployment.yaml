@@ -73,6 +73,13 @@ spec:
         image: registry.lan.buetow.org:30001/radicale:latest
         ports:
         - containerPort: 8080
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/collections/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         volumeMounts:
         - name: radicale-collections
           mountPath: /collections

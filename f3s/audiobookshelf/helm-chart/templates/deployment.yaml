@@ -71,6 +71,13 @@ spec:
         image: ghcr.io/advplyr/audiobookshelf
         ports:
         - containerPort: 80
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/config/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         volumeMounts:
         - name: audiobookshelf-config
           mountPath: /config

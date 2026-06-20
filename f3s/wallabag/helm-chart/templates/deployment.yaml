@@ -55,6 +55,13 @@ spec:
         image: wallabag/wallabag
         ports:
         - containerPort: 80
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/var/www/wallabag/data/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         env:
         - name: SYMFONY__ENV__DOMAIN_NAME
           value: "https://bag.f3s.buetow.org"

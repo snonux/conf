@@ -18,6 +18,22 @@ spec:
         seLinuxOptions:
           type: spc_t
       initContainers:
+      - name: nfs-check-data
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: webdav-data
+          mountPath: /mnt
+          readOnly: true
       - name: setup
         image: httpd:2.4
         command:
@@ -47,6 +63,13 @@ spec:
           runAsGroup: 65534
         ports:
         - containerPort: 8080
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/var/www/webdav/.nfs-sentinel"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
         volumeMounts:
         - name: webdav-data
           mountPath: /var/www/webdav
