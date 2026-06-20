@@ -6,7 +6,7 @@ metadata:
 spec:
   replicas: 1
   # Recreate so the old pod fully terminates before the new one starts —
-  # prevents two bridge instances racing for the same config/keychain on NFS.
+  # prevents two bridge instances racing for the same vault on NFS.
   strategy:
     type: Recreate
   selector:
@@ -72,21 +72,35 @@ spec:
           mountPath: /bridge-data
       containers:
       - name: protonbridge
-        # Bridge v3 headless. Reads keychain from pass (set up by the init container).
-        # IMAP + SMTP listen once an account is logged in.
+        # Bridge v3 in non-interactive daemon mode. The gRPC server embedded in bridge
+        # allows a separate CLI client process to connect for initial login and management.
         #
-        # FIRST-TIME SETUP (run once):
-        #   kubectl exec -it -n services <pod> -- bridge --cli
-        #   > login
-        # Enter ProtonMail credentials. Session persists in pass on PVC.
-        # Run 'info' in the CLI to get the IMAP/SMTP bridge password.
+        # FIRST-TIME SETUP (run once after pod is Running):
+        #   1. Get pod name: kubectl get pod -n services -l app=protonbridge
+        #   2. Connect the interactive CLI to the running bridge daemon:
+        #        kubectl exec -it -n services <pod-name> -- /usr/lib/protonmail/bridge/bridge --cli
+        #   3. At the bridge> prompt: type 'login'
+        #   4. Enter ProtonMail email and password when prompted
+        #   5. After login, run: info   (note the IMAP/SMTP bridge passwords)
+        #   6. Type: quit  (exits CLI; bridge daemon keeps running)
         #
-        # EMAIL CLIENT SETUP:
-        #   IMAP: <r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
-        #   SMTP: <r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
+        # Session persists in pass on NFS PVC; subsequent restarts reconnect automatically.
+        #
+        # EMAIL CLIENT SETUP (after login):
+        #   IMAP: <any-r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
+        #   SMTP: <any-r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
         #   Username: your ProtonMail address
-        #   Password: bridge-generated password (from 'info' in bridge --cli)
+        #   Password: bridge-generated password (from 'info' in the CLI above)
         image: shenxn/protonmail-bridge:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          export GNUPGHOME=/bridge-data/.gnupg
+          export PASSWORD_STORE_DIR=/bridge-data/.password-store
+          socat TCP-LISTEN:25,fork TCP:127.0.0.1:1025 &
+          socat TCP-LISTEN:143,fork TCP:127.0.0.1:1143 &
+          exec /usr/lib/protonmail/bridge/bridge --noninteractive
         env:
         - name: GNUPGHOME
           value: /bridge-data/.gnupg
