@@ -44,10 +44,21 @@ case "$2" in
         service nfsd stop >/dev/null 2>&1
         service mountd stop >/dev/null 2>&1
         service nfsuserd stop >/dev/null 2>&1
-        # Restore readonly=on on the sink dataset so that zrepl can resume
-        # writing incoming snapshot data from f0.
+        # Restore the sink dataset for zrepl replication from f0.
+        # Any writes made while MASTER must be rolled back to the last
+        # received snapshot; otherwise zfs receive fails with "destination
+        # has been modified since most recent snapshot". Data written
+        # during the MASTER window is transient (health checks, test writes)
+        # and is intentionally discarded here.
         if [ "$HOSTNAME" != 'f0.lan.buetow.org' ]; then
-            zfs set readonly=on zdata/sink/f0/zdata/enc/nfsdata
+            SINK="zdata/sink/f0/zdata/enc/nfsdata"
+            LAST_SNAP=$(zfs list -t snapshot -Ho name "$SINK" 2>/dev/null | tail -1)
+            if [ -n "$LAST_SNAP" ]; then
+                zfs rollback "$LAST_SNAP" && \
+                    logger "CARP BACKUP: rolled back $SINK to $LAST_SNAP" || \
+                    logger "CARP BACKUP: WARNING rollback of $SINK to $LAST_SNAP failed"
+            fi
+            zfs set readonly=on "$SINK"
         fi
         logger "CARP BACKUP: NFS and stunnel services stopped"
         ;;
