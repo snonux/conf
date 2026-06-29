@@ -21,6 +21,31 @@ spec:
         values: |
           valkey:
             enabled: true
+            controllers:
+              main:
+                containers:
+                  main:
+                    probes:
+                      # NFS-aware liveness: valkey-cli must PONG AND a write to the
+                      # NFS-backed /data volume must succeed. Catches the "reads OK but
+                      # writes return ESTALE" stale-bind-mount state that follows a CARP
+                      # failover / NFS remount (the default ping-only probe stays green
+                      # because reads are served from the stale handle). On failure the
+                      # container restarts, which re-binds hostPath to the now-healthy
+                      # host NFS mount and clears the stale handle.
+                      liveness:
+                        enabled: true
+                        custom: true
+                        spec:
+                          exec:
+                            command:
+                              - sh
+                              - -c
+                              - "valkey-cli ping | grep -q PONG && echo probe > /data/.nfs-write-probe && rm -f /data/.nfs-write-probe"
+                          initialDelaySeconds: 30
+                          periodSeconds: 10
+                          timeoutSeconds: 10
+                          failureThreshold: 3
             persistence:
               data:
                 enabled: true
@@ -36,6 +61,18 @@ spec:
             enabled: true
             controllers:
               main:
+                pod:
+                  labels:
+                    # Opt in to the node-level nfs-mount-monitor stale-bind-mount
+                    # reaper. The server's liveness probe is an HTTP /ping that
+                    # never touches the NFS volume, so a stale /data bind-mount
+                    # (writes return ESTALE, uploads 500) leaves the pod Running
+                    # and Ready and cannot self-heal. The chart hardcodes the
+                    # httpGet liveness and its value-merge refills httpGet, so an
+                    # in-pod exec write-probe cannot be set via Helm values (as is
+                    # done for valkey). Instead the node monitor execs a write
+                    # probe into this pod and recreates it when writes fail.
+                    nfs.stale-restart/enabled: "true"
                 containers:
                   main:
                     image:

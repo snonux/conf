@@ -66,6 +66,10 @@ TEXTFILE_PROM="$TEXTFILE_DIR/nfs_mount_monitor.prom"
 # deployed alongside this script.  Defaults are defined here so the script
 # works even if the file is absent.
 NFS_FAIL_THRESHOLD=5
+# Minimum seconds between stale-NFS pod reaper passes (reap_stale_nfs_pods).
+# The timer fires every 10s, but the reaper issues several kubectl calls, so we
+# throttle it to limit API churn while still healing within ~one interval.
+REAP_INTERVAL=30
 # shellcheck source=/etc/default/nfs-mount-monitor
 [ -f /etc/default/nfs-mount-monitor ] && . /etc/default/nfs-mount-monitor
 
@@ -174,6 +178,98 @@ kill_pinning_processes() {
         done
     done
     echo "Killed $killed process(es) pinning $MOUNT_POINT"
+}
+
+# reap_stale_nfs_pods — recreate pods on THIS node that are broken by a stale
+# NFS bind-mount, even when the node-level mount itself is healthy.
+#
+# Why this exists separately from fix_mount:
+#   fix_mount (and its post-repair stuck-pod cleanup) only run when one of the
+#   three node-level probes fails — i.e. when /data/nfs/k3svolumes is itself
+#   missing/hung/unwritable.  But after a CARP failover / f-host reboot /
+#   stunnel reconnect, the node can re-establish a perfectly healthy mount
+#   while individual pods that existed during the brief transition keep a
+#   STALE bind-mount to the old, detached NFS superblock.  Those pods are
+#   invisible to fix_mount (node mount is fine, so MOUNT_FIXED is never set and
+#   all three probes pass).  Observed real-world fallout of exactly this:
+#     * git-server / prometheus: CreateContainerConfigError
+#       "failed to prepare subPath for volumeMount ..." — kubelet cannot even
+#       (re)create the container, and retries forever on the same node.
+#     * immich-server: container is Running and Ready (its liveness probe is an
+#       HTTP /ping that never touches the volume) yet every WRITE to the NFS
+#       volume returns ESTALE (errno 116) — uploads fail with HTTP 500.
+#   Recreating the pod fixes both, because a fresh pod sandbox / container
+#   re-binds the now-healthy host mount.
+#
+# Two detection strategies, both conservative:
+#   Case 1 (container cannot be created): visible in pod status.  We match the
+#     waiting reason + a subPath/stale message, and only act on pods older than
+#     a grace period so a normally slow first start is never reaped.
+#   Case 2 (Running+Ready but writes fail): NOT visible in pod status, so it is
+#     OPT-IN.  A pod is probed only if it carries the label
+#     nfs.stale-restart/enabled=true ; we exec a tiny write probe into it (path
+#     from annotation nfs.stale-restart/path, default /data) and reap only if
+#     the probe fails twice in a row (guards against a transient exec hiccup).
+reap_stale_nfs_pods() {
+    command -v kubectl >/dev/null 2>&1 || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    local node
+    node=$(hostname)
+
+    # --- Case 1: container-create failures caused by a stale NFS subPath -----
+    # Only pods older than CREATE_GRACE_SECS are eligible, so a pod that is
+    # briefly in ContainerCreating during a normal start is never reaped.
+    local create_grace=120
+    local now
+    now=$(date +%s)
+    timeout 15 kubectl get pods -A --field-selector "spec.nodeName=$node" -o json 2>/dev/null \
+      | jq -r --argjson now "$now" --argjson grace "$create_grace" '
+          .items[]
+          | select((.metadata.creationTimestamp | fromdateiso8601) < ($now - $grace))
+          | . as $p
+          | ((.status.containerStatuses // []) + (.status.initContainerStatuses // []))
+          | map(select(
+                ((.state.waiting.reason // "")
+                   | test("CreateContainerConfigError|CreateContainerError|RunContainerError"))
+                and ((.state.waiting.message // "")
+                   | test("subPath|stale file handle"; "i"))
+            ))
+          | select(length > 0)
+          | "\($p.metadata.namespace) \($p.metadata.name)"
+        ' 2>/dev/null | sort -u | while read -r ns pod; do
+        [ -n "$ns" ] || continue
+        echo "reap_stale_nfs_pods: $ns/$pod stuck creating container (stale NFS subPath) — deleting"
+        timeout 20 kubectl delete pod -n "$ns" "$pod" --grace-period=0 --force 2>&1
+    done
+
+    # --- Case 2: Running+Ready opt-in pods with a stale bind-mount -----------
+    timeout 15 kubectl get pods -A \
+        --field-selector "spec.nodeName=$node,status.phase=Running" \
+        -l nfs.stale-restart/enabled=true -o json 2>/dev/null \
+      | jq -r '
+          .items[]
+          | select((.status.conditions // []) | any(.type=="Ready" and .status=="True"))
+          | "\(.metadata.namespace)\t\(.metadata.name)\t\(.metadata.annotations["nfs.stale-restart/path"] // "/data")"
+        ' 2>/dev/null | while IFS=$'\t' read -r ns pod path; do
+        [ -n "$ns" ] || continue
+        # Probe file is per-node so concurrent r0/r1/r2 checks never collide.
+        local probe="$path/.nfs-pod-probe.$node"
+        # A stale handle makes the write fail immediately (ESTALE); a hung mount
+        # makes it block, in which case the outer `timeout` kills kubectl exec
+        # and we treat it as a failure — both should trigger a reap.
+        if timeout 20 kubectl exec -n "$ns" "$pod" -- \
+               sh -c "echo x > '$probe' && rm -f '$probe'" >/dev/null 2>&1; then
+            continue
+        fi
+        sleep 2
+        if timeout 20 kubectl exec -n "$ns" "$pod" -- \
+               sh -c "echo x > '$probe' && rm -f '$probe'" >/dev/null 2>&1; then
+            continue
+        fi
+        echo "reap_stale_nfs_pods: $ns/$pod write-probe to $path failed twice (stale NFS bind-mount) — deleting"
+        timeout 20 kubectl delete pod -n "$ns" "$pod" --grace-period=0 --force 2>&1
+    done
 }
 
 fix_mount () {
@@ -379,4 +475,17 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
     # On a healthy remount, also ensure the fail counter is reset.
     write_fail_count 0
     echo "Stuck-pod cleanup done; consecutive-failure counter reset to 0"
+fi
+
+# Reap pods broken by a stale NFS bind-mount even when the node-level mount is
+# healthy (the failure mode fix_mount cannot see).  Throttled to REAP_INTERVAL
+# seconds because, unlike the probes above, it issues kubectl calls on every
+# pass regardless of mount health.
+REAP_STAMP="$STATE_DIR/last-reap"
+last_reap=0
+[ -f "$REAP_STAMP" ] && last_reap=$(stat -c %Y "$REAP_STAMP" 2>/dev/null || echo 0)
+if (( $(date +%s) - last_reap >= REAP_INTERVAL )); then
+    mkdir -p "$STATE_DIR"
+    touch "$REAP_STAMP"
+    reap_stale_nfs_pods
 fi
