@@ -1,0 +1,44 @@
+#!/bin/sh
+# Turn on the Shelly Plug M Gen 3 that powers the rack fans.
+#
+# Called at boot by the shellyfans rc service so the rack fans start whenever
+# an f-host (f0/f1/f2/f3) comes up. The Shelly plug uses HTTP digest auth
+# (user "admin"); the password is read from $SHELLY_PASS_FILE if present.
+#
+# The password lives on the UFS USB key stick mounted read-only at /keys,
+# alongside the ZFS encryption keys. If the stick is missing the file will be
+# unreadable and the fans simply will not be switched on (logged, non-fatal).
+#
+# Networking may not be fully ready the instant this runs at boot, and the
+# plug itself may briefly be unreachable, so the call is retried a few times.
+
+# rc.d runs with a minimal PATH; curl lives in /usr/local/bin.
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+export PATH
+
+SHELLY_IP="${SHELLY_IP:-192.168.1.28}"
+SHELLY_PASS_FILE="${SHELLY_PASS_FILE:-/keys/shelly_plug.secret}"
+
+PASS=""
+if [ -r "$SHELLY_PASS_FILE" ]; then
+    PASS=$(head -n 1 "$SHELLY_PASS_FILE" | tr -d '\r\n')
+fi
+
+AUTH=""
+if [ -n "$PASS" ]; then
+    AUTH="--digest -u admin:$PASS"
+fi
+
+i=0
+while [ "$i" -lt 12 ]; do
+    if curl -s --max-time 5 $AUTH \
+        "http://${SHELLY_IP}/rpc/Switch.Set?id=0&on=true" >/dev/null 2>&1; then
+        logger -t shellyfans "Rack fans switched on via Shelly plug $SHELLY_IP"
+        exit 0
+    fi
+    i=$((i + 1))
+    sleep 5
+done
+
+logger -t shellyfans "Failed to reach Shelly plug $SHELLY_IP after retries"
+exit 1

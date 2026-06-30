@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# PROVIDE: shellyfans
+# REQUIRE: NETWORKING f3skeys
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="shellyfans"
+desc="Turn on the rack-fan Shelly plug at boot"
+rcvar="shellyfans_enable"
+start_cmd="shellyfans_start"
+stop_cmd=":"
+
+: ${shellyfans_enable:="NO"}
+
+shellyfans_start()
+{
+    # Run in the background so a slow or unreachable plug cannot delay boot;
+    # the helper retries on its own.
+    if [ -x /usr/local/sbin/shelly-fans-on ]; then
+        /usr/local/sbin/shelly-fans-on &
+    else
+        logger -t shellyfans "/usr/local/sbin/shelly-fans-on is missing"
+    fi
+}
+
+load_rc_config "$name"
+run_rc_command "$1"
