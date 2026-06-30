@@ -3,4 +3,4 @@ name: ychat
 description: yChat revival (Mode A, in-memory guest chat) for f3s
 type: application
 version: 0.1.0
-appVersion: "f03e160"
+appVersion: "651f762"
