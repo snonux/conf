@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ychat
+  name: ychat-service
+  namespace: services
+spec:
+  ports:
+    - name: web
+      port: 2000
+      protocol: TCP
+      targetPort: http
+  selector:
+    app: ychat
