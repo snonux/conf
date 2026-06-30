@@ -24,7 +24,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: ychat
-          image: registry.lan.buetow.org:30001/ychat:fed8e7b
+          image: registry.lan.buetow.org:30001/ychat:dadd9f9
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
