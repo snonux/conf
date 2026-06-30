@@ -7,7 +7,10 @@ This directory contains cert-manager configuration for providing self-signed TLS
 - **Purpose**: Provide TLS certificates for LAN ingresses
 - **Certificate Type**: Self-signed (via self-signed ClusterIssuer)
 - **Wildcard Cert**: `*.f3s.lan.buetow.org`
-- **Used by**: FreeBSD relayd on CARP VIP (192.168.1.138)
+- **TLS terminated by**: Traefik inside k3s (via ingress `tls.secretName: f3s-lan-tls`).
+  FreeBSD relayd on the CARP VIP (192.168.1.138) is a **pure TCP passthrough**
+  (`forward to <k3s_nodes> port 443 check tcp`, no `tls` keyword) — it does **not**
+  terminate TLS and needs no certificate of its own.
 
 ## Components
 
@@ -25,28 +28,26 @@ Manual deployment:
 just install
 ```
 
-## Exporting Certificates for relayd
+## relayd does NOT need the certificate (historical note)
 
-After cert-manager creates the wildcard certificate, export it for use by FreeBSD relayd:
+> **Obsolete:** relayd used to terminate TLS and required the wildcard keypair
+> exported to `/usr/local/etc/ssl/relayd/`. The setup has since moved to **TCP
+> passthrough** — relayd forwards raw TLS to Traefik, which terminates it using
+> the `f3s-lan-tls` secret. There is no longer any export step, and the leftover
+> `/usr/local/etc/ssl/relayd/f3s.lan.buetow.org*` files on f0/f1 are unused.
+
+Because cert-manager renews the cert in-cluster and Traefik reloads it
+automatically, **no manual action is normally required** on renewal.
+
+Pitfall (root cause of the 2026 LAN-cert outage): if `relayd.conf` is changed
+(e.g. termination → passthrough), the running relayd process keeps the **old**
+behaviour and its cached keypair until restarted. Always `doas service relayd
+restart` (not `reload` — SIGHUP does not re-read TLS keypairs) on **f0 and f1**
+after editing relayd's TLS config, then verify the live cert at the VIP:
 
 ```bash
-# Export from k3s
-kubectl get secret f3s-lan-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d > /tmp/f3s-lan-cert.pem
-kubectl get secret f3s-lan-tls -n cert-manager -o jsonpath='{.data.tls\.key}' | base64 -d > /tmp/f3s-lan-key.pem
-
-# Copy to FreeBSD hosts
-scp /tmp/f3s-lan-cert.pem paul@f0:/tmp/
-scp /tmp/f3s-lan-key.pem paul@f0:/tmp/
-scp /tmp/f3s-lan-cert.pem paul@f1:/tmp/
-scp /tmp/f3s-lan-key.pem paul@f1:/tmp/
-
-# On f0 and f1
-doas mkdir -p /usr/local/etc/ssl/relayd
-doas mv /tmp/f3s-lan-cert.pem /usr/local/etc/ssl/relayd/f3s.lan.buetow.org.crt
-doas mv /tmp/f3s-lan-key.pem /usr/local/etc/ssl/relayd/f3s.lan.buetow.org.key
-doas chmod 600 /usr/local/etc/ssl/relayd/*
-doas chown root:wheel /usr/local/etc/ssl/relayd/*
-doas service relayd reload
+echo | openssl s_client -connect 192.168.1.138:443 \
+  -servername f3s.lan.buetow.org 2>/dev/null | openssl x509 -noout -dates
 ```
 
 ## Trusting the CA Certificate
@@ -85,7 +86,10 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 
 ## Certificate Renewal
 
-Self-signed certificates are valid for 90 days by default. cert-manager automatically renews them before expiration. After renewal, re-export and deploy to relayd.
+The wildcard cert is valid for 90 days (`renewBefore: 360h` = 15 days).
+cert-manager renews it automatically and Traefik picks up the updated
+`f3s-lan-tls` secret on its own — **no manual re-export to relayd** (relayd is
+now TCP passthrough; see the section above).
 
 ## See Also
 
