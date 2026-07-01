@@ -34,6 +34,31 @@ spec:
             - name: jellyfin-config
               mountPath: /mnt
               readOnly: true
+        # Self-heal the setup-wizard flag. Runs only after nfs-check-config has
+        # proven /config is the real NFS directory (not a local-XFS shadow), so
+        # we never rewrite config on the wrong volume. If the DB already exists
+        # (server was set up) but IsStartupWizardCompleted flipped to false
+        # (e.g. an interrupted wizard run or partial config restore), restore it
+        # to true so a working instance never drops back into the setup wizard.
+        # A genuine fresh install has no jellyfin.db yet, so its first-run wizard
+        # is left untouched.
+        - name: ensure-wizard-completed
+          image: busybox:stable
+          command:
+            - sh
+            - -c
+            - |
+              cfg=/config/config/system.xml
+              if [ -f /config/data/jellyfin.db ] && \
+                 grep -q "<IsStartupWizardCompleted>false</IsStartupWizardCompleted>" "$cfg" 2>/dev/null; then
+                echo "existing jellyfin.db present but setup-wizard flag was false; restoring to true"
+                sed -i 's#<IsStartupWizardCompleted>false</IsStartupWizardCompleted>#<IsStartupWizardCompleted>true</IsStartupWizardCompleted>#' "$cfg"
+              else
+                echo "no action: fresh install (no jellyfin.db) or wizard flag already true"
+              fi
+          volumeMounts:
+            - name: jellyfin-config
+              mountPath: /config
         - name: nfs-check-libraries
           image: busybox:stable
           command:
