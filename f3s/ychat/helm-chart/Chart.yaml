@@ -1,6 +1,6 @@
 apiVersion: v2
 name: ychat
-description: yChat revival (Mode A, in-memory guest chat) for f3s
+description: yChat revival (SQLite-backed, persistent registered accounts) for f3s
 type: application
-version: 0.1.0
-appVersion: "6c3a65b"
+version: 0.2.0
+appVersion: "67babb2"
