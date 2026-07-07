@@ -1,0 +1,41 @@
+#!/usr/bin/expect -f
+# Blind-drive the NetBSD-in-qemu console to fetch+run setup.sh, verify, sync,
+# and power off. Paths come from the environment (set by bake-golden.sh):
+#   NBIMG  - raw work image (edited in place, then gzipped to the golden)
+#   NBVARS - writable AAVMF (edk2) varstore
+#   NBLOG  - session log file
+#   NBHTTP - host-side URL of setup.sh (reachable from the guest as 10.0.2.2)
+#
+# Lessons baked in: virtio-rng (entropy, else boot stalls / no ssh host keys),
+# run under LC_ALL=C (Tcl chokes on the serial's control bytes), blind login
+# with fixed sleeps + a quote-trick shell probe (expect's LIVE matching over the
+# TCG serial is unreliable), and judge success by the &&-chained command's
+# markers in NBLOG rather than by intermediate console matches.
+set timeout 700
+log_file -a $env(NBLOG)
+
+spawn qemu-system-aarch64 -M virt -cpu cortex-a72 -m 2048 -smp 2 -accel tcg \
+  -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-device,rng=rng0 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/AAVMF/AAVMF_CODE.fd \
+  -drive if=pflash,format=raw,file=$env(NBVARS) \
+  -drive file=$env(NBIMG),format=raw,if=virtio,cache=writeback \
+  -nic user -display none -serial stdio -monitor none
+
+# Fully blind login (root has no password on the stock image). expect's LIVE
+# console matching over the TCG serial is unreliable, so we do NOT probe for a
+# prompt — we just type, with generous settle time, and let bake-golden.sh judge
+# success from the SETUP_OK / halt markers in NBLOG afterward. Sending root twice
+# is harmless: the first logs in, a second lands as "root: not found" at a shell.
+sleep 135
+send "\r"; sleep 2
+send "root\r"; sleep 6
+send "\r"; sleep 2
+send "root\r"; sleep 6
+
+# one &&-chained command: fetch -> setup -> verify dump -> sync -> poweroff.
+# setup.sh prints SETUP_OK; the VBEGIN..VEND block is the on-disk verification.
+set timeout 600
+send "ftp -o /tmp/setup.sh $env(NBHTTP) && sh /tmp/setup.sh && echo VBEGIN && id paul && grep '^paul:' /etc/master.passwd && grep -E '^(hostname|ifconfig_mue0|defaultroute|dhcpcd|sshd)=' /etc/rc.conf && cat /home/paul/.ssh/authorized_keys && echo VEND && sync && sync && halt -p\r"
+expect { eof {} timeout { puts "\n!!TIMEOUT no poweroff" } }
+puts "\n==SESSION ENDED=="
+exit 0
