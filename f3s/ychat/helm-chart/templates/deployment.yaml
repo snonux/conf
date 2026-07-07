@@ -43,7 +43,7 @@ spec:
         - name: ychat
           # SQLite is now mandatory (see ychat/DOCKER.md); the image tag tracks
           # the ychat repo commit that build was cut from.
-          image: registry.lan.buetow.org:30001/ychat:b8d28a1
+          image: registry.lan.buetow.org:30001/ychat:a3908e1
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
