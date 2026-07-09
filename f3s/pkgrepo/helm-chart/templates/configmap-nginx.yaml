@@ -29,6 +29,11 @@ data:
                 autoindex on;
             }
 
+            # NetBSD pkg_add/pkgin repository
+            location /netbsd/ {
+                autoindex on;
+            }
+
             # Rocky Linux dnf repository
             location /rockylinux/ {
                 autoindex on;

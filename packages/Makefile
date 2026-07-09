@@ -8,6 +8,7 @@
 # Multi-binary / CGo packages (built natively on OpenBSD build VM):
 #   make dtail-openbsd                                       # DTail for OpenBSD
 #   make dtail-freebsd                                       # DTail for FreeBSD (cross-compiled, nozstd)
+#   make dtail-netbsd                                        # DTail for NetBSD/aarch64 (cross-compiled, nozstd; packaged on pi0)
 #   make dtail-rocky                                         # DTail RPM repo for Rocky Linux 9 (x86_64 + aarch64)
 #
 # Build VM management:
@@ -36,9 +37,14 @@ FREEBSD_SCP  := scp -P 22
 OPENBSD_HOST := rex@fishfinger.buetow.org
 OPENBSD_SSH  := ssh
 OPENBSD_SCP  := scp
-ROCKY_ARM_BUILD_HOST := paul@pi0.lan.buetow.org
+# pi0/pi1 were re-imaged to NetBSD; aarch64 RPMs are built on pi2 (Rocky Linux)
+ROCKY_ARM_BUILD_HOST := paul@pi2.lan.buetow.org
 ROCKY_ARM_SSH := ssh -p 22
 ROCKY_ARM_SCP := scp -P 22
+# NetBSD packages are assembled natively on pi0 (pkg_create needs a NetBSD host)
+NETBSD_BUILD_HOST := paul@pi0.lan.buetow.org
+NETBSD_SSH := ssh -p 22
+NETBSD_SCP := scp -P 22
 
 # Local OpenBSD build VM (QEMU/KVM) for native compilation
 BUILDVM_SSH  := ssh -o StrictHostKeyChecking=no -p 2222
@@ -51,6 +57,8 @@ PV_BASE         := /data/nfs/k3svolumes/pkgrepo
 FREEBSD_REPO    := freebsd/FreeBSD:15:amd64/latest
 OPENBSD_VERSION := 7.8
 OPENBSD_REPO    := openbsd/$(OPENBSD_VERSION)/packages/amd64
+NETBSD_VERSION  := 10.1
+NETBSD_REPO     := netbsd/$(NETBSD_VERSION)/packages/aarch64
 ROCKY_VERSION   := 9
 ROCKY_REPO      := rockylinux/$(ROCKY_VERSION)
 CONTAINER_ENGINE ?= podman
@@ -71,10 +79,13 @@ VERSION = $(shell grep 'Version' $(SRC)/internal/version.go | sed 's/.*"\(.*\)"/
 DTAIL_SRC      := /home/paul/git/dtail
 DTAIL_VERSION   = $(shell grep 'Version string' $(DTAIL_SRC)/internal/version/version.go | sed 's/.*"\(.*\)"/\1/')
 DTAIL_BINARIES := dserver dcat dgrep dmap dtail dtailhealth
+# NetBSD package versions must not contain dashes (dash separates name from
+# version in pkg naming), so 4.3.2-ng becomes 4.3.2ng
+DTAIL_NETBSD_VERSION = $(shell echo $(DTAIL_VERSION) | tr -d -)
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
 DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
-.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-freebsd dtail-rocky check-vars clean
+.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-freebsd dtail-netbsd dtail-rocky check-vars clean
 .PHONY: buildvm-start buildvm-stop buildvm-ensure
 
 # --- Build VM management ---
@@ -207,6 +218,37 @@ dtail-freebsd:
 	rm -rf /tmp/dtail-freebsd-binaries
 	@echo "FreeBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
 
+# Cross-compile dtail for NetBSD/aarch64 (CGO_ENABLED=0, nozstd), package natively
+# on pi0 with pkg_create, upload package + pkg_summary.gz to the PV via f0.
+# .zst log files are not supported in this binary; gzip still works.
+dtail-netbsd:
+	@echo "Building DTail $(DTAIL_VERSION) for NetBSD/arm64..."
+	rm -rf /tmp/dtail-netbsd-binaries
+	mkdir -p /tmp/dtail-netbsd-binaries
+	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
+		echo "  Cross-compiling $$bin for NetBSD..."; \
+		CGO_ENABLED=0 GOOS=netbsd GOARCH=arm64 go build -tags nozstd \
+			-o /tmp/dtail-netbsd-binaries/$$bin ./cmd/$$bin/main.go || exit 1; \
+	done
+	cp $(CONF_FRONTENDS)/etc/dserver/dtail-netbsd.json.tpl /tmp/dtail-netbsd-binaries/dtail.json
+	cp $(CONF_FRONTENDS)/scripts/dserver-update-key-cache-netbsd.sh.tpl /tmp/dtail-netbsd-binaries/dserver-update-key-cache.sh
+	cp $(CONF_FRONTENDS)/etc/rc.d/dserver-netbsd.tpl /tmp/dtail-netbsd-binaries/dserver.rc
+	@echo "Packaging dtail $(DTAIL_NETBSD_VERSION) for NetBSD on pi0..."
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-pkg /tmp/pkg-dtail-netbsd.sh"
+	$(NETBSD_SCP) -r /tmp/dtail-netbsd-binaries $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-binaries
+	$(NETBSD_SCP) $(SCRIPTS)/pkg-dtail-netbsd.sh $(NETBSD_BUILD_HOST):/tmp/pkg-dtail-netbsd.sh
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "/bin/sh /tmp/pkg-dtail-netbsd.sh '$(DTAIL_NETBSD_VERSION)'"
+	@echo "Copying package to PV via f0..."
+	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz
+	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/pkg_summary.gz /tmp/dtail-netbsd-pkg_summary.gz
+	$(FREEBSD_SCP) /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz $(FREEBSD_HOST):/tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz
+	$(FREEBSD_SCP) /tmp/dtail-netbsd-pkg_summary.gz $(FREEBSD_HOST):/tmp/dtail-netbsd-pkg_summary.gz
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/$(NETBSD_REPO) && doas cp /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz $(PV_BASE)/$(NETBSD_REPO)/ && doas cp /tmp/dtail-netbsd-pkg_summary.gz $(PV_BASE)/$(NETBSD_REPO)/pkg_summary.gz && rm /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz"
+	@# Clean up remote and local temp files
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/dtail-netbsd-pkg /tmp/dtail-netbsd-binaries /tmp/pkg-dtail-netbsd.sh"
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
+	@echo "NetBSD package dtail-$(DTAIL_NETBSD_VERSION) uploaded to repo"
+
 # Build RPMs for Rocky Linux 9 (x86_64 + aarch64), generate repodata, and upload to the PV.
 dtail-rocky:
 	@echo "Packaging dtail $(DTAIL_VERSION) for Rocky Linux $(ROCKY_VERSION)..."
@@ -244,4 +286,5 @@ clean:
 	rm -f /tmp/$(NAME)-freebsd /tmp/$(NAME)-openbsd /tmp/$(NAME)-*.tgz
 	rm -rf /tmp/dtail-binaries /tmp/dtail-*.tgz
 	rm -rf /tmp/dtail-freebsd-binaries
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-pkg_summary.gz
 	rm -rf /tmp/dtail-rocky-repo /tmp/dtail-rocky-upload /tmp/dtail-rocky-aarch64-root
