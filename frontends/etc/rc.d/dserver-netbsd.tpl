@@ -21,10 +21,13 @@ start_precmd="dserver_precmd"
 dserver_precmd()
 {
 	# /var/run is volatile on NetBSD — recreate the runtime dirs and
-	# repopulate the SSH key cache on every service start.
+	# repopulate the SSH key cache on every service start. The SSH host
+	# key lives in persistent /var/db/dserver so it survives reboots
+	# (a regenerated host key would break clients' known_hosts).
 	install -d -o dserver -m 0755 /var/log/dserver
 	install -d -o dserver -m 0755 /var/run/dserver
 	install -d -o dserver -m 0755 /var/run/dserver/cache
+	install -d -o dserver -m 0700 /var/db/dserver
 	if [ -x /usr/local/bin/dserver-update-key-cache.sh ]; then
 		/usr/local/bin/dserver-update-key-cache.sh
 	fi

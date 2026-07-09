@@ -1,7 +1,9 @@
 #!/bin/sh
 # Refresh the dserver SSH key cache from user authorized_keys files.
 # NetBSD variant: called from the dserver rc.d start_precmd (because
-# /var/run is volatile across reboots) and from a daily root cron job.
+# /var/run is volatile across reboots) and from a daily root cron job that
+# is added manually at install time (not by the package) — see the pkgrepo
+# skill's dtail-package.md for the crontab entry.
 
 CACHEDIR=/var/run/dserver/cache
 DSERVER_USER=dserver

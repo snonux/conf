@@ -28,6 +28,10 @@
 #   ENTRY       — Go main package path relative to SRC (default: cmd/$(NAME)/main.go)
 
 SHELL := /bin/bash
+# -e: with .ONESHELL a whole recipe runs as one shell script, so without -e a
+# failing intermediate line (remote pkg_create, scp, doas cp upload, ...)
+# would NOT stop the recipe and make would exit 0 — silently "succeeding".
+.SHELLFLAGS := -ec
 .ONESHELL:
 
 # SSH targets for production hosts
@@ -81,7 +85,7 @@ DTAIL_VERSION   = $(shell grep 'Version string' $(DTAIL_SRC)/internal/version/ve
 DTAIL_BINARIES := dserver dcat dgrep dmap dtail dtailhealth
 # NetBSD package versions must not contain dashes (dash separates name from
 # version in pkg naming), so 4.3.2-ng becomes 4.3.2ng
-DTAIL_NETBSD_VERSION = $(shell echo $(DTAIL_VERSION) | tr -d -)
+DTAIL_NETBSD_VERSION = $(shell echo $(DTAIL_VERSION) | tr -d '-')
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
 DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
@@ -222,8 +226,11 @@ dtail-freebsd:
 # on pi0 with pkg_create, upload package + pkg_summary.gz to the PV via f0.
 # .zst log files are not supported in this binary; gzip still works.
 dtail-netbsd:
+	@test -n "$(DTAIL_NETBSD_VERSION)" || { echo "Error: could not extract DTail version from $(DTAIL_SRC)"; exit 1; }
 	@echo "Building DTail $(DTAIL_VERSION) for NetBSD/arm64..."
-	rm -rf /tmp/dtail-netbsd-binaries
+	@# Remove stale artifacts from previous runs so a failed build can never
+	@# silently upload an old package.
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
 	mkdir -p /tmp/dtail-netbsd-binaries
 	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
 		echo "  Cross-compiling $$bin for NetBSD..."; \

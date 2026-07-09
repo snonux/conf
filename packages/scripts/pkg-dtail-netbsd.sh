@@ -8,6 +8,10 @@
 # NetBSD repo ever holds more than dtail, regenerate the summary across all
 # .tgz files in the repo directory instead.
 #
+# The package deliberately ships no install script for the dserver user/group:
+# creating them is a documented one-time install step (see the pkgrepo skill's
+# dtail-package.md), matching how the FreeBSD package handles it.
+#
 # Arguments:
 #   $1 — version (NetBSD-safe, no dashes — e.g. 4.3.2ng)
 
@@ -18,6 +22,10 @@ PATH=/usr/sbin:/usr/bin:/bin:$PATH
 export PATH
 
 VERSION="$1"
+if [ -z "$VERSION" ]; then
+    echo "Error: version argument missing (would build dtail-.tgz)" >&2
+    exit 1
+fi
 NAME="dtail"
 COMMENT="Distributed log tail and grep tool"
 DESC="DTail is a distributed DevOps tool for tailing, grepping, catting, and
@@ -89,7 +97,12 @@ pkg_create \
     -p "$WORKDIR/stage" \
     "$WORKDIR/out/${NAME}-${VERSION}.tgz"
 
-# Repo metadata for pkgin (pkg_add itself doesn't need it)
-( cd "$WORKDIR/out" && pkg_info -X ./*.tgz | gzip -9 > pkg_summary.gz )
+# Repo metadata for pkgin (pkg_add itself doesn't need it). Write the summary
+# to a temp file first: piping pkg_info straight into gzip would mask a
+# pkg_info failure (set -e without pipefail) and publish a truncated summary.
+( cd "$WORKDIR/out" && \
+    pkg_info -X ./*.tgz > pkg_summary.tmp && \
+    gzip -9 < pkg_summary.tmp > pkg_summary.gz && \
+    rm pkg_summary.tmp )
 
 echo "NetBSD package ${NAME}-${VERSION} built in $WORKDIR/out/"

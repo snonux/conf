@@ -90,7 +90,7 @@
   },
   "Server": {
     "SSHBindAddress": "0.0.0.0",
-    "HostKeyFile": "/var/run/dserver/cache/ssh_host_key",
+    "HostKeyFile": "/var/db/dserver/ssh_host_key",
     "HostKeyBits": 2048,
     "MapreduceLogFormat": "default",
     "MaxConcurrentCats": 2,
