@@ -90,7 +90,7 @@
   },
   "Server": {
     "SSHBindAddress": "0.0.0.0",
-    "HostKeyFile": "cache/ssh_host_key",
+    "HostKeyFile": "/var/db/dserver/ssh_host_key",
     "HostKeyBits": 2048,
     "MapreduceLogFormat": "default",
     "MaxConcurrentCats": 2,
@@ -120,7 +120,7 @@
     "LogDir": "/var/log/dserver",
     "Logger": "Fout",
     "LogRotation": "Daily",
-    "CacheDir": "cache",
+    "CacheDir": "/var/run/dserver/cache",
     "SSHPort": 2222,
     "LogLevel": "Info"
   }
