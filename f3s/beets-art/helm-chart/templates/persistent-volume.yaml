@@ -1,20 +1,41 @@
-# beets-art-state-pvc: small local-path PVC on r1 for the beets SQLite DB,
-# logs, and any temp working files. Same reasoning as navidrome-data-pvc:
-#   - SQLite over NFS is fragile under concurrent locks.
-#   - The CronJob is pinned to r1 (see cronjob.yaml nodeSelector), and the
-#     local-path provisioner pins the PV to whichever node first consumes
-#     it (WaitForFirstConsumer), so r1 is always the home.
-# Contents are essentially regenerable: deleting this PVC just forces the
-# next run to re-import the library (slower one-off, then incremental again).
+# beets-art-state: beets SQLite state DB, logs, and temp working files, kept
+# on the shared NFS export (same mount as navidrome-music) so the CronJob can
+# run on any r-node — it is no longer pinned to r1.
+#
+# Previously this was a local-path PVC pinned to r1 (SQLite-over-NFS
+# avoidance). Moving to NFS is acceptable here because:
+#   - concurrencyPolicy: Forbid means exactly one writer ever runs at a time;
+#     there is no concurrent lock contention that makes SQLite-over-NFS
+#     fragile (unlike the Navidrome/Grafana rolling-restart case).
+#   - Contents are essentially regenerable: if the SQLite DB ever corrupts,
+#     deleting it just forces the next run to re-import the library (slower
+#     one-off, then incremental again).
+# The directory is created on first use via DirectoryOrCreate (it lives on the
+# shared NFS mount, so all r-nodes see the same state).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: beets-art-state-pv
+spec:
+  capacity:
+    storage: 2Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/beets-art/state
+    type: DirectoryOrCreate
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: beets-art-state-pvc
   namespace: services
 spec:
-  storageClassName: local-path
+  storageClassName: ""
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 2Gi

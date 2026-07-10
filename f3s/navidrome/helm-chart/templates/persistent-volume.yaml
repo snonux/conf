@@ -27,7 +27,16 @@ spec:
       storage: 10Gi
 ---
 # navidrome-music: keep on NFS — 200 GB library shared across nodes.
-# This is a static PV backed by hostPath at the NFS mount point.
+# This is a static PV backed by hostPath at the NFS mount point. The NFS
+# export is mounted at the same path on all three r-nodes (r0/r1/r2), so the
+# hostPath resolves identically on each node.
+#
+# ReadWriteMany (not RWO): Navidrome mounts this read-only as the library
+# reader; the beets-art CronJob mounts it read-write to fetch and embed cover
+# art. RWX lets beets-art run on any r-node (it no longer has to co-locate
+# with Navidrome just to satisfy RWO's single-node-mount rule). At the FS
+# level there is a single writer (beets-art; Forbid concurrency) and a single
+# reader (Navidrome), so no write contention.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -37,7 +46,7 @@ spec:
     storage: 200Gi
   volumeMode: Filesystem
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   hostPath:
     path: /data/nfs/k3svolumes/navidrome/music
@@ -51,7 +60,7 @@ metadata:
 spec:
   storageClassName: ""
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 200Gi

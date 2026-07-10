@@ -43,8 +43,11 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          nodeSelector:
-            kubernetes.io/hostname: r1.lan.buetow.org
+          # Not pinned to any node: the music library is RWX NFS (shared
+          # across r0/r1/r2) and the state PVC is now NFS-backed too, so the
+          # job may land on any r-node. Letting the scheduler spread it avoids
+          # the thermal spike that occurred when it was hard-pinned to r1
+          # (on the passively-cooled f1) with a CPU limit of 2.
           containers:
             - name: beets
               image: lscr.io/linuxserver/beets:latest
@@ -102,20 +105,27 @@ spec:
                 - name: tmp
                   mountPath: /tmp
               resources:
-                # Generous because ImageMagick + ffprobe + SQLite scans can
-                # spike. Tighten after observing real usage.
+                # Capped at 1 CPU to limit thermal load on the passively-cooled
+                # Beelink N100 host (f1). A limit of 2 cores (half the 4-core
+                # N100) sustained during the ~28 min fetchart/embedart sweep
+                # pushed f1 to ~95 C and tripped the FreebsdCpuTemperatureHigh
+                # alert (>=80 C for 5m). Halving the cap roughly halves the
+                # sustained heat; the run takes ~2x longer but stays well under
+                # the 6h activeDeadlineSeconds. Request stays at 100m so the
+                # scheduler still treats it as a light batch job.
                 requests:
                   cpu: 100m
                   memory: 256Mi
                 limits:
-                  cpu: "2"
+                  cpu: "1"
                   memory: 1Gi
           volumes:
             - name: music
               persistentVolumeClaim:
                 # Reuse the existing Navidrome music PVC — single source of
-                # truth for the library tree. RWO is OK because both pods
-                # are pinned to r1.
+                # truth for the library tree. It is RWX (shared NFS), so this
+                # job can mount it on any r-node alongside Navidrome (which
+                # mounts it read-only).
                 claimName: navidrome-music-pvc
             - name: state
               persistentVolumeClaim:
