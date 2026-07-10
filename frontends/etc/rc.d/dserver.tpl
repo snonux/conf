@@ -14,7 +14,11 @@ rc_pre() {
     # keeps it fresh afterwards). The SSH host key lives in persistent
     # /var/db/dserver so it survives reboots (a regenerated host key would
     # break clients' known_hosts).
+    # install -d applies -o only to the final directory, so create the
+    # parent /var/run/dserver (the _dserver home dir) explicitly with the
+    # right ownership instead of letting it appear implicitly as root:wheel.
     install -d -o _dserver /var/log/dserver
+    install -d -o _dserver /var/run/dserver
     install -d -o _dserver /var/run/dserver/cache
     install -d -o _dserver -m 0700 /var/db/dserver
     if [ -x /usr/local/bin/dserver-update-key-cache.sh ]; then
