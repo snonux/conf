@@ -92,7 +92,7 @@ DTAIL_NETBSD_VERSION = $(shell echo $(DTAIL_VERSION) | tr -d '-')
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
 DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
-.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-freebsd dtail-netbsd dtail-rocky check-vars clean
+.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-freebsd dtail-netbsd dtail-rocky check-vars check-dtail-version clean
 .PHONY: buildvm-start buildvm-stop buildvm-ensure
 
 # --- Build VM management ---
@@ -164,9 +164,15 @@ pkg: pkg-freebsd pkg-openbsd
 
 # --- DTail (multi-binary, native build on OpenBSD VM) ---
 
+# Fail fast when the DTail version cannot be extracted (e.g. wrong DTAIL_SRC)
+# — before any VM start, remote work, or /tmp cleanup runs with an empty
+# version in the file names.
+check-dtail-version:
+	@test -n "$(DTAIL_VERSION)" || { echo "Error: could not extract DTail version from $(DTAIL_SRC)"; exit 1; }
+
 # Sync dtail source to build VM and compile natively.
 # Native build handles CGo dependencies (e.g. DataDog/zstd).
-/tmp/dtail-binaries/.built: buildvm-ensure
+/tmp/dtail-binaries/.built: check-dtail-version buildvm-ensure
 	@echo "Building DTail $(DTAIL_VERSION) natively on OpenBSD build VM..."
 	@mkdir -p /tmp/dtail-binaries
 	@# Sync source to VM via git archive (excludes build artifacts, saves space)
@@ -190,8 +196,11 @@ pkg: pkg-freebsd pkg-openbsd
 
 # Package, sign, and upload the OpenBSD dtail package.
 # Binaries are built on the local build VM; packaging and signing happen on fishfinger.
-dtail-openbsd: /tmp/dtail-binaries/.built
+dtail-openbsd: check-dtail-version /tmp/dtail-binaries/.built
 	@echo "Packaging dtail $(DTAIL_VERSION) for OpenBSD..."
+	@# Remove stale staging artifacts from previous runs so a failed run can
+	@# never silently upload an old package.
+	rm -f /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz
 	$(OPENBSD_SCP) -r /tmp/dtail-binaries $(OPENBSD_HOST):/tmp/dtail-binaries
 	$(OPENBSD_SCP) $(SCRIPTS)/pkg-dtail-openbsd.sh $(OPENBSD_HOST):/tmp/pkg-dtail-openbsd.sh
 	$(OPENBSD_SSH) $(OPENBSD_HOST) "/bin/sh /tmp/pkg-dtail-openbsd.sh '$(DTAIL_VERSION)'"
@@ -209,7 +218,7 @@ dtail-openbsd: /tmp/dtail-binaries/.built
 
 # Cross-compile dtail for FreeBSD/amd64 (CGO_ENABLED=0, nozstd), package on f0, upload to PV.
 # .zst log files are not supported in this binary; gzip still works.
-dtail-freebsd:
+dtail-freebsd: check-dtail-version
 	@echo "Building DTail $(DTAIL_VERSION) for FreeBSD/amd64..."
 	rm -rf /tmp/dtail-freebsd-binaries
 	mkdir -p /tmp/dtail-freebsd-binaries

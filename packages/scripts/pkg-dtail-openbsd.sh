@@ -9,6 +9,10 @@
 set -e
 
 VERSION="$1"
+if [ -z "$VERSION" ]; then
+    echo "Error: version argument missing (would build dtail-.tgz)" >&2
+    exit 1
+fi
 NAME="dtail"
 COMMENT="Distributed log tail and grep tool"
 DESC="DTail is a distributed DevOps tool for tailing, grepping, catting, and
