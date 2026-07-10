@@ -7,6 +7,10 @@ daemon_user="_dserver"
 . /etc/rc.d/rc.subr
 
 rc_reload=NO
+# dserver does not daemonize itself — let rc.subr start it in the background
+# (rc_bg) instead of backgrounding the whole rc_cmd invocation, which would
+# hide rc_pre failures and the start result from rcctl.
+rc_bg=YES
 
 rc_pre() {
     # /var/run is wiped by /etc/rc at boot — recreate the runtime dirs and
@@ -26,4 +30,4 @@ rc_pre() {
     fi
 }
 
-rc_cmd $1 &
+rc_cmd "$1"

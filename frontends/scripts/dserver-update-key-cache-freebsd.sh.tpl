@@ -1,6 +1,8 @@
 #!/bin/sh
 # Refresh the dserver SSH key cache from user authorized_keys files.
-# Called by /usr/local/etc/periodic/daily/200.dserver-update-key-cache.
+# FreeBSD variant: called from the dserver rc.d start_precmd (because
+# /var/run is volatile across reboots — cleanvar purges it) and by
+# /usr/local/etc/periodic/daily/200.dserver-update-key-cache.
 
 CACHEDIR=/var/run/dserver/cache
 DSERVER_USER=dserver

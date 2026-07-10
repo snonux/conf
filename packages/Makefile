@@ -31,7 +31,10 @@ SHELL := /bin/bash
 # -e: with .ONESHELL a whole recipe runs as one shell script, so without -e a
 # failing intermediate line (remote pkg_create, scp, doas cp upload, ...)
 # would NOT stop the recipe and make would exit 0 — silently "succeeding".
-.SHELLFLAGS := -ec
+# -o pipefail: without it a pipeline only reports the last command's status,
+# so e.g. a failing "git archive | ssh ... tar" would still exit 0 as long
+# as tar succeeds on the (truncated) stream.
+.SHELLFLAGS := -e -o pipefail -c
 .ONESHELL:
 
 # SSH targets for production hosts
@@ -193,12 +196,15 @@ dtail-openbsd: /tmp/dtail-binaries/.built
 	$(OPENBSD_SCP) $(SCRIPTS)/pkg-dtail-openbsd.sh $(OPENBSD_HOST):/tmp/pkg-dtail-openbsd.sh
 	$(OPENBSD_SSH) $(OPENBSD_HOST) "/bin/sh /tmp/pkg-dtail-openbsd.sh '$(DTAIL_VERSION)'"
 	@echo "Copying signed package to PV via f0..."
-	$(OPENBSD_SCP) $(OPENBSD_HOST):/tmp/dtail-pkg/out/dtail-$(DTAIL_VERSION).tgz /tmp/dtail-$(DTAIL_VERSION).tgz
-	$(FREEBSD_SCP) /tmp/dtail-$(DTAIL_VERSION).tgz $(FREEBSD_HOST):/tmp/dtail-$(DTAIL_VERSION).tgz
-	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas cp /tmp/dtail-$(DTAIL_VERSION).tgz $(PV_BASE)/$(OPENBSD_REPO)/ && rm /tmp/dtail-$(DTAIL_VERSION).tgz"
+	@# OS-suffixed staging name: a dash-less version would make the OpenBSD
+	@# and NetBSD staging files collide in /tmp (locally and on f0). Only the
+	@# final repo copy uses the canonical dtail-<version>.tgz name.
+	$(OPENBSD_SCP) $(OPENBSD_HOST):/tmp/dtail-pkg/out/dtail-$(DTAIL_VERSION).tgz /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz
+	$(FREEBSD_SCP) /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz $(FREEBSD_HOST):/tmp/dtail-openbsd-$(DTAIL_VERSION).tgz
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas cp /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz $(PV_BASE)/$(OPENBSD_REPO)/dtail-$(DTAIL_VERSION).tgz && rm /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz"
 	@# Clean up remote and local temp files
 	$(OPENBSD_SSH) $(OPENBSD_HOST) "doas rm -rf /tmp/dtail-pkg /tmp/dtail-binaries /tmp/pkg-dtail-openbsd.sh"
-	rm -rf /tmp/dtail-binaries /tmp/dtail-$(DTAIL_VERSION).tgz
+	rm -rf /tmp/dtail-binaries /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz
 	@echo "OpenBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
 
 # Cross-compile dtail for FreeBSD/amd64 (CGO_ENABLED=0, nozstd), package on f0, upload to PV.
@@ -230,7 +236,7 @@ dtail-netbsd:
 	@echo "Building DTail $(DTAIL_VERSION) for NetBSD/arm64..."
 	@# Remove stale artifacts from previous runs so a failed build can never
 	@# silently upload an old package.
-	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
 	mkdir -p /tmp/dtail-netbsd-binaries
 	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
 		echo "  Cross-compiling $$bin for NetBSD..."; \
@@ -246,14 +252,17 @@ dtail-netbsd:
 	$(NETBSD_SCP) $(SCRIPTS)/pkg-dtail-netbsd.sh $(NETBSD_BUILD_HOST):/tmp/pkg-dtail-netbsd.sh
 	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "/bin/sh /tmp/pkg-dtail-netbsd.sh '$(DTAIL_NETBSD_VERSION)'"
 	@echo "Copying package to PV via f0..."
-	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz
+	@# OS-suffixed staging name: a dash-less version would make the OpenBSD
+	@# and NetBSD staging files collide in /tmp (locally and on f0). Only the
+	@# final repo copy uses the canonical dtail-<version>.tgz name.
+	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
 	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/pkg_summary.gz /tmp/dtail-netbsd-pkg_summary.gz
-	$(FREEBSD_SCP) /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz $(FREEBSD_HOST):/tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz
+	$(FREEBSD_SCP) /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz $(FREEBSD_HOST):/tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
 	$(FREEBSD_SCP) /tmp/dtail-netbsd-pkg_summary.gz $(FREEBSD_HOST):/tmp/dtail-netbsd-pkg_summary.gz
-	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/$(NETBSD_REPO) && doas cp /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz $(PV_BASE)/$(NETBSD_REPO)/ && doas cp /tmp/dtail-netbsd-pkg_summary.gz $(PV_BASE)/$(NETBSD_REPO)/pkg_summary.gz && rm /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/$(NETBSD_REPO) && doas cp /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz $(PV_BASE)/$(NETBSD_REPO)/dtail-$(DTAIL_NETBSD_VERSION).tgz && doas cp /tmp/dtail-netbsd-pkg_summary.gz $(PV_BASE)/$(NETBSD_REPO)/pkg_summary.gz && rm /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz"
 	@# Clean up remote and local temp files
 	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/dtail-netbsd-pkg /tmp/dtail-netbsd-binaries /tmp/pkg-dtail-netbsd.sh"
-	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
 	@echo "NetBSD package dtail-$(DTAIL_NETBSD_VERSION) uploaded to repo"
 
 # Build RPMs for Rocky Linux 9 (x86_64 + aarch64), generate repodata, and upload to the PV.
