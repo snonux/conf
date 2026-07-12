@@ -161,7 +161,11 @@
       "Plugin": "<%= $plugin_dir %>/check_swap",
       "RandomSpread": 10,
       "RunInterval": 300,
+<% if ($hostname eq 'fishfinger') { -%>
+      "Args": ["-w", "20%", "-c", "10%"]
+<% } else { -%>
       "Args": ["-w", "95%", "-c", "90%"]
+<% } -%>
     },
     "Check Procs <%= $hostname %>": {
       "Plugin": "<%= $plugin_dir %>/check_procs",

@@ -18,10 +18,19 @@ spec:
           labels:
             os: freebsd
 
-        # Synthetic MemAvailable for FreeBSD
-        # Available = free + inactive + cache (approximation)
+        # Synthetic MemAvailable for FreeBSD. Laundry pages are reclaimable
+        # after writeback, as is the portion of ZFS ARC above its minimum.
         - record: node_memory_MemAvailable_bytes
-          expr: node_memory_free_bytes{os="freebsd"} + node_memory_inactive_bytes{os="freebsd"} + node_memory_cache_bytes{os="freebsd"}
+          expr: |
+            node_memory_free_bytes{os="freebsd"}
+              + node_memory_inactive_bytes{os="freebsd"}
+              + node_memory_cache_bytes{os="freebsd"}
+              + node_memory_laundry_bytes{os="freebsd"}
+              + clamp_min(
+                  node_zfs_arcstats_size_bytes{os="freebsd"}
+                    - node_zfs_arcstats_c_min_bytes{os="freebsd"},
+                  0
+                )
           labels:
             os: freebsd
 
