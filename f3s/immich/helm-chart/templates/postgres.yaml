@@ -1,5 +1,13 @@
 # PostgreSQL Deployment for Immich
-# Requires PostgreSQL 16+ with pgvector extension
+# Requires PostgreSQL 16 with the VectorChord (vchord) extension. Immich 3.x
+# dropped pgvecto.rs, so we run the official Immich Postgres image which bundles
+# VectorChord *and* pgvecto.rs (the "vectors"/pgvectors extension). Keeping the
+# -pgvectors0.3.0 variant is mandatory during/after migration: our data dir was
+# created by pgvecto.rs 0.3.0, so vectors.so must stay loadable to (a) read the
+# existing catalog and (b) satisfy Immich 3.0.1, which preloads BOTH vchord.so
+# and vectors.so. The image's entrypoint sets shared_preload_libraries from its
+# own template (vchord.so, vectors.so); our previous tensorchord image set it via
+# a command-line arg (not persisted in PGDATA), so the swap starts clean.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,7 +50,7 @@ spec:
           readOnly: true
       containers:
       - name: postgres
-        image: tensorchord/pgvecto-rs:pg16-v0.3.0
+        image: ghcr.io/immich-app/postgres:16-vectorchord0.4.3-pgvector0.8.0-pgvectors0.3.0
         ports:
         - containerPort: 5432
         env:
