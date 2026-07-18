@@ -76,7 +76,10 @@ spec:
                 containers:
                   main:
                     image:
-                      tag: v2.7.5
+                      # v3.x drops the pgvecto.rs extension; the Postgres bundle
+                      # was migrated to VectorChord first (Stage A), so the DB is
+                      # 3.x-ready and preloads vchord.so + vectors.so as 3.0.1+ needs.
+                      tag: v3.0.3
             resources:
               requests:
                 cpu: 500m
@@ -142,7 +145,10 @@ spec:
                 containers:
                   main:
                     image:
-                      tag: v2.7.5
+                      # v3.x drops the pgvecto.rs extension; the Postgres bundle
+                      # was migrated to VectorChord first (Stage A), so the DB is
+                      # 3.x-ready and preloads vchord.so + vectors.so as 3.0.1+ needs.
+                      tag: v3.0.3
                     env:
                       MACHINE_LEARNING_MODEL_INTRA_OP_THREADS: "4"
                       MACHINE_LEARNING_MODEL_INTER_OP_THREADS: "1"
