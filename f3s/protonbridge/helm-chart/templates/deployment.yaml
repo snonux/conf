@@ -108,10 +108,10 @@ spec:
           value: /bridge-data/.password-store
         ports:
         - name: imap
-          containerPort: 1143
+          containerPort: 143
           protocol: TCP
         - name: smtp
-          containerPort: 1025
+          containerPort: 25
           protocol: TCP
         volumeMounts:
         - name: protonbridge-data
@@ -126,18 +126,27 @@ spec:
           mountPath: /root/.local
           subPath: dot-local
         readinessProbe:
-          tcpSocket:
-            port: 1143
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - "</dev/tcp/127.0.0.1/1143"
           initialDelaySeconds: 30
           periodSeconds: 15
         startupProbe:
-          tcpSocket:
-            port: 1143
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - "</dev/tcp/127.0.0.1/1143"
           periodSeconds: 10
           failureThreshold: 30
         livenessProbe:
-          tcpSocket:
-            port: 1143
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - "</dev/tcp/127.0.0.1/1143"
           initialDelaySeconds: 60
           periodSeconds: 30
       volumes:

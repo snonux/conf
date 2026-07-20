@@ -11,14 +11,16 @@ spec:
   - name: imap
     protocol: TCP
     port: 1143
-    targetPort: 1143
+    # Bridge binds to loopback; socat exposes it on the pod network at port 143.
+    targetPort: 143
     # NodePort 30143 — configure email clients as:
     # IMAP server: <any-r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
     nodePort: 30143
   - name: smtp
     protocol: TCP
     port: 1025
-    targetPort: 1025
+    # Bridge binds to loopback; socat exposes it on the pod network at port 25.
+    targetPort: 25
     # NodePort 30025 — configure email clients as:
     # SMTP server: <any-r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
     nodePort: 30025
