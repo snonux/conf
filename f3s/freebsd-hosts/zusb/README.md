@@ -72,6 +72,14 @@ doas zfs list -r zusb
 doas /usr/local/bin/zusb-unload   # snapshot + export, then unplug the disks
 ```
 
+The quarterly backup itself is driven by `/opt/snonux/bin/backup/backup`
+(which travels on the pool under `zusb/data/opt`). Its S3 sync leg needs the
+AWS CLI installed on the hosting f-host and `/root/.aws/credentials` symlinked
+to `/opt/snonux/secrets/aws.credentials` (also on the pool). See the
+`f3s-storage` skill, `references/backups.md` → "AWS CLI setup on a FreeBSD
+host", for the install steps. Without the AWS CLI the snapshot-export part of
+the backup still works; only the offsite S3 sync is skipped/fails.
+
 ## Verification
 
 ```sh
