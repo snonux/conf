@@ -72,17 +72,15 @@ spec:
           mountPath: /bridge-data
       containers:
       - name: protonbridge
-        # Bridge v3 daemon. IMAP and SMTP stay available while account management
-        # is performed through a separate CLI process.
+        # Bridge v3 CLI kept open with an attachable TTY so it can run headlessly.
         #
         # Session persists in pass on NFS PVC; subsequent restarts reconnect automatically.
         #
         # ACCOUNT LOGIN (when Bridge reports no active accounts):
         #   1. Get pod name: kubectl get pod -n services -l app=protonbridge
-        #   2. Start a CLI connected to the daemon:
-        #        kubectl exec -it -n services <pod-name> -- protonmail-bridge --cli
+        #   2. Attach to the existing Bridge CLI: kubectl attach -it -n services <pod-name>
         #   3. At the bridge> prompt, type 'login' and follow the prompts
-        #   4. Type 'quit'; only the separate CLI exits
+        #   4. Type 'quit'; the pod restarts and reconnects with the saved session
         #
         # EMAIL CLIENT SETUP (after login):
         #   IMAP: <any-r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
@@ -90,6 +88,8 @@ spec:
         #   Username: your ProtonMail address
         #   Password: bridge-generated password (from 'info' in the CLI above)
         image: shenxn/protonmail-bridge:latest
+        stdin: true
+        tty: true
         command:
         - /bin/bash
         - -c
@@ -100,7 +100,7 @@ spec:
           apt-get install -y -qq --no-install-recommends libfido2-1
           socat TCP-LISTEN:25,fork TCP:127.0.0.1:1025 &
           socat TCP-LISTEN:143,fork TCP:127.0.0.1:1143 &
-          exec protonmail-bridge --noninteractive
+          exec protonmail-bridge --cli
         env:
         - name: GNUPGHOME
           value: /bridge-data/.gnupg
