@@ -1,0 +1,27 @@
+#!/bin/sh
+# zusb-unload — snapshot zusb for safety, then export the pool.
+#
+# Ported from t450:/root/bin/zusb-unload.csh. The t450 version also snapshotted
+# zroot (its boot pool); that step is dropped here because f1's zroot is the
+# host boot pool and is not part of this workflow. The zfs.snapshot helper
+# ships under /opt (mounted from zusb/data/opt) and is used when present, with
+# a plain timestamped snapshot as a fallback.
+
+set -eu
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+
+POOL=zusb
+SNAPBIN=/opt/snonux/bin/zfs/zfs.snapshot
+
+# 1. Snapshot zusb for safety before export.
+if [ -x "$SNAPBIN" ]; then
+    "$SNAPBIN" "$POOL"
+else
+    zfs snapshot -r "${POOL}@unload-$(date +%Y%m%d-%H%M%S)"
+fi
+
+# 2. Export the pool.
+zpool export "$POOL"
+
+echo "zusb exported."

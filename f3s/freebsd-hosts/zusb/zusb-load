@@ -1,0 +1,42 @@
+#!/bin/sh
+# zusb-load — import the zusb raidz2 pool (4 x 1.8T USB-SATA disks) and unlock
+# zusb/data/enc using the raw key on the F3S_KEYS stick, then mount everything.
+#
+# Ported from t450:/root/bin/zusb-load.csh to f1's f3s USB-key scheme. The old
+# t450 flow unlocked a passphrase-protected zroot/secret keystore and then read
+# /zroot/secret/zroot.enc.key; on f1 the raw key lives directly on the F3S_KEYS
+# stick at /keys/zusb.key, exactly like the other f-host secrets
+# (see f3s-storage/references/usb-keys.md). zusb/data/enc was rekeyed from
+# passphrase to a raw key to match that scheme.
+
+set -eu
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+
+POOL=zusb
+ENCROOT=zusb/data/enc
+KEYFILE=/keys/zusb.key
+
+# 1. Make sure the F3S_KEYS stick is mounted (provides $KEYFILE).
+/usr/local/sbin/f3s-mount-keys --strict
+
+if [ ! -r "$KEYFILE" ]; then
+    echo "zusb-load: key file $KEYFILE missing or unreadable" >&2
+    exit 1
+fi
+
+# 2. Import the pool if it is not already imported.
+if ! zpool list "$POOL" >/dev/null 2>&1; then
+    zpool import "$POOL"
+fi
+
+# 3. Load the encryption key for the encrypted root dataset from the stick.
+if [ "$(zfs get -H -o value keystatus "$ENCROOT")" = "unavailable" ]; then
+    zfs load-key "$ENCROOT"
+fi
+
+# 4. Mount everything.
+zfs mount -a
+
+echo "zusb loaded:"
+zfs list -r "$POOL" -o name,keystatus,mounted,mountpoint
