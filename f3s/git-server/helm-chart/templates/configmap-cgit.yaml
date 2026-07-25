@@ -15,8 +15,23 @@ data:
     # Set the virtual root for correct URL generation
     virtual-root=/
 
-    # Disable caching to avoid permission issues
-    cache-size=0
+    # Response cache. With scan-path over ~80 repos on NFS, an uncached render
+    # reopens every repo to resolve its age column: measured 376ms per index
+    # page, 87% of it NFS wait rather than CPU. Caching drops that to ~19-29ms.
+    # cache-root must be node-local and writable by UID 33 -- it points at the
+    # cgit-runtime emptyDir mounted on /tmp, NOT at the NFS-backed /repos
+    # (caching on NFS is what originally caused the permission trouble here).
+    # The startup script in deployment.yaml creates the directory.
+    cache-root=/tmp/cgit-cache
+    cache-size=1000
+
+    # TTLs in minutes; these are cgit's defaults, stated explicitly so the
+    # staleness window after a push is visible rather than implied.
+    # Static pages are keyed by commit SHA, so they never need to expire.
+    cache-root-ttl=5
+    cache-repo-ttl=5
+    cache-dynamic-ttl=5
+    cache-static-ttl=-1
 
     # Enable git-config for per-repo settings
     enable-git-config=1

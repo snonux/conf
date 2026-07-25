@@ -204,8 +204,19 @@ spec:
               }\
           ' /tmp/conf.d/default.conf
 
-          # Start fcgiwrap with socket in /tmp
-          spawn-fcgi -s /tmp/fcgiwrap.sock -n -- /usr/bin/fcgiwrap &
+          # cgit's response cache lives here (see cache-root in the cgit-config
+          # ConfigMap). It must exist before cgit runs -- cgit does not create it.
+          # /tmp is the cgit-runtime emptyDir: node-local, so cache writes never
+          # go back over NFS. The cache is intentionally per-pod and cold after
+          # a restart.
+          mkdir -p /tmp/cgit-cache
+
+          # Start fcgiwrap with socket in /tmp.
+          # -c 4 preforks 4 workers. With a single worker the 26 ArgoCD apps
+          # polling conf.git through git-http-backend serialize against web UI
+          # renders on the same CGI process; measured 4 concurrent requests at
+          # only ~1.5x the throughput of one.
+          spawn-fcgi -s /tmp/fcgiwrap.sock -n -- /usr/bin/fcgiwrap -c 4 &
           sleep 1
           chmod 666 /tmp/fcgiwrap.sock
           exec nginx -c /tmp/nginx.conf -g 'daemon off;'
@@ -239,13 +250,18 @@ spec:
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
+        # cgit idled at 105m against the previous 250m limit -- 42% of its own
+        # ceiling at rest -- and the cgroup had accumulated ~2.9h of throttled
+        # time (nr_throttled 96979). Renders are bursty, so the quota was being
+        # hit on ordinary page loads. Headroom raised for the 4 fcgiwrap
+        # workers; the request tracks measured idle usage.
         resources:
           requests:
-            cpu: 50m
+            cpu: 100m
             memory: 128Mi
           limits:
-            cpu: 250m
-            memory: 256Mi
+            cpu: 1000m
+            memory: 512Mi
 
       volumes:
       - name: repos
