@@ -46,6 +46,10 @@ metadata:
   namespace: services
 spec:
   storageClassName: ""
+  # Pinned explicitly: without volumeName the 1Gi config claim below would also
+  # be a valid match for this 20Gi volume, leaving the binding to the
+  # smallest-sufficient-PV heuristic.
+  volumeName: forgejo-data-pv
   accessModes:
     - ReadWriteOnce
   resources:
@@ -59,6 +63,7 @@ metadata:
   namespace: services
 spec:
   storageClassName: ""
+  volumeName: forgejo-config-pv
   accessModes:
     - ReadWriteOnce
   resources:

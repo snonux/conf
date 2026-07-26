@@ -96,10 +96,24 @@ spec:
           value: "true"
         - name: FORGEJO__server__SSH_LISTEN_PORT
           value: "2222"
+        # SSH_DOMAIN is deliberately NOT code.f3s.buetow.org: that name resolves
+        # to the OpenBSD gateways, which forward 443 only, and *.f3s.lan points
+        # at the CARP storage VIP rather than a k3s node. Advertise a node that
+        # actually answers on the NodePort, so the clone URLs Forgejo renders
+        # are ones that work.
         - name: FORGEJO__server__SSH_DOMAIN
-          value: "code.f3s.buetow.org"
+          value: "r0.lan.buetow.org"
         - name: FORGEJO__server__SSH_PORT
           value: "30222"
+
+        # Behind relayd -> Traefik, Forgejo's default trusts only 127.0.0.0/8,
+        # so every request would be attributed to the Traefik pod IP: real client
+        # IPs lost from the audit trail and per-IP rate limiting defeated. That
+        # matters here because the instance is internet-facing. 10.42.0.0/16 is
+        # the k3s pod CIDR; Traefik is already configured to pass the correct
+        # X-Forwarded-For (see f3s/traefik-config).
+        - name: FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES
+          value: "10.42.0.0/16"
 
         # This instance is reachable from the public internet through relayd.
         # Lock the installer (otherwise the first visitor gets the setup wizard)

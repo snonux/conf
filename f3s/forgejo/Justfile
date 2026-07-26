@@ -34,10 +34,17 @@ restart:
     @echo "Restarting forgejo..."
     kubectl rollout restart -n {{NAMESPACE}} deployment/forgejo
 
-# One-time after the first successful start. Prompts for the password.
+# One-time after the first successful start. This is the ONLY way in: the web
+# installer is locked and registration is disabled.
+# `admin user create` does not prompt -- without --password or --random-password
+# it exits with "must set either password or random-password flag". Use a
+# generated password (printed once, to stdout) rather than passing one on the
+# command line where it would land in shell history and ps output.
 create-admin username="paul" email="paul.buetow@gmail.com":
+    @echo "The generated password is printed below -- copy it now, it is shown only once."
     kubectl exec -n {{NAMESPACE}} -it deploy/forgejo -- \
-        forgejo admin user create --admin --username {{username}} --email {{email}}
+        forgejo admin user create --admin --username {{username}} --email {{email}} \
+        --random-password
 
 # Open a shell as the git user inside the running instance.
 shell:

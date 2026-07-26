@@ -49,8 +49,13 @@ doas mkdir -p /data/nfs/k3svolumes/forgejo/data /data/nfs/k3svolumes/forgejo/con
 doas touch    /data/nfs/k3svolumes/forgejo/data/.nfs-sentinel \
               /data/nfs/k3svolumes/forgejo/config/.nfs-sentinel
 doas chown -R 1000:1000 /data/nfs/k3svolumes/forgejo
-doas chmod -R 0750      /data/nfs/k3svolumes/forgejo
+doas chmod 0750 /data/nfs/k3svolumes/forgejo/data /data/nfs/k3svolumes/forgejo/config
+doas chmod 0644 /data/nfs/k3svolumes/forgejo/data/.nfs-sentinel \
+                /data/nfs/k3svolumes/forgejo/config/.nfs-sentinel
 ```
+
+The sentinel files are 0644 per `f3s/docs/nfs-sentinel-initcontainer.md` — do not
+sweep them up in a recursive chmod of the directories.
 
 The PVs use `type: Directory`, so the pod will not schedule until these exist.
 
@@ -65,14 +70,21 @@ so the certificate has to exist first:
 
 ```sh
 cd frontends
-rex -H blowfish.buetow.org:2 nsd httpd acme acme_invoke relayd
-rex -H fishfinger.buetow.org:2 nsd httpd acme acme_invoke relayd
+rex -H blowfish.buetow.org:2 nsd httpd acme acme_invoke relayd gogios
+rex -H fishfinger.buetow.org:2 nsd httpd acme acme_invoke relayd gogios
 ```
 
 `acme.sh` copies the `foo.zone` cert as a placeholder for any host that has none
-yet, so relayd will still start on the first pass; the real certificate arrives
-on the same run. Deploying one gateway at a time avoids restarting both public
-frontends simultaneously.
+yet, so relayd will still start on the first pass. The *real* certificate is only
+issued on the gateway currently holding the DNS master IP — `acme.sh` skips
+`acme-client` on the standby, which keeps the placeholder until a failover. That
+is normal; the standby is not serving the name yet.
+
+`gogios` is included because the TLS and HTTP checks for the new host are
+rendered from `@acme_hosts`; without it `code.f3s.buetow.org` gets no monitoring.
+
+Deploying one gateway at a time avoids restarting both public frontends
+simultaneously.
 
 ### 3. Deploy
 
@@ -80,7 +92,9 @@ frontends simultaneously.
 kubectl apply -f ../argocd-apps/services/forgejo.yaml
 ```
 
-Or just push — ArgoCD picks it up automatically.
+This apply is required and cannot be skipped: there is no app-of-apps or
+ApplicationSet watching `f3s/argocd-apps/`, so pushing the repo alone does
+nothing. Once the Application exists, later edits to the chart do auto-sync.
 
 ### 4. Create the admin user
 
