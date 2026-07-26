@@ -122,10 +122,25 @@ http protocol "https" {
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_static_proxy>
     <%   } } -%>
 
-    # Add cache-control headers to f3s fallback pages (served from localhost when cluster is down)
-    match response header set "Cache-Control" value "no-cache, no-store, must-revalidate"
-    match response header set "Pragma" value "no-cache"
-    match response header set "Expires" value "0"
+    # Keep the f3s fallback pages (served from localhost httpd when the cluster
+    # is down) out of browser caches, so nobody keeps seeing "cluster is down"
+    # after the cluster recovers.
+    #
+    # These rules used to be unscoped, so they rewrote EVERY response through
+    # this relay -- including everything the k3s cluster serves. That silently
+    # defeated upstream cache headers cluster-wide: cgit sets "expires 30d" on
+    # its CSS and logo, but browsers re-fetched them on every page view.
+    #
+    # relayd cannot filter a response by the backend table that produced it, so
+    # scope on the Server header instead: the local httpd is the only backend
+    # that answers "OpenBSD httpd" (the cluster answers nginx, the Pis
+    # bozohttpd). A "header set" cannot be combined with a header match in one
+    # rule, hence the tag: it is sticky for the connection, and a later
+    # response rule picks it up with "tagged".
+    match response header "Server" value "OpenBSD httpd" tag "HTTPD_FALLBACK"
+    match response tagged "HTTPD_FALLBACK" header set "Cache-Control" value "no-cache, no-store, must-revalidate"
+    match response tagged "HTTPD_FALLBACK" header set "Pragma" value "no-cache"
+    match response tagged "HTTPD_FALLBACK" header set "Expires" value "0"
     }
 
 relay "https4" {
