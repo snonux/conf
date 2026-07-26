@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forgejo
+  namespace: services
+  labels:
+    app: forgejo
+spec:
+  replicas: 1
+  # Recreate so the old pod fully terminates before the new one starts —
+  # avoids NFS-lock races on the hostPath-backed PVC during rolling updates.
+  # This also matters for SQLite: exactly one process may hold the database.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forgejo
+  template:
+    metadata:
+      labels:
+        app: forgejo
+    spec:
+      securityContext:
+        # The -rootless image runs entirely as the unprivileged git user (1000).
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: nfs-check-data
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: forgejo-data
+          mountPath: /mnt
+          readOnly: true
+      - name: nfs-check-config
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          test -f /mnt/.nfs-sentinel || (
+            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+            echo "refusing to start; node likely has NFS unmounted"
+            echo "pod would otherwise bind-mount the local-XFS shadow"
+            exit 1
+          )
+        volumeMounts:
+        - name: forgejo-config
+          mountPath: /mnt
+          readOnly: true
+
+      containers:
+      - name: forgejo
+        image: codeberg.org/forgejo/forgejo:16.0.1-rootless
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        - containerPort: 2222
+          name: ssh
+          protocol: TCP
+        env:
+        # SQLite rather than a separate PostgreSQL pod: this is a single-writer
+        # instance (replicas 1 + Recreate), and NFSv4.2 does real byte-range
+        # locking, so the usual SQLite-on-NFS corruption mode does not apply.
+        # Revisit if this ever needs more than one replica.
+        - name: FORGEJO__database__DB_TYPE
+          value: "sqlite3"
+        - name: FORGEJO__database__PATH
+          value: "/var/lib/gitea/data/forgejo.db"
+
+        # Public identity. ROOT_URL must match what relayd terminates TLS for,
+        # otherwise Forgejo generates clone URLs and redirects on the wrong host.
+        - name: FORGEJO__server__DOMAIN
+          value: "code.f3s.buetow.org"
+        - name: FORGEJO__server__ROOT_URL
+          value: "https://code.f3s.buetow.org/"
+        - name: FORGEJO__server__HTTP_PORT
+          value: "3000"
+
+        # Built-in SSH server. SSH_LISTEN_PORT is what the container binds;
+        # SSH_PORT is what Forgejo advertises in clone URLs, i.e. the NodePort
+        # users actually reach. git-server already owns 30022, so this is 30222.
+        - name: FORGEJO__server__START_SSH_SERVER
+          value: "true"
+        - name: FORGEJO__server__SSH_LISTEN_PORT
+          value: "2222"
+        - name: FORGEJO__server__SSH_DOMAIN
+          value: "code.f3s.buetow.org"
+        - name: FORGEJO__server__SSH_PORT
+          value: "30222"
+
+        # This instance is reachable from the public internet through relayd.
+        # Lock the installer (otherwise the first visitor gets the setup wizard)
+        # and keep signups closed; create the admin with the CLI, see README.
+        - name: FORGEJO__security__INSTALL_LOCK
+          value: "true"
+        - name: FORGEJO__service__DISABLE_REGISTRATION
+          value: "true"
+
+        # Catches stale NFS file handles (ESTALE) after an NFS server restart,
+        # which a plain HTTP probe would not notice until a request touched disk.
+        livenessProbe:
+          exec:
+            command: ["test", "-f", "/var/lib/gitea/.nfs-sentinel"]
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          failureThreshold: 3
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /api/healthz
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          failureThreshold: 3
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: forgejo-data
+          mountPath: /var/lib/gitea
+        - name: forgejo-config
+          mountPath: /etc/gitea
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+
+      volumes:
+      - name: forgejo-data
+        persistentVolumeClaim:
+          claimName: forgejo-data-pvc
+      - name: forgejo-config
+        persistentVolumeClaim:
+          claimName: forgejo-config-pvc

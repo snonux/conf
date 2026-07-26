@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgejo
+  namespace: services
+  labels:
+    app: forgejo
+spec:
+  selector:
+    app: forgejo
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: ClusterIP
+---
+# SSH for git clone/push. NodePort 30222 -- git-server/cgit already owns 30022,
+# and the two installs are intentionally independent.
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgejo-ssh
+  namespace: services
+  labels:
+    app: forgejo
+spec:
+  selector:
+    app: forgejo
+  ports:
+  - name: ssh
+    protocol: TCP
+    port: 2222
+    targetPort: 2222
+    nodePort: 30222
+  type: NodePort

@@ -1,0 +1,44 @@
+NAMESPACE := "services"
+APP_NAME := "forgejo"
+
+status:
+    @echo "=== Pods ==="
+    @kubectl get pods -n {{NAMESPACE}} | grep forgejo
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl get svc -n {{NAMESPACE}} forgejo forgejo-ssh
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl get ingress -n {{NAMESPACE}} forgejo-ingress forgejo-ingress-lan
+    @echo ""
+    @echo "=== PVCs ==="
+    @kubectl get pvc -n {{NAMESPACE}} | grep forgejo
+    @echo ""
+    @echo "=== ArgoCD Status ==="
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo ""
+
+logs lines="100":
+    kubectl logs -n {{NAMESPACE}} -l app=forgejo --tail={{lines}} -f
+
+port-forward port="3000":
+    @echo "Forwarding forgejo to localhost:{{port}}"
+    kubectl port-forward -n {{NAMESPACE}} svc/forgejo {{port}}:80
+
+sync:
+    @echo "Triggering ArgoCD sync..."
+    @kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+    @sleep 2
+    @kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+restart:
+    @echo "Restarting forgejo..."
+    kubectl rollout restart -n {{NAMESPACE}} deployment/forgejo
+
+# One-time after the first successful start. Prompts for the password.
+create-admin username="paul" email="paul.buetow@gmail.com":
+    kubectl exec -n {{NAMESPACE}} -it deploy/forgejo -- \
+        forgejo admin user create --admin --username {{username}} --email {{email}}
+
+# Open a shell as the git user inside the running instance.
+shell:
+    kubectl exec -n {{NAMESPACE}} -it deploy/forgejo -- /bin/sh

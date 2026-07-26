@@ -1,0 +1,66 @@
+# Forgejo storage. Deliberately separate from the git-server/cgit volume:
+# Forgejo owns its own repositories under /data/nfs/k3svolumes/forgejo/data and
+# never touches the 80 bare repos cgit serves out of
+# /data/nfs/k3svolumes/git-server/repos.
+#
+# Both directories must exist and contain a .nfs-sentinel file before the pod
+# starts -- see the initContainers in deployment.yaml and the README.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: forgejo-data-pv
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/forgejo/data
+    type: Directory
+---
+# app.ini lives here, and with it the SECRET_KEY and INTERNAL_TOKEN that Forgejo
+# generates on first start. Losing this volume invalidates existing sessions and
+# any stored credentials, so it is kept on NFS (ZFS-snapshotted) rather than in
+# an emptyDir.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: forgejo-config-pv
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/forgejo/config
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forgejo-data-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forgejo-config-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

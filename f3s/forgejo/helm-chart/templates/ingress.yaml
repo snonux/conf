@@ -1,0 +1,54 @@
+# Forgejo web UI ingress.
+#
+# code.f3s.buetow.org must also be listed in @f3s_hosts in frontends/Rexfile --
+# that array drives the DNS zone, the relayd routing rule and the ACME cert.
+# Adding it here alone is not enough to make the name resolve or serve TLS.
+#
+# cgit stays where it is, at c-git.f3s.buetow.org; the two are unrelated.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forgejo-ingress
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: code.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forgejo
+                port:
+                  number: 80
+---
+# LAN ingress. *.f3s.lan resolves to the storage VIP via Pi-hole, and Traefik
+# terminates TLS here with the shared f3s-lan-tls cert.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forgejo-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - code.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: code.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forgejo
+                port:
+                  number: 80
