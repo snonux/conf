@@ -48,6 +48,15 @@ table <garage> {
   192.168.2.132
 }
 
+# Forgejo git+ssh backends (NodePort 30222 on the k3s nodes, over WireGuard).
+# Separate table from <f3s> so the health check tracks the SSH port specifically:
+# the web UI can be up while the built-in SSH server is not.
+table <forgejo_ssh> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+
 # Local OpenBSD httpd
 table <localhost> {
   127.0.0.1
@@ -232,6 +241,31 @@ relay "gemini6" {
     listen on <%= $ipv6address->($hostname) %> port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
+}
+
+# Forgejo git+ssh.
+#
+# Port 2022, deliberately not 22: leaving the forge off the default port keeps
+# it out of the way of the mass scanners that hammer 22 continuously. That is
+# noise reduction, not security -- the actual protection is that Forgejo's SSH
+# server does key-only auth for git operations and offers no shell.
+#
+# 2222 was the obvious alternative but is already taken here by dserver (DTail).
+#
+# Plain TCP relay: no "protocol" line, so relayd forwards the stream untouched.
+# TLS is not involved and must not be -- SSH does its own transport security,
+# and the client verifies Forgejo's own host key at the far end.
+#
+# Only the gateway currently holding the code.f3s.buetow.org address actually
+# receives connections; the other listens harmlessly.
+relay "forgejo_ssh4" {
+    listen on <%= $ipv4address->($hostname) %> port 2022
+    forward to <forgejo_ssh> port 30222 check tcp
+}
+
+relay "forgejo_ssh6" {
+    listen on <%= $ipv6address->($hostname) %> port 2022
+    forward to <forgejo_ssh> port 30222 check tcp
 }
 
 relay "f3s_static_proxy4" {

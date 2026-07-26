@@ -112,8 +112,24 @@ just create-admin
 # HTTPS
 git clone https://code.f3s.buetow.org/<user>/<repo>.git
 
-# SSH (NodePort; LAN only unless you forward it)
+# SSH, from anywhere -- relayd listens on 2022 and TCP-forwards to the NodePort
+git clone ssh://git@code.f3s.buetow.org:2022/<user>/<repo>.git
+
+# SSH direct to a node, bypassing the gateways (LAN only)
 git clone ssh://git@r0.lan.buetow.org:30222/<user>/<repo>.git
+```
+
+Port 2022 rather than 22 keeps the forge away from the mass scanning the default
+port attracts; 2222 was unavailable, dserver (DTail) already uses it on the
+gateways. To administer blowfish/fishfinger, SSH is on port 2 as usual.
+
+To use the short `git@code.f3s.buetow.org:user/repo.git` form, put the port in
+`~/.ssh/config`:
+
+```
+Host code.f3s.buetow.org
+  Port 2022
+  User git
 ```
 
 ## Operations

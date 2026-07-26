@@ -96,15 +96,18 @@ spec:
           value: "true"
         - name: FORGEJO__server__SSH_LISTEN_PORT
           value: "2222"
-        # SSH_DOMAIN is deliberately NOT code.f3s.buetow.org: that name resolves
-        # to the OpenBSD gateways, which forward 443 only, and *.f3s.lan points
-        # at the CARP storage VIP rather than a k3s node. Advertise a node that
-        # actually answers on the NodePort, so the clone URLs Forgejo renders
-        # are ones that work.
+        # relayd listens on 2022 on the gateways and TCP-forwards to NodePort
+        # 30222, so git+ssh works from off-LAN (see relay "forgejo_ssh4" in
+        # frontends/etc/relayd.conf.tpl). Not 22: that keeps the forge clear of
+        # the constant scanning on the default port. Not 2222 either -- dserver
+        # already holds that on the gateways.
+        #
+        # SSH_PORT is what Forgejo advertises in clone URLs (2022, via relayd);
+        # SSH_LISTEN_PORT above is what the container actually binds (2222).
         - name: FORGEJO__server__SSH_DOMAIN
-          value: "r0.lan.buetow.org"
+          value: "code.f3s.buetow.org"
         - name: FORGEJO__server__SSH_PORT
-          value: "30222"
+          value: "2022"
 
         # Behind relayd -> Traefik, Forgejo's default trusts only 127.0.0.0/8,
         # so every request would be attributed to the Traefik pod IP: real client
