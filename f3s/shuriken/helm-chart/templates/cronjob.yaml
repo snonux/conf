@@ -65,13 +65,24 @@ spec:
                 # to shuriken as --image-jobs.
                 - name: SHURIKEN_IMAGE_JOBS
                   value: "1"
+                # ImageMagick 7 is Q16-HDRI and built with OpenMP. Pin OpenMP
+                # to a single thread: the pod is cpu-limited to 1 core anyway,
+                # and extra resample threads would only multiply the HDRI pixel
+                # buffer's memory pressure (the OOM trigger for large PNGs).
+                - name: OMP_NUM_THREADS
+                  value: "1"
               resources:
                 requests:
                   cpu: 100m
                   memory: 256Mi
                 limits:
                   cpu: "1"
-                  memory: 1Gi
+                  # 2 Gi: the ImageMagick policy (baked into the image) caps
+                  # the in-RAM pixel cache at 512 MiB and spills oversized
+                  # decodes to the /tmp disk cache, so this headroom covers the
+                  # working set + bash + the HDRI buffers of one photo without
+                  # the pod being OOM-killed on a multi-megapixel source image.
+                  memory: 2Gi
               securityContext:
                 allowPrivilegeEscalation: false
                 runAsUser: 0
@@ -82,6 +93,8 @@ spec:
                 - name: configs
                   mountPath: /configs
                   readOnly: true
+                - name: tmp
+                  mountPath: /tmp
           volumes:
             - name: data
               persistentVolumeClaim:
@@ -89,3 +102,8 @@ spec:
             - name: configs
               configMap:
                 name: shuriken-config
+            # Disk-backed scratch for ImageMagick's disk pixel cache (the
+            # policy spills oversized HDRI decodes here instead of OOMing).
+            - name: tmp
+              emptyDir:
+                sizeLimit: 8Gi
