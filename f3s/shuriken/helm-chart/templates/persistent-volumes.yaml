@@ -1,0 +1,38 @@
+# shuriken-data: the shared NFS export (/data/nfs/k3svolumes) mounted into the
+# CronJob at /data. The whole tree is mounted (not just shuriken.sh/) because
+# the incoming directories under shuriken.sh/incoming/ are relative symlinks
+# into ../../syncthing/... -- they only resolve when /data exposes the full
+# k3svolumes layout. The job writes only under /data/shuriken.sh/<site>/dist;
+# everything else it reads.
+#
+# RWX (shared NFS) so the job may land on any r-node; the nfs-mount-monitor on
+# each r-node keeps the mount healthy and the initContainer sentinel check
+# refuses to start if NFS is down (avoids writing into a stale local-XFS
+# shadow). The sentinel lives at shuriken.sh/.nfs-sentinel on the NFS server.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: shuriken-data-pv
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shuriken-data-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi

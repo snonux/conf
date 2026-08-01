@@ -1,0 +1,91 @@
+# shuriken: nightly regeneration of the irregular.ninja and alt.irregular.ninja
+# static photo albums. The container entrypoint runs `shuriken --generate
+# --config <conf>` once per /configs/*.conf (alphabetical), writing each site
+# into /data/shuriken.sh/<site>/dist on the shared NFS export.
+#
+# Design:
+#   - concurrencyPolicy: Forbid -- a long generate run (large photo library,
+#     single image job) must not stack a second worker on top of it; shuriken's
+#     staging directories would race and the NFS write load would double.
+#   - backoffLimit: 0 -- a failed nightly run surfaces in the Job history and
+#     gets retried by the next night's schedule; spamming retries would just
+#     re-burn ImageMagick CPU on a persistent failure (e.g. NFS down).
+#   - activeDeadlineSeconds: 6h -- caps a runaway first-run backfill of a large
+#     library; steady state is far shorter.
+#   - runAsUser: 0 -- the syncthing source tree is mode 750 root:wheel on the
+#     NFS server, and the dist output is written as root to match the existing
+#     irregular.ninja layout.
+#   - Single image job by default (entrypoint --image-jobs 1); raise via the
+#     SHURIKEN_IMAGE_JOBS env if a faster one-off run is needed.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: shuriken
+  namespace: services
+spec:
+  # 04:00 local daily -- off-peak, and doesn't collide with the beets-art
+  # noon sweep. timeZone is GA in k8s 1.27+; k3s 1.32 supports it.
+  schedule: "0 4 * * *"
+  timeZone: Europe/Sofia
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 21600
+      template:
+        spec:
+          restartPolicy: Never
+          initContainers:
+            - name: nfs-check
+              image: busybox:stable
+              command:
+                - sh
+                - -c
+                - |
+                  test -f /mnt/shuriken.sh/.nfs-sentinel || (
+                    echo "ERROR: NFS sentinel missing at /mnt/shuriken.sh/.nfs-sentinel"
+                    echo "refusing to start; node likely has NFS unmounted"
+                    echo "pod would otherwise write into a stale local-XFS shadow"
+                    exit 1
+                  )
+              volumeMounts:
+                - name: data
+                  mountPath: /mnt
+                  readOnly: true
+          containers:
+            - name: shuriken
+              image: registry.lan.buetow.org:30001/shuriken:0.13.2
+              imagePullPolicy: Always
+              env:
+                # Default 1 image job (single-threaded); override here if a
+                # faster one-off run is acceptable. The entrypoint passes this
+                # to shuriken as --image-jobs.
+                - name: SHURIKEN_IMAGE_JOBS
+                  value: "1"
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsUser: 0
+                runAsGroup: 0
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: configs
+                  mountPath: /configs
+                  readOnly: true
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: shuriken-data-pvc
+            - name: configs
+              configMap:
+                name: shuriken-config

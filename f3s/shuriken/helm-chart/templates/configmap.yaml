@@ -1,0 +1,50 @@
+# Per-site shuriken.conf files, mounted read-only at /configs inside the
+# CronJob container. The image entrypoint runs `shuriken --generate --config
+# <conf>` once per *.conf here (alphabetical), so both albums are regenerated
+# sequentially in a single daily run.
+#
+# Notes:
+#   - INCOMING_DIR uses `readlink -f` on the symlink under /data/shuriken.sh/
+#     incoming/ so shuriken's `find` descends into the real syncthing tree
+#     (find does not follow a symlinked start directory). The resolved path
+#     contains spaces; shuriken handles that (see the existing alt conf).
+#   - DIST_DIR is a regular subdirectory under the NFS mount (NOT a mount
+#     point), so shuriken's staging atomic-swap rename works.
+#   - IMAGE_JOBS is set to 1 for documentation, but the container entrypoint
+#     also passes --image-jobs 1 (overridable via SHURIKEN_IMAGE_JOBS), so a
+#     single ImageMagick process runs at a time -- the N100 hosts are
+#     passively cooled and this batch job has no latency budget.
+#   - No SYNC_* settings: the container only generates the static site into
+#     dist/. Publishing to fishfinger/blowfish stays a separate concern.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shuriken-config
+  namespace: services
+data:
+  irregular-ninja.conf: |
+    TITLE='Irregular Ninja'
+    THUMBHEIGHT=400
+    HEIGHT=1800
+    MAXPREVIEWS=40
+    IMAGE_JOBS=1
+    SHUFFLE=yes
+    SPLASH_PAGE=yes
+    STATS_PAGE=yes
+    INCOMING_DIR=$(readlink -f /data/shuriken.sh/incoming/irregular.ninja)
+    DIST_DIR=/data/shuriken.sh/irregular.ninja/dist
+    TEMPLATE_DIR=/usr/share/shuriken/templates/default
+    TARBALL_INCLUDE=no
+  alt-irregular-ninja.conf: |
+    TITLE='Alternative Irregular Ninja'
+    THUMBHEIGHT=400
+    HEIGHT=1800
+    MAXPREVIEWS=40
+    IMAGE_JOBS=1
+    SHUFFLE=yes
+    SPLASH_PAGE=yes
+    STATS_PAGE=yes
+    INCOMING_DIR=$(readlink -f /data/shuriken.sh/incoming/alt.irregular.ninja)
+    DIST_DIR=/data/shuriken.sh/alt.irregular.ninja/dist
+    TEMPLATE_DIR=/usr/share/shuriken/templates/default
+    TARBALL_INCLUDE=no

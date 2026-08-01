@@ -1,0 +1,17 @@
+REGISTRY := "r0.lan.buetow.org:30001"
+IMAGE := "shuriken"
+TAG := "0.13.2"
+# Source tree for the image build. The Dockerfile lives at the repo root and
+# copies bin/, share/templates, assets/site, src/shuriken.default.conf and
+# docker/entrypoint.sh, so build from the shuriken.sh checkout root. Run
+# `just build` in the shuriken.sh repo first so bin/shuriken is up to date.
+SRC := "/home/paul/git/shuriken.sh"
+
+build:
+	docker build -t {{IMAGE}}:{{TAG}} {{SRC}}
+
+push:
+	docker tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+	docker push {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+
+all: build push
