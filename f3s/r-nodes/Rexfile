@@ -2,6 +2,7 @@
 #
 # Run from repository root:
 #   rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+#   rex -f f3s/r-nodes/Rexfile persistent_journal
 #
 # All tasks connect as root (r-nodes require root for systemd and
 # /usr/local/bin writes; paul user has no sudo configured on these VMs).
@@ -41,6 +42,8 @@ parallelism 3;
 #   /etc/default/nfs-mount-monitor          (tunable: NFS_FAIL_THRESHOLD)
 #   /etc/systemd/system/nfs-mount-monitor.service
 #   /etc/systemd/system/nfs-mount-monitor.timer
+#   /etc/systemd/system/data-nfs-k3svolumes.mount.d/10-stunnel-ordering.conf
+#   /etc/systemd/system/k3s.service.d/10-nfs-ordering.conf
 #   /var/lib/nfs-mount-monitor/             (state dir for fail-count file)
 #
 # Idempotent: Rex only writes the file when content changes; the
@@ -115,6 +118,34 @@ task 'nfs_mount_monitor',
       mode      => '644',
       on_change => sub { $changed = 1 };
 
+    # Keep the local TLS transport running until the NFS mount is detached.
+    file '/etc/systemd/system/data-nfs-k3svolumes.mount.d',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '755';
+
+    file '/etc/systemd/system/data-nfs-k3svolumes.mount.d/10-stunnel-ordering.conf',
+      source    => catfile( $monitor_dir, 'nfs-stunnel-ordering.conf' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
+    # Stop k3s before detaching its host-path NFS filesystem.
+    file '/etc/systemd/system/k3s.service.d',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '755';
+
+    file '/etc/systemd/system/k3s.service.d/10-nfs-ordering.conf',
+      source    => catfile( $monitor_dir, 'k3s-nfs-ordering.conf' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
     if ($changed) {
         Rex::Logger::info('Files changed — reloading systemd and restarting timer');
         run 'systemctl daemon-reload';
@@ -124,6 +155,43 @@ task 'nfs_mount_monitor',
     # Ensure the timer is enabled and running regardless of whether files changed.
     service 'nfs-mount-monitor.timer', ensure => 'started';
     run 'systemctl enable nfs-mount-monitor.timer';
+  };
+
+# Keep the previous boot's journal so failed shutdowns can be diagnosed after
+# a forced guest stop or reboot. Limit its disk use on these small VMs.
+desc 'Enable persistent systemd journal storage on r0/r1/r2';
+task 'persistent_journal',
+  group => 'r_nodes',
+  sub {
+    my $changed = 0;
+
+    file '/etc/systemd/journald.conf.d',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'root',
+      mode   => '755';
+
+    file '/etc/systemd/journald.conf.d/10-persistent.conf',
+      source    => catfile( $RNODES_DIR, 'journald-persistent.conf' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
+    file '/var/log/journal',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'systemd-journal',
+      mode   => '2755';
+
+    if ($changed) {
+        run 'systemd-tmpfiles --create --prefix /var/log/journal';
+        run 'systemctl restart systemd-journald';
+    }
+
+    # Also converges after the journal directory was recreated independently
+    # of the already-correct drop-in file.
+    run 'journalctl --flush';
   };
 
 1;

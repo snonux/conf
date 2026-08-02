@@ -7,7 +7,7 @@
 
 [Unit]
 Description=Run NFS Mount Health Monitor every 10 seconds
-Requires=nfs-mount-monitor.service
+After=remote-fs.target
 
 [Timer]
 OnBootSec=30s
