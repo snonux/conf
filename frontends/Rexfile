@@ -11,7 +11,6 @@
 use Rex -feature => [ '1.14', 'exec_autodie' ];
 use Rex::Logger;
 use File::Slurp;
-use File::Basename qw(dirname);
 
 # REX CONFIG SECTION
 
@@ -652,9 +651,9 @@ task 'gogios',
       mode    => '744';
 
     # Shuriken album-age check plugin (canonical copy lives in the shuriken.sh
-    # repo; read it from the sibling checkout so there is one source of truth).
+    # repo; read it from the homelab checkout so there is one source of truth).
     file '/usr/local/bin/check_shuriken_age',
-      content => read_file( dirname(__FILE__) . '/../../shuriken.sh/contrib/check_shuriken_age' ),
+      content => read_file( $ENV{HOME} . '/git/shuriken.sh/contrib/check_shuriken_age' ),
       owner   => 'root',
       group   => 'wheel',
       mode    => '755';
