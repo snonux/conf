@@ -3,4 +3,4 @@ name: ychat
 description: yChat revival (SQLite-backed, persistent registered accounts) for f3s
 type: application
 version: 0.8.0
-appVersion: "46e5af3"
+appVersion: "8f3051b"
