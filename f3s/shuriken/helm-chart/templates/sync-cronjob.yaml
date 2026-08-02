@@ -76,6 +76,17 @@ spec:
                   set -euo pipefail
                   D=/data/shuriken.sh
 
+                  # Mutually exclude with the generation CronJob: don't publish
+                  # while a generation is running. Non-blocking -- if the lock is
+                  # held (generation in progress), skip this tick and let the next
+                  # one publish once generation finishes. flock auto-releases if
+                  # the generation pod dies, so a crash never wedges the sync.
+                  exec 9>"$D/.lock"
+                  if ! flock -n 9; then
+                    echo "shuriken-sync: generation in progress (lock held); skipping"
+                    exit 0
+                  fi
+
                   # Only publish when a generation has completed since the last
                   # sync. status.json is deleted at the start of a run and
                   # written last on success, so its presence means "completed"

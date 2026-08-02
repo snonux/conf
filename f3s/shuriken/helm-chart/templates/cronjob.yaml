@@ -59,6 +59,16 @@ spec:
             - name: shuriken
               image: registry.lan.buetow.org:30001/shuriken:0.13.2
               imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  # Hold the generation/sync mutex for the WHOLE multi-site run
+                  # so the shuriken-sync CronJob can't publish mid-generation
+                  # (and vice versa). flock auto-releases if the pod dies, so a
+                  # crash never leaves a stale lock. Blocking acquire: if a sync
+                  # is mid-publish, wait for it (it's short) then generate.
+                  exec flock /data/shuriken.sh/.lock shuriken-entrypoint
               env:
                 # Default 1 image job (single-threaded); override here if a
                 # faster one-off run is acceptable. The entrypoint passes this
