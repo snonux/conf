@@ -1,0 +1,88 @@
+# shuriken-sync: a SEPARATE CronJob that publishes the already-generated
+# /data/shuriken.sh/<site>/dist trees to the public web servers (fishfinger +
+# blowfish) over rsync/SSH. Decoupled from the generation CronJob so it can run
+# more frequently than the daily generate -- rsync only transfers the diff, so
+# an incremental publish after generation is cheap, and a failed publish is
+# retried on the next tick without re-running the (expensive) generation.
+#
+# Requires a Secret `shuriken-rsync-ssh-key` holding the admin private key
+# authorized on fishfinger/blowfish (the same key the local `shuriken --sync`
+# uses). Until that Secret is provisioned this CronJob's pods fail to mount the
+# key and publish nothing -- safe by design (no live publish without the key).
+# Create it once:
+#   kubectl create secret generic shuriken-rsync-ssh-key -n services \
+#       --from-file=id_ed25519=/path/to/admin_ed25519
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: shuriken-sync
+  namespace: services
+spec:
+  # Every 4h -- 6x/day, far more often than the daily 04:00 generation. rsync
+  # is incremental, so after the first publish each tick only ships the diff.
+  schedule: "0 */4 * * *"
+  timeZone: Europe/Sofia
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Transient SSH/rsync failures (gateway blip, NFS hiccup) are retried by
+      # the next tick; don't spam retries within one run.
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: shuriken-sync
+              image: registry.lan.buetow.org:30001/shuriken:0.13.2
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  export HOME=/tmp
+                  mkdir -p "$HOME/.ssh"
+                  SSH="ssh -i /ssh-keys/id_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+                  for site in irregular.ninja alt.irregular.ninja; do
+                    for srv in fishfinger.buetow.org blowfish.buetow.org; do
+                      echo "shuriken-sync: publishing $site -> $srv"
+                      rsync -a --delete --info=stats1 -e "$SSH" \
+                          "/data/shuriken.sh/$site/dist/" \
+                          "admin@$srv:/var/www/htdocs/$site/"
+                    done
+                  done
+                  echo "shuriken-sync: published both sites to both servers"
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsUser: 0
+                runAsGroup: 0
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: ssh-keys
+                  mountPath: /ssh-keys
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: shuriken-data-pvc
+            - name: ssh-keys
+              secret:
+                secretName: shuriken-rsync-ssh-key
+                defaultMode: 0400
+            - name: tmp
+              emptyDir:
+                sizeLimit: 256Mi

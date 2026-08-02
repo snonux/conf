@@ -71,6 +71,36 @@ just sync            # refresh the ArgoCD app
 just argocd-status   # argocd CLI view
 ```
 
+## Publishing (separate rsync CronJob)
+
+`shuriken-sync` is a second CronJob that rsyncs the generated
+`/data/shuriken.sh/<site>/dist` trees to the public web servers
+(`admin@fishfinger.buetow.org` and `admin@blowfish.buetow.org`, with
+`--delete`) every 4h -- decoupled from the daily generation so a publish can
+be retried far more often than a (re)generate. It reuses the shuriken image
+(rsync + openssh-client) but overrides the command, so it never runs
+generation.
+
+It needs the admin SSH key authorized on fishfinger/blowfish. Until that key
+is provisioned the publish pods fail to mount the key and publish nothing (safe
+by design -- no live publish without the key). Create the Secret once:
+
+```bash
+kubectl create secret generic shuriken-rsync-ssh-key -n services \
+    --from-file=id_ed25519=/path/to/admin_ed25519
+```
+
+The generation CronJob deliberately has no `SYNC_*` settings -- it only writes
+to NFS; all publishing goes through `shuriken-sync`.
+
+The image includes `openssh-client` (alongside rsync) so the same image serves
+both jobs. If the registry still holds an older `shuriken:0.13.2` without it,
+rebuild and push before activating sync (the generation job is unaffected):
+
+```bash
+cd /home/paul/git/conf/f3s/shuriken && just build-push
+```
+
 ## ArgoCD
 
 `argocd-apps/services/shuriken.yaml` points ArgoCD at
