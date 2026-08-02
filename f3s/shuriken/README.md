@@ -24,8 +24,8 @@ cd /home/paul/git/conf/f3s/shuriken
 just build-push
 ```
 
-The image is pushed as `r0.lan.buetow.org:30001/shuriken:0.13.2` and the
-CronJob pulls `registry.lan.buetow.org:30001/shuriken:0.13.2`. Bump `TAG` in
+The image is pushed as `r0.lan.buetow.org:30001/shuriken:0.14.0` and the
+CronJob pulls `registry.lan.buetow.org:30001/shuriken:0.14.0`. Bump `TAG` in
 `docker-image/Justfile` and `appVersion`/the CronJob `image:` tag together
 when releasing a new shuriken version.
 

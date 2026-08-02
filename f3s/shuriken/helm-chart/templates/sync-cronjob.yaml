@@ -68,7 +68,7 @@ spec:
                   readOnly: true
           containers:
             - name: shuriken-sync
-              image: registry.lan.buetow.org:30001/shuriken:0.13.2
+              image: registry.lan.buetow.org:30001/shuriken:0.14.0
               imagePullPolicy: Always
               command: ["/bin/bash", "-c"]
               args:
