@@ -185,11 +185,7 @@
       "RunInterval": 300,
       "Args": ["-w", "2,1,1", "-c", "4,3,3"]
     },
-    <%# Shuriken album freshness: status.json is written last by a successful
-        generation and pushed to the frontends by shuriken-sync, so a stale
-        epoch means the daily generation CronJob or the rsync sync is broken.
-        warn=1 week (604800s), crit=2 weeks (1209600s). Only run when the site
-        itself is reachable (DependsOn its HTTP checks). -%>
+    <%# Shuriken album freshness via status.json unix_epoch (written last on success, pushed by shuriken-sync); warn=1w, crit=2w; DependsOn the site HTTP checks. -%>
     "Check Shuriken Age irregular.ninja": {
       "Plugin": "/usr/local/bin/check_shuriken_age",
       "RandomSpread": 10,
