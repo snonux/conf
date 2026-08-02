@@ -1,26 +1,31 @@
-# shuriken-sync: a SEPARATE CronJob that publishes the already-generated
+# shuriken-sync: a SEPARATE CronJob that publishes the generated
 # /data/shuriken.sh/<site>/dist trees to the public web servers (fishfinger +
-# blowfish) over rsync/SSH. Decoupled from the generation CronJob so it can run
-# more frequently than the daily generate -- rsync only transfers the diff, so
-# an incremental publish after generation is cheap, and a failed publish is
-# retried on the next tick without re-running the (expensive) generation.
+# blowfish) over the rsync DAEMON protocol (no SSH, no key). The frontends run
+# rsyncd via inetd with `hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the
+# k3s pods run on r-nodes that have .wg0 (WireGuard) connectivity, so they match
+# and can push over the mesh. The writable modules `irregular-ninja` and
+# `alt-irregular-ninja` are declared in frontends/etc/rsyncd.conf.tpl (deploy
+# with `rex -f frontends/Rexfile rsync`).
 #
-# Requires a Secret `shuriken-rsync-ssh-key` holding the admin private key
-# authorized on fishfinger/blowfish (the same key the local `shuriken --sync`
-# uses). Until that Secret is provisioned this CronJob's pods fail to mount the
-# key and publish nothing -- safe by design (no live publish without the key).
-# Create it once:
-#   kubectl create secret generic shuriken-rsync-ssh-key -n services \
-#       --from-file=id_ed25519=/path/to/admin_ed25519
+# It only publishes when a generation has COMPLETED since the last sync:
+# shuriken deletes dist/status.json at the start of a run and writes it last on
+# success, so status.json's presence+freshness is the "completed" signal. Most
+# ticks are no-ops (one stat); a publish fires once after each successful daily
+# generation. The shuriken `--sync` over SSH stays available as an option; this
+# cron job just uses the rsync protocol instead.
+#
+# The nfs-check initContainer refuses to start if NFS is down on the node, so
+# rsync --delete can never run against an empty/stale source and wipe the live
+# public site.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: shuriken-sync
   namespace: services
 spec:
-  # Every 4h -- 6x/day, far more often than the daily 04:00 generation. rsync
-  # is incremental, so after the first publish each tick only ships the diff.
-  schedule: "0 */4 * * *"
+  # Every 30 min -- most ticks skip (no fresh generation); a publish fires soon
+  # after the daily 04:00 generation completes. Cheap: one stat per tick.
+  schedule: "*/30 * * * *"
   timeZone: Europe/Sofia
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -28,13 +33,22 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      # Transient SSH/rsync failures (gateway blip, NFS hiccup) are retried by
-      # the next tick; don't spam retries within one run.
       backoffLimit: 0
       activeDeadlineSeconds: 3600
       template:
         spec:
           restartPolicy: Never
+          hostAliases:
+            # The frontends are reached over the WireGuard mesh (.wg0); cluster
+            # DNS does not resolve *.wg0 names, so pin them to the mesh IPs.
+            - ip: 192.168.2.111
+              hostnames:
+                - fishfinger.wg0
+                - fishfinger.wg0.wan.buetow.org
+            - ip: 192.168.2.110
+              hostnames:
+                - blowfish.wg0
+                - blowfish.wg0.wan.buetow.org
           initContainers:
             - name: nfs-check
               image: busybox:stable
@@ -60,18 +74,44 @@ spec:
               args:
                 - |
                   set -euo pipefail
-                  export HOME=/tmp
-                  mkdir -p "$HOME/.ssh"
-                  SSH="ssh -i /ssh-keys/id_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
-                  for site in irregular.ninja alt.irregular.ninja; do
-                    for srv in fishfinger.buetow.org blowfish.buetow.org; do
-                      echo "shuriken-sync: publishing $site -> $srv"
-                      rsync -a --delete --info=stats1 -e "$SSH" \
-                          "/data/shuriken.sh/$site/dist/" \
-                          "admin@$srv:/var/www/htdocs/$site/"
+                  D=/data/shuriken.sh
+
+                  # Only publish when a generation has completed since the last
+                  # sync. status.json is deleted at the start of a run and
+                  # written last on success, so its presence means "completed"
+                  # and its freshness vs .last-sync means "not yet published".
+                  gen=0
+                  for f in \
+                      "$D/irregular.ninja/dist/status.json" \
+                      "$D/alt.irregular.ninja/dist/status.json"; do
+                    if [ ! -f "$f" ]; then
+                      echo "shuriken-sync: $f absent (generation in progress or failed); skipping"
+                      exit 0
+                    fi
+                    m=$(stat -c %Y "$f")
+                    [ "$m" -gt "$gen" ] && gen=$m
+                  done
+
+                  last=0
+                  [ -f "$D/.last-sync" ] && last=$(stat -c %Y "$D/.last-sync")
+                  if [ "$gen" -le "$last" ]; then
+                    echo "shuriken-sync: no completed generation since last sync (gen=$gen last=$last); skipping"
+                    exit 0
+                  fi
+
+                  echo "shuriken-sync: generation completed at $gen (last sync $last); publishing"
+                  for pair in irregular.ninja:irregular-ninja alt.irregular.ninja:alt-irregular-ninja; do
+                    site=${pair%%:*}
+                    mod=${pair##*:}
+                    for srv in fishfinger.wg0 blowfish.wg0; do
+                      echo "shuriken-sync: $site -> rsync://$srv/$mod/"
+                      rsync -a --delete --info=stats1 \
+                          "$D/$site/dist/" "rsync://$srv/$mod/"
                     done
                   done
-                  echo "shuriken-sync: published both sites to both servers"
+
+                  : > "$D/.last-sync"
+                  echo "shuriken-sync: done"
               resources:
                 requests:
                   cpu: 50m
@@ -86,20 +126,12 @@ spec:
               volumeMounts:
                 - name: data
                   mountPath: /data
-                  readOnly: true
-                - name: ssh-keys
-                  mountPath: /ssh-keys
-                  readOnly: true
                 - name: tmp
                   mountPath: /tmp
           volumes:
             - name: data
               persistentVolumeClaim:
                 claimName: shuriken-data-pvc
-            - name: ssh-keys
-              secret:
-                secretName: shuriken-rsync-ssh-key
-                defaultMode: 0400
             - name: tmp
               emptyDir:
                 sizeLimit: 256Mi

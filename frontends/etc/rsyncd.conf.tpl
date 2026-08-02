@@ -11,6 +11,24 @@ uid = www
 gid = www
 hosts allow = <%= $allow %>
 
+[irregular-ninja]
+comment = Irregular Ninja photo album (push from k3s over wg0)
+path = /var/www/htdocs/irregular.ninja
+read only = no
+list = yes
+uid = www
+gid = www
+hosts allow = <%= $allow %>
+
+[alt-irregular-ninja]
+comment = Alternative Irregular Ninja photo album (push from k3s over wg0)
+path = /var/www/htdocs/alt.irregular.ninja
+read only = no
+list = yes
+uid = www
+gid = www
+hosts allow = <%= $allow %>
+
 # [publicgemini]
 # comment = Public Gemini capsule content
 # path = /var/gemini

@@ -71,35 +71,37 @@ just sync            # refresh the ArgoCD app
 just argocd-status   # argocd CLI view
 ```
 
-## Publishing (separate rsync CronJob)
+## Publishing (separate rsync CronJob, rsync protocol)
 
-`shuriken-sync` is a second CronJob that rsyncs the generated
-`/data/shuriken.sh/<site>/dist` trees to the public web servers
-(`admin@fishfinger.buetow.org` and `admin@blowfish.buetow.org`, with
-`--delete`) every 4h -- decoupled from the daily generation so a publish can
-be retried far more often than a (re)generate. It reuses the shuriken image
-(rsync + openssh-client) but overrides the command, so it never runs
-generation.
+`shuriken-sync` is a second CronJob that publishes the generated
+`/data/shuriken.sh/<site>/dist` trees to the public web servers (fishfinger +
+blowfish) every 30 min. It uses the **rsync daemon protocol** (`rsync://`),
+NOT SSH -- no key/Secret needed. The frontends run rsyncd via inetd with
+`hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the k3s pods run on r-nodes
+with `.wg0` (WireGuard) connectivity, so they're authorized to push over the
+mesh. The writable modules `irregular-ninja` and `alt-irregular-ninja` are
+declared in `frontends/etc/rsyncd.conf.tpl` (deploy with `rex -f
+frontends/Rexfile rsync`).
 
-It needs the admin SSH key authorized on fishfinger/blowfish. Until that key
-is provisioned the publish pods fail to mount the key and publish nothing (safe
-by design -- no live publish without the key). Create the Secret once:
+It only publishes when a generation has **completed** since the last sync:
+shuriken deletes `dist/status.json` at the start of a run and writes it last
+on success, so status.json's presence + freshness vs a `.last-sync` marker on
+NFS is the "completed, not yet published" signal. Most ticks are no-ops; a
+publish fires once after each successful daily generation.
 
-```bash
-kubectl create secret generic shuriken-rsync-ssh-key -n services \
-    --from-file=id_ed25519=/path/to/admin_ed25519
-```
+The generation CronJob has no `SYNC_*` settings -- it only writes to NFS; all
+publishing goes through `shuriken-sync`. The `shuriken --sync` over SSH stays
+available as a manual option (openssh-client is in the image); the cron job
+just uses the rsync protocol.
 
-The generation CronJob deliberately has no `SYNC_*` settings -- it only writes
-to NFS; all publishing goes through `shuriken-sync`.
+### Frontend setup (one-time)
 
-The image includes `openssh-client` (alongside rsync) so the same image serves
-both jobs. If the registry still holds an older `shuriken:0.13.2` without it,
-rebuild and push before activating sync (the generation job is unaffected):
-
-```bash
-cd /home/paul/git/conf/f3s/shuriken && just build-push
-```
+1. Deploy the rsyncd modules: `rex -f frontends/Rexfile rsync`.
+2. The modules drop to `uid=www`; ensure the web dirs are www-writable. If
+   migrating from the old SSH sync (files owned by `admin`):
+   `doas chown -R www:www /var/www/htdocs/irregular.ninja /var/www/htdocs/alt.irregular.ninja` on both frontends.
+3. The image must include `rsync` (it does). Rebuild/push if the registry holds
+   an older `shuriken:0.13.2`: `cd /home/paul/git/conf/f3s/shuriken && just build-push` (from on-LAN).
 
 ## ArgoCD
 
