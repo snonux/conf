@@ -653,7 +653,7 @@ task 'gogios',
     # Shuriken album-age check plugin (canonical copy lives in the shuriken.sh
     # repo; read it from the homelab checkout so there is one source of truth).
     file '/usr/local/bin/check_shuriken_age',
-      content => read_file( $ENV{HOME} . '/git/shuriken.sh/contrib/check_shuriken_age' ),
+      content => scalar read_file( $ENV{HOME} . '/git/shuriken.sh/contrib/check_shuriken_age' ),
       owner   => 'root',
       group   => 'wheel',
       mode    => '755';
