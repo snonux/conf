@@ -184,6 +184,25 @@
       "RandomSpread": 10,
       "RunInterval": 300,
       "Args": ["-w", "2,1,1", "-c", "4,3,3"]
+    },
+    <%# Shuriken album freshness: status.json is written last by a successful
+        generation and pushed to the frontends by shuriken-sync, so a stale
+        epoch means the daily generation CronJob or the rsync sync is broken.
+        warn=1 week (604800s), crit=2 weeks (1209600s). Only run when the site
+        itself is reachable (DependsOn its HTTP checks). -%>
+    "Check Shuriken Age irregular.ninja": {
+      "Plugin": "/usr/local/bin/check_shuriken_age",
+      "RandomSpread": 10,
+      "RunInterval": 1800,
+      "Args": ["-f", "/var/www/htdocs/irregular.ninja/status.json", "-w", "604800", "-c", "1209600"],
+      "DependsOn": ["Check HTTP IPv4 irregular.ninja", "Check HTTP IPv6 irregular.ninja"]
+    },
+    "Check Shuriken Age alt.irregular.ninja": {
+      "Plugin": "/usr/local/bin/check_shuriken_age",
+      "RandomSpread": 10,
+      "RunInterval": 1800,
+      "Args": ["-f", "/var/www/htdocs/alt.irregular.ninja/status.json", "-w", "604800", "-c", "1209600"],
+      "DependsOn": ["Check HTTP IPv4 alt.irregular.ninja", "Check HTTP IPv6 alt.irregular.ninja"]
     }
   }
 }
