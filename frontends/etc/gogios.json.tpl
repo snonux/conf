@@ -185,19 +185,19 @@
       "RunInterval": 300,
       "Args": ["-w", "2,1,1", "-c", "4,3,3"]
     },
-    <%# Shuriken album freshness via status.json unix_epoch (written last on success, pushed by shuriken-sync); warn=1w, crit=2w; DependsOn the site HTTP checks. -%>
+    <%# Shuriken album freshness via status.json unix_epoch (written last on success, pushed by shuriken-sync); warn=3w, crit=5w; DependsOn the site HTTP checks. -%>
     "Check Shuriken Age irregular.ninja": {
       "Plugin": "/usr/local/bin/check_shuriken_age",
       "RandomSpread": 10,
       "RunInterval": 1800,
-      "Args": ["-f", "/var/www/htdocs/irregular.ninja/status.json", "-w", "604800", "-c", "1209600"],
+      "Args": ["-f", "/var/www/htdocs/irregular.ninja/status.json", "-w", "1814400", "-c", "3024000"],
       "DependsOn": ["Check HTTP IPv4 irregular.ninja", "Check HTTP IPv6 irregular.ninja"]
     },
     "Check Shuriken Age alt.irregular.ninja": {
       "Plugin": "/usr/local/bin/check_shuriken_age",
       "RandomSpread": 10,
       "RunInterval": 1800,
-      "Args": ["-f", "/var/www/htdocs/alt.irregular.ninja/status.json", "-w", "604800", "-c", "1209600"],
+      "Args": ["-f", "/var/www/htdocs/alt.irregular.ninja/status.json", "-w", "1814400", "-c", "3024000"],
       "DependsOn": ["Check HTTP IPv4 alt.irregular.ninja", "Check HTTP IPv6 alt.irregular.ninja"]
     }
   }
