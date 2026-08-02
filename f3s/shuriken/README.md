@@ -101,7 +101,7 @@ just uses the rsync protocol.
    migrating from the old SSH sync (files owned by `admin`):
    `doas chown -R www:www /var/www/htdocs/irregular.ninja /var/www/htdocs/alt.irregular.ninja` on both frontends.
 3. The image must include `rsync` (it does). Rebuild/push if the registry holds
-   an older `shuriken:0.13.2`: `cd /home/paul/git/conf/f3s/shuriken && just build-push` (from on-LAN).
+   an older `shuriken:0.14.0`: `cd /home/paul/git/conf/f3s/shuriken && just build-push` (from on-LAN).
 
 ## ArgoCD
 
