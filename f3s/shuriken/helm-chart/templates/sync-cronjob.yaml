@@ -35,11 +35,28 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          initContainers:
+            - name: nfs-check
+              image: busybox:stable
+              command:
+                - sh
+                - -c
+                - |
+                  test -f /mnt/shuriken.sh/.nfs-sentinel || (
+                    echo "ERROR: NFS sentinel missing at /mnt/shuriken.sh/.nfs-sentinel"
+                    echo "refusing to publish; NFS likely unmounted on this node"
+                    echo "rsync --delete against an empty/stale source would wipe the live site"
+                    exit 1
+                  )
+              volumeMounts:
+                - name: data
+                  mountPath: /mnt
+                  readOnly: true
           containers:
             - name: shuriken-sync
               image: registry.lan.buetow.org:30001/shuriken:0.13.2
               imagePullPolicy: Always
-              command: ["/bin/sh", "-c"]
+              command: ["/bin/bash", "-c"]
               args:
                 - |
                   set -euo pipefail
