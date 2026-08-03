@@ -75,7 +75,8 @@ just argocd-status   # argocd CLI view
 
 `shuriken-sync` is a second CronJob that publishes the generated
 `/data/shuriken.sh/<site>/dist` trees to the public web servers (fishfinger +
-blowfish) every 30 min. It uses the **rsync daemon protocol** (`rsync://`),
+blowfish) twice a day (10:00 and 18:00 Europe/Sofia -- daytime, well clear of
+the 04:00 generation run). It uses the **rsync daemon protocol** (`rsync://`),
 NOT SSH -- no key/Secret needed. The frontends run rsyncd via inetd with
 `hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the k3s pods run on r-nodes
 with `.wg0` (WireGuard) connectivity, so they're authorized to push over the
@@ -83,11 +84,14 @@ mesh. The writable modules `irregular-ninja` and `alt-irregular-ninja` are
 declared in `frontends/etc/rsyncd.conf.tpl` (deploy with `rex -f
 frontends/Rexfile rsync`).
 
-It only publishes when a generation has **completed** since the last sync:
-shuriken deletes `dist/status.json` at the start of a run and writes it last
-on success, so status.json's presence + freshness vs a `.last-sync` marker on
-NFS is the "completed, not yet published" signal. Most ticks are no-ops; a
-publish fires once after each successful daily generation.
+It only publishes a site whose content actually **changed**: each site's
+`dist/status.json` (`image_count` + `total_size_bytes`, extracted with
+grep since the image has no `jq`) is compared against a backup copy from the
+last publish (`<site>/.last-published-status.json` on NFS -- the persisted
+"did it change" state). `generated_at` is excluded from the comparison
+because shuriken rewrites it on every run regardless of whether the source
+images changed. Each of the two daily ticks independently checks both sites
+and publishes only the ones that changed.
 
 The generation CronJob has no `SYNC_*` settings -- it only writes to NFS; all
 publishing goes through `shuriken-sync`. The `shuriken --sync` over SSH stays

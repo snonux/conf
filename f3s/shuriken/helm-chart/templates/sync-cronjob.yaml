@@ -7,12 +7,15 @@
 # `alt-irregular-ninja` are declared in frontends/etc/rsyncd.conf.tpl (deploy
 # with `rex -f frontends/Rexfile rsync`).
 #
-# It only publishes when a generation has COMPLETED since the last sync:
-# shuriken deletes dist/status.json at the start of a run and writes it last on
-# success, so status.json's presence+freshness is the "completed" signal. Most
-# ticks are no-ops (one stat); a publish fires once after each successful daily
-# generation. The shuriken `--sync` over SSH stays available as an option; this
-# cron job just uses the rsync protocol instead.
+# It only publishes a site when its content actually changed: each site's
+# dist/status.json (image_count + total_size_bytes) is compared against a
+# backup copy of the status.json from the last publish
+# (<site>/.last-published-status.json on NFS -- the persisted "did it
+# change" state). generated_at is excluded from the comparison because
+# shuriken rewrites it on every run regardless of whether the source images
+# changed, so comparing the whole file would publish every tick. The shuriken
+# `--sync` over SSH stays available as an option; this cron job just uses the
+# rsync protocol instead.
 #
 # The nfs-check initContainer refuses to start if NFS is down on the node, so
 # rsync --delete can never run against an empty/stale source and wipe the live
@@ -23,9 +26,12 @@ metadata:
   name: shuriken-sync
   namespace: services
 spec:
-  # Every 30 min -- most ticks skip (no fresh generation); a publish fires soon
-  # after the daily 04:00 generation completes. Cheap: one stat per tick.
-  schedule: "*/30 * * * *"
+  # Twice a day, during daytime hours, well clear of the 04:00 generation
+  # run (avoids the flock race the two CronJobs used to hit when a tick
+  # landed on top of a still-running generation). Each tick is a cheap
+  # per-site status.json comparison; only sites that actually changed
+  # since the last publish get rsynced.
+  schedule: "0 10,18 * * *"
   timeZone: Europe/Sofia
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -87,42 +93,56 @@ spec:
                     exit 0
                   fi
 
-                  # Only publish when a generation has completed since the last
-                  # sync. status.json is deleted at the start of a run and
-                  # written last on success, so its presence means "completed"
-                  # and its freshness vs .last-sync means "not yet published".
-                  gen=0
-                  for f in \
-                      "$D/irregular.ninja/dist/status.json" \
-                      "$D/alt.irregular.ninja/dist/status.json"; do
-                    if [ ! -f "$f" ]; then
-                      echo "shuriken-sync: $f absent (generation in progress or failed); skipping"
-                      exit 0
-                    fi
-                    m=$(stat -c %Y "$f")
-                    [ "$m" -gt "$gen" ] && gen=$m
-                  done
+                  # Pull "image_count" and "total_size_bytes" out of a shuriken
+                  # status.json without a JSON parser (the image ships grep/sed,
+                  # not jq). The sidecar's layout is fixed
+                  # (status-metadata.source.sh in shuriken.sh), so grep+digits
+                  # is safe. generated_at is deliberately NOT part of the
+                  # fingerprint: it's rewritten on every run regardless of
+                  # whether the source images changed, so including it would
+                  # make every tick look "changed".
+                  status_fingerprint() {
+                    grep '"image_count"' "$1" | grep -oE '[0-9]+'
+                    grep '"total_size_bytes"' "$1" | grep -oE '[0-9]+'
+                  }
 
-                  last=0
-                  [ -f "$D/.last-sync" ] && last=$(stat -c %Y "$D/.last-sync")
-                  if [ "$gen" -le "$last" ]; then
-                    echo "shuriken-sync: no completed generation since last sync (gen=$gen last=$last); skipping"
-                    exit 0
-                  fi
-
-                  echo "shuriken-sync: generation completed at $gen (last sync $last); publishing"
+                  published=0
                   for pair in irregular.ninja:irregular-ninja alt.irregular.ninja:alt-irregular-ninja; do
                     site=${pair%%:*}
                     mod=${pair##*:}
+                    status="$D/$site/dist/status.json"
+                    backup="$D/$site/.last-published-status.json"
+
+                    if [ ! -f "$status" ]; then
+                      echo "shuriken-sync: $status absent (generation in progress or failed); skipping $site"
+                      continue
+                    fi
+
+                    cur=$(status_fingerprint "$status")
+                    prev=""
+                    [ -f "$backup" ] && prev=$(status_fingerprint "$backup")
+
+                    if [ "$cur" = "$prev" ]; then
+                      echo "shuriken-sync: $site unchanged since last publish; skipping"
+                      continue
+                    fi
+
+                    echo "shuriken-sync: $site changed since last publish; publishing"
                     for srv in fishfinger.wg0 blowfish.wg0; do
                       echo "shuriken-sync: $site -> rsync://$srv/$mod/"
                       rsync -a --delete --info=stats1 \
                           "$D/$site/dist/" "rsync://$srv/$mod/"
                     done
+
+                    cp "$status" "$backup"
+                    published=1
                   done
 
-                  : > "$D/.last-sync"
-                  echo "shuriken-sync: done"
+                  if [ "$published" -eq 0 ]; then
+                    echo "shuriken-sync: nothing changed; no sites published"
+                  else
+                    echo "shuriken-sync: done"
+                  fi
               resources:
                 requests:
                   cpu: 50m
