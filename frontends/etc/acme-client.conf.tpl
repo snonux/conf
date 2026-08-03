@@ -28,13 +28,9 @@ authority buypass-test {
      # Skip ipv4/ipv6 subdomains - they're included as SANs in parent cert
      next if $host =~ /^(ipv4|ipv6)\./;
 -%>
-<%   # Public DNS publishes www for every service. f3s hosts use the primary
-     # certificate for standby too (unlike other hosts, they do not get a
-     # separate standby certificate/keypair).
+<%   # Public DNS publishes www for every service. Standby names resolve to
+     # the other frontend, so they need their own certificate/keypair.
      my @alt_names = ("www.$host");
-     if (grep { $_ eq $host } @$f3s_hosts) {
-         push @alt_names, "standby.$host";
-     }
      for my $sub_host (@$acme_hosts) {
          if ($sub_host =~ /^(ipv4|ipv6)\.\Q$host\E$/) {
              push @alt_names, $sub_host;
@@ -48,13 +44,11 @@ domain <%= $host %> {
 	domain full chain certificate "/etc/ssl/<%= $host %>.fullchain.pem"
 	sign with letsencrypt
 }
-<% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
 domain standby.<%= $host %> {
 	domain key "/etc/ssl/private/standby.<%= $host %>.key"
 	domain full chain certificate "/etc/ssl/standby.<%= $host %>.fullchain.pem"
 	sign with letsencrypt
 }
-<% } -%>
 <% } -%>
 
 # Current server's FQDN (blowfish.buetow.org or fishfinger.buetow.org)

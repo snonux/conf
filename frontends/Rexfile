@@ -296,21 +296,13 @@ task 'acme',
   group => 'frontends',
   sub {
     file '/etc/acme-client.conf',
-      content => template(
-        './etc/acme-client.conf.tpl',
-        acme_hosts => \@acme_hosts,
-        f3s_hosts  => \@f3s_hosts
-      ),
+      content => template( './etc/acme-client.conf.tpl', acme_hosts => \@acme_hosts ),
       owner   => 'root',
       group   => 'wheel',
       mode    => '644';
 
     file '/usr/local/bin/acme.sh',
-      content => template(
-        './scripts/acme.sh.tpl',
-        acme_hosts => \@acme_hosts,
-        f3s_hosts  => \@f3s_hosts
-      ),
+      content => template( './scripts/acme.sh.tpl', acme_hosts => \@acme_hosts ),
       owner   => 'root',
       group   => 'wheel',
       mode    => '744';
