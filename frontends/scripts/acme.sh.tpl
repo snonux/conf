@@ -16,6 +16,15 @@ ensure_placeholder_cert () {
     fi
 }
 
+alias_cert () {
+    source=$1
+    alias=$2
+
+    ln -sf "/etc/ssl/$source.fullchain.pem" "/etc/ssl/$alias.crt"
+    ln -sf "/etc/ssl/$source.fullchain.pem" "/etc/ssl/$alias.fullchain.pem"
+    ln -sf "/etc/ssl/private/$source.key" "/etc/ssl/private/$alias.key"
+}
+
 handle_cert () {
     host=$1
     host_ip=`host $host | awk '/has address/ { print $(NF) }'`
@@ -48,7 +57,13 @@ handle_cert <%= $host %>
 if [ $? -eq 0 ]; then
     has_update=yes
 fi
-<% unless ($host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org') { -%>
+<% if (grep { $_ eq $host } @$f3s_hosts) { -%>
+# f3s standby names are SANs on the primary certificate. relayd selects a
+# keypair by SNI name, so provide filename aliases for that shared certificate.
+alias_cert <%= $host %> standby.<%= $host %>
+<% } -%>
+<% unless ($host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org'
+           or grep { $_ eq $host } @$f3s_hosts) { -%>
 handle_cert standby.<%= $host %>
 if [ $? -eq 0 ]; then
     has_update=yes

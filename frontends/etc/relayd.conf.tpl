@@ -71,9 +71,7 @@ http protocol "https" {
          next if $host =~ /^(ipv4|ipv6)\./;
      -%>
      tls keypair <%= $host %>
-     <% unless (grep { $_ eq $host } @$f3s_hosts) { -%>
      tls keypair standby.<%= $host %>
-     <% } -%>
      <% } -%>
      tls keypair <%= $hostname.'.'.$domain -%>
 

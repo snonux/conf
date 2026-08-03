@@ -28,11 +28,12 @@ authority buypass-test {
      # Skip ipv4/ipv6 subdomains - they're included as SANs in parent cert
      next if $host =~ /^(ipv4|ipv6)\./;
 -%>
-<%   # Check if this host has ipv4/ipv6 subdomains that need to be included as SANs
-     my @alt_names;
-     # Don't add www prefix for f3s hosts - they don't have DNS records for www variants
-     unless (grep { $_ eq $host } @$f3s_hosts) {
-         push @alt_names, "www.$host";
+<%   # Public DNS publishes www for every service. f3s hosts use the primary
+     # certificate for standby too (unlike other hosts, they do not get a
+     # separate standby certificate/keypair).
+     my @alt_names = ("www.$host");
+     if (grep { $_ eq $host } @$f3s_hosts) {
+         push @alt_names, "standby.$host";
      }
      for my $sub_host (@$acme_hosts) {
          if ($sub_host =~ /^(ipv4|ipv6)\.\Q$host\E$/) {
