@@ -12,14 +12,39 @@ namespace of the f3s k3s cluster.
 |---|---|---|
 | Web UI | `c-git.f3s.buetow.org` | `code.f3s.buetow.org` |
 | Namespace | `cicd` | `services` |
-| Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (`snonux/conf` migrated) |
+| Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (80 public `snonux` repositories preseeded) |
 | SSH NodePort | 30022 | 30222 |
 
-`conf.git` is the first and only repository migrated so far. ArgoCD reads it
-anonymously from `http://forgejo.services.svc.cluster.local/snonux/conf.git`.
-All other repositories remain on cgit/git-server, which stays running as the
-tested rollback source. Repositories are migrated by hand, one at a time — there
-is no bulk import.
+All 80 cgit repositories were preseeded in Forgejo on 2026-08-04. ArgoCD reads
+`conf` anonymously from
+`http://forgejo.services.svc.cluster.local/snonux/conf.git`. The cgit/git-server
+remains writable and available as the live source until the separate final
+mirror/freeze and retention phase.
+
+### Preseed migration report (2026-08-04)
+
+- Authoritative source inventory: 80 bare repositories, 1,238,877,184 bytes
+  (1.154 GiB) on disk; 79 newly preseeded and the previously migrated `conf`
+  revalidated. All source and destination repositories passed strict, full
+  `git fsck`.
+- The inventory covered descriptions, symbolic HEAD, every ref/object ID,
+  hooks, alternates and LFS indicators. There were no empty repositories,
+  unsafe hooks, alternates, LFS indicators or refs outside heads/tags/notes.
+- All safe refs in the 79 newly preseeded repositories match exactly. The
+  already-live `conf` repository was deliberately not overwritten. Thirty-nine
+  source repositories have a stale symbolic `HEAD` pointing at absent `master`;
+  Forgejo therefore uses their existing pushed branch as the usable default
+  rather than creating a synthetic `master` ref. The other 41 defaults match
+  the source symbolic HEAD exactly.
+- All 80 targets are public and visible through the anonymous API. Names and
+  descriptions match the source. Validation included the two largest repos
+  (`foo.zone` and `pages`), the tag-heavy `hexai`, mixed-case
+  `Adv360-Pro-ZMK`, and `conf`. There was no empty source repository to sample.
+- Bulk Git payload never traversed a laptop, mobile connection or the public
+  endpoint. Inventory, fsck and pushes ran on `f0`, reading
+  `/data/nfs/k3svolumes/git-server/repos/*.git` locally and pushing over the LAN
+  directly to `ssh://git@r0.lan.buetow.org:30222/snonux/REPO.git`. Only small API
+  metadata calls were made from the administration workstation.
 
 ## Architecture
 
