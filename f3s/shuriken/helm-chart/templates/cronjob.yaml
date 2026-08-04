@@ -65,10 +65,16 @@ spec:
                   set -e
                   # Hold the generation/sync mutex for the WHOLE multi-site run
                   # so the shuriken-sync CronJob can't publish mid-generation
-                  # (and vice versa). flock auto-releases if the pod dies, so a
-                  # crash never leaves a stale lock. Blocking acquire: if a sync
-                  # is mid-publish, wait for it (it's short) then generate.
-                  exec flock /data/shuriken.sh/.lock shuriken-entrypoint
+                  # (and vice versa). The lock is held on fd 9, which the exec'd
+                  # entrypoint inherits, so flock auto-releases when the pod dies
+                  # (a crash never leaves a stale lock). Blocking acquire: if a
+                  # sync is mid-publish, wait for it (it's short) then generate.
+                  # NB: busybox's `flock FILE PROG` form returns "Bad file
+                  # descriptor" on NFS, so use the fd form (matching
+                  # sync-cronjob.yaml) instead.
+                  exec 9>/data/shuriken.sh/.lock
+                  flock 9
+                  exec shuriken-entrypoint
               env:
                 # Default 1 image job (single-threaded); override here if a
                 # faster one-off run is acceptable. The entrypoint passes this
