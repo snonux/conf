@@ -9,7 +9,7 @@ spec:
   project: default
   sources:
     # Deploy custom resources (PVs, PVCs, PostgreSQL, Middleware)
-    - repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+    - repoURL: http://forgejo.services.svc.cluster.local/snonux/conf.git
       targetRevision: master
       path: f3s/immich/helm-chart
     # Deploy Immich Helm chart with custom values

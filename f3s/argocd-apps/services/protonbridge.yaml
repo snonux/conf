@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+    repoURL: http://forgejo.services.svc.cluster.local/snonux/conf.git
     targetRevision: master
     path: f3s/protonbridge/helm-chart
   destination:

@@ -120,34 +120,25 @@ just uninstall
 
 ### 1. Setup Self-Hosted Git Repository
 
-ArgoCD in the f3s cluster uses the self-hosted git-server for all application manifests. The configuration repository (conf.git) must be available on the git-server before deploying applications.
-
-**Ensure conf.git is synced to git-server:**
-
-```bash
-# Using gitsyncer (recommended for keeping repos in sync)
-gitsyncer sync repo conf --backup --no-releases
-
-# Or manually push to git-server
-cd /path/to/conf
-git remote add r0 ssh://git@r0:30022/repos/conf.git
-git push r0 master
-```
+ArgoCD reads application manifests from the public `snonux/conf` repository on
+Forgejo. The legacy git-server copy remains available for rollback; do not remove
+or disable it while repositories are migrated individually.
 
 **Verify repository is accessible:**
 
 ```bash
-# Via SSH
-git ls-remote ssh://git@r0:30022/repos/conf.git
+# Public HTTPS
+git ls-remote https://code.f3s.buetow.org/snonux/conf.git
 
 # Via HTTP (used by ArgoCD)
-curl -s "http://git-server.cicd.svc.cluster.local/conf.git/info/refs?service=git-upload-pack" | head -5
+kubectl -n cicd exec deploy/argocd-repo-server -- \
+  git ls-remote http://forgejo.services.svc.cluster.local/snonux/conf.git
 ```
 
 **ArgoCD Repository Configuration:**
 
-ArgoCD applications use HTTP to fetch from the self-hosted git-server:
-- **Repository URL**: `http://git-server.cicd.svc.cluster.local/conf.git`
+ArgoCD applications use HTTP to fetch from Forgejo inside the cluster:
+- **Repository URL**: `http://forgejo.services.svc.cluster.local/snonux/conf.git`
 - **No authentication required** (internal cluster access)
 - **Auto-sync enabled** for most applications
 
@@ -161,7 +152,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+    repoURL: http://forgejo.services.svc.cluster.local/snonux/conf.git
     targetRevision: master
     path: f3s/my-app/helm-chart
   destination:
@@ -169,9 +160,26 @@ spec:
     namespace: my-namespace
 ```
 
-**Important**: Always push changes to git-server (r0) before ArgoCD can sync them. Changes pushed only to external git hosts (Codeberg/GitHub) will not be picked up by ArgoCD.
+Because there is no app-of-apps, changes under `f3s/argocd-apps/` must be pushed
+to Forgejo and each active `Application` must also be applied explicitly.
 
-See `/home/paul/git/conf/f3s/git-server/helm-chart/README.md` for more details on the git-server setup.
+**Rollback:** keep the legacy repository current, then restore the old URL and
+refresh all affected applications:
+
+```bash
+old=http://git-server.cicd.svc.cluster.local/conf.git
+kubectl -n cicd get applications.argoproj.io -o name | while read -r app; do
+  kubectl -n cicd get "$app" -o json | jq --arg old "$old" \
+    '(.spec.source.repoURL | select(. == "http://forgejo.services.svc.cluster.local/snonux/conf.git")) = $old |
+     (.spec.sources[]?.repoURL | select(. == "http://forgejo.services.svc.cluster.local/snonux/conf.git")) = $old' |
+    kubectl apply -f -
+done
+kubectl -n cicd annotate applications.argoproj.io --all \
+  argocd.argoproj.io/refresh=hard --overwrite
+```
+
+See `f3s/forgejo/README.md` and `f3s/git-server/helm-chart/README.md` for the
+current and rollback repository services.
 
 ### 2. Change Admin Password
 

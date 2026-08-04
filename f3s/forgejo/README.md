@@ -15,10 +15,11 @@ namespace of the f3s k3s cluster.
 | Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (starts empty) |
 | SSH NodePort | 30022 | 30222 |
 
-ArgoCD keeps reading `conf.git` from the existing git-server
-(`http://git-server.cicd.svc.cluster.local/conf.git`). Forgejo has no consumers,
-so if it breaks, cluster deploys are unaffected. Repositories are migrated by
-hand, one at a time, whenever you feel like it — there is no bulk import.
+`conf.git` is the first and only repository migrated so far. ArgoCD reads it
+anonymously from `http://forgejo.services.svc.cluster.local/snonux/conf.git`.
+All other repositories remain on cgit/git-server, which stays running as the
+tested rollback source. Repositories are migrated by hand, one at a time — there
+is no bulk import.
 
 ## Architecture
 
