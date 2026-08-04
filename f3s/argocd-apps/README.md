@@ -100,7 +100,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://codeberg.org/snonux/conf.git
+    repoURL: http://forgejo.services.svc.cluster.local/snonux/conf.git
     targetRevision: master
     path: f3s/<app-name>/helm-chart
   destination:

@@ -12,7 +12,7 @@ namespace of the f3s k3s cluster.
 |---|---|---|
 | Web UI | `c-git.f3s.buetow.org` | `code.f3s.buetow.org` |
 | Namespace | `cicd` | `services` |
-| Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (starts empty) |
+| Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (`snonux/conf` migrated) |
 | SSH NodePort | 30022 | 30222 |
 
 `conf.git` is the first and only repository migrated so far. ArgoCD reads it

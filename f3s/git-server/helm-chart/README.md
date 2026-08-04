@@ -19,7 +19,7 @@ Self-hosted git server for the f3s Kubernetes cluster with SSH access, HTTP git-
 ### 3. git-http-backend
 - **Internal**: `http://git-server.cicd.svc.cluster.local/<repo>.git`
 - **External**: `https://c-git.f3s.buetow.org/<repo>.git`
-- **Used by**: ArgoCD for syncing applications
+- **Used by**: Legacy repository access and ArgoCD rollback
 - **FastCGI**: nginx + fcgiwrap + git-http-backend
 
 ## Storage
@@ -181,9 +181,10 @@ jq -r 'to_entries[] | "\(.key)\t\(.value)"' /tmp/cache.json | while IFS=$'\t' re
 done
 ```
 
-## ArgoCD Integration
+## ArgoCD Rollback Source
 
-ArgoCD applications use HTTP to fetch from the git-server.
+ArgoCD applications normally fetch `conf.git` from Forgejo. The legacy HTTP
+repository remains available as the tested rollback source.
 
 **Application manifest example**:
 ```yaml
@@ -195,7 +196,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: http://git-server.cicd.svc.cluster.local/conf.git
+    repoURL: http://forgejo.services.svc.cluster.local/snonux/conf.git
     targetRevision: master
     path: f3s/my-app/helm-chart
   destination:
@@ -203,14 +204,9 @@ spec:
     namespace: my-namespace
 ```
 
-**Update existing application**:
-```bash
-# Change from SSH to HTTP
-kubectl edit application <app-name> -n cicd
-
-# Old: ssh://git@git-server.cicd.svc.cluster.local/repos/conf.git
-# New: http://git-server.cicd.svc.cluster.local/conf.git
-```
+For targeted rollback commands, including multi-source Applications, see
+`f3s/argocd/README.md`. Do not apply whole live Application objects during
+rollback.
 
 ## Deployment
 

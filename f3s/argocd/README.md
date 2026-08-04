@@ -164,18 +164,62 @@ Because there is no app-of-apps, changes under `f3s/argocd-apps/` must be pushed
 to Forgejo and each active `Application` must also be applied explicitly.
 
 **Rollback:** keep the legacy repository current, then restore the old URL and
-refresh all affected applications:
+refresh only the affected applications. This script discovers live Applications
+that still use Forgejo, then uses JSON Patch to change only matching `repoURL`
+fields (including multi-source Applications). It does not re-apply whole live
+objects:
 
 ```bash
-old=http://git-server.cicd.svc.cluster.local/conf.git
-kubectl -n cicd get applications.argoproj.io -o name | while read -r app; do
-  kubectl -n cicd get "$app" -o json | jq --arg old "$old" \
-    '(.spec.source.repoURL | select(. == "http://forgejo.services.svc.cluster.local/snonux/conf.git")) = $old |
-     (.spec.sources[]?.repoURL | select(. == "http://forgejo.services.svc.cluster.local/snonux/conf.git")) = $old' |
-    kubectl apply -f -
+set -euo pipefail
+
+forgejo=http://forgejo.services.svc.cluster.local/snonux/conf.git
+legacy=http://git-server.cicd.svc.cluster.local/conf.git
+
+app_names=$(
+  kubectl -n cicd get applications.argoproj.io -o json |
+    jq -r --arg url "$forgejo" '
+      .items[] |
+      select(.spec.source.repoURL? == $url or
+             any(.spec.sources[]?; .repoURL? == $url)) |
+      .metadata.name'
+)
+[[ -n "$app_names" ]] || {
+  echo "No live Applications use $forgejo; refusing rollback" >&2
+  exit 1
+}
+mapfile -t apps <<<"$app_names"
+
+for app in "${apps[@]}"; do
+  patch=$(
+    kubectl -n cicd get application "$app" -o json |
+      jq -ce --arg from "$forgejo" --arg to "$legacy" '
+        ([if .spec.source.repoURL? == $from then
+            {op: "test", path: "/spec/source/repoURL", value: $from},
+            {op: "replace", path: "/spec/source/repoURL", value: $to}
+          else empty end] +
+         [.spec.sources // [] | to_entries[] |
+          select(.value.repoURL? == $from) |
+          {op: "test", path: ("/spec/sources/" + (.key | tostring) + "/repoURL"), value: $from},
+          {op: "replace", path: ("/spec/sources/" + (.key | tostring) + "/repoURL"), value: $to}]) |
+        select(length > 0)'
+  )
+  kubectl -n cicd patch application "$app" --type=json -p "$patch"
+  kubectl -n cicd annotate application "$app" \
+    argocd.argoproj.io/refresh=hard --overwrite
 done
-kubectl -n cicd annotate applications.argoproj.io --all \
-  argocd.argoproj.io/refresh=hard --overwrite
+
+remaining=$(
+  kubectl -n cicd get applications.argoproj.io -o json |
+    jq -r --arg url "$forgejo" '
+      [.items[] |
+       select(.spec.source.repoURL? == $url or
+              any(.spec.sources[]?; .repoURL? == $url)) |
+       .metadata.name] | join(" ")'
+)
+[[ -z "$remaining" ]] || {
+  echo "Rollback incomplete; Forgejo URL remains in: $remaining" >&2
+  exit 1
+}
 ```
 
 See `f3s/forgejo/README.md` and `f3s/git-server/helm-chart/README.md` for the
