@@ -57,7 +57,7 @@ spec:
                   readOnly: true
           containers:
             - name: shuriken
-              image: registry.lan.buetow.org:30001/shuriken:0.14.0
+              image: registry.lan.buetow.org:30001/shuriken:0.14.1
               imagePullPolicy: Always
               command: ["/bin/sh", "-c"]
               args:

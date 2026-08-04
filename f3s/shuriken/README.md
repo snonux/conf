@@ -24,8 +24,8 @@ cd /home/paul/git/conf/f3s/shuriken
 just build-push
 ```
 
-The image is pushed as `r0.lan.buetow.org:30001/shuriken:0.14.0` and the
-CronJob pulls `registry.lan.buetow.org:30001/shuriken:0.14.0`. Bump `TAG` in
+The image is pushed as `r0.lan.buetow.org:30001/shuriken:0.14.1` and the
+CronJob pulls `registry.lan.buetow.org:30001/shuriken:0.14.1`. Bump `TAG` in
 `docker-image/Justfile` and `appVersion`/the CronJob `image:` tag together
 when releasing a new shuriken version.
 
@@ -105,7 +105,7 @@ just uses the rsync protocol.
    migrating from the old SSH sync (files owned by `admin`):
    `doas chown -R www:www /var/www/htdocs/irregular.ninja /var/www/htdocs/alt.irregular.ninja` on both frontends.
 3. The image must include `rsync` (it does). Rebuild/push if the registry holds
-   an older `shuriken:0.14.0`: `cd /home/paul/git/conf/f3s/shuriken && just build-push` (from on-LAN).
+   an older `shuriken:0.14.1`: `cd /home/paul/git/conf/f3s/shuriken && just build-push` (from on-LAN).
 
 ## ArgoCD
 
