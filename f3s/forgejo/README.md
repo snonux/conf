@@ -58,9 +58,14 @@ git+ssh  -> NodePort 30222 -----------------------------------> pod:2222
 
 - Image `codeberg.org/forgejo/forgejo:16.0.1-rootless` — the rootless variant, so
   the whole pod runs as UID/GID 1000 with all capabilities dropped.
-- SQLite, not PostgreSQL. Single writer (`replicas: 1` + `Recreate`), and NFSv4.2
-  does real byte-range locking, so the classic SQLite-on-NFS corruption mode does
-  not apply. Revisit if this ever needs to scale out.
+- SQLite, not PostgreSQL, with one writer (`replicas: 1` + `Recreate`). The
+  database currently shares the NFS data volume. Forgejo defaults SQLite to WAL,
+  which SQLite does not support on network filesystems; the bulk preseed exposed
+  this as repeated `locking protocol` failures. The deployment explicitly uses
+  `SQLITE_JOURNAL_MODE=DELETE` and a 60-second busy timeout. Rollback journaling
+  avoids WAL's shared-memory requirement but does not make SQLite-on-NFS fully
+  safe. Move the database to local block storage or PostgreSQL if lock failures
+  recur.
 - Both volumes carry the standard `.nfs-sentinel` guard so the pod refuses to
   start against the local-XFS shadow if a node has NFS unmounted.
 

@@ -72,13 +72,20 @@ spec:
           protocol: TCP
         env:
         # SQLite rather than a separate PostgreSQL pod: this is a single-writer
-        # instance (replicas 1 + Recreate), and NFSv4.2 does real byte-range
-        # locking, so the usual SQLite-on-NFS corruption mode does not apply.
-        # Revisit if this ever needs more than one replica.
+        # instance (replicas 1 + Recreate). The database is on NFS, where
+        # Forgejo's default WAL journal mode is unsupported by SQLite and caused
+        # repeated "locking protocol" failures after the repository preseed.
+        # DELETE uses the rollback journal instead. This reduces, but does not
+        # eliminate, the general risks of SQLite on a network filesystem; move
+        # the database to local block storage or PostgreSQL if contention recurs.
         - name: FORGEJO__database__DB_TYPE
           value: "sqlite3"
         - name: FORGEJO__database__PATH
           value: "/var/lib/gitea/data/forgejo.db"
+        - name: FORGEJO__database__SQLITE_JOURNAL_MODE
+          value: "DELETE"
+        - name: FORGEJO__database__SQLITE_TIMEOUT
+          value: "60000"
 
         # Public identity. ROOT_URL must match what relayd terminates TLS for,
         # otherwise Forgejo generates clone URLs and redirects on the wrong host.
