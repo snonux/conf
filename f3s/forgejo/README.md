@@ -18,8 +18,8 @@ namespace of the f3s k3s cluster.
 All 80 cgit repositories were preseeded in Forgejo on 2026-08-04. ArgoCD reads
 `conf` anonymously from
 `http://forgejo.services.svc.cluster.local/snonux/conf.git`. The cgit/git-server
-remains writable and available as the live source until the separate final
-mirror/freeze and retention phase.
+became read-only on 2026-08-05 and remains available for browsing, clones and
+rollback during the retention phase.
 
 ### Preseed migration report (2026-08-04)
 
@@ -45,6 +45,54 @@ mirror/freeze and retention phase.
   `/data/nfs/k3svolumes/git-server/repos/*.git` locally and pushing over the LAN
   directly to `ssh://git@r0.lan.buetow.org:30222/snonux/REPO.git`. Only small API
   metadata calls were made from the administration workstation.
+
+### Final cutover and retention (2026-08-05)
+
+- The legacy repository service became read-only at **2026-08-05T06:48:19Z**.
+  The earliest retirement time, after 14 full days of successful read-only
+  retention, is **2026-08-19T06:48:19Z**. Do not retire the service or delete its
+  data before that timestamp, and require separate confirmation before deleting
+  either the dataset or retained snapshots.
+- Both legacy containers mount `/repos` read-only. cgit, anonymous smart HTTP
+  fetches and rollback data remain available, while an actual HTTP push probe
+  reached `git-receive-pack` and was rejected by the read-only filesystem. The
+  pre-cutover snapshot is
+  `zdata/enc/nfsdata@forgejo-cutover-pre-20260805T064657Z`. The matching
+  authorized-keys file is retained on `f0` as root-owned mode 0600 at
+  `/root/git-server-authorized_keys.20260805T064657Z`.
+- The final gitsyncer pass completed both directions for every configured public
+  repository discovered from Codeberg (47) and GitHub (46), including Forgejo
+  backup pushes and API description updates. The installed 49-repository config
+  validates and its Forgejo credential remains an owner-only mode 0600 regular
+  file outside Git.
+- Final inventory found the same 80 legacy names plus the expected Forgejo-only
+  `failunderd`: 81 unique public, non-empty repositories. Names, descriptions,
+  usable default branches and expected safe refs passed. The old service had 787
+  safe refs and Forgejo had 798 after configured repositories' newer primary
+  work and `failunderd`; every old ref was preserved or replaced by its reviewed
+  current primary ref. Strict full `git fsck` passed for all 80 old and all 81
+  Forgejo repositories. Anonymous HTTPS and public SSH both resolved `conf` at
+  the cutover commit.
+- All 32 ArgoCD Applications were Synced/Healthy. Thirty applications read
+  `conf` from Forgejo; the external-chart applications retain their upstream
+  sources, and the retiring `git-server` Application intentionally retains its
+  Codeberg source. No live Application uses an old cgit URL. The read-only
+  cutover commit advanced Forgejo `conf` and was observed by the Forgejo-backed
+  Applications, proving reconciliation after the final backup.
+- Remaining old-service references are intentional until retirement:
+  `f3s/git-server/` defines the retained workload and rollback service;
+  `f3s/argocd/git-server-{repo-creds,known-hosts}.yaml` preserves rollback
+  credentials; `frontends/Rexfile` keeps the old DNS/TLS/monitoring names alive;
+  and existing local `r0`/`r1`/`r2` Git remotes on port 30022 are rollback-only.
+  Current gitsyncer configuration and live non-retiring ArgoCD Applications do
+  not use those endpoints.
+
+To restore writes during the retention window, revert the read-only cutover
+commit in `f3s/git-server/helm-chart/templates/deployment.yaml`, push it to the
+`git-server` Application's Codeberg source, wait for that Application to become
+Synced/Healthy, and verify a controlled push. If Forgejo itself must be rolled
+back, use the Application URL rollback in `f3s/argocd/README.md`; the retained
+cgit data and credentials are deliberately left intact for that procedure.
 
 ## Architecture
 
