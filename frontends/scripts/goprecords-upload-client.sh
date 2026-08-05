@@ -2,7 +2,7 @@
 set -e
 GOPRECORDS_BASE_URL="${GOPRECORDS_BASE_URL:-https://goprecords.f3s.buetow.org}"
 GOPRECORDS_HOST="${GOPRECORDS_HOST:?set GOPRECORDS_HOST (e.g. f0, pi0, earth)}"
-PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:${PATH}"
+PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/pkg/bin:/usr/pkg/sbin:/usr/local/bin:/usr/local/sbin:${PATH}"
 
 _default_token_file() {
 	if [ "$(id -u)" = "0" ]; then
