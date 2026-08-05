@@ -103,13 +103,36 @@ doas /usr/pkg/sbin/sysupgrade modules
 `sysupgrade kernel` updates the conventional `/netbsd`; the separately staged
 `netbsd.img` is the kernel that the Pi firmware actually loads. Both must be
 kept at the same release. Do **not** replace `config.txt` or `cmdline.txt`. Do
-not install `bootaa64.efi` for this direct-firmware boot path. Reboot once,
-confirm `uname -r` is 11.0, then complete the post-reboot half exactly as the
-INSTALL specifies:
+not install `bootaa64.efi` for this direct-firmware boot path. Reboot once and
+confirm `uname -r` is 11.0.
+
+Installing the userland sets replaces libraries and `sshd` while the old
+daemons are still running. On pi1, `sysupgrade sets` succeeded but every new
+SSH connection then closed before sending a banner; restoring access required
+a hard reboot. Avoid depending on a new login on pi0 by running the sets
+installation and reboot from one hangup-resistant root shell in the existing
+authenticated SSH session. Keep the client connected for observation, but do
+not attempt another SSH login after this command starts:
+
+```sh
+doas sh -c 'trap "" HUP; /usr/pkg/sbin/sysupgrade sets </dev/null >/var/log/sysupgrade-11.0-sets.log 2>&1 && exec /sbin/shutdown -r now'
+```
+
+The reboot remains conditional on `sysupgrade sets` returning success.
+`shutdown -r now` performs the orderly shutdown and filesystem synchronization,
+then detaches from the SSH session while the reboot proceeds. If `sysupgrade
+sets` fails, the command returns without requesting a reboot; inspect
+`/var/log/sysupgrade-11.0-sets.log` from the existing session. If that session
+was lost, do not assume either success or reboot: userland may be partial and
+fresh SSH may still be unavailable, so use the documented console or SD-card
+recovery path.
+
+After pi0 returns, establish a fresh SSH connection and repeat the full
+kernel, network, route, DNS, root-filesystem, module, and boot-diagnostic gate.
+Only then continue with configuration migration:
 
 ```sh
 set -e
-doas /usr/pkg/sbin/sysupgrade sets
 doas /usr/pkg/sbin/sysupgrade etcupdate
 doas /usr/pkg/sbin/sysupgrade postinstall
 doas sync
