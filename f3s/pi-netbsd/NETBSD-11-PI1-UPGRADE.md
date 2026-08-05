@@ -1,8 +1,9 @@
-# pi1 NetBSD 11.0 upgrade staging
+# pi1 NetBSD 11.0 upgrade
 
-This records the staging completed on 2026-08-03. It is deliberately **not**
-an upgrade procedure that has already been run: no 11.0 kernel, modules, sets,
-or boot files have been installed and pi1 has not been rebooted.
+This records the staging completed on 2026-08-03 and the upgrade completed on
+2026-08-05. pi1 now runs the 11.0 kernel, modules, userland, and boot files.
+The commands below remain as the reviewed procedure and recovery record; do
+not rerun them on the upgraded host.
 
 ## Verified release inputs
 
@@ -146,8 +147,29 @@ from another system. `enable_uart=1` is set, but the kernel command line does
 not currently select a serial console, so serial must not be the only recovery
 plan. A durable full backup exists on fishfinger at
 `/home/rex/backups/pi1-20260803`, and pi0 keeps the web service available.
-Physical SD recovery is explicitly unavailable/accepted until approximately
-2026-08-05, so the actual upgrade must wait until then.
+Physical SD recovery was explicitly unavailable/accepted until approximately
+2026-08-05, which was the recovery constraint during the upgrade.
+
+## Completion
+
+The kernel/modules/direct-boot files and all userland sets were installed on
+2026-08-03. The first kernel reboot gate passed. The old sshd then stopped
+serving an SSH banner after the userland extraction, so work paused without a
+downgrade until pi1 could be rebooted and recovered.
+
+On 2026-08-05, fresh SSH and the full kernel/network/root/module gate passed.
+`sysupgrade etcupdate` installed the 11.0 base configuration while retaining
+the local network, firewall, SSH, account, crontab, and custom rc.d settings.
+`sysupgrade postinstall` passed after applying its requested 11.0 `MAKEDEV`
+update. The paused content-sync, goprecords, and dserver key-cache crons were
+restored from their saved originals.
+
+After the final controlled reboot, pi1 reported NetBSD 11.0, matching modules,
+a healthy writable FFS root, mue0 at `192.168.1.126`, the expected default
+route and DNS, valid sshd and NPF configurations, the required rcorder, and
+running bozohttpd, WireGuard, uptimed, NPF, and dserver services. Local and
+public HTTP checks passed, both frontends reported pi0 and pi1 up, and pi0
+remained untouched on NetBSD 10.1.
 
 ## Staged configuration and capacity
 
