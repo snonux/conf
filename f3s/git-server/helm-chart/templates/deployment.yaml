@@ -135,6 +135,10 @@ spec:
         - name: repos
           mountPath: /repos
           subPath: repos
+          # Forgejo is now the backup forge. Keep the legacy repository volume
+          # readable for clones and rollback throughout the retention window,
+          # but reject all SSH pushes at the filesystem boundary.
+          readOnly: true
         - name: git-ssh-writable
           mountPath: /home/git/.ssh
         - name: ssh-host-keys
@@ -168,10 +172,6 @@ spec:
         - |
           # Add git safe.directory exception for repository ownership
           git config --global --add safe.directory /repos/conf.git
-
-          # Configure git repository for HTTP access
-          git config --file /repos/conf.git/config http.receivepack true
-          git config --file /repos/conf.git/config http.uploadpack true
 
           # Copy nginx configs to writable location and modify them
           cp /etc/nginx/nginx.conf /tmp/nginx.conf
@@ -237,7 +237,9 @@ spec:
         - name: repos
           mountPath: /repos
           subPath: repos
-          readOnly: false
+          # cgit and git-http-backend remain available for browsing, clone and
+          # ArgoCD rollback, but cannot mutate the retained repositories.
+          readOnly: true
         - name: cgit-config
           mountPath: /etc/cgitrc
           subPath: cgitrc
