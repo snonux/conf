@@ -1,6 +1,6 @@
 # Remote in-place NetBSD install on a Raspberry Pi 3B+ (no SD removal)
 
-Runbook + scripts to replace **Rocky Linux 9** with **NetBSD 10.1** on an f3s
+Runbook + scripts to replace **Rocky Linux 9** with **NetBSD 11.0** on an f3s
 Raspberry Pi **3 Model B+**, entirely over SSH, **without pulling the microSD
 card**. Proven on `pi0` (2026-07-03); this document is written so the same can
 be done to `pi1` (or a rebuild of `pi0`) by changing two values.
@@ -34,7 +34,7 @@ be done to `pi1` (or a rebuild of `pi0`) by changing two values.
 
 ## Outcome / definition of done
 
-`ssh paul@<pi-ip>` lands on a **NetBSD 10.1 (GENERIC64) evbarm/aarch64** system:
+`ssh paul@<pi-ip>` lands on a **NetBSD 11.0 (GENERIC64) evbarm/aarch64** system:
 
 - login as `paul` via **SSH key** (member of `wheel`); password auth also on as a backup
 - hostname correct (`piN.lan.buetow.org`)
@@ -61,8 +61,12 @@ the ext4 root directly); `ext4`, `vfat`, `nls_cp437`, `nls_ascii`, `mmc_block`,
 `sdhci`, `tmpfs` are all **built-in** (`=y`) — so a flasher initramfs needs no
 extra modules to mount `/boot`, the root, or a tmpfs.
 
-NetBSD base image used: **NetBSD 10.1 evbarm-aarch64 gzimg**
-`https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.1/evbarm-aarch64/binary/gzimg/arm64.img.gz`
+NetBSD base image used: **NetBSD 11.0 evbarm-aarch64 gzimg**
+`https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/evbarm-aarch64/binary/gzimg/arm64.img.gz`.
+The bake script pins and verifies the release image's SHA-512 before
+decompression, then runs `gzip -t`; a stale or partial cached download fails
+closed. Update the pinned digest only after independently verifying a formal
+replacement release image.
 (GPT: EFI System partition + NetBSD FFS root; boots RPi 3/4/5).
 
 ## Why the obvious methods fail
@@ -107,7 +111,7 @@ Three RAM-flasher mechanisms were tried on `pi0`. Only the third works here:
                                                - dryrun: gunzip|wc -c  (validate, reboot to Rocky)
                                                - real:   gunzip|dd of=/dev/mmcblk0  (reboot to NetBSD)
                                                                                  ▼
-                                              NetBSD 10.1 boots headless, static .12x, sshd
+                                              NetBSD 11.0 boots headless, static .12x, sshd
                                                                                  ▼
                                               ssh paul@<ip>  ✅ ACCEPTANCE
 ```
@@ -140,8 +144,9 @@ On the **Pi**:
 Scripts: [`bake/`](bake). Editing the NetBSD FFS root from Linux is unsafe, so
 we configure the image **from inside a real NetBSD** running under qemu.
 
-1. **Edit the two per-host values** at the top of [`bake/setup.sh`](bake/setup.sh):
-   `HOSTNAME` and `IPADDR` (see [Doing pi1](#doing-pi1-specifically)).
+1. Choose `pi0` or `pi1`; the orchestrator renders that host's `HOSTNAME` and
+   `IPADDR` into [`bake/setup.sh`](bake/setup.sh) (see
+   [Doing pi1](#doing-pi1-specifically)).
 2. Run the orchestrator:
    ```bash
    cd f3s/pi-netbsd/bake
@@ -201,9 +206,10 @@ Scripts: [`flash/`](flash). Copy this whole `pi-netbsd/` tree (or at least
    ssh paul@piN.lan.buetow.org 'sudo cat /boot/flash-evidence.txt'
    # EXPECT:
    #   FLASHER-RAN mode=dryrun up=...
-   #   DRYRUN-RESULT bytes=1586495488 rc=0
+   #   DRYRUN-RESULT bytes=<golden-image-size> rc=0
    ```
-   `bytes=1586495488 rc=0` and `config.txt` gone ⇒ the whole path works.
+   Compare `bytes=` with `gzip -l netbsd-piN-golden.img.gz` on earth. A match,
+   `rc=0`, and `config.txt` gone means the whole path works.
    **Do not proceed to the real flash unless the dry-run shows this.**
 4. **Real flash (destructive, irreversible):**
    ```bash
@@ -219,17 +225,18 @@ Scripts: [`flash/`](flash). Copy this whole `pi-netbsd/` tree (or at least
 
 ## Doing pi1 specifically
 
-Only two things differ from pi0. In [`bake/setup.sh`](bake/setup.sh):
+Only two rendered values differ from pi0:
 
 ```sh
 HOSTNAME="pi1.lan.buetow.org"
 IPADDR="192.168.1.126"
 ```
 
+Do not edit the template: `./bake-golden.sh pi1` substitutes these values.
 Everything else is identical: same board, same NIC (`mue0`), same gateway/DNS,
 same flasher. WireGuard peer for pi1 is `192.168.2.204` (configured later,
-out of scope here). Then run Stage A (`./bake-golden.sh pi1`) and Stage B as
-above against `pi1.lan.buetow.org` / `192.168.1.126`.
+out of scope here). Run Stage B against `pi1.lan.buetow.org` /
+`192.168.1.126`.
 
 > Keep pi0 (or the other twin) up while flashing pi1 so the static
 > `f3s.buetow.org` backend stays served.
@@ -238,7 +245,7 @@ above against `pi1.lan.buetow.org` / `192.168.1.126`.
 
 ```bash
 ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null paul@192.168.1.126 '
-  uname -a                       # NetBSD piN.lan.buetow.org 10.1 ... evbarm
+  uname -a                       # NetBSD piN.lan.buetow.org 11.0 ... evbarm
   hostname                       # piN.lan.buetow.org
   id                             # uid=1000(paul) ... groups ... wheel
   ifconfig mue0                  # inet 192.168.1.126
@@ -262,6 +269,11 @@ Pi will change — remove the old line or use the relaxed flags above.
   Rocky image (keep a known-good one handy) — physically or by the same method
   in reverse. **Keep a Rocky SD image before starting** as the ultimate fallback
   (physical access is "inconvenient but possible" for these boxes).
+- **A later in-place base upgrade:** follow
+  [`NETBSD-11-PI1-UPGRADE.md`](NETBSD-11-PI1-UPGRADE.md). In particular, run
+  userland sets and the conditional orderly reboot in one HUP-resistant root
+  shell. Replacing userland can make the old `sshd` reject every fresh login;
+  never rely on opening another SSH session between sets extraction and reboot.
 
 ## Troubleshooting & gotchas
 
@@ -271,7 +283,7 @@ Pi will change — remove the old line or use the relaxed flags above.
   the trigger file `/boot/netbsd-flash-mode` contains exactly `dryrun`.
 - **`dracut module 'netbsdflash' cannot be found`:** use `--add netbsdflash`
   (module name = directory name **without** the `95` prefix).
-- **`bytes=` is not `1586495488` or `rc!=0`:** the staged/decompressed image is
+- **`bytes=` differs from `gzip -l` on earth or `rc!=0`:** the staged/decompressed image is
   bad — re-check the `scp`/`sha256sum` of the golden gz on the Pi.
 - **NetBSD boots but is unreachable:** the NIC came up under a name other than
   `mue0`; the `rc.local` fallback should still put `.12x` on the first real

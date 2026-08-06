@@ -35,7 +35,7 @@ send "root\r"; sleep 6
 # one &&-chained command: fetch -> setup -> verify dump -> sync -> poweroff.
 # setup.sh prints SETUP_OK; the VBEGIN..VEND block is the on-disk verification.
 set timeout 600
-send "ftp -o /tmp/setup.sh $env(NBHTTP) && sh /tmp/setup.sh && echo VBEGIN && id paul && grep '^paul:' /etc/master.passwd && grep -E '^(hostname|ifconfig_mue0|defaultroute|dhcpcd|sshd)=' /etc/rc.conf && cat /home/paul/.ssh/authorized_keys && echo VEND && sync && sync && halt -p\r"
+send "host cdn.netbsd.org && ftp -o /tmp/setup.sh $env(NBHTTP) && sh /tmp/setup.sh && echo VBEGIN && uname -a && id paul && grep '^paul:' /etc/master.passwd && grep -E '^(hostname|ifconfig_mue0|defaultroute|dhcpcd|sshd)=' /etc/rc.conf && cat /etc/resolv.conf && cat /etc/rc.local && cat /home/paul/.ssh/authorized_keys && /usr/sbin/sshd -t && echo SSH_CONFIG_OK && test -d /stand/evbarm/11.0/modules && test -f /boot/netbsd.img && test -f /boot/dtb/broadcom/bcm2837-rpi-3-b-plus.dtb && mount && df -h / /boot && echo BOOT_ARTIFACTS_OK && echo VEND && sync && sync && halt -p\r"
 expect { eof {} timeout { puts "\n!!TIMEOUT no poweroff" } }
 puts "\n==SESSION ENDED=="
 exit 0

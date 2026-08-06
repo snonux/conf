@@ -3,11 +3,11 @@
 # root INSIDE the NetBSD-in-qemu VM by config.exp during a bake.
 #
 # `bake-golden.sh` substitutes __SSHKEY__ and __PW__ before serving this file.
-# EDIT the two per-host values below for the target Pi (see README "Doing pi1").
+# These defaults document pi0; bake-golden.sh substitutes the selected piN.
 set -eu
 
-HOSTNAME="pi0.lan.buetow.org"      # <-- EDIT for the target Pi (e.g. pi1.lan.buetow.org)
-IPADDR="192.168.1.125"             # <-- EDIT for the target Pi (e.g. 192.168.1.126)
+HOSTNAME="pi0.lan.buetow.org"
+IPADDR="192.168.1.125"
 GW="192.168.1.1"
 DNS="192.168.1.1"
 

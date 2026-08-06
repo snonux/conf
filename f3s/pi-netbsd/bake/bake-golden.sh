@@ -1,15 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Stage A orchestrator — run on `earth`. Produces netbsd-<piN>-golden.img.gz.
 #   Usage: ./bake-golden.sh piN [workdir]
 # Requires: qemu-system-aarch64, qemu-img, edk2 AAVMF, expect, ~/.ssh/id_rsa.pub.
-# EDIT bake/setup.sh (HOSTNAME/IPADDR) for the target Pi BEFORE running this.
+# The piN argument renders HOSTNAME/IPADDR into bake/setup.sh automatically.
 set -euo pipefail
 
 PIN="${1:?usage: $0 piN [workdir]}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${2:-$HOME/Downloads}"
-BASE="$WORK/NetBSD-10.1-evbarm-aarch64-arm64.img.gz"
-URL="https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.1/evbarm-aarch64/binary/gzimg/arm64.img.gz"
+BASE="$WORK/NetBSD-11.0-evbarm-aarch64-arm64.img.gz"
+URL="https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/evbarm-aarch64/binary/gzimg/arm64.img.gz"
+BASE_SHA512="50c8597cd83b73d12a466e67c1ecc49fb1969941171644b15a7fe377b0f482ccb190b3aa38b043eba3f5e7b4d6e38cf0e7d3c6fd5251813af869b49beda2ee80"
 CODE=/usr/share/AAVMF/AAVMF_CODE.fd
 VARSRC=/usr/share/AAVMF/AAVMF_VARS.fd
 PUBKEY="${SSHKEY_FILE:-$HOME/.ssh/id_rsa.pub}"
@@ -21,6 +22,7 @@ mkdir -p "$WORK"
 
 echo "== base image =="
 [ -f "$BASE" ] || curl -fSL "$URL" -o "$BASE"
+printf '%s  %s\n' "$BASE_SHA512" "$BASE" | sha512sum -c -
 gzip -t "$BASE"
 
 echo "== fresh work image + varstore =="
