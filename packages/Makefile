@@ -8,8 +8,8 @@
 # Multi-binary / CGo packages (built natively on OpenBSD build VM):
 #   make dtail-openbsd                                       # DTail for OpenBSD
 #   make dtail-freebsd                                       # DTail for FreeBSD (cross-compiled, nozstd)
-#   make dtail-netbsd                                        # DTail for NetBSD 10.1/aarch64 (cross-compiled, nozstd; packaged on pi0)
-#   make dtail-netbsd11                                      # DTail for NetBSD 11.0/aarch64 (cross-compiled, nozstd; packaged on pi1)
+#   make dtail-netbsd                                        # DTail for NetBSD 11.0/aarch64 (cross-compiled, nozstd; packaged on pi0)
+#   make dtail-netbsd11                                      # Compatibility alias for dtail-netbsd
 #   make dtail-rocky                                         # DTail RPM repo for Rocky Linux 9 (x86_64 + aarch64)
 #
 # Build VM management:
@@ -51,7 +51,6 @@ ROCKY_ARM_SSH := ssh -p 22
 ROCKY_ARM_SCP := scp -P 22
 # NetBSD packages are assembled natively (pkg_create needs a matching NetBSD host)
 NETBSD_BUILD_HOST := paul@pi0.lan.buetow.org
-NETBSD11_BUILD_HOST := paul@pi1.lan.buetow.org
 NETBSD_SSH := ssh -p 22
 NETBSD_SCP := scp -P 22
 
@@ -66,7 +65,7 @@ PV_BASE         := /data/nfs/k3svolumes/pkgrepo
 FREEBSD_REPO    := freebsd/FreeBSD:15:amd64/latest
 OPENBSD_VERSION := 7.8
 OPENBSD_REPO    := openbsd/$(OPENBSD_VERSION)/packages/amd64
-NETBSD_VERSION  := 10.1
+NETBSD_VERSION  := 11.0
 NETBSD_REPO     = netbsd/$(NETBSD_VERSION)/packages/aarch64
 ROCKY_VERSION   := 9
 ROCKY_REPO      := rockylinux/$(ROCKY_VERSION)
@@ -242,8 +241,6 @@ dtail-freebsd: check-dtail-version
 # Cross-compile dtail for NetBSD/aarch64 (CGO_ENABLED=0, nozstd), package with
 # pkg_create on the matching native host, upload package + pkg_summary.gz via f0.
 # .zst log files are not supported in this binary; gzip still works.
-dtail-netbsd11: NETBSD_BUILD_HOST := $(NETBSD11_BUILD_HOST)
-dtail-netbsd11: NETBSD_VERSION := 11.0
 dtail-netbsd11: dtail-netbsd
 
 dtail-netbsd:
