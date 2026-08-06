@@ -134,6 +134,43 @@ Only then continue with configuration migration:
 ```sh
 set -e
 doas /usr/pkg/sbin/sysupgrade etcupdate
+```
+
+Keep that authenticated privileged session open after `etcupdate`. Before
+continuing, verify the active account databases and SSH key file, not just the
+text files from which the databases are built:
+
+```sh
+id paul
+grep -Fqx 'wheel:*:0:root,paul' /etc/group
+test -s /home/paul/.ssh/authorized_keys
+test "$(stat -f '%Su:%Sg %Lp' /home/paul/.ssh)" = 'paul:users 700'
+test "$(stat -f '%Su:%Sg %Lp' /home/paul/.ssh/authorized_keys)" = 'paul:users 600'
+ssh-keygen -lf /home/paul/.ssh/authorized_keys
+```
+
+`id paul` must report uid 1000, primary group `users`, and supplementary group
+`wheel`. From a second client shell, require a fresh key-authenticated login
+and noninteractive privilege escalation on explicit port 22 before releasing
+the original session:
+
+```sh
+recovery_key=~/.ssh/id_rsa
+ssh -p 22 -o BatchMode=yes -o PreferredAuthentications=publickey \
+    -o IdentitiesOnly=yes -i "$recovery_key" \
+    paul@piN.lan.buetow.org 'id; doas -n id'
+```
+
+The fresh `id` must still include `wheel`, and `doas -n id` must report uid 0.
+Set `recovery_key` to each identity that must remain usable and repeat the
+command so every required recovery key is proven independently.
+Do not continue if either gate fails: `etcupdate` can replace `group`,
+`master.passwd`, and the generated password databases, so a correct wheel line
+or `authorized_keys` file alone does not prove that sshd recognizes the user.
+Only after this fresh-session gate passes, finish postinstall:
+
+```sh
+set -e
 doas /usr/pkg/sbin/sysupgrade postinstall
 doas sync
 ```
