@@ -255,7 +255,10 @@ Update the tracked upgrade runbook so future `etcupdate` work verifies
 `id paul`, explicit wheel membership, `authorized_keys`, and a fresh
 noninteractive doas login before releasing the last privileged session.
 
-## Repository and task state at handoff time
+## Historical repository and task state at handoff creation
+
+This snapshot records the interrupted recovery handoff and is superseded by
+the completed base-system and package-migration sections that follow.
 
 - Active task: `ww0` — pi0 NetBSD 11 base upgrade with gated reboots.
 - Current repository worktree was clean before adding this handoff.
@@ -264,3 +267,57 @@ noninteractive doas login before releasing the last privileged session.
   - `744fefe` — hardened same-session sets-to-reboot procedure.
   - `82d9a3a` — pi1 NetBSD 11 upgrade completion record.
 - Nothing from this recovery work has been pushed.
+
+## NetBSD 11 package and service migration (completed)
+
+The operational work for task `xw0` completed the remaining package migration
+on 2026-08-06. The
+durable command results and operational transcript are retained in the task's
+annotations (`ask info xw0`); the summary below records the stable outcome.
+The official pkgsrc repository is now the aarch64/11.0 repository. A full pkgin
+upgrade refreshed all 31 installed third-party packages for 11.0 and installed
+the required GCC 12 runtime dependency; a subsequent dry run had nothing left
+to do. The resulting count is 33: the 31 refreshed pkgsrc packages, newly
+installed GCC 12, and the separately installed custom DTail package.
+`pkg_admin check` passed all 7,286 files in those 33 packages. Explicit
+version checks also passed for doas, rsync, curl, wireguard-go,
+wireguard-tools, autoconf, automake, libtool, and pkg-config.
+
+Uptimed 0.4.7 was rebuilt natively with the refreshed autoconf, automake,
+libtool, and pkg-config toolchain. Both uptime databases were backed up and
+restored byte-for-byte with their `root:wheel` ownership, and the Linux,
+NetBSD 10.1, and NetBSD 11.0 history remained visible in `uprecords`.
+
+The already-published artifact at
+`https://pkgrepo.f3s.buetow.org/netbsd/11.0/packages/aarch64/dtail-4.3.2ng.tgz`
+was downloaded and installed with `pkg_add`. Its size was 44,260,503 bytes and
+its SHA256 was
+`26519dcbce90244bd3dd00e7e3a907e41d73e2cd7a2da53cf89ade9506594737`.
+The package's `+BUILD_INFO` identified `MACHINE_ARCH=aarch64`, `OPSYS=NetBSD`,
+and `OS_VERSION=11.0`; post-install `pkg_info dtail` reported
+`dtail-4.3.2ng`. The persistent dserver host key retained SHA256
+`eb02c2a65e3d153bfb845cd69b27efb6aec399fad84d9890245fff90d54d0b84`.
+Service start and the final controlled reboot both recreated the paul key
+cache; TCP 2222 listened and an external `dcat` read of `/etc/fstab` passed.
+
+The controlled reboot ran at 21:19 UTC. Post-reboot checks included:
+
+- fresh SSH, `id paul`, and `doas -n id`;
+- NPF validation, active filtering, and rules for TCP 22, 80, and 2222;
+- recent WireGuard handshakes and successful pings to both frontends;
+- HTTP 200 for all five vhosts (`f3s`, `www.f3s`, `standby.f3s`, `snonux`,
+  and `www.snonux`), `/fotos/`, `/scifi/`, and all 12 `index.html` files found
+  under the document root;
+- running bozohttpd, WireGuard, uptimed, dserver, cron, NPF, and sshd;
+- successful goprecords script execution using the root cron PATH, both
+  expected root cron entries, no paul cron or pull script on source pi0, and
+  the expected `sync-from-pi0.sh` entry on pi1;
+- the LAN address, default route, DNS lookup, persistent DTail key and
+  recreated cache, retained uptime history, external `dcat`, and public HTTP
+  200 for both domains plus `/fotos/` and `/scifi/`.
+
+The negative package check was `pkgin -n full-upgrade`, which reported
+`nothing to do`; `pkg_admin check` found no damaged package files. pi1 was
+accessed read-only throughout this task: its NetBSD 11.0 release, local HTTP
+200, pull cron, and three-hour uptime were observed after the pi0 reboot. No
+command changed or rebooted pi1.
