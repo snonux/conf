@@ -25,11 +25,11 @@ fi
 case "$2" in
     MASTER)
         logger "CARP state changed to MASTER, starting services"
-        # On the BACKUP host (f1), the sink dataset is kept readonly=on so
-        # zrepl can write incoming snapshots. On MASTER takeover we flip it
-        # read-write so NFS clients can write to it.
+        # The replicated dataset on f1 must remain read-only even during CARP
+        # takeover. This prevents failover writes from diverging the zrepl
+        # receiver and breaking subsequent incremental receives.
         if [ "$HOSTNAME" != 'f0.lan.buetow.org' ]; then
-            zfs set readonly=off zdata/sink/f0/zdata/enc/nfsdata
+            zfs set readonly=on zdata/sink/f0/zdata/enc/nfsdata
         fi
         service rpcbind start >/dev/null 2>&1
         service mountd start >/dev/null 2>&1
@@ -44,20 +44,11 @@ case "$2" in
         service nfsd stop >/dev/null 2>&1
         service mountd stop >/dev/null 2>&1
         service nfsuserd stop >/dev/null 2>&1
-        # Restore the sink dataset for zrepl replication from f0.
-        # Any writes made while MASTER must be rolled back to the last
-        # received snapshot; otherwise zfs receive fails with "destination
-        # has been modified since most recent snapshot". Data written
-        # during the MASTER window is transient (health checks, test writes)
-        # and is intentionally discarded here.
+        # Never roll back receiver changes automatically. zrepl will refuse
+        # an incremental receive if the receiver diverged, leaving the files
+        # available for inspection with zfs diff before manual recovery.
         if [ "$HOSTNAME" != 'f0.lan.buetow.org' ]; then
             SINK="zdata/sink/f0/zdata/enc/nfsdata"
-            LAST_SNAP=$(zfs list -t snapshot -Ho name "$SINK" 2>/dev/null | tail -1)
-            if [ -n "$LAST_SNAP" ]; then
-                zfs rollback "$LAST_SNAP" && \
-                    logger "CARP BACKUP: rolled back $SINK to $LAST_SNAP" || \
-                    logger "CARP BACKUP: WARNING rollback of $SINK to $LAST_SNAP failed"
-            fi
             zfs set readonly=on "$SINK"
         fi
         logger "CARP BACKUP: NFS and stunnel services stopped"
