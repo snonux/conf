@@ -1,9 +1,15 @@
-# Remote in-place NetBSD install on a Raspberry Pi 3B+ (no SD removal)
+# Remote NetBSD image installation on a Raspberry Pi 3B+
 
-Runbook + scripts to replace **Rocky Linux 9** with **NetBSD 11.0** on an f3s
-Raspberry Pi **3 Model B+**, entirely over SSH, **without pulling the microSD
-card**. Proven on `pi0` (2026-07-03); this document is written so the same can
-be done to `pi1` (or a rebuild of `pi0`) by changing two values.
+Runbook and scripts to replace **Rocky Linux 9** with **NetBSD 11.0** on an f3s
+Raspberry Pi **3 Model B+**, entirely over SSH and **without pulling the
+microSD card**. The method was proven during the original pi0 conversion and
+is retained for rebuilding either node or provisioning a replacement.
+
+> **Current state:** pi0 and pi1 both run NetBSD 11.0 and passed dual-node
+> service, reboot, synchronization, and failover acceptance. See
+> [`NETBSD-11-DUAL-NODE-ACCEPTANCE.md`](NETBSD-11-DUAL-NODE-ACCEPTANCE.md).
+> Do not use this image-conversion procedure as an in-place update of either
+> live NetBSD node.
 
 > **TL;DR of the hard-won lesson:** `kexec` is compiled out of the Rocky RPi
 > kernel and the systemd shutdown-pivot does not fire on these boxes, so the
@@ -22,12 +28,12 @@ be done to `pi1` (or a rebuild of `pi0`) by changing two values.
 - [Prerequisites](#prerequisites)
 - [Stage A — bake the golden image (on `earth`)](#stage-a--bake-the-golden-image-on-earth)
 - [Stage B — remote in-place flash (on the Pi)](#stage-b--remote-in-place-flash-on-the-pi)
-- [Doing pi1 specifically](#doing-pi1-specifically)
+- [Per-node identity](#per-node-identity)
 - [Verification](#verification)
 - [Rollback / recovery](#rollback--recovery)
 - [Troubleshooting & gotchas](#troubleshooting--gotchas)
 - [Cleanup](#cleanup)
-- [Post-install (deferred)](#post-install-deferred)
+- [Current post-install services](#current-post-install-services)
 - [File manifest](#file-manifest)
 
 ---
@@ -46,7 +52,7 @@ be done to `pi1` (or a rebuild of `pi0`) by changing two values.
 | Item | pi0 | pi1 |
 |------|-----|-----|
 | Board | Raspberry Pi 3 Model B+ | Raspberry Pi 3 Model B+ |
-| Was running | Rocky Linux 9.7 aarch64 | Rocky Linux 9.x aarch64 |
+| OS before original conversion | Rocky Linux 9.7 aarch64 | Rocky Linux 9.x aarch64 |
 | LAN IP | 192.168.1.125 | **192.168.1.126** |
 | Hostname | pi0.lan.buetow.org | **pi1.lan.buetow.org** |
 | WireGuard | 192.168.2.203 | 192.168.2.204 |
@@ -146,7 +152,7 @@ we configure the image **from inside a real NetBSD** running under qemu.
 
 1. Choose `pi0` or `pi1`; the orchestrator renders that host's `HOSTNAME` and
    `IPADDR` into [`bake/setup.sh`](bake/setup.sh) (see
-   [Doing pi1](#doing-pi1-specifically)).
+   [Per-node identity](#per-node-identity)).
 2. Run the orchestrator:
    ```bash
    cd f3s/pi-netbsd/bake
@@ -223,20 +229,25 @@ Scripts: [`flash/`](flash). Copy this whole `pi-netbsd/` tree (or at least
    reboots into **NetBSD**. Allow several minutes (SD write + first boot +
    root resize).
 
-## Doing pi1 specifically
+## Per-node identity
 
-Only two rendered values differ from pi0:
+Only the rendered hostname and address differ:
 
 ```sh
+# pi0
+HOSTNAME="pi0.lan.buetow.org"
+IPADDR="192.168.1.125"
+
+# pi1
 HOSTNAME="pi1.lan.buetow.org"
 IPADDR="192.168.1.126"
 ```
 
-Do not edit the template: `./bake-golden.sh pi1` substitutes these values.
-Everything else is identical: same board, same NIC (`mue0`), same gateway/DNS,
-same flasher. WireGuard peer for pi1 is `192.168.2.204` (configured later,
-out of scope here). Run Stage B against `pi1.lan.buetow.org` /
-`192.168.1.126`.
+Do not edit the template: `./bake-golden.sh pi0` and
+`./bake-golden.sh pi1` substitute the correct values. Everything else is
+identical: same board, NIC (`mue0`), gateway/DNS, and flasher. Preserve each
+node's own SSH host keys and WireGuard identity when rebuilding an existing
+card; never copy identity material from its twin.
 
 > Keep pi0 (or the other twin) up while flashing pi1 so the static
 > `f3s.buetow.org` backend stays served.
@@ -269,11 +280,12 @@ Pi will change — remove the old line or use the relaxed flags above.
   Rocky image (keep a known-good one handy) — physically or by the same method
   in reverse. **Keep a Rocky SD image before starting** as the ultimate fallback
   (physical access is "inconvenient but possible" for these boxes).
-- **A later in-place base upgrade:** follow
-  [`NETBSD-11-PI1-UPGRADE.md`](NETBSD-11-PI1-UPGRADE.md). In particular, run
-  userland sets and the conditional orderly reboot in one HUP-resistant root
-  shell. Replacing userland can make the old `sshd` reject every fresh login;
-  never rely on opening another SSH session between sets extraction and reboot.
+- **A future in-place base upgrade:** start from the target release's formal
+  installation guidance, then incorporate the failure lessons in
+  [`NETBSD-11-PI1-UPGRADE-INCIDENT.md`](NETBSD-11-PI1-UPGRADE-INCIDENT.md).
+  In particular, run userland sets and the conditional orderly reboot in one
+  HUP-resistant root shell, and verify the active account databases plus a
+  fresh key/doas login immediately after `etcupdate`.
 
 ## Troubleshooting & gotchas
 
@@ -298,25 +310,24 @@ real flash; relevant only if you leave a Pi on Rocky after dry-runs):
 
 ```bash
 sudo rm -f /boot/config.txt /boot/netbsd-flash-mode /boot/flash-evidence.txt \
-           /boot/flasher.img /home/paul/netbsd-pi0-golden.img.gz
-# optional: restore the untouched initramfs backup
-sudo mv /boot/initramfs-*.img.orig /boot/initramfs-$(uname -r).img   # if present
+           /boot/flasher.img /home/paul/netbsd-pi0-golden.img.gz \
+           /home/paul/netbsd-pi1-golden.img.gz
 ```
+
+Inspect any `/boot/initramfs-*.img.orig` backup manually before restoring it;
+do not use an unqualified wildcard `mv` when multiple backups may exist.
 
 On earth: stop any leftover `python3 -m http.server` from the bake; the
 `*.img`/`*.img.gz` work files can be deleted or kept for the next Pi.
 
-## Post-install (deferred)
+## Current post-install services
 
-Base OS + networking + SSH is the whole scope of this runbook. Re-provisioning
-the Pi's role on NetBSD is separate work:
-
-- **lighttpd static site** (`f3s.buetow.org`): `pkgin install lighttpd`, recreate
-  `/var/www` + the Host-based vhost config. relayd backends keep the same IPs, so
-  the OpenBSD frontends need no change.
-- **DTail `dserver`**: needs a **`netbsd/arm64`** build (the Pis previously ran
-  `linux/arm64`).
-- **WireGuard** peer, monitoring agents, etc.
+The image runbook intentionally installs only the base OS, networking, and
+SSH. The live nodes additionally run bozohttpd, WireGuard, NPF, uptimed,
+DTail/dserver, hourly pi0-to-pi1 content synchronization, and goprecords
+uploads. Rebuilds must restore each node's own identity and then satisfy the
+service and failover gates in
+[`NETBSD-11-DUAL-NODE-ACCEPTANCE.md`](NETBSD-11-DUAL-NODE-ACCEPTANCE.md).
 
 ## File manifest
 

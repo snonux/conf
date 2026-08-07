@@ -1,4 +1,4 @@
-# pi0 NetBSD 11 recovery handoff
+# pi0 NetBSD 11 recovery incident
 
 > **Completed 2026-08-06.** This document is retained as the incident and
 > recovery record. The offline-repair instructions below are historical and
@@ -24,28 +24,27 @@ reloaded with `PermitRootLogin prohibit-password`, and the temporary credential
 was verified rejected. No temporary plaintext credential is retained in this
 repository or the recovery workspace.
 
-## Status at handoff time
+## Incident state when recovery began
 
-Task `ww0` is upgrading pi0 from NetBSD 10.1 to 11.0. The kernel, modules,
-direct-boot files, and userland sets are already NetBSD 11.0. The hardened
-same-session `sysupgrade sets` to orderly-reboot sequence worked. The upgrade
-is incomplete because `etcupdate` replaced local account configuration before
-`postinstall`, configuration validation, cron restoration, and the final
-reboot were completed.
+Task `ww0` was upgrading pi0 from NetBSD 10.1 to 11.0. The kernel, modules,
+direct-boot files, and userland sets were already NetBSD 11.0. The hardened
+same-session `sysupgrade sets` to orderly-reboot sequence had worked. The
+upgrade was incomplete because `etcupdate` replaced local account
+configuration before `postinstall`, configuration validation, cron
+restoration, and the final reboot were completed.
 
-pi0 is currently powered on and reachable at `192.168.1.125` and
-`192.168.2.203`. OpenSSH responds on port 22 and presents the expected host
-key, but rejects every currently offered user key. The repository SSH config
-selects port 2 for the pi aliases, so all direct tests must explicitly use
-`-p 22`:
+At that point pi0 was powered on and reachable at `192.168.1.125` and
+`192.168.2.203`. OpenSSH responded on port 22 and presented the expected host
+key, but rejected every offered user key. The repository SSH config selected
+port 2 for the pi aliases, so direct tests used explicit port 22:
 
 ```sh
 ssh -p 22 paul@pi0.lan.buetow.org
 ```
 
-`dserver` on port 2222 and bozohttpd remain intentionally stopped from the
-maintenance window. pi1 is healthy on NetBSD 11.0 and continues to serve the
-public static sites. Do not modify or reboot pi1 during pi0 recovery.
+`dserver` on port 2222 and bozohttpd were intentionally stopped for the
+maintenance window. Pi1 remained healthy on NetBSD 11.0 and served the public
+static sites throughout recovery.
 
 ## Original failure
 
@@ -156,9 +155,9 @@ SHA256:rzvwz15PkOvKZWtqfwMuwoug+zNTSILwFnXpejrn/Zk paul@computer
 SHA256:fBoselDdawO4H5F+gk0zOFqNqWZSDR2SVjbtFTSBXEU paul@earth
 ```
 
-The likely mistake was replacing `authorized_keys` with only `id_rsa.pub`
-instead of preserving/appending the pre-existing `paul@earth` key. Install
-both agent keys on the next offline pass. Do not replace one with the other.
+The mistake was replacing `authorized_keys` with only `id_rsa.pub` instead of
+preserving/appending the pre-existing `paul@earth` key. The subsequent offline
+repair installed both agent keys without replacing one with the other.
 
 ## Important failed approaches
 
@@ -179,31 +178,31 @@ both agent keys on the next offline pass. Do not replace one with the other.
   FAT payload and did not affect the physical card. Successful physical-card
   writes were followed by clean sync, unmount, and FFS verification.
 
-## Required next offline repair (completed)
+## Third offline repair: both SSH keys (completed)
 
 The following procedure was completed successfully and is retained only as a
 recovery record. Do not repeat it on the recovered card.
 
-The user must power pi0 off and reinsert its microSD card into earth. Then:
+The completed repair used this sequence:
 
-1. Re-identify the card by the exact geometry above and confirm it is not
+1. Re-identified the card by the exact geometry above and confirmed it was not
    mounted.
-2. Reverify the existing full-image checksum; a second 32 GB image is optional
-   because the verified pre-repair image already exists.
-3. Build `authorized_keys` from all public keys currently returned by:
+2. Reverified the existing full-image checksum; the verified pre-repair image
+   made a second 32 GB image unnecessary.
+3. Built `authorized_keys` from all public keys returned at the time by:
 
    ```sh
    ssh-add -L
    ```
 
-   Include `~/.ssh/id_rsa.pub`, deduplicate complete key lines, and verify that
-   the resulting file contains both fingerprints listed above.
-4. Boot a disposable formal NetBSD 11 recovery image under QEMU with:
+   The payload included `~/.ssh/id_rsa.pub`, deduplicated complete key lines,
+   and contained both fingerprints listed above.
+4. Booted a disposable formal NetBSD 11 recovery image under QEMU with:
    - the recovery image as the first virtio disk;
    - the physical card as the second virtio disk (`ld5`, `dk3` root);
    - a separate read-only FAT payload as the third disk (`ld6e`), containing
      the two-key `authorized_keys` and a short repair script.
-5. In the guest:
+5. Ran the following in the guest:
 
    ```sh
    fsck_ffs -p /dev/rdk3
@@ -221,14 +220,15 @@ The user must power pi0 off and reinsert its microSD card into earth. Then:
    halt -p
    ```
 
-6. Require both expected key fingerprints in output, `AUTH_REPAIR_OK`, a clean
+6. Required both expected key fingerprints in output, `AUTH_REPAIR_OK`, a clean
    post-write filesystem check, and a clean QEMU halt.
-7. On earth, flush the card and safely power off the reader before removal.
-8. Reinstall and boot pi0, then test both identities explicitly on port 22.
+7. Flushed the card on earth and safely powered off the reader before removal.
+8. Reinstalled and booted pi0, then tested both identities explicitly on port
+   22.
 
-## Online completion after SSH recovery (completed)
+## Online completion after SSH recovery
 
-Once a fresh login succeeds, do not immediately reboot. First require:
+After a fresh login succeeded, the recovery first required:
 
 ```sh
 id
@@ -236,8 +236,8 @@ doas -n id
 uname -a
 ```
 
-`id` must include `wheel`, and `doas -n id` must report uid 0. Then resume task
-`ww0` from its annotations:
+`id` included `wheel`, and `doas -n id` reported uid 0. Task `ww0` then resumed
+with these gates:
 
 1. Verify `mue0=192.168.1.125`, default route, DNS, writable FFS root, matching
    11.0 modules, and clean boot diagnostics.
@@ -251,22 +251,10 @@ uname -a
 7. Perform the final controlled reboot and repeat all gates.
 8. Keep pi1 healthy and serving public traffic throughout.
 
-Update the tracked upgrade runbook so future `etcupdate` work verifies
-`id paul`, explicit wheel membership, `authorized_keys`, and a fresh
-noninteractive doas login before releasing the last privileged session.
-
-## Historical repository and task state at handoff creation
-
-This snapshot records the interrupted recovery handoff and is superseded by
-the completed base-system and package-migration sections that follow.
-
-- Active task: `ww0` — pi0 NetBSD 11 base upgrade with gated reboots.
-- Current repository worktree was clean before adding this handoff.
-- Latest relevant commits:
-  - `ad96a0a` — NetBSD 11 golden-image recovery workflow.
-  - `744fefe` — hardened same-session sets-to-reboot procedure.
-  - `82d9a3a` — pi1 NetBSD 11 upgrade completion record.
-- Nothing from this recovery work has been pushed.
+This incident established the future `etcupdate` gate now recorded in the
+rebuild and skills documentation: verify `id paul`, explicit wheel membership,
+`authorized_keys`, and a fresh noninteractive doas login before releasing the
+last privileged session.
 
 ## NetBSD 11 package and service migration (completed)
 

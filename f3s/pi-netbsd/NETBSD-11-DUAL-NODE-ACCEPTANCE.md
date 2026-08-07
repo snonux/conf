@@ -107,11 +107,15 @@ Rollback material was confirmed retained and was not deleted:
 Keep these and all other rollback images/media until explicit deletion
 approval is given.
 
-## External documentation to synchronize
+The one-time upgrade and recovery records are retained as incident history,
+not active runbooks:
 
-The external `~/.agents/skills` project was intentionally not edited here. Its
-`f3s/SKILL.md`, `f3s-raspberry-pi/SKILL.md`, and
-`f3s-raspberry-pi/references/bootstrap-netbsd-pi.md` still describe pi0/pi1 as
-NetBSD 10.1 and need a separate skills-project update to the verified 11.0
-state and recovery lesson above. Package-repository and DTail skill text should
-also be checked for 10.1-specific client URLs during that update.
+- [`NETBSD-11-PI1-UPGRADE-INCIDENT.md`](NETBSD-11-PI1-UPGRADE-INCIDENT.md)
+- [`PI0-NETBSD-11-RECOVERY-INCIDENT.md`](PI0-NETBSD-11-RECOVERY-INCIDENT.md)
+
+## External documentation
+
+The external `~/.agents/skills` f3s, Raspberry Pi, package-repository, and
+DTail references were synchronized after acceptance to describe the verified
+NetBSD 11.0 state, current package URLs, and the major-upgrade recovery lessons
+above.

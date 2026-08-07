@@ -1,9 +1,10 @@
-# pi1 NetBSD 11.0 upgrade
+# pi1 NetBSD 11.0 upgrade incident and procedure record
 
 This records the staging completed on 2026-08-03 and the upgrade completed on
 2026-08-05. pi1 now runs the 11.0 kernel, modules, userland, and boot files.
-The commands below remain as the reviewed procedure and recovery record; do
-not rerun them on the upgraded host.
+The commands below remain as historical procedure and recovery evidence; do
+not rerun them on either upgraded host. The current dual-node state is in
+[`NETBSD-11-DUAL-NODE-ACCEPTANCE.md`](NETBSD-11-DUAL-NODE-ACCEPTANCE.md).
 
 ## Verified release inputs
 
@@ -70,10 +71,12 @@ under `/var/cache/sysupgrade`. Do not copy staged files blindly: only the
 BCM2837 B+ DTB and direct-boot `netbsd.img` apply to pi1; EFI is retained for
 reference/recovery and the firmware is byte-identical.
 
-## Install commands for the later upgrade task
+## Historical install procedure
 
-Run these only during an approved maintenance window with physical SD access.
-First preserve the live boot partition again:
+This is the exact command record from the completed maintenance window, not an
+active runbook. A future upgrade must be derived from its target release's
+formal guidance and may reuse only the failure-prevention lessons documented
+here. The historical procedure first preserved the live boot partition:
 
 ```sh
 set -e
@@ -127,7 +130,7 @@ was lost, do not assume either success or reboot: userland may be partial and
 fresh SSH may still be unavailable, so use the documented console or SD-card
 recovery path.
 
-After pi0 returns, establish a fresh SSH connection and repeat the full
+After the upgraded node returns, establish a fresh SSH connection and repeat the full
 kernel, network, route, DNS, root-filesystem, module, and boot-diagnostic gate.
 Only then continue with configuration migration:
 
@@ -229,9 +232,10 @@ a healthy writable FFS root, mue0 at `192.168.1.126`, the expected default
 route and DNS, valid sshd and NPF configurations, the required rcorder, and
 running bozohttpd, WireGuard, uptimed, NPF, and dserver services. Local and
 public HTTP checks passed, both frontends reported pi0 and pi1 up, and pi0
-remained untouched on NetBSD 10.1.
+remained untouched on NetBSD 10.1 during this pi1 maintenance window. Pi0 was
+subsequently upgraded; see the dual-node acceptance record linked above.
 
-## Staged configuration and capacity
+## Historical staged configuration and capacity
 
 `sysutils/sysupgrade` 1.5nb12 is installed. Its configuration is:
 
@@ -244,6 +248,6 @@ POSTINSTALL_AUTOFIX="obsolete"
 AUTOCLEAN=no
 ```
 
-The fetch cache is 219 MiB and the boot staging tree is 23 MiB. After staging,
-the root filesystem had 17 GiB free and `/boot` had 47 MiB free. Services were
-left running and no reboot occurred.
+The fetch cache was 219 MiB and the boot staging tree was 23 MiB. After the
+pre-maintenance staging phase, the root filesystem had 17 GiB free and `/boot`
+had 47 MiB free; services remained running until the approved upgrade window.

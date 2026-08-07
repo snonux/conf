@@ -242,26 +242,34 @@ Result: 12 false CRITICAL alerts (3 checks × 4 hostnames)
 
 The PI phase 3 cluster now has a fixed role split:
 
-- `pi0.lan.buetow.org` and `pi1.lan.buetow.org` serve static HTTP content on port 80 with `lighttpd`
+- `pi0.lan.buetow.org` and `pi1.lan.buetow.org` run NetBSD 11.0 and serve static HTTP content on port 80 with `bozohttpd`
 - `pi2.lan.buetow.org` and `pi3.lan.buetow.org` run Pi-hole DNS on port 53 and the admin UI on port 80
 
 Monitoring should match that split:
 
 - HTTP checks should hit `http://pi0.lan.buetow.org` and `http://pi1.lan.buetow.org`
 - Pi-hole checks should verify DNS resolution against `pi2` and `pi3` and confirm the admin UI on port 80
-- `lighttpd` is intentionally used on the Pi HTTP nodes because the hardware is low-RAM and the workload is static content only
-- Firewall changes on the Pis are conditional: check `firewall-cmd --state` first and skip `firewall-cmd` rules entirely if `firewalld` is not running
+- `bozohttpd` is provided by the NetBSD base system and is used for the static vhosts
+- On pi0/pi1, validate the NetBSD NPF configuration and active rules for TCP
+  22, 80, and 2222. The conditional `firewall-cmd --state` guidance applies
+  only to Rocky pi2/pi3.
 
-### Pi lighttpd Host-Based Virtual Hosting
+### Pi bozohttpd Host-Based Virtual Hosting
 
-`relayd` cannot rewrite URL paths — it can only route based on Host header to different backend tables. To serve a subdirectory as the root for a domain, lighttpd on the Pis uses Host-based virtual hosting to remap the document root.
+`relayd` cannot rewrite URL paths — it forwards the original path and Host
+header. Bozohttpd therefore uses directory-based virtual hosts under
+`/var/www/html`.
 
-Config: `/etc/lighttpd/lighttpd.conf` on pi0/pi1 (managed directly, not in a config repo).
+Config: `/etc/rc.d/bozohttpd` and `/etc/rc.conf` on pi0/pi1.
 
 Current vhost mappings:
-- `snonux.foo` / `www.snonux.foo` → `/var/www/html/snonux`
+- `f3s.buetow.org` → `/var/www/html/f3s.buetow.org`; the `www` and `standby`
+  names are matching vhost symlinks
+- `snonux.foo` → `/var/www/html/snonux.foo`; `www.snonux.foo` is a matching
+  vhost symlink
 
-The `Host` header is passed through by relayd unchanged, so lighttpd can match on it directly.
+The `Host` header is passed through by relayd unchanged, so bozohttpd selects
+the matching vhost directory.
 
 ## Configuration Testing
 
@@ -342,4 +350,3 @@ doas relayd -dvv 2>&1 | grep "socket_rlimit" | head -1
 **References**:
 - IRCNow wiki: "TLS Acceleration with relayd" - documents file descriptor requirements
 - Stack Exchange: "OpenBSD, relayd and acme-client" (Nov 2022)
->>>>>>> 529caf525d3c8594bcf0208697629827113dc1fc
