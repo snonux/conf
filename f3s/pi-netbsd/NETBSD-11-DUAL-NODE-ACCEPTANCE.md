@@ -71,7 +71,7 @@ SDR25, mount the FFS root, use `/stand/evbarm/11.0/modules`, synchronize time,
 and run normally. No recurring post-boot SD, FFS, kernel/module, time, or
 service error was observed during acceptance.
 
-## Package repositories and rollback retention
+## Package repositories and recovery references
 
 The official pkgsrc repository is:
 
@@ -98,14 +98,20 @@ make dtail-netbsd NETBSD_VERSION=10.1 \
 Do not package for 10.1 on a running 11.0 host: `pkg_create` must match the
 target NetBSD release.
 
-Rollback material was confirmed retained and was not deleted:
+The file-level recovery archives remain available:
 
 - `fishfinger:/home/rex/backups/pi1-20260803`
 - `fishfinger:/home/rex/backups/pi0-20260806T0712`
-- `/home/paul/Downloads/pi0-recovery-20260806/pi0-microsd-before-wheel-fix.img`
 
-Keep these and all other rollback images/media until explicit deletion
-approval is given.
+After explicit approval on 2026-08-07, the rollback images were deleted:
+
+- pi0 full microSD image
+  `/home/paul/Downloads/pi0-recovery-20260806/pi0-microsd-before-wheel-fix.img`
+- pi1 boot-partition image
+  `fishfinger:/home/rex/backups/pi1-20260803/pi1-boot-partition.img`
+
+The remaining `.tar.gz` archives are file-level recovery references, not disk
+images.
 
 The one-time upgrade and recovery records are retained as incident history,
 not active runbooks:

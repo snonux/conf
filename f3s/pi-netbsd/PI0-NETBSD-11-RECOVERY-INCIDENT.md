@@ -72,7 +72,7 @@ The durable file-level backup created before the pi0 upgrade is:
 fishfinger:/home/rex/backups/pi0-20260806T0712
 ```
 
-The complete physical microSD image taken before the first offline repair is:
+The complete physical microSD image taken before the first offline repair was:
 
 ```text
 /home/paul/Downloads/pi0-recovery-20260806/pi0-microsd-before-wheel-fix.img
@@ -85,8 +85,9 @@ size:   31,914,983,424 bytes
 SHA256: 62d91457b14c879ed213e94f8f4498a6c3ddd1e7b6fe07dd7d1462d692f86231
 ```
 
-The checksum is stored in the adjacent `SHA256SUMS` and has been reverified.
-Recovery logs are in the same directory:
+After successful dual-node acceptance, the user explicitly approved deleting
+this 31.9 GB rollback image on 2026-08-07. Its image-only `SHA256SUMS` file was
+deleted with it. Recovery logs remain in the same directory:
 
 ```text
 repair.log
