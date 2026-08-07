@@ -31,12 +31,15 @@ obsolete for `zusb`.
 
 ## Installed Files
 
-- `/usr/local/bin/zusb-load` — mounts the `F3S_KEYS` stick, imports `zusb`,
-  loads the encryption key for `zusb/data/enc` from `/keys/zusb.key`, and mounts
-  all datasets.
+- `/usr/local/bin/zusb-load` — mounts the `F3S_KEYS` stick, powers on and starts
+  the four USB disks when the pool is offline, imports `zusb`, loads the
+  encryption key for `zusb/data/enc` from `/keys/zusb.key`, and mounts all
+  datasets.
 - `/usr/local/bin/zusb-unload` — snapshots `zusb` for safety (via
   `/opt/snonux/bin/zfs/zfs.snapshot` when `/opt` is mounted, with a timestamped
-  fallback) and exports the pool so the disks can be unplugged.
+  fallback), exports the pool, stops all four disks, and powers off their USB
+  devices so the disks can be unplugged safely. It identifies the disks by
+  their stable USB-SATA bridge serials rather than host-specific device names.
 
 Both scripts are host-independent (they reference only `zusb`, `zusb/data/enc`,
 and `/keys/zusb.key`) and are byte-identical across all f-hosts.
@@ -69,8 +72,22 @@ is copied host-to-host from a stick that already has it.
 doas /usr/local/bin/zusb-load     # plug the disks in, then load + mount
 doas zfs list -r zusb
 # ... run the quarterly backup ...
-doas /usr/local/bin/zusb-unload   # snapshot + export, then unplug the disks
+doas /usr/local/bin/zusb-unload   # snapshot + export + power off, then unplug
 ```
+
+The unload script first sends SCSI `STOP UNIT` to park/spin down each disk and
+then runs `usbconfig power_off` for only these four bridge serials:
+`914000000A11` through `914000000A14`. USB bus and disk unit numbers are
+resolved at runtime because they can change after a reboot or re-plug. If a
+disk cannot be identified, the script refuses to export; if stopping or
+powering off fails after export, it exits nonzero and reports that the pool is
+already safely exported.
+
+When the pool is offline, `zusb-load` performs the inverse operation for the
+same four serials: `usbconfig power_on`, wait for CAM discovery, SCSI `START
+UNIT`, wait for every disk to become ready, then `zpool import`. This also works
+when the stack has been re-plugged and its disks are already powered. If `zusb`
+is already imported, the power/start sequence is skipped.
 
 The quarterly backup itself is driven by `/opt/snonux/bin/backup/backup`
 (which travels on the pool under `zusb/data/opt`). Its S3 sync leg needs the

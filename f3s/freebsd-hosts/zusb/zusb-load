@@ -16,6 +16,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
 POOL=zusb
 ENCROOT=zusb/data/enc
 KEYFILE=/keys/zusb.key
+ZUSB_SERIALS="914000000A11 914000000A12 914000000A13 914000000A14"
 
 # 1. Make sure the F3S_KEYS stick is mounted (provides $KEYFILE).
 /usr/local/sbin/f3s-mount-keys --strict
@@ -25,8 +26,68 @@ if [ ! -r "$KEYFILE" ]; then
     exit 1
 fi
 
-# 2. Import the pool if it is not already imported.
+# 2. If the pool is offline, power on its four USB-SATA bridges and start the
+# disks before importing it. ugen(4) and da(4) unit numbers are resolved from
+# stable bridge serials because probe order differs between hosts and re-plugs.
 if ! zpool list "$POOL" >/dev/null 2>&1; then
+    for serial in $ZUSB_SERIALS; do
+        usbdev=
+        for candidate in $(usbconfig list | sed -n 's/^\(ugen[0-9.]*\):.*/\1/p'); do
+            candidate_serial=$(
+                usbconfig -d "$candidate" dump_device_desc 2>/dev/null |
+                    sed -n 's/.*iSerialNumber = .*<\(.*\)>.*/\1/p'
+            )
+            if [ "$candidate_serial" = "$serial" ]; then
+                usbdev=$candidate
+                break
+            fi
+        done
+
+        if [ -z "$usbdev" ]; then
+            echo "zusb-load: USB disk $serial not found; is the disk stack plugged in?" >&2
+            exit 1
+        fi
+        usbconfig -d "$usbdev" power_on
+    done
+
+    DISKS=
+    for serial in $ZUSB_SERIALS; do
+        disk=
+        attempts=0
+        while [ "$attempts" -lt 30 ] && [ -z "$disk" ]; do
+            for candidate in $(sysctl -n kern.disks); do
+                if [ "$(camcontrol inquiry "$candidate" -S 2>/dev/null || true)" = "$serial" ]; then
+                    disk=$candidate
+                    break
+                fi
+            done
+            if [ -z "$disk" ]; then
+                sleep 1
+                attempts=$((attempts + 1))
+            fi
+        done
+
+        if [ -z "$disk" ]; then
+            echo "zusb-load: USB disk $serial did not appear after power-on" >&2
+            exit 1
+        fi
+        camcontrol start "$disk"
+        DISKS="$DISKS $disk"
+    done
+
+    # START UNIT can complete before a rotating disk is ready for I/O.
+    for disk in $DISKS; do
+        attempts=0
+        until camcontrol tur "$disk" >/dev/null 2>&1; do
+            if [ "$attempts" -ge 30 ]; then
+                echo "zusb-load: /dev/$disk did not become ready after start" >&2
+                exit 1
+            fi
+            sleep 1
+            attempts=$((attempts + 1))
+        done
+    done
+
     zpool import "$POOL"
 fi
 

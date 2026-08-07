@@ -1,5 +1,5 @@
 #!/bin/sh
-# zusb-unload — snapshot zusb for safety, then export the pool.
+# zusb-unload — snapshot and export zusb, then power off its USB disks.
 #
 # Ported from t450:/root/bin/zusb-unload.csh. The t450 version also snapshotted
 # zroot (its boot pool); that step is dropped here because f1's zroot is the
@@ -13,6 +13,38 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
 
 POOL=zusb
 SNAPBIN=/opt/snonux/bin/zfs/zfs.snapshot
+ZUSB_SERIALS="914000000A11 914000000A12 914000000A13 914000000A14"
+
+# Resolve the stable bridge serials before exporting: da(4) and ugen(4) unit
+# numbers depend on probe order and can differ between hosts or re-plugs.
+POWER_TARGETS=
+for serial in $ZUSB_SERIALS; do
+    disk=
+    for candidate in $(sysctl -n kern.disks); do
+        if [ "$(camcontrol inquiry "$candidate" -S 2>/dev/null || true)" = "$serial" ]; then
+            disk=$candidate
+            break
+        fi
+    done
+
+    usbdev=
+    for candidate in $(usbconfig list | sed -n 's/^\(ugen[0-9.]*\):.*/\1/p'); do
+        candidate_serial=$(
+            usbconfig -d "$candidate" dump_device_desc 2>/dev/null |
+                sed -n 's/.*iSerialNumber = .*<\(.*\)>.*/\1/p'
+        )
+        if [ "$candidate_serial" = "$serial" ]; then
+            usbdev=$candidate
+            break
+        fi
+    done
+
+    if [ -z "$disk" ] || [ -z "$usbdev" ]; then
+        echo "zusb-unload: cannot map USB disk $serial; refusing to export" >&2
+        exit 1
+    fi
+    POWER_TARGETS="$POWER_TARGETS $disk:$usbdev"
+done
 
 # 1. Snapshot zusb for safety before export.
 if [ -x "$SNAPBIN" ]; then
@@ -24,4 +56,33 @@ fi
 # 2. Export the pool.
 zpool export "$POOL"
 
-echo "zusb exported."
+# 3. Stop every disk so the heads are parked before USB power is removed.
+stop_failed=false
+for target in $POWER_TARGETS; do
+    disk=${target%%:*}
+    if ! camcontrol stop "$disk"; then
+        echo "zusb-unload: failed to stop /dev/$disk" >&2
+        stop_failed=true
+    fi
+done
+if $stop_failed; then
+    echo "zusb-unload: pool exported, but disks remain USB-powered" >&2
+    exit 1
+fi
+
+# 4. Disable only the four known zusb USB-SATA bridges. Re-plugging the disk
+# stack enumerates them again for the next zusb-load.
+power_failed=false
+for target in $POWER_TARGETS; do
+    usbdev=${target#*:}
+    if ! usbconfig -d "$usbdev" power_off; then
+        echo "zusb-unload: failed to power off $usbdev" >&2
+        power_failed=true
+    fi
+done
+if $power_failed; then
+    echo "zusb-unload: pool exported, but one or more USB devices remain powered" >&2
+    exit 1
+fi
+
+echo "zusb exported and USB disks powered off; the disk stack can be unplugged."
