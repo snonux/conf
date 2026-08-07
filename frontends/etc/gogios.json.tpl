@@ -115,6 +115,62 @@
     <%     } -%>
     <%   } -%>
     <% } -%>
+    <%
+    # HTTPS service checks.
+    #
+    # The port-80 checks above never reach the application: relayd/httpd answer
+    # them with a 302 to HTTPS, which check_http reports as OK. They therefore
+    # stayed green through a two-day audiobookshelf outage in August 2026.
+    # These checks terminate TLS and hit the real backend.
+    #
+    # Bare hostnames only. Traefik has no ingress rules for the www./standby.
+    # variants of the f3s services, so those answer 404 over HTTPS while
+    # remaining valid over the port-80 redirect path.
+    #
+    # Services that legitimately answer with a non-2xx/3xx status at "/" carry
+    # an explicit expected code, so the check tracks reachability rather than
+    # the status code alone.
+    #
+    # NOTE: Rex renders a hash-prefixed template tag as a one-line Perl
+    # comment, so multi-line commentary must live in a code block like this
+    # one, and must never contain a closing template delimiter.
+    -%>
+    <% my %https_expect = (
+         'player.f3s.buetow.org'   => 'HTTP/1.1 401',  # basic auth prompt
+         'xplayer.f3s.buetow.org'  => 'HTTP/1.1 401',  # basic auth prompt
+         'webdav.f3s.buetow.org'   => 'HTTP/1.1 401',  # basic auth prompt
+         'garage.f3s.buetow.org'   => 'HTTP/1.1 403',  # S3 endpoint denies GET /
+         'koreader.f3s.buetow.org' => 'HTTP/1.1 412',  # sync API, no root doc
+         'pihole.f3s.buetow.org'   => 'HTTP/1.1 404',  # UI lives under /admin
+         'anki.f3s.buetow.org'     => 'HTTP/1.1 404',  # sync API, no root doc
+         'git.f3s.buetow.org'      => 'HTTP/1.1 404',
+         'grafana.f3s.buetow.org'  => 'HTTP/1.1 404',
+         'pkgrepo.f3s.buetow.org'  => 'HTTP/1.1 404',  # no autoindex at root
+       );
+       my %is_f3s = map { $_ => 1 } @$f3s_hosts;
+       for my $host (@$acme_hosts) {
+         # Server FQDNs have dedicated checks; ipv4./ipv6. have their own loop.
+         next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
+         next if $host =~ /^(ipv4|ipv6)\./;
+         # ychat is currently unresponsive over HTTPS (socket timeout); adding a
+         # check would alert on a known-broken legacy service. Re-enable by
+         # removing this skip once it serves again.
+         next if $host eq 'ychat.f3s.buetow.org';
+         for my $proto (4, 6) {
+    -%>
+    "Check HTTPS IPv<%= $proto %> <%= $host %>": {
+      "Plugin": "<%= $plugin_dir %>/check_http",
+      "RandomSpread": 10,
+      "RunInterval": 300,
+      <%# f3s services are down by design while the cluster is taken down. -%>
+      <% if ($is_f3s{$host}) { -%>
+      "OnlyIfNotExists": "/tmp/f3s_taken_down",
+      <% } -%>
+      "Args": ["--sni", "-S", "-H", "<%= $host %>", "-<%= $proto %>"<% if ($https_expect{$host}) { %>, "-e", "<%= $https_expect{$host} %>"<% } %>],
+      "DependsOn": ["Check Ping<%= $proto %> master.buetow.org"]
+    },
+    <%   } -%>
+    <% } -%>
     <%# Special handling for ipv4/ipv6 subdomains - only check the appropriate IP version -%>
     <% for my $host (@$acme_hosts) {
          next unless $host =~ /^(ipv4|ipv6)\./;

@@ -645,7 +645,10 @@ task 'gogios',
       mode   => '755';
 
     file '/etc/gogios.json',
-      content => template( './etc/gogios.json.tpl', acme_hosts => \@acme_hosts, wg0_ips => \%wg0_ips ),
+      content => template( './etc/gogios.json.tpl',
+        acme_hosts => \@acme_hosts,
+        f3s_hosts  => \@f3s_hosts,
+        wg0_ips    => \%wg0_ips ),
       owner   => 'root',
       group   => 'wheel',
       mode    => '744';
