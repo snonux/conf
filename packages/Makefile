@@ -4,6 +4,11 @@
 #   make pkg NAME=gogios SRC=/home/paul/git/gogios          # both OSes
 #   make pkg-freebsd NAME=gogios SRC=/home/paul/git/gogios  # FreeBSD only
 #   make pkg-openbsd NAME=gogios SRC=/home/paul/git/gogios  # OpenBSD only
+#   make pkg-netbsd  NAME=f3sctl SRC=/home/paul/git/f3sctl  # NetBSD aarch64 only
+#
+# Repository metadata:
+#   make netbsd-summary                                      # regenerate pkg_summary.gz
+#                                                            # across the whole NetBSD repo
 #
 # Multi-binary / CGo packages (built natively on OpenBSD build VM):
 #   make dtail-openbsd                                       # DTail for OpenBSD
@@ -80,8 +85,13 @@ ENTRY      ?= cmd/$(NAME)/main.go
 
 SCRIPTS := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))scripts
 
-# Extract version from internal/version.go, stripping the "v" prefix
-VERSION = $(shell grep 'Version' $(SRC)/internal/version.go | sed 's/.*"\(.*\)"/\1/' | tr -d v)
+# Extract version from internal/version.go, stripping the "v" prefix.
+#
+# Anchored on the declaration rather than matching bare "Version" anywhere in
+# the file: a doc comment mentioning the word (f3sctl's explains this very
+# grep) otherwise matches too, and the multi-line result gets spliced into the
+# remote command line and mangles it.
+VERSION = $(shell grep -m1 '^const Version' $(SRC)/internal/version.go | sed 's/.*"\(.*\)"/\1/' | tr -d v)
 
 # DTail settings
 DTAIL_SRC      := /home/paul/git/dtail
@@ -93,7 +103,7 @@ DTAIL_NETBSD_VERSION = $(shell echo $(DTAIL_VERSION) | tr -d '-')
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
 DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
-.PHONY: pkg pkg-freebsd pkg-openbsd dtail-openbsd dtail-freebsd dtail-netbsd dtail-netbsd11 dtail-rocky check-vars check-dtail-version clean
+.PHONY: pkg pkg-freebsd pkg-openbsd pkg-netbsd netbsd-summary dtail-openbsd dtail-freebsd dtail-netbsd dtail-netbsd11 dtail-rocky check-vars check-dtail-version clean
 .PHONY: buildvm-start buildvm-stop buildvm-ensure
 
 # --- Build VM management ---
@@ -159,6 +169,55 @@ pkg-openbsd: /tmp/$(NAME)-openbsd
 	$(OPENBSD_SSH) $(OPENBSD_HOST) "doas rm -rf /tmp/$(NAME)-pkg /tmp/$(NAME) /tmp/pkg-openbsd.sh"
 	rm -f /tmp/$(NAME)-openbsd /tmp/$(NAME)-$(VERSION).tgz
 	@echo "OpenBSD package $(NAME)-$(VERSION) uploaded to repo"
+
+# Cross-compile for NetBSD aarch64 (pi0/pi1), package natively on pi0, upload
+# via f0, then regenerate the repository index.
+#
+# CGO_ENABLED=0 keeps the binary static so no NetBSD toolchain is needed here.
+/tmp/$(NAME)-netbsd: check-vars
+	@echo "Cross-compiling $(NAME) for NetBSD/arm64..."
+	cd $(SRC) && CGO_ENABLED=0 GOOS=netbsd GOARCH=arm64 go build -o $@ $(ENTRY)
+
+pkg-netbsd: /tmp/$(NAME)-netbsd
+	@echo "Packaging $(NAME) $(VERSION) for NetBSD on $(NETBSD_BUILD_HOST)..."
+	@# Clear stale artifacts so a failed run can never upload an old package.
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/$(NAME)-netbsd-pkg /tmp/pkg-netbsd.sh"
+	$(NETBSD_SCP) /tmp/$(NAME)-netbsd $(NETBSD_BUILD_HOST):/tmp/$(NAME)-netbsd
+	$(NETBSD_SCP) $(SCRIPTS)/pkg-netbsd.sh $(NETBSD_BUILD_HOST):/tmp/pkg-netbsd.sh
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "/bin/sh /tmp/pkg-netbsd.sh \
+		'$(NAME)' '$(VERSION)' '$(COMMENT)' '$(DESC)'"
+	@echo "Copying package to PV via f0..."
+	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/$(NAME)-netbsd-pkg/out/$(NAME)-$(VERSION).tgz /tmp/$(NAME)-netbsd-$(VERSION).tgz
+	$(FREEBSD_SCP) /tmp/$(NAME)-netbsd-$(VERSION).tgz $(FREEBSD_HOST):/tmp/$(NAME)-netbsd-$(VERSION).tgz
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/$(NETBSD_REPO) && \
+		doas cp /tmp/$(NAME)-netbsd-$(VERSION).tgz $(PV_BASE)/$(NETBSD_REPO)/$(NAME)-$(VERSION).tgz && \
+		rm /tmp/$(NAME)-netbsd-$(VERSION).tgz"
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/$(NAME)-netbsd-pkg /tmp/$(NAME)-netbsd /tmp/pkg-netbsd.sh"
+	rm -f /tmp/$(NAME)-netbsd /tmp/$(NAME)-netbsd-$(VERSION).tgz
+	@$(MAKE) --no-print-directory netbsd-summary
+	@echo "NetBSD package $(NAME)-$(VERSION) uploaded to repo"
+
+# Regenerate pkg_summary.gz from EVERY package in the NetBSD repo.
+#
+# The summary describes a repository, not a package, so it must be rebuilt from
+# the full set after any upload. Generating it from just-built packages (as the
+# dtail script used to) drops everything else from the index the moment there
+# is more than one package.
+netbsd-summary:
+	@echo "Regenerating the NetBSD repo index..."
+	@# Stage every published .tgz on the build host: pkg_info -X is a NetBSD
+	@# tool, and the repo lives on f0's ZFS/NFS, so the files have to travel.
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/netbsd-repo-pkgs && mkdir -p /tmp/netbsd-repo-pkgs"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "cd $(PV_BASE)/$(NETBSD_REPO) && tar cf - ./*.tgz" | \
+		$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "tar xf - -C /tmp/netbsd-repo-pkgs"
+	$(NETBSD_SCP) $(SCRIPTS)/netbsd-summary.sh $(NETBSD_BUILD_HOST):/tmp/netbsd-summary.sh
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "/bin/sh /tmp/netbsd-summary.sh /tmp/netbsd-repo-pkgs"
+	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/netbsd-repo-pkgs/pkg_summary.gz /tmp/netbsd-pkg_summary.gz
+	$(FREEBSD_SCP) /tmp/netbsd-pkg_summary.gz $(FREEBSD_HOST):/tmp/netbsd-pkg_summary.gz
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas cp /tmp/netbsd-pkg_summary.gz $(PV_BASE)/$(NETBSD_REPO)/pkg_summary.gz && rm /tmp/netbsd-pkg_summary.gz"
+	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/netbsd-repo-pkgs /tmp/netbsd-summary.sh"
+	rm -f /tmp/netbsd-pkg_summary.gz
+	@echo "NetBSD repo index updated"
 
 # Build and upload for both OSes
 pkg: pkg-freebsd pkg-openbsd
@@ -239,7 +298,8 @@ dtail-freebsd: check-dtail-version
 	@echo "FreeBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
 
 # Cross-compile dtail for NetBSD/aarch64 (CGO_ENABLED=0, nozstd), package with
-# pkg_create on the matching native host, upload package + pkg_summary.gz via f0.
+# pkg_create on the matching native host, upload the package via f0, then
+# regenerate the repository index across every package.
 # .zst log files are not supported in this binary; gzip still works.
 dtail-netbsd11: dtail-netbsd
 
@@ -248,7 +308,7 @@ dtail-netbsd:
 	@echo "Building DTail $(DTAIL_VERSION) for NetBSD/arm64..."
 	@# Remove stale artifacts from previous runs so a failed build can never
 	@# silently upload an old package.
-	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
 	mkdir -p /tmp/dtail-netbsd-binaries
 	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
 		echo "  Cross-compiling $$bin for NetBSD..."; \
@@ -268,13 +328,12 @@ dtail-netbsd:
 	@# and NetBSD staging files collide in /tmp (locally and on f0). Only the
 	@# final repo copy uses the canonical dtail-<version>.tgz name.
 	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/dtail-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
-	$(NETBSD_SCP) $(NETBSD_BUILD_HOST):/tmp/dtail-netbsd-pkg/out/pkg_summary.gz /tmp/dtail-netbsd-pkg_summary.gz
 	$(FREEBSD_SCP) /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz $(FREEBSD_HOST):/tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
-	$(FREEBSD_SCP) /tmp/dtail-netbsd-pkg_summary.gz $(FREEBSD_HOST):/tmp/dtail-netbsd-pkg_summary.gz
-	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/$(NETBSD_REPO) && doas cp /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz $(PV_BASE)/$(NETBSD_REPO)/dtail-$(DTAIL_NETBSD_VERSION).tgz && doas cp /tmp/dtail-netbsd-pkg_summary.gz $(PV_BASE)/$(NETBSD_REPO)/pkg_summary.gz && rm /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas mkdir -p $(PV_BASE)/$(NETBSD_REPO) && doas cp /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz $(PV_BASE)/$(NETBSD_REPO)/dtail-$(DTAIL_NETBSD_VERSION).tgz && rm /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz"
 	@# Clean up remote and local temp files
 	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/dtail-netbsd-pkg /tmp/dtail-netbsd-binaries /tmp/pkg-dtail-netbsd.sh"
-	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz /tmp/dtail-netbsd-pkg_summary.gz
+	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
+	@$(MAKE) --no-print-directory netbsd-summary
 	@echo "NetBSD package dtail-$(DTAIL_NETBSD_VERSION) uploaded to repo"
 
 # Build RPMs for Rocky Linux 9 (x86_64 + aarch64), generate repodata, and upload to the PV.
@@ -314,5 +373,5 @@ clean:
 	rm -f /tmp/$(NAME)-freebsd /tmp/$(NAME)-openbsd /tmp/$(NAME)-*.tgz
 	rm -rf /tmp/dtail-binaries /tmp/dtail-*.tgz
 	rm -rf /tmp/dtail-freebsd-binaries
-	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-pkg_summary.gz
+	rm -rf /tmp/dtail-netbsd-binaries
 	rm -rf /tmp/dtail-rocky-repo /tmp/dtail-rocky-upload /tmp/dtail-rocky-aarch64-root

@@ -1,12 +1,12 @@
 #!/bin/sh
 # Build a NetBSD dtail package from pre-compiled binaries.
 # Run on a NetBSD host (e.g. pi0). Called by the Makefile via SSH.
-# The .tgz and a matching pkg_summary.gz are left in /tmp/dtail-netbsd-pkg/out/
-# for the Makefile to retrieve.
+# The .tgz is left in /tmp/dtail-netbsd-pkg/out/ for the Makefile to retrieve.
 #
-# Note: the pkg_summary.gz only describes the packages built here. If the
-# NetBSD repo ever holds more than dtail, regenerate the summary across all
-# .tgz files in the repo directory instead.
+# This script deliberately does NOT write pkg_summary.gz. A summary describes a
+# repository, not a package, so one generated here would list only dtail and
+# hide every other package from pkgin. The Makefile's netbsd-summary target
+# regenerates it across the whole repo after the upload instead.
 #
 # The package deliberately ships no install script for the dserver user/group:
 # creating them is a documented one-time install step (see the pkgrepo skill's
@@ -96,13 +96,5 @@ pkg_create \
     -I / \
     -p "$WORKDIR/stage" \
     "$WORKDIR/out/${NAME}-${VERSION}.tgz"
-
-# Repo metadata for pkgin (pkg_add itself doesn't need it). Write the summary
-# to a temp file first: piping pkg_info straight into gzip would mask a
-# pkg_info failure (set -e without pipefail) and publish a truncated summary.
-( cd "$WORKDIR/out" && \
-    pkg_info -X ./*.tgz > pkg_summary.tmp && \
-    gzip -9 < pkg_summary.tmp > pkg_summary.gz && \
-    rm pkg_summary.tmp )
 
 echo "NetBSD package ${NAME}-${VERSION} built in $WORKDIR/out/"
