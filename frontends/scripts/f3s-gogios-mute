@@ -1,0 +1,48 @@
+#!/bin/sh
+# Set or clear the Gogios mute marker, as an SSH forced command.
+#
+# Gogios runs on the OpenBSD gateways, and its config keys several checks on
+# OnlyIfNotExists: /tmp/f3s_taken_down -- so muting alerts during a deliberate
+# cluster shutdown means touching a file on blowfish and fishfinger. That, and
+# nothing else, is why f3sctl reaches these hosts at all.
+#
+# This is a standalone script rather than the f3sctl binary on purpose: the
+# gateways have no other use for f3sctl, and shipping a whole homelab power
+# tool onto the two internet-facing machines to touch one file is more surface
+# than the job deserves. The wire protocol is unchanged -- f3sctl still sends
+# the bare verbs "gogios-mute" and "gogios-unmute" -- so this is a drop-in
+# replacement for `f3sctl agent` on these hosts.
+#
+# Installed as /usr/local/bin/f3s-gogios-mute and pinned as the ForceCommand
+# for the f3sctl user in sshd_config, so the account can run this and nothing
+# else regardless of what the client asks for.
+
+set -eu
+
+MARKER=/tmp/f3s_taken_down
+
+# The requested verb arrives in SSH_ORIGINAL_COMMAND, which is entirely
+# client-controlled. Require exactly one bare word from the allowlist: never
+# trim extra words, never pass any of it to a shell. "gogios-mute; rm -rf /"
+# is rejected outright rather than having its tail quietly dropped.
+set -- ${SSH_ORIGINAL_COMMAND:-}
+
+if [ "$#" -ne 1 ]; then
+    echo "expected exactly one verb: gogios-mute or gogios-unmute" >&2
+    exit 2
+fi
+
+case "$1" in
+gogios-mute)
+    # /tmp on purpose: a gateway reboot clears it, so a mute can never outlive
+    # the machine that set it.
+    : > "$MARKER"
+    ;;
+gogios-unmute)
+    rm -f "$MARKER"
+    ;;
+*)
+    echo "unknown verb: $1 (expected gogios-mute or gogios-unmute)" >&2
+    exit 2
+    ;;
+esac
