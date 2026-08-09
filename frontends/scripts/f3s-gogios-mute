@@ -27,12 +27,25 @@ MARKER=/tmp/f3s_taken_down
 # is rejected outright rather than having its tail quietly dropped.
 set -- ${SSH_ORIGINAL_COMMAND:-}
 
+VERBS="gogios-status, gogios-mute or gogios-unmute"
+
 if [ "$#" -ne 1 ]; then
-    echo "expected exactly one verb: gogios-mute or gogios-unmute" >&2
+    echo "expected exactly one verb: $VERBS" >&2
     exit 2
 fi
 
 case "$1" in
+gogios-status)
+    # Read-only, so f3sctl can show whether monitoring is muted without
+    # changing it. Needed because a mute can outlive the shutdown that set it
+    # -- if the un-mute times out waiting for the k3s nodes, the marker is left
+    # behind deliberately, and an operator has to be able to see that.
+    if [ -e "$MARKER" ]; then
+        echo muted
+    else
+        echo unmuted
+    fi
+    ;;
 gogios-mute)
     # /tmp on purpose: a gateway reboot clears it, so a mute can never outlive
     # the machine that set it.
@@ -42,7 +55,7 @@ gogios-unmute)
     rm -f "$MARKER"
     ;;
 *)
-    echo "unknown verb: $1 (expected gogios-mute or gogios-unmute)" >&2
+    echo "unknown verb: $1 (expected $VERBS)" >&2
     exit 2
     ;;
 esac
