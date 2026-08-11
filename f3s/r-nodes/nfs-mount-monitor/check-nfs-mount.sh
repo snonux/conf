@@ -52,6 +52,18 @@
 MOUNT_POINT="/data/nfs/k3svolumes"
 LOCK_FILE="/var/run/nfs-mount-check.lock"
 
+# During a coordinated shutdown, the storage side may already be tearing
+# down NFS/stunnel; probing or repairing the mount here would just fight
+# that teardown (e.g. re-mounting NFS after the shutdown sequence has
+# unmounted it, or burning the fail-count towards an unwanted reboot
+# escalation). /dev/shm/shutdown_in_progress is created as an in-memory
+# flag by the shutdown sequence, so it is naturally cleared on reboot.
+SHUTDOWN_FLAG="/dev/shm/shutdown_in_progress"
+if [ -f "$SHUTDOWN_FLAG" ]; then
+    echo "Shutdown in progress ($SHUTDOWN_FLAG present) — skipping NFS mount check"
+    exit 0
+fi
+
 # State directory for the fail counter; created if absent.
 STATE_DIR="/var/lib/nfs-mount-monitor"
 FAIL_COUNT_FILE="$STATE_DIR/fail-count"
