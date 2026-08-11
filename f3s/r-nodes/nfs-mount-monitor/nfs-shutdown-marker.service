@@ -1,0 +1,48 @@
+# systemd marker unit: touches /dev/shm/shutdown_in_progress during a
+# coordinated shutdown/reboot, after k3s.service (and therefore every pod on
+# this node) has stopped but before data-nfs-k3svolumes.mount is torn down.
+#
+# check-nfs-mount.sh (nfs-mount-monitor.service/.timer) checks for this file
+# and skips its probes while it exists, so the 10-second monitor does not
+# fight the shutdown sequence -- e.g. re-mounting NFS the shutdown sequence
+# just unmounted, or burning the fail-count towards an unwanted reboot
+# escalation.
+#
+# Ordering is what pins the "after k3s, before the NFS unmount" placement:
+# systemd stops units in the REVERSE of their start order. Before=k3s.service
+# means this unit starts before k3s, so it stops (ExecStop fires) after k3s
+# has already stopped. After=data-nfs-k3svolumes.mount means this unit
+# starts after the mount is up, so it stops before the mount unit is torn
+# down. Both are plain ordering-only relationships (no Requires/Wants), the
+# same style k3s-nfs-ordering.conf and nfs-stunnel-ordering.conf already use
+# for the same mount, so this adds no new hard dependency to the boot or
+# shutdown transaction.
+#
+# DefaultDependencies is left at its default (yes): that already gives every
+# service unit an implicit Before=/Conflicts= on shutdown.target, which is
+# what makes ExecStop fire during a normal poweroff/reboot -- no explicit
+# shutdown.target wiring needed here.
+#
+# RemainAfterExit=yes with a no-op ExecStart is the standard systemd idiom
+# for "run something specifically at shutdown": the unit must be active for
+# ExecStop to fire at all, and there is nothing for it to do while the
+# system is actually running.
+#
+# /dev/shm is tmpfs, so the flag is gone automatically on the next boot --
+# nothing here needs to clear it.
+#
+# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+
+[Unit]
+Description=Mark a coordinated shutdown for the NFS mount monitor
+Before=k3s.service
+After=data-nfs-k3svolumes.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/true
+ExecStop=/usr/bin/touch /dev/shm/shutdown_in_progress
+
+[Install]
+WantedBy=multi-user.target

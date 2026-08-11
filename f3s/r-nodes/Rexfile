@@ -42,6 +42,7 @@ parallelism 3;
 #   /etc/default/nfs-mount-monitor          (tunable: NFS_FAIL_THRESHOLD)
 #   /etc/systemd/system/nfs-mount-monitor.service
 #   /etc/systemd/system/nfs-mount-monitor.timer
+#   /etc/systemd/system/nfs-shutdown-marker.service
 #   /etc/systemd/system/data-nfs-k3svolumes.mount.d/10-stunnel-ordering.conf
 #   /etc/systemd/system/k3s.service.d/10-nfs-ordering.conf
 #   /var/lib/nfs-mount-monitor/             (state dir for fail-count file)
@@ -118,6 +119,16 @@ task 'nfs_mount_monitor',
       mode      => '644',
       on_change => sub { $changed = 1 };
 
+    # Deploy the shutdown marker: touches /dev/shm/shutdown_in_progress
+    # between k3s (and every pod) stopping and the NFS mount unmounting, so
+    # check-nfs-mount.sh stands down instead of fighting the teardown.
+    file '/etc/systemd/system/nfs-shutdown-marker.service',
+      source    => catfile( $monitor_dir, 'nfs-shutdown-marker.service' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
     # Keep the local TLS transport running until the NFS mount is detached.
     file '/etc/systemd/system/data-nfs-k3svolumes.mount.d',
       ensure => 'directory',
@@ -155,6 +166,12 @@ task 'nfs_mount_monitor',
     # Ensure the timer is enabled and running regardless of whether files changed.
     service 'nfs-mount-monitor.timer', ensure => 'started';
     run 'systemctl enable nfs-mount-monitor.timer';
+
+    # Ensure the shutdown marker is enabled and active too: RemainAfterExit
+    # units only run their ExecStop at shutdown if they were actually started,
+    # so this must be running, not merely present on disk.
+    service 'nfs-shutdown-marker.service', ensure => 'started';
+    run 'systemctl enable nfs-shutdown-marker.service';
   };
 
 # Keep the previous boot's journal so failed shutdowns can be diagnosed after
