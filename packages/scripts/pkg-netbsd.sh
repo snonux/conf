@@ -64,10 +64,24 @@ PLIST
 # programs inside its cgibin directory, and that directory is deliberately kept
 # outside /var/www/html so the hourly pi0->pi1 content rsync never touches the
 # binary and it can never appear in a directory index.
+#
+# A symlink, not a second copy. The CGI is the half that actually runs power
+# jobs, and while pkg_add updated both copies happily enough, two independent
+# 9MB files at two paths are two things that can disagree -- and on
+# 2026-08-11 they did: a hand-installed binary in /usr/local/bin left the CGI
+# on the previous release, so a whole rack shutdown silently ran the old code
+# and the run had to be repeated. One inode cannot drift from itself, and it
+# halves what the package costs on a Pi.
+#
+# The link is relative so it stays correct wherever the / prefix is staged,
+# and it is not dangling inside the staging tree either: ../../bin/f3sctl
+# resolves to the copy staged above.
+#
+# bozohttpd executes it without complaint -- verified on pi0 against the live
+# server, which answered f3sctl's own 401 JSON body through the symlink.
 if [ "$NAME" = "f3sctl" ]; then
     mkdir -p "$WORKDIR/stage/usr/local/libexec/cgi-bin"
-    cp "/tmp/${NAME}-netbsd" "$WORKDIR/stage/usr/local/libexec/cgi-bin/${NAME}"
-    chmod 555 "$WORKDIR/stage/usr/local/libexec/cgi-bin/${NAME}"
+    ln -sf "../../bin/${NAME}" "$WORKDIR/stage/usr/local/libexec/cgi-bin/${NAME}"
     echo "usr/local/libexec/cgi-bin/${NAME}" >> "$WORKDIR/plist"
 fi
 
