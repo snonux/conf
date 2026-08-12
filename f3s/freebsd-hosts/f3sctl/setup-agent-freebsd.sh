@@ -13,7 +13,7 @@
 #     restriction is root-owned daemon config rather than a key option;
 #   * the agent accepts a single bare word from a fixed allowlist, no
 #     arguments, nothing reaching a shell;
-#   * doas rules are keyed to exact argv for the three verbs needing root.
+#   * doas rules are keyed to exact argv for the four verbs needing root.
 #
 # Idempotent: safe to re-run.
 #
@@ -91,16 +91,24 @@ service sshd reload
 # Exact-argv allowlist: agent-root refuses to run unless euid is 0 and argv is
 # a single allowlisted verb, so this is as narrow as the SSH side.
 DOAS=/usr/local/etc/doas.conf
-if ! grep -q 'f3sctl as root' "$DOAS" 2>/dev/null; then
-    cat >> "$DOAS" <<'DOASCONF'
 
-# f3sctl power agent: only the three verbs that genuinely need root.
-permit nopass f3sctl as root cmd /usr/local/bin/f3sctl args agent-root poweroff
-permit nopass f3sctl as root cmd /usr/local/bin/f3sctl args agent-root zusb-unload
-permit nopass f3sctl as root cmd /usr/local/bin/f3sctl args agent-root probe
-DOASCONF
-    echo "appended f3sctl rules to $DOAS"
+# One rule per verb, each added only if missing. Checking per verb rather than
+# for the block as a whole is what makes this re-runnable on a host that was
+# set up before a verb existed: the old "does the block exist" test skipped
+# the whole append, so carp-quiesce (added 2026-08-11) would silently never
+# have been permitted on any already-configured host, and every rack shutdown
+# would have fallen back to its slow sequential path.
+if ! grep -q '# f3sctl power agent' "$DOAS" 2>/dev/null; then
+    printf '\n# f3sctl power agent: only the verbs that genuinely need root.\n' >> "$DOAS"
 fi
+
+for verb in poweroff zusb-unload probe carp-quiesce; do
+    rule="permit nopass f3sctl as root cmd /usr/local/bin/f3sctl args agent-root $verb"
+    if ! grep -qxF "$rule" "$DOAS" 2>/dev/null; then
+        printf '%s\n' "$rule" >> "$DOAS"
+        echo "appended the $verb rule to $DOAS"
+    fi
+done
 
 echo "--- result on $(hostname -s) ---"
 pw usershow f3sctl
