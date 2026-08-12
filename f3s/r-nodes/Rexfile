@@ -129,6 +129,25 @@ task 'nfs_mount_monitor',
       mode      => '644',
       on_change => sub { $changed = 1 };
 
+    # Deploy the shutdown drain: holds stunnel open until the pods have
+    # released their own kubelet NFS mounts, which the mount/k3s ordering
+    # drop-ins below cannot do (k3s.service has KillMode=process, so it stops
+    # long before its containers do, and kubelet's per-volume mounts are
+    # invisible to systemd). See k3s-nfs-drain.sh for the measurements.
+    file '/usr/local/bin/k3s-nfs-drain.sh',
+      source    => catfile( $monitor_dir, 'k3s-nfs-drain.sh' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '755',
+      on_change => sub { $changed = 1 };
+
+    file '/etc/systemd/system/k3s-nfs-drain.service',
+      source    => catfile( $monitor_dir, 'k3s-nfs-drain.service' ),
+      owner     => 'root',
+      group     => 'root',
+      mode      => '644',
+      on_change => sub { $changed = 1 };
+
     # Keep the local TLS transport running until the NFS mount is detached.
     file '/etc/systemd/system/data-nfs-k3svolumes.mount.d',
       ensure => 'directory',
@@ -172,6 +191,11 @@ task 'nfs_mount_monitor',
     # so this must be running, not merely present on disk.
     service 'nfs-shutdown-marker.service', ensure => 'started';
     run 'systemctl enable nfs-shutdown-marker.service';
+
+    # Same reasoning for the drain: its ExecStop is the entire unit, and
+    # ExecStop never fires for a unit that was not started.
+    service 'k3s-nfs-drain.service', ensure => 'started';
+    run 'systemctl enable k3s-nfs-drain.service';
   };
 
 # Keep the previous boot's journal so failed shutdowns can be diagnosed after

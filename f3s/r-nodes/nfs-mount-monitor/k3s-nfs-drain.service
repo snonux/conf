@@ -1,0 +1,66 @@
+# systemd unit whose only job is to hold the shutdown open between "the pods
+# are gone" and "the NFS transport is stopped".
+#
+# See k3s-nfs-drain.sh for the measurements and the reasoning; in short, every
+# NFS mount on this node is carried by stunnel, systemd used to stop stunnel
+# one second into the shutdown, and roughly sixty containers then spent three
+# to four minutes blocked on `hard` NFS mounts with no transport underneath.
+#
+# Ordering is the whole unit, and systemd stops units in the REVERSE of their
+# start order:
+#
+#   After=stunnel.service              => STOPS BEFORE stunnel
+#   After=data-nfs-k3svolumes.mount    => STOPS BEFORE that mount is detached
+#   Before=k3s.service                 => STOPS AFTER k3s
+#
+# giving a stop sequence of:
+#
+#   k3s -> this unit's ExecStop -> /data/nfs/k3svolumes -> stunnel
+#
+# Because a unit's stop job does not complete until its ExecStop returns,
+# everything below it in that list is held up for exactly as long as the
+# drain takes, which is the point: no NFS is torn down anywhere on this node
+# until the pods that were using it are gone.
+#
+# The mount ordering is not redundant with the stunnel ordering. Without it
+# the two are unordered siblings, and systemd duly detached
+# /data/nfs/k3svolumes at t+0 on 2026-08-11 -- concurrently with the drain,
+# while every pod was still running. It survived only because nothing held
+# that path at that moment; a pod with a hostPath under it (which is what the
+# mount is there for, see k3s-nfs-ordering.conf) would have made the unmount
+# busy, and forced or lazy detach puts us straight back into the
+# unflushable-dirty-pages state this unit exists to prevent.
+#
+# Both relationships are ordering-only (no Requires/Wants), matching the style
+# of nfs-shutdown-marker.service and the k3s/mount drop-ins alongside it: this
+# adds nothing to the boot transaction that could fail it, and a node running
+# without stunnel still starts normally.
+#
+# RemainAfterExit=yes with a no-op ExecStart is the standard idiom for "run
+# something specifically at shutdown": ExecStop only fires for a unit that is
+# active, and there is nothing to do while the node is running.
+#
+# TimeoutStopSec must exceed everything the drain can spend: GRACE_TIMEOUT
+# (30s) waiting for containers, plus up to 10s for the kill to be reaped,
+# plus the unmount sweep. Were systemd to cut the drain short it would stop
+# stunnel anyway, which is the exact failure being fixed. 120s is generous
+# room for that ~45s worst case and still fits inside the 240s that f3sctl's
+# agent gives this guest.
+#
+# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+
+[Unit]
+Description=Drain kubelet NFS mounts before the stunnel transport stops
+After=stunnel.service
+After=data-nfs-k3svolumes.mount
+Before=k3s.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/true
+ExecStop=/usr/local/bin/k3s-nfs-drain.sh
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
