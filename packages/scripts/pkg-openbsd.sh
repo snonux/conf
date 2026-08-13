@@ -24,19 +24,20 @@ mkdir -p "$WORKDIR/stage/usr/local/bin" "$WORKDIR/out"
 cp "/tmp/${NAME}" "$WORKDIR/stage/usr/local/bin/${NAME}"
 chmod 755 "$WORKDIR/stage/usr/local/bin/${NAME}"
 
-# Packing list. The @comment pkgpath line lets "pkg_add -u" recognize
-# different versions of this package as update candidates of each other —
-# without it, pkg_add treats them as unrelated look-alikes and silently
-# skips the upgrade (seen with gogios 1.4.3 -> 1.4.4).
-printf '@comment pkgpath=local/%s\n' "$NAME" > "$WORKDIR/plist"
-printf 'usr/local/bin/%s\n' "$NAME" >> "$WORKDIR/plist"
+# Packing list
+printf 'usr/local/bin/%s\n' "$NAME" > "$WORKDIR/plist"
 
 # Description file
 printf '%s\n' "$DESC" > "$WORKDIR/desc"
 
-# Build the package
+# Build the package. FULLPKGPATH makes pkg_create emit a proper
+# "@comment pkgpath=... ftp=no" line, which is what "pkg_add -u" uses to
+# recognize different versions of this package as update candidates of
+# each other — without it, pkg_add treats them as unrelated look-alikes
+# and silently skips the upgrade (seen with gogios 1.4.3 -> 1.4.4).
 doas pkg_create \
     -D COMMENT="$COMMENT" \
+    -D FULLPKGPATH="local/${NAME}" \
     -d "$WORKDIR/desc" \
     -f "$WORKDIR/plist" \
     -B "$WORKDIR/stage" \
