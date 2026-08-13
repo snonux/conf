@@ -1,10 +1,65 @@
 ---
-# Wildcard certificate for *.f3s.lan.buetow.org
+# Wildcard certificates for *.f3s.lan.buetow.org.
+#
+# A Kubernetes Ingress can only reference a TLS secret from its OWN namespace,
+# so every namespace that serves .lan hosts needs its own certificate. They are
+# all issued from the same selfsigned-ca-issuer, so clients keep trusting the
+# single f3s-lan-ca root; only the leaf certificates differ.
+#
+# Do NOT copy the secret between namespaces by hand: cert-manager renews each
+# Certificate on its own (75 days in, see duration/renewBefore), and a manual
+# copy silently keeps serving the expired leaf until someone notices.
+#
+# cert-manager namespace: source for relayd/other exports (just export-certs).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: f3s-lan-wildcard
   namespace: cert-manager
+spec:
+  secretName: f3s-lan-tls
+  issuerRef:
+    name: selfsigned-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  commonName: "*.f3s.lan.buetow.org"
+  dnsNames:
+    - "*.f3s.lan.buetow.org"
+    - "f3s.lan.buetow.org"
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  duration: 2160h # 90 days
+  renewBefore: 360h # 15 days
+---
+# services namespace: all *-ingress-lan ingresses of the applications.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: f3s-lan-wildcard
+  namespace: services
+spec:
+  secretName: f3s-lan-tls
+  issuerRef:
+    name: selfsigned-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  commonName: "*.f3s.lan.buetow.org"
+  dnsNames:
+    - "*.f3s.lan.buetow.org"
+    - "f3s.lan.buetow.org"
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  duration: 2160h # 90 days
+  renewBefore: 360h # 15 days
+---
+# cicd namespace: cgit-ingress-lan.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: f3s-lan-wildcard
+  namespace: cicd
 spec:
   secretName: f3s-lan-tls
   issuerRef:
