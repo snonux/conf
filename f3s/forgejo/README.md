@@ -1,6 +1,6 @@
 # Forgejo
 
-Self-hosted git forge at `https://forge.f3s.buetow.org`, running in the `services`
+Self-hosted git forge at `https://code.f3s.buetow.org`, running in the `services`
 namespace of the f3s k3s cluster.
 
 ## Relationship to the cgit git-server
@@ -10,7 +10,7 @@ namespace of the f3s k3s cluster.
 
 | | cgit / git-server | Forgejo |
 |---|---|---|
-| Web UI | `c-git.f3s.buetow.org` | `forge.f3s.buetow.org` |
+| Web UI | `c-git.f3s.buetow.org` | `code.f3s.buetow.org` |
 | Namespace | `cicd` | `services` |
 | Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (80 public `snonux` repositories preseeded) |
 | SSH NodePort | 30022 | 30222 |
@@ -140,11 +140,11 @@ The PVs use `type: Directory`, so the pod will not schedule until these exist.
 
 ### 2. Publish the hostname
 
-`forge.f3s.buetow.org` must be added to `@f3s_hosts` in `frontends/Rexfile`. That
+`code.f3s.buetow.org` must be added to `@f3s_hosts` in `frontends/Rexfile`. That
 one array drives the DNS zone, the relayd routing rule, the ACME certificate and
 the gogios monitoring checks.
 
-Deploy order matters — relayd loads `tls keypair forge.f3s.buetow.org` at startup,
+Deploy order matters — relayd loads `tls keypair code.f3s.buetow.org` at startup,
 so the certificate has to exist first:
 
 ```sh
@@ -160,7 +160,7 @@ issued on the gateway currently holding the DNS master IP — `acme.sh` skips
 is normal; the standby is not serving the name yet.
 
 `gogios` is included because the TLS and HTTP checks for the new host are
-rendered from `@acme_hosts`; without it `forge.f3s.buetow.org` gets no monitoring.
+rendered from `@acme_hosts`; without it `code.f3s.buetow.org` gets no monitoring.
 
 Deploying one gateway at a time avoids restarting both public frontends
 simultaneously.
@@ -189,10 +189,10 @@ just create-admin
 
 ```sh
 # HTTPS
-git clone https://forge.f3s.buetow.org/<user>/<repo>.git
+git clone https://code.f3s.buetow.org/<user>/<repo>.git
 
 # SSH, from anywhere -- relayd listens on 2022 and TCP-forwards to the NodePort
-git clone ssh://git@forge.f3s.buetow.org:2022/<user>/<repo>.git
+git clone ssh://git@code.f3s.buetow.org:2022/<user>/<repo>.git
 
 # SSH direct to a node, bypassing the gateways (LAN only)
 git clone ssh://git@r0.lan.buetow.org:30222/<user>/<repo>.git
@@ -202,11 +202,11 @@ Port 2022 rather than 22 keeps the forge away from the mass scanning the default
 port attracts; 2222 was unavailable, dserver (DTail) already uses it on the
 gateways. To administer blowfish/fishfinger, SSH is on port 2 as usual.
 
-To use the short `git@forge.f3s.buetow.org:user/repo.git` form, put the port in
+To use the short `git@code.f3s.buetow.org:user/repo.git` form, put the port in
 `~/.ssh/config`:
 
 ```
-Host forge.f3s.buetow.org
+Host code.f3s.buetow.org
   Port 2022
   User git
 ```

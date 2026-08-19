@@ -89,6 +89,20 @@ http protocol "https" {
     pass header "Sec-WebSocket-Extensions"
     pass header "Sec-WebSocket-Protocol"
 
+    # code.f3s.buetow.org (Forgejo web UI) drew a crawler that hammered the
+    # expensive blame/commit/diff pages hard enough to saturate the home
+    # fiber uplink. Block it on the standard port here; the same host stays
+    # reachable at https://code.f3s.buetow.org:2443/ (see the "forgejo-alt"
+    # relay below) for anyone who already knows the non-standard port, and
+    # git+ssh on 2022 is untouched since that relay is a plain TCP forward
+    # with no Host-header awareness. Port 80 stays alive too -- it never
+    # reaches Forgejo (relayd doesn't proxy :80 to the cluster, httpd just
+    # does ACME-challenge/redirect there) and killing it would break the
+    # cert renewal that the :2443 listener depends on.
+    <% for my $prefix (@prefixes) { -%>
+    block request header "Host" value "<%= $prefix %>code.f3s.buetow.org"
+    <% } -%>
+
     # Explicitly route non-f3s hosts to localhost to prevent them from trying f3s backends
     <% for my $host (@$acme_hosts) {
          next if grep { $_ eq $host } @$f3s_hosts;
@@ -239,6 +253,41 @@ relay "gemini6" {
     listen on <%= $ipv6address->($hostname) %> port 1965 tls
     protocol "gemini"
     forward to 127.0.0.1 port 11965
+}
+
+# Forgejo web UI, alternate port. Standard :443 blocks code.f3s.buetow.org
+# (see the "block quick" rule in the "https" protocol above, added after a
+# crawler hammering blame/commit/diff pages saturated the home fiber link).
+# This keeps the UI reachable for anyone who knows the non-standard port,
+# same idea as git+ssh living on 2022 instead of 22.
+http protocol "forgejo-alt" {
+    tls keypair code.f3s.buetow.org
+
+    http websockets
+
+    match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
+    match request header set "X-Forwarded-Proto" value "https"
+
+    pass header "Connection"
+    pass header "Upgrade"
+    pass header "Sec-WebSocket-Key"
+    pass header "Sec-WebSocket-Version"
+    pass header "Sec-WebSocket-Extensions"
+    pass header "Sec-WebSocket-Protocol"
+
+    match request header "Host" value "code.f3s.buetow.org" forward to <f3s>
+}
+
+relay "forgejo_alt4" {
+    listen on <%= $ipv4address->($hostname) %> port 2443 tls
+    protocol "forgejo-alt"
+    forward to <f3s> port 80 check tcp
+}
+
+relay "forgejo_alt6" {
+    listen on <%= $ipv6address->($hostname) %> port 2443 tls
+    protocol "forgejo-alt"
+    forward to <f3s> port 80 check tcp
 }
 
 # Forgejo git+ssh.
