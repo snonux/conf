@@ -39,10 +39,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - code.f3s.lan.buetow.org
+        - forge.f3s.lan.buetow.org
       secretName: f3s-lan-tls
   rules:
-    - host: code.f3s.lan.buetow.org
+    - host: forge.f3s.lan.buetow.org
       http:
         paths:
           - path: /
