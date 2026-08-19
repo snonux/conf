@@ -1,6 +1,6 @@
 # Forgejo web UI ingress.
 #
-# code.f3s.buetow.org must also be listed in @f3s_hosts in frontends/Rexfile --
+# forge.f3s.buetow.org must also be listed in @f3s_hosts in frontends/Rexfile --
 # that array drives the DNS zone, the relayd routing rule and the ACME cert.
 # Adding it here alone is not enough to make the name resolve or serve TLS.
 #
@@ -15,7 +15,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
-    - host: code.f3s.buetow.org
+    - host: forge.f3s.buetow.org
       http:
         paths:
           - path: /

@@ -90,9 +90,9 @@ spec:
         # Public identity. ROOT_URL must match what relayd terminates TLS for,
         # otherwise Forgejo generates clone URLs and redirects on the wrong host.
         - name: FORGEJO__server__DOMAIN
-          value: "code.f3s.buetow.org"
+          value: "forge.f3s.buetow.org"
         - name: FORGEJO__server__ROOT_URL
-          value: "https://code.f3s.buetow.org/"
+          value: "https://forge.f3s.buetow.org/"
         - name: FORGEJO__server__HTTP_PORT
           value: "3000"
 
@@ -112,7 +112,7 @@ spec:
         # SSH_PORT is what Forgejo advertises in clone URLs (2022, via relayd);
         # SSH_LISTEN_PORT above is what the container actually binds (2222).
         - name: FORGEJO__server__SSH_DOMAIN
-          value: "code.f3s.buetow.org"
+          value: "forge.f3s.buetow.org"
         - name: FORGEJO__server__SSH_PORT
           value: "2022"
 
