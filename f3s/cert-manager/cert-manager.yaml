@@ -11,6 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# LOCAL PATCH (2026-08-19): all three cert-manager containers' imagePullPolicy
+# was changed from the vendored default of Always to IfNotPresent. quay.io is
+# reachable from this cluster but marginal (IPv6-only resolution, multi-second
+# handshakes), and Always forces a live registry check on every pod (re)start
+# regardless of whether the image is already cached -- so a slow/flaky check
+# fails the pod even though every node already has the image locally. This
+# caused cert-manager-cainjector/-controller to sit in ErrImagePull/
+# CrashLoopBackOff for 9-10 days, worst right after a k3s restart when every
+# pod resyncs at once. Tags here are pinned versions (not `:latest`), so
+# IfNotPresent is safe -- re-vendoring a future cert-manager release will
+# reintroduce Always and needs this patch reapplied.
 
 apiVersion: v1
 kind: Namespace
@@ -5563,7 +5575,7 @@ spec:
       containers:
         - name: cert-manager-cainjector
           image: "quay.io/jetstack/cert-manager-cainjector:v1.14.4"
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           args:
           - --v=2
           - --leader-election-namespace=kube-system
@@ -5622,7 +5634,7 @@ spec:
       containers:
         - name: cert-manager-controller
           image: "quay.io/jetstack/cert-manager-controller:v1.14.4"
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           args:
           - --v=2
           - --cluster-resource-namespace=$(POD_NAMESPACE)
@@ -5700,7 +5712,7 @@ spec:
       containers:
         - name: cert-manager-webhook
           image: "quay.io/jetstack/cert-manager-webhook:v1.14.4"
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           args:
           - --v=2
           - --secure-port=10250
