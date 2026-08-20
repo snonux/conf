@@ -42,7 +42,12 @@ server "<%= "$hostname.$domain" %>" {
 # f3s cluster fallback page on port 8080 when cluster is down
 server "f3s.buetow.org" {
   listen on * port 8080
-  log style forwarded
+  # Logging off: relayd health-checks this vhost constantly
+  # (`forward to <localhost> port 8080 check http "/"` on every relay, v4 and
+  # v6), and each probe wrote a line. That was ~99% of access.log -- 250MB/day,
+  # 1GB in four days, which filled /var to 105% on blowfish. Nothing of value
+  # is lost: this vhost only ever serves the static "cluster is down" page.
+  no log
   location * {
     # Rewrite all requests to /index.html to show fallback page regardless of path
     request rewrite "/index.html"
@@ -54,7 +59,9 @@ server "f3s.buetow.org" {
 # Serves fallback page when k3s cluster is down
 server "*.f3s.buetow.org" {
   listen on * port 8080
-  log style forwarded
+  # Same reasoning as the f3s.buetow.org block above -- this catch-all is where
+  # the bulk of the health-check probes actually landed.
+  no log
   location * {
     # Rewrite all requests to /index.html to show fallback page regardless of path
     request rewrite "/index.html"
