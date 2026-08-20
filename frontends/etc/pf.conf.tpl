@@ -67,3 +67,31 @@ pass in on vio0 proto tcp to port 2022  label "svc_forgejo_ssh"
 pass in on vio0 proto tcp to port 2222  label "svc_dserver"
 pass in on vio0 proto tcp to port 2     label "svc_ssh_admin"
 pass in on vio0 proto udp to port 56709 label "svc_wireguard"
+
+# Backend leg, over the WireGuard mesh.
+#
+# The rules above measure the front door only (`in on vio0`), where
+# everything TLS arrives on :443 and is therefore indistinguishable --
+# Immich, foo.zone, the Pi static sites and Jellyfin all land in svc_https
+# together. The services only separate once relayd picks a backend, so
+# label that hop too: destination address and port together identify the
+# service unambiguously.
+#
+# Note both address and port are needed. Traefik on the r-nodes and
+# bozohttpd on the Pis both listen on :80, so port alone cannot tell the
+# k3s cluster apart from the Raspberry Pi static sites.
+#
+# Counters here are per state and cover both directions, so bytes_out is
+# what the backend sent back, i.e. what was ultimately served to the client.
+pass out on wg0 proto tcp to { 192.168.2.203 192.168.2.204 } port 80    label "dst_pi_static"
+pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 80    label "dst_traefik"
+pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30096 label "dst_jellyfin"
+pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30800 label "dst_anki"
+pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30001 label "dst_registry"
+pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30222 label "dst_forgejo_ssh"
+pass out on wg0 proto tcp to { 192.168.2.130 192.168.2.131 192.168.2.132 } port 3900  label "dst_garage"
+
+# Everything arriving from the mesh (f-hosts, r-nodes, Pis, roaming clients).
+# This replaces the bare `pass in on wg0` earlier in the file -- same policy,
+# but attributed instead of anonymous.
+pass in on wg0 label "wg_mesh_in"

@@ -23,22 +23,28 @@ TMP="$OUT.$$"
 
 [ -d "$OUTDIR" ] || exit 0
 
+# Counters must be SUMMED per label, not printed per rule. pf expands an
+# address list -- `to { a b c }` -- into one rule per address, all carrying
+# the same label, so a rule covering the three r-nodes emits three lines.
+# Printing them raw produces duplicate series with identical label sets,
+# which the textfile collector rejects. Summing is also the semantically
+# right answer: "bytes to Traefik" is the total across all three nodes.
+emit() {
+    metric="$1"
+    col="$2"
+    help="$3"
+    echo "# HELP $metric $help"
+    echo "# TYPE $metric counter"
+    pfctl -sl 2>/dev/null | awk -v m="$metric" -v c="$col" '
+        NF>=8 { sum[$1] += $c }
+        END   { for (l in sum) printf "%s{label=\"%s\"} %d\n", m, l, sum[l] }'
+}
+
 {
-    echo '# HELP pf_label_bytes_in_total Bytes received, per pf rule label.'
-    echo '# TYPE pf_label_bytes_in_total counter'
-    pfctl -sl 2>/dev/null | awk 'NF>=8 {printf "pf_label_bytes_in_total{label=\"%s\"} %s\n", $1, $5}'
-
-    echo '# HELP pf_label_bytes_out_total Bytes sent, per pf rule label.'
-    echo '# TYPE pf_label_bytes_out_total counter'
-    pfctl -sl 2>/dev/null | awk 'NF>=8 {printf "pf_label_bytes_out_total{label=\"%s\"} %s\n", $1, $7}'
-
-    echo '# HELP pf_label_packets_total Packets matched, per pf rule label.'
-    echo '# TYPE pf_label_packets_total counter'
-    pfctl -sl 2>/dev/null | awk 'NF>=8 {printf "pf_label_packets_total{label=\"%s\"} %s\n", $1, $3}'
-
-    echo '# HELP pf_label_states_total States created, per pf rule label.'
-    echo '# TYPE pf_label_states_total counter'
-    pfctl -sl 2>/dev/null | awk 'NF>=8 {printf "pf_label_states_total{label=\"%s\"} %s\n", $1, $8}'
+    emit pf_label_bytes_in_total  5 'Bytes received, per pf rule label.'
+    emit pf_label_bytes_out_total 7 'Bytes sent, per pf rule label.'
+    emit pf_label_packets_total   3 'Packets matched, per pf rule label.'
+    emit pf_label_states_total    8 'States created, per pf rule label.'
 } > "$TMP" 2>/dev/null
 
 mv "$TMP" "$OUT"
