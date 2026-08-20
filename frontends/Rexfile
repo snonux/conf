@@ -820,6 +820,40 @@ task 'pf',
         # Reload PF configuration
         run 'pfctl -f /etc/pf.conf';
       };
+
+    # Publish the per-service pf label counters (see the accounting block at
+    # the end of pf.conf.tpl) to Prometheus. node_exporter is already scraped
+    # on both gateways, so going through its textfile collector means no
+    # scrape-config change and no extra listener.
+    file '/var/node_exporter',
+      ensure => 'directory',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '755';
+
+    file '/usr/local/bin/pf-labels-exporter.sh',
+      source => './scripts/pf-labels-exporter.sh',
+      owner  => 'root',
+      group  => 'wheel',
+      mode   => '500';
+
+    # pfctl needs root, so this runs from root's crontab rather than as the
+    # _node_exporter user. Every minute matches the scrape interval; the
+    # script is cheap and writes atomically via rename.
+    file '/tmp/pflabels.cron',
+      ensure  => 'file',
+      content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/pf-labels-exporter.sh",
+      mode    => '600';
+
+    run '{ crontab -l -u root ; cat /tmp/pflabels.cron; } | uniq | crontab -u root -';
+    run 'rm /tmp/pflabels.cron';
+
+    # node_exporter only reads a textfile directory if told to; without this
+    # flag the .prom file above is written but never exported.
+    run 'rcctl set node_exporter flags '
+      . "--web.listen-address=\$(ifconfig wg0 | awk '/inet /{print \$2}'):9100 "
+      . '--collector.textfile.directory=/var/node_exporter';
+    run 'rcctl restart node_exporter';
   };
 
 # COMBINED TASKS SECTION
