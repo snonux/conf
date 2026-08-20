@@ -88,11 +88,24 @@
       "Args": ["<%= $host %>.wg0.wan.buetow.org", "-4"]
     },
     <% } -%>
+    <%
+    # Hosts whose web UI is deliberately blocked on :443 at the gateway, to
+    # keep crawlers off expensive git pages. Both need the TLS and HTTPS
+    # checks adjusted or they alert forever on a state we chose:
+    #   - code.f3s serves on a non-standard port instead, so check that port.
+    #   - c-git (legacy cgit, retention expired 2026-08-19) has no alternate
+    #     port at all, so it is skipped outright.
+    # See the block rules in relayd.conf.tpl.
+    our %https_port    = ( 'code.f3s.buetow.org' => 2443 );
+    our %https_blocked = ( 'c-git.f3s.buetow.org' => 1 );
+    -%>
     <% for my $host (@$acme_hosts) {
          # Skip server hostnames - they have dedicated checks above without www/standby variants
          next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
          # Skip ipv4/ipv6 subdomains - they're included as SANs in parent cert and checked there
          next if $host =~ /^(ipv4|ipv6)\./;
+         # No TLS listener on :443 for these, so a cert check there cannot pass.
+         next if $https_blocked{$host};
          my $is_ipv6_only = $host =~ /^ipv6\./;
          my $is_ipv4_only = $host =~ /^ipv4\./;
     -%>
@@ -102,7 +115,7 @@
       "Plugin": "<%= $plugin_dir %>/check_http",
       "RandomSpread": 10,
       "RunInterval": 3600,
-      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20" ],
+      "Args": ["--sni", "-H", "<%= $prefix . $host %>", "-C", "20"<% if ($https_port{$host}) { %>, "-p", "<%= $https_port{$host} %>"<% } %> ],
       "DependsOn": ["Check Ping4 <%= $depends_on %>", "Check Ping6 <%= $depends_on %>"]
     },
     <%     for my $proto (4, 6) { -%>
@@ -156,6 +169,8 @@
          # check would alert on a known-broken legacy service. Re-enable by
          # removing this skip once it serves again.
          next if $host eq 'ychat.f3s.buetow.org';
+         # Blocked on :443 by design (see %https_blocked above) -- nothing to check.
+         next if $https_blocked{$host};
          for my $proto (4, 6) {
     -%>
     "Check HTTPS IPv<%= $proto %> <%= $host %>": {
@@ -166,7 +181,7 @@
       <% if ($is_f3s{$host}) { -%>
       "OnlyIfNotExists": "/tmp/f3s_taken_down",
       <% } -%>
-      "Args": ["--sni", "-S", "-H", "<%= $host %>", "-<%= $proto %>"<% if ($https_expect{$host}) { %>, "-e", "<%= $https_expect{$host} %>"<% } %>],
+      "Args": ["--sni", "-S", "-H", "<%= $host %>", "-<%= $proto %>"<% if ($https_port{$host}) { %>, "-p", "<%= $https_port{$host} %>"<% } %><% if ($https_expect{$host}) { %>, "-e", "<%= $https_expect{$host} %>"<% } %>],
       "DependsOn": ["Check Ping<%= $proto %> master.buetow.org"]
     },
     <%   } -%>
