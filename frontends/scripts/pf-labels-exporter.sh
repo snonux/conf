@@ -40,11 +40,15 @@ emit() {
         END   { for (l in sum) printf "%s{label=\"%s\"} %d\n", m, l, sum[l] }'
 }
 
+# Column numbers are load-bearing and easy to get wrong -- the packet and
+# byte pairs interleave, so an off-by-one silently reports packet counts as
+# bytes. Verified against live output; $6 + $8 == $4 is the check that the
+# in/out byte columns are the right ones.
 {
-    emit pf_label_bytes_in_total  5 'Bytes received, per pf rule label.'
-    emit pf_label_bytes_out_total 7 'Bytes sent, per pf rule label.'
+    emit pf_label_bytes_in_total  6 'Bytes received, per pf rule label.'
+    emit pf_label_bytes_out_total 8 'Bytes sent, per pf rule label.'
     emit pf_label_packets_total   3 'Packets matched, per pf rule label.'
-    emit pf_label_states_total    8 'States created, per pf rule label.'
+    emit pf_label_states_total    9 'States created, per pf rule label.'
 } > "$TMP" 2>/dev/null
 
 mv "$TMP" "$OUT"
