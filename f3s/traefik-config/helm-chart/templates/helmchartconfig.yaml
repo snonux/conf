@@ -8,3 +8,28 @@ spec:
     additionalArguments:
       - "--entryPoints.web.forwardedHeaders.trustedIPs=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
       - "--entryPoints.websecure.forwardedHeaders.trustedIPs=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
+
+    # Expose Traefik's own Prometheus metrics and let kube-prometheus-stack
+    # scrape them. Without this there are no traefik_* series at all, so
+    # "which site is generating the ingress traffic?" can only be guessed at
+    # from backend pod counters -- cAdvisor sees bytes per pod, not per host
+    # or per route.
+    #
+    # addRoutersLabels/addServicesLabels are the point of the exercise: they
+    # add `router` and `service` labels to traefik_*_bytes_total, which is
+    # what makes a per-site breakdown possible. They do raise metric
+    # cardinality (roughly one series set per ingress route); that is fine at
+    # this cluster's ~30 routes but is the knob to turn off if the Prometheus
+    # TSDB starts to bloat.
+    #
+    # The serviceMonitor needs `release: prometheus` -- kube-prometheus-stack
+    # only picks up ServiceMonitors carrying its own release label.
+    metrics:
+      prometheus:
+        addEntryPointsLabels: true
+        addRoutersLabels: true
+        addServicesLabels: true
+        serviceMonitor:
+          enabled: true
+          additionalLabels:
+            release: prometheus
