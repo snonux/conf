@@ -121,8 +121,18 @@ just uninstall
 ### 1. Setup Self-Hosted Git Repository
 
 ArgoCD reads application manifests from the public `snonux/conf` repository on
-Forgejo. The legacy git-server copy remains available for rollback; do not remove
-or disable it while repositories are migrated individually.
+Forgejo. The legacy git-server copy that backed the Codeberg-to-Forgejo cutover
+rollback was retired 2026-08-30 (task 3x0) after its 14-day post-cutover
+retention window expired with a clean verification pass: all migrated repos
+present in Forgejo, anonymous clones and gitsyncer pushes/description updates
+working, and no live automation left pointing at the old server. Its ArgoCD
+Application, helm chart, and ArgoCD SSH known_hosts/repo-creds were removed
+from this repo in that same commit. Its NFS-backed data at
+`/data/nfs/k3svolumes/git-server` (`persistentVolumeReclaimPolicy: Retain`) and
+its final ZFS snapshot are untouched pending a separate, explicitly-confirmed
+deletion -- see that commit's message for the exact runbook. There is no
+git-server rollback path anymore; if Forgejo itself needs recovery, restore
+from ZFS/zrepl snapshots of `zdata/enc/nfsdata` instead.
 
 **Verify repository is accessible:**
 
@@ -163,67 +173,7 @@ spec:
 Because there is no app-of-apps, changes under `f3s/argocd-apps/` must be pushed
 to Forgejo and each active `Application` must also be applied explicitly.
 
-**Rollback:** keep the legacy repository current, then restore the old URL and
-refresh only the affected applications. This script discovers live Applications
-that still use Forgejo, then uses JSON Patch to change only matching `repoURL`
-fields (including multi-source Applications). It does not re-apply whole live
-objects:
-
-```bash
-set -euo pipefail
-
-forgejo=http://forgejo.services.svc.cluster.local/snonux/conf.git
-legacy=http://git-server.cicd.svc.cluster.local/conf.git
-
-app_names=$(
-  kubectl -n cicd get applications.argoproj.io -o json |
-    jq -r --arg url "$forgejo" '
-      .items[] |
-      select(.spec.source.repoURL? == $url or
-             any(.spec.sources[]?; .repoURL? == $url)) |
-      .metadata.name'
-)
-[[ -n "$app_names" ]] || {
-  echo "No live Applications use $forgejo; refusing rollback" >&2
-  exit 1
-}
-mapfile -t apps <<<"$app_names"
-
-for app in "${apps[@]}"; do
-  patch=$(
-    kubectl -n cicd get application "$app" -o json |
-      jq -ce --arg from "$forgejo" --arg to "$legacy" '
-        ([if .spec.source.repoURL? == $from then
-            {op: "test", path: "/spec/source/repoURL", value: $from},
-            {op: "replace", path: "/spec/source/repoURL", value: $to}
-          else empty end] +
-         [.spec.sources // [] | to_entries[] |
-          select(.value.repoURL? == $from) |
-          {op: "test", path: ("/spec/sources/" + (.key | tostring) + "/repoURL"), value: $from},
-          {op: "replace", path: ("/spec/sources/" + (.key | tostring) + "/repoURL"), value: $to}]) |
-        select(length > 0)'
-  )
-  kubectl -n cicd patch application "$app" --type=json -p "$patch"
-  kubectl -n cicd annotate application "$app" \
-    argocd.argoproj.io/refresh=hard --overwrite
-done
-
-remaining=$(
-  kubectl -n cicd get applications.argoproj.io -o json |
-    jq -r --arg url "$forgejo" '
-      [.items[] |
-       select(.spec.source.repoURL? == $url or
-              any(.spec.sources[]?; .repoURL? == $url)) |
-       .metadata.name] | join(" ")'
-)
-[[ -z "$remaining" ]] || {
-  echo "Rollback incomplete; Forgejo URL remains in: $remaining" >&2
-  exit 1
-}
-```
-
-See `f3s/forgejo/README.md` and `f3s/git-server/helm-chart/README.md` for the
-current and rollback repository services.
+See `f3s/forgejo/README.md` for the current repository service.
 
 ### 2. Change Admin Password
 

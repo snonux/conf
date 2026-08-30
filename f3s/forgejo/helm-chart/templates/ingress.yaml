@@ -4,7 +4,8 @@
 # that array drives the DNS zone, the relayd routing rule and the ACME cert.
 # Adding it here alone is not enough to make the name resolve or serve TLS.
 #
-# cgit stays where it is, at c-git.f3s.buetow.org; the two are unrelated.
+# The legacy cgit git-server at c-git.f3s.buetow.org was retired 2026-08-30
+# (task 3x0); this is now the only git web UI in the cluster.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

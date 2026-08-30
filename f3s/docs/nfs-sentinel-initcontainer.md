@@ -183,7 +183,6 @@ Feasible charts:
 | `apache` | Owned workload manifest. |
 | `audiobookshelf` | Owned workload manifest. |
 | `filebrowser` | Owned workload manifest. |
-| `git-server` | Owned workload manifest. |
 | `goprecords` | Owned workload manifest. |
 | `immich` | Only `helm-chart/templates/postgres.yaml` is owned here. |
 | `jellyfin` | Owned workload manifest. |

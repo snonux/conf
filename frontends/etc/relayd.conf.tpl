@@ -103,22 +103,14 @@ http protocol "https" {
     block request header "Host" value "<%= $prefix %>code.f3s.buetow.org"
     <% } -%>
 
-    # c-git.f3s.buetow.org (legacy cgit git-server) gets the same treatment.
-    # Blocking code.f3s did not stop the crawler, it just moved: once Traefik
-    # metrics were enabled, cicd-git-server-80 was taking 2.1 req/s while
-    # Forgejo took 0.0 -- the bot had walked over to the other git web UI.
-    # cgit renders equally expensive per-commit/per-file pages, so the same
-    # block applies.
-    #
-    # No alternate port for this one, unlike Forgejo: the service is a
-    # read-only rollback artifact whose retention window expired
-    # 2026-08-19, not something anyone browses. The workload, its data and
-    # the ssh clone path (NodePort 30022) are all deliberately left intact
-    # so the documented Forgejo rollback still works; only the public web UI
-    # is closed off.
-    <% for my $prefix (@prefixes) { -%>
-    block request header "Host" value "<%= $prefix %>c-git.f3s.buetow.org"
-    <% } -%>
+    # c-git.f3s.buetow.org (legacy cgit git-server) used to get the same
+    # crawler-mitigation block here. The workload was retired 2026-08-30 after
+    # its 14-day post-Forgejo-cutover retention window expired (task 3x0): the
+    # ArgoCD Application, helm chart and NodePort 30022 ssh path are gone, and
+    # the hostname was dropped from @f3s_hosts in Rexfile, so it no longer
+    # gets a TLS keypair or a routing rule at all -- there is nothing left to
+    # explicitly block. This comment is left as a pointer for anyone who finds
+    # old bookmarks/monitoring still referencing the hostname.
 
     # Explicitly route non-f3s hosts to localhost to prevent them from trying f3s backends
     <% for my $host (@$acme_hosts) {

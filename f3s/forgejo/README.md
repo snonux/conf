@@ -3,23 +3,22 @@
 Self-hosted git forge at `https://code.f3s.buetow.org`, running in the `services`
 namespace of the f3s k3s cluster.
 
-## Relationship to the cgit git-server
+## Relationship to the retired cgit git-server
 
-**These two installs are deliberately independent.** Nothing here touches
-`f3s/git-server/`:
-
-| | cgit / git-server | Forgejo |
-|---|---|---|
-| Web UI | `c-git.f3s.buetow.org` | `code.f3s.buetow.org` |
-| Namespace | `cicd` | `services` |
-| Repo storage | `/data/nfs/k3svolumes/git-server/repos` (80 bare repos) | `/data/nfs/k3svolumes/forgejo/data` (80 public `snonux` repositories preseeded) |
-| SSH NodePort | 30022 | 30222 |
+Forgejo is now the sole git forge in the cluster. It was preseeded from a
+legacy cgit/git-server install (`cicd` namespace, `c-git.f3s.buetow.org`,
+`/data/nfs/k3svolumes/git-server/repos`, SSH NodePort 30022) that served as a
+14-day read-only rollback fallback after the 2026-08-05 cutover. That fallback
+was retired 2026-08-30 (task 3x0) once the retention window passed with a
+clean re-verification: its ArgoCD Application, helm chart and ArgoCD SSH
+known_hosts/repo-creds were removed from this repo, and its hostnames were
+dropped from `@f3s_hosts` in `frontends/Rexfile`. Its NFS data directory and
+final ZFS snapshot are preserved pending a separate, explicitly-confirmed
+deletion. See `f3s/argocd/README.md` for what now stands in for a rollback
+path (ZFS/zrepl snapshots of `zdata/enc/nfsdata`, not a second git service).
 
 All 80 cgit repositories were preseeded in Forgejo on 2026-08-04. ArgoCD reads
-`conf` anonymously from
-`http://forgejo.services.svc.cluster.local/snonux/conf.git`. The cgit/git-server
-became read-only on 2026-08-05 and remains available for browsing, clones and
-rollback during the retention phase.
+`conf` anonymously from `http://forgejo.services.svc.cluster.local/snonux/conf.git`.
 
 ### Preseed migration report (2026-08-04)
 
@@ -79,20 +78,19 @@ rollback during the retention phase.
   Codeberg source. No live Application uses an old cgit URL. The read-only
   cutover commit advanced Forgejo `conf` and was observed by the Forgejo-backed
   Applications, proving reconciliation after the final backup.
-- Remaining old-service references are intentional until retirement:
-  `f3s/git-server/` defines the retained workload and rollback service;
-  `f3s/argocd/git-server-{repo-creds,known-hosts}.yaml` preserves rollback
-  credentials; `frontends/Rexfile` keeps the old DNS/TLS/monitoring names alive;
-  and existing local `r0`/`r1`/`r2` Git remotes on port 30022 are rollback-only.
-  Current gitsyncer configuration and live non-retiring ArgoCD Applications do
-  not use those endpoints.
-
-To restore writes during the retention window, revert the read-only cutover
-commit in `f3s/git-server/helm-chart/templates/deployment.yaml`, push it to the
-`git-server` Application's Codeberg source, wait for that Application to become
-Synced/Healthy, and verify a controlled push. If Forgejo itself must be rolled
-back, use the Application URL rollback in `f3s/argocd/README.md`; the retained
-cgit data and credentials are deliberately left intact for that procedure.
+- **Update 2026-08-30 (task 3x0):** the above old-service references were
+  intentional only through the end of the 14-day retention window
+  (2026-08-19T06:48:19Z). With that window long passed and a fresh
+  verification pass clean (all repos present in Forgejo, anonymous clones and
+  gitsyncer pushes/description updates working, no live automation left
+  pointing at the old server), `f3s/git-server/` and
+  `f3s/argocd/git-server-{repo-creds,known-hosts}.yaml` were removed from this
+  repo, and `c-git.f3s.buetow.org`/`git.f3s.buetow.org` were dropped from
+  `frontends/Rexfile`. The old NFS data directory and its final ZFS snapshot
+  are preserved and untouched pending a separate, explicitly-confirmed
+  deletion — see that commit's message for the exact runbook. There is no
+  longer a git-server rollback path; if Forgejo itself needs recovery, restore
+  from ZFS/zrepl snapshots of `zdata/enc/nfsdata` instead.
 
 ## Architecture
 

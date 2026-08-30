@@ -89,15 +89,17 @@
     },
     <% } -%>
     <%
-    # Hosts whose web UI is deliberately blocked on :443 at the gateway, to
-    # keep crawlers off expensive git pages. Both need the TLS and HTTPS
-    # checks adjusted or they alert forever on a state we chose:
-    #   - code.f3s serves on a non-standard port instead, so check that port.
-    #   - c-git (legacy cgit, retention expired 2026-08-19) has no alternate
-    #     port at all, so it is skipped outright.
-    # See the block rules in relayd.conf.tpl.
+    # code.f3s.buetow.org is deliberately blocked on :443 at the gateway (to
+    # keep crawlers off expensive git pages) and serves on a non-standard
+    # port instead, so route its TLS/HTTPS checks to that port. See the block
+    # rule in relayd.conf.tpl.
+    #
+    # c-git.f3s.buetow.org (legacy cgit git-server) used to need the same
+    # %https_blocked treatment; it was retired 2026-08-30 (task 3x0) and
+    # dropped from @f3s_hosts entirely, so it no longer reaches this loop at
+    # all -- nothing left to skip.
     our %https_port    = ( 'code.f3s.buetow.org' => 2443 );
-    our %https_blocked = ( 'c-git.f3s.buetow.org' => 1 );
+    our %https_blocked = ();
     -%>
     <% for my $host (@$acme_hosts) {
          # Skip server hostnames - they have dedicated checks above without www/standby variants
@@ -156,7 +158,6 @@
          'koreader.f3s.buetow.org' => 'HTTP/1.1 412',  # sync API, no root doc
          'pihole.f3s.buetow.org'   => 'HTTP/1.1 404',  # UI lives under /admin
          'anki.f3s.buetow.org'     => 'HTTP/1.1 404',  # sync API, no root doc
-         'git.f3s.buetow.org'      => 'HTTP/1.1 404',
          'grafana.f3s.buetow.org'  => 'HTTP/1.1 404',
          'pkgrepo.f3s.buetow.org'  => 'HTTP/1.1 404',  # no autoindex at root
        );

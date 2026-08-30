@@ -33,7 +33,8 @@ This setup provides secure HTTPS access to k3s services from your local network,
 - f3s cluster with k3s running on r0, r1, r2
 - FreeBSD hosts f0, f1 with CARP configured (VIP 192.168.1.138)
 - kubectl access to k3s cluster
-- Git repository synced to git-server in k3s
+- Git repository synced to Forgejo in k3s (the legacy in-cluster git-server
+  was retired 2026-08-30, task 3x0)
 
 ## Setup Steps
 
