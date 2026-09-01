@@ -31,7 +31,14 @@ prepare_standby_cert () {
 
 handle_cert () {
     host=$1
-    host_ip=`host $host | awk '/has address/ { print $(NF) }'`
+    # Wrapped in timeout(1): an unbounded lookup here left several 'host'
+    # processes stuck for hours on blowfish, wedging this script mid-run and
+    # so blocking certificate renewal for every later domain in the list.
+    host_ip=`timeout 10 host $host | awk '/has address/ { print $(NF) }'`
+    if [ -z "$host_ip" ]; then
+        echo "Lookup of $host failed or timed out, skipping..."
+        return
+    fi
 
     grep -q "^server \"$host\"" /etc/httpd.conf
     if [ $? -ne 0 ]; then

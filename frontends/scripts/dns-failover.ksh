@@ -1,8 +1,36 @@
 #!/bin/ksh
 
+# Every outbound lookup here is wrapped in timeout(1). Without it a single
+# hung DNS query wedges the whole script, and because the cron entry uses -s
+# (single instance) no later run can start either -- which is exactly what
+# happened: a 'host' call blocked in kqread on 2026-08-25 and froze this
+# host's zone for a week, leaving the two nameservers advertising different
+# masters and breaking Let's Encrypt validation fleet-wide.
+readonly LOOKUP_TIMEOUT=10
+
 ZONES_DIR=/var/nsd/zones/master/
 DEFAULT_MASTER=fishfinger.buetow.org
 DEFAULT_STANDBY=blowfish.buetow.org
+
+# Resolve one address and store it, but only if the lookup actually returned
+# something. Writing the file unconditionally is what produced the 0-byte
+# /var/nsd/run/standby_a seen on blowfish: a failed lookup emptied the file,
+# and the sed below would then substitute an empty address into the zone.
+# Keeping the previous value is always safer than publishing a broken record.
+lookup_into () {
+    local -r target_file=$1
+    local -r hostname=$2
+    local -r pattern=$3
+
+    local -r result=$(timeout $LOOKUP_TIMEOUT host "$hostname" | awk "$pattern { print \$(NF) }")
+
+    if [ -z "$result" ]; then
+        echo "Lookup of $hostname ($pattern) failed or timed out, keeping $target_file"
+        return 1
+    fi
+
+    echo "$result" >"$target_file"
+}
 
 determine_master_and_standby () {
     local master=$DEFAULT_MASTER
@@ -17,10 +45,10 @@ determine_master_and_standby () {
     fi
 
     local -i health_ok=1
-    if ! ftp -4 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
+    if ! timeout $LOOKUP_TIMEOUT ftp -4 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
         echo "https://$master/index.txt IPv4 health check failed"
         health_ok=0
-    elif ! ftp -6 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
+    elif ! timeout $LOOKUP_TIMEOUT ftp -6 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
         echo "https://$master/index.txt IPv6 health check failed"
         health_ok=0
     fi
@@ -33,10 +61,10 @@ determine_master_and_standby () {
 
     echo "Master is $master, standby is $standby"
 
-    host $master | awk '/has address/ { print $(NF) }' >/var/nsd/run/master_a
-    host $master | awk '/has IPv6 address/ { print $(NF) }' >/var/nsd/run/master_aaaa
-    host $standby | awk '/has address/ { print $(NF) }' >/var/nsd/run/standby_a
-    host $standby | awk '/has IPv6 address/ { print $(NF) }' >/var/nsd/run/standby_aaaa
+    lookup_into /var/nsd/run/master_a       "$master"  '/has address/'
+    lookup_into /var/nsd/run/master_aaaa    "$master"  '/has IPv6 address/'
+    lookup_into /var/nsd/run/standby_a      "$standby" '/has address/'
+    lookup_into /var/nsd/run/standby_aaaa   "$standby" '/has IPv6 address/'
 }
 
 transform () {
