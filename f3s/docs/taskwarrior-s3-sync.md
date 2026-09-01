@@ -6,27 +6,30 @@ enough. Written 2026-09-01.
 
 ## Verdict
 
-**Not from packages — but yes from a custom build, and that was verified to
-work.**
+**Yes — and the stock Fedora package is enough on the LAN.** A custom build is
+only needed for the off-LAN path.
 
 1. The laptop runs **task 2.6.2**, which has no cloud sync backend at all.
 2. The newest packaged version, **task 3.4.2** (Fedora 44 — and 43, 45 and
-   Rawhide), does have an AWS S3 backend, but it only speaks to *real* AWS S3.
-   The two settings needed to point it at an S3-compatible service like our
-   Garage — `sync.aws.endpoint_url` and `sync.aws.force_path_style` — landed
-   upstream on 2026-08-19, **after** the v3.5.0 tag, so they are in **no
-   release** and in **no Fedora package**.
-3. **A custom build from upstream `develop` does have them.** Built here in a
-   throwaway Fedora 44 container in ~6.5 minutes; the resulting binary runs
-   natively on the laptop. See [Custom build](#custom-build-verified-working).
-4. **A full sync round-trip against the homelab Garage was tested and works** —
-   in both directions, over both the LAN endpoint and the public relayd edge,
-   with no changes to Garage, DNS, TLS or relayd. See
+   Rawhide), has an AWS S3 backend but lacks `sync.aws.endpoint_url` and
+   `sync.aws.force_path_style`, which landed upstream on 2026-08-19, **after**
+   the v3.5.0 tag.
+3. **That turns out not to matter on the LAN.** The AWS SDK's own
+   `AWS_ENDPOINT_URL_S3` environment variable redirects stock 3.4.2 at Garage,
+   and because the endpoint is an IP literal the SDK uses path-style addressing
+   automatically. Tested: a full two-replica round-trip. **No build required.**
+4. **It does matter off-LAN.** With a hostname endpoint
+   (`garage.f3s.buetow.org`) the SDK switches to virtual-hosted addressing and
+   fails DNS. Only `sync.aws.force_path_style` fixes that — so the custom build
+   is needed for the off-LAN case, not for the LAN one.
+5. **A custom build from upstream `develop` has both settings** and works over
+   both paths — LAN and the public relayd edge — in both directions. Built in a
+   throwaway Fedora 44 container in ~6.5 minutes. See
+   [Custom build](#custom-build-verified-working) and
    [Sync round-trip against Garage](#sync-round-trip-against-garage--verified).
 
-So: S3 -> Garage works today, and is proven, but only by running an unreleased
-Taskwarrior. The trade-off — an unreleased build owning every task you have —
-is discussed under [Recommendation](#recommendation).
+So the decision is narrower than it first looked: **stock package if LAN-only
+sync is acceptable, custom build if you want it to work away from home.**
 
 ## Current state
 
@@ -111,14 +114,50 @@ path-style only:
   `*.f3s.buetow.org` does not cover `<bucket>.garage.f3s.buetow.org` — DNS
   wildcards are single-label — so vhost-style would also need a second cert.
 
+### …except it does work, via the SDK environment variable
+
+The above reasons from the config keys alone. **Tested, the stock Fedora 3.4.2
+package does sync to Garage** — the missing `sync.aws.endpoint_url` is not
+actually fatal.
+
 TaskChampion builds its S3 client with `aws_config::defaults(BehaviorVersion::latest())`,
-so the AWS Rust SDK's standard `AWS_ENDPOINT_URL` / `AWS_ENDPOINT_URL_S3`
-environment variables would probably still redirect 3.4.2 at Garage. But that
-gets you only the endpoint — the SDK defaults to virtual-hosted addressing for a
-custom endpoint, and there is no environment variable for `force_path_style`.
-That is precisely the gap the unreleased `sync.aws.force_path_style` setting
-closes. **This env-var route was not tested** and is noted only for
-completeness; it is not a supported configuration.
+which loads the AWS Rust SDK's standard configuration chain. That chain honours
+`AWS_ENDPOINT_URL_S3` (and the global `AWS_ENDPOINT_URL`), so the endpoint can
+be redirected without any Taskwarrior setting at all:
+
+```sh
+$ AWS_ENDPOINT_URL_S3=http://192.168.1.130:3900 task sync
+Syncing with AWS bucket taskwarrior
+Success!
+Sent 5 local operations to the server
+```
+
+A second stock replica then pulled the task straight back down. Both env var
+names work.
+
+**Why `force_path_style` turns out not to be needed here:** S3 endpoint
+resolution falls back to path-style addressing when the endpoint is an **IP
+literal**, because a bucket name cannot be prefixed onto an IP. Addressing
+Garage as `http://192.168.1.130:3900` therefore gets path-style for free.
+
+**The catch — this only works by IP.** With a hostname the SDK uses
+virtual-hosted addressing and the request never leaves the machine:
+
+```sh
+$ AWS_ENDPOINT_URL_S3=https://garage.f3s.buetow.org task sync
+unhandled error: dispatch failure: io error: error trying to connect:
+dns error: failed to lookup address information: Name or service not known
+```
+
+That is it trying to resolve `taskwarrior.garage.f3s.buetow.org`. So the stock
+package covers the **LAN** case only; the off-LAN path through the relayd edge
+still needs `sync.aws.force_path_style`, i.e. the custom build.
+
+**Shared config does not help.** `endpoint_url` in a `~/.aws/config` profile is
+ignored, and so is the documented `[services]` / `s3 = endpoint_url` form —
+both fall back to real AWS and fail DNS. Only the environment variable works,
+which means it has to be set by a wrapper or shell config rather than living in
+`taskrc`.
 
 Making *3.4.2* + Garage work would mean setting `root_domain` in Garage, issuing
 a second-level wildcard cert, and adding relayd rules — a lot of homelab surgery
@@ -432,12 +471,16 @@ from source.
 The honest framing is that this is a choice between *the backend you asked for*
 and *supported software*, and both are now known to work:
 
-* **If S3 -> Garage is the point**, take option 2. It is proven end to end —
-  built, configured, and synced in both directions against the real cluster over
-  both the LAN and the edge. The container build is reproducible and touches
-  nothing on the laptop, and the maintenance burden is one rebuild whenever
-  upstream moves. Package it as an RPM served from our own `f3s/pkgrepo/`, not
-  as a loose binary.
+* **If LAN-only sync is acceptable, use the stock Fedora package.** `dnf install
+  task` plus `AWS_ENDPOINT_URL_S3=http://192.168.1.130:3900` in the shell
+  environment is the whole configuration. No build, no package to maintain, no
+  unreleased code. This is the cheapest option by a wide margin and it is
+  tested.
+* **If sync must work away from home**, take option 2 (custom build). Only
+  `sync.aws.force_path_style` makes a hostname endpoint work, and that is in no
+  release. Package it as an RPM — and note that Fedora's own SRPM already
+  carries the spec, the vendored-crates tarball and a `create-vendored-tarball.sh`
+  script, so this is a version bump and rebuild rather than a hand-written spec.
 * **If "stop losing edits to Syncthing conflicts" is the point**, option 4
   (`taskchampion-sync-server` in k3s) gets there on the **packaged** 3.4.2, with
   no custom build to maintain, using upstream's prebuilt image and the same
