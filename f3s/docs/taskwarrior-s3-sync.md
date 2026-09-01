@@ -4,6 +4,64 @@ Investigation of whether Taskwarrior can replace the current Syncthing-based
 task sync with a native S3 backend, and whether the version we run is recent
 enough. Written 2026-09-01.
 
+## Decision (2026-09-01)
+
+**Stock Fedora `task` package. No custom build.** Off-LAN sync reaches Garage
+through the OpenBSD frontends and relayd, and Garage is reconfigured to serve
+virtual-hosted-style requests so the stock package can address it by hostname.
+
+| | |
+|---|---|
+| Package | Fedora's `task` (3.4.2), **not** a custom build |
+| Bucket | `taskwarrior-garage` |
+| Endpoint | `https://f3s.buetow.org` |
+| Garage | `root_domain = ".f3s.buetow.org"` |
+| Hostname on the wire | `taskwarrior-garage.f3s.buetow.org` |
+
+**The hostname is not freely chosen.** The AWS SDK derives it as
+`<bucket>.<endpoint-host>`, so the hyphen has to come from the *bucket name* —
+hence bucket `taskwarrior-garage` with `f3s.buetow.org` as the endpoint, rather
+than bucket `taskwarrior` with `garage.f3s.buetow.org` (which would produce the
+four-label `taskwarrior.garage.f3s.buetow.org`). The three-label form fits the
+existing `@f3s_hosts` pattern in `frontends/Rexfile`, which auto-generates DNS
+records, Let's Encrypt certs and relayd keypairs.
+
+Tested before committing to it:
+
+* Stock 3.4.2 + hostname endpoint + Garage with `root_domain` → full
+  two-replica round-trip.
+* Genuinely virtual-hosted, not a silent fallback: Garage logged `GET /salt`
+  and `GET /?list-type=2` with **no bucket in the path**.
+* The hyphenated shape works: bucket `taskwarrior-garage`, endpoint
+  `test.local`, `root_domain = ".test.local"` → round-trip.
+* **The bare endpoint host is never contacted.** Sync still succeeded with
+  `test.local` removed from resolution entirely, so the SDK only ever talks to
+  `<bucket>.<endpoint>`. Using `f3s.buetow.org` as the endpoint therefore has
+  zero interaction with the `f3s.buetow.org` landing page, which relayd routes
+  to `<f3s_static_proxy>`.
+* **Enabling `root_domain` is non-breaking.** Path-style access still works
+  alongside it (`GET /taskwarrior/…`, bucket in the path), so the existing
+  `watchos-app` bucket consumer is unaffected.
+
+Rejected alternatives:
+
+* **WireGuard IP routing** — would work with the stock package (an IP endpoint
+  gets path-style for free), but off-LAN traffic is to go through the frontends,
+  not direct over wg.
+* **Custom build with `sync.aws.force_path_style`** — proven working against the
+  bare `garage.f3s.buetow.org` with no DNS, cert or relayd changes at all, but
+  means maintaining a forked package for the rest of its life. Kept as the
+  fallback if the vhost route hits an obstacle.
+
+Known trade-off: with vhost-style the bucket name becomes part of the DNS name,
+so each future bucket needs its own `@f3s_hosts` entry, DNS records and cert —
+acme-client uses HTTP-01 and cannot issue wildcards. And `root_domain =
+".f3s.buetow.org"` makes Garage read *any* `Host: X.f3s.buetow.org` as bucket
+`X`; that is contained only because relayd forwards just the matched hosts to
+the `<garage>` table.
+
+Implementation steps live in task `f91`.
+
 ## Verdict
 
 **Yes — and the stock Fedora package is enough on the LAN.** A custom build is
