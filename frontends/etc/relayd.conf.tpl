@@ -136,16 +136,15 @@ http protocol "https" {
     <%         } elsif ($host eq 'anki.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_anki>
-    <%         # taskwarrior-garage is the same Garage backend reached under a
-               # second name. Taskwarrior's stock Fedora package cannot force
-               # path-style S3 addressing, so the AWS SDK addresses the bucket
-               # as <bucket>.<endpoint>; with Garage's root_domain of
-               # ".f3s.buetow.org" the bucket "taskwarrior-garage" therefore
-               # arrives here as Host: taskwarrior-garage.f3s.buetow.org.
-               # Without this rule it falls through to the default <f3s>
-               # backend (Traefik) and never reaches Garage.
+    <%         # garage.f3s.buetow.org is the S3 endpoint itself, and
+               # <bucket>.garage.f3s.buetow.org is how a client that cannot
+               # force path-style addressing asks for a single bucket -- Garage
+               # maps that name back to the bucket via its root_domain. Both
+               # go to the same backend. Bucket hosts come from @garage_hosts,
+               # which is pushed onto @f3s_hosts, so they are matched here by
+               # suffix rather than being listed one by one.
                } elsif ($host eq 'garage.f3s.buetow.org'
-                     or $host eq 'taskwarrior-garage.f3s.buetow.org') {
+                     or $host =~ /\.garage\.f3s\.buetow\.org$/) {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <garage>
     <%         }

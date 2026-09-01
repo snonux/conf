@@ -85,10 +85,29 @@ our $secrets = sub { read_file './secrets/' . shift };
 
 # k3s cluster running on FreeBSD in my LAN
 our @f3s_hosts =
-  qw/f3s.buetow.org ychat.f3s.buetow.org player.f3s.buetow.org xplayer.f3s.buetow.org pihole.f3s.buetow.org jellyfin.f3s.buetow.org navidrome.f3s.buetow.org code.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org taskwarrior-garage.f3s.buetow.org garage.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org syncthing.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org pkgrepo.f3s.buetow.org goprecords.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
+  qw/f3s.buetow.org ychat.f3s.buetow.org player.f3s.buetow.org xplayer.f3s.buetow.org pihole.f3s.buetow.org jellyfin.f3s.buetow.org navidrome.f3s.buetow.org code.f3s.buetow.org immich.f3s.buetow.org argocd.f3s.buetow.org keybr.f3s.buetow.org anki.f3s.buetow.org bag.f3s.buetow.org flux.f3s.buetow.org audiobookshelf.f3s.buetow.org garage.f3s.buetow.org grafana.f3s.buetow.org radicale.f3s.buetow.org syncthing.f3s.buetow.org koreader.f3s.buetow.org filebrowser.f3s.buetow.org webdav.f3s.buetow.org pkgrepo.f3s.buetow.org goprecords.f3s.buetow.org ipv6test.f3s.buetow.org ipv4.ipv6test.f3s.buetow.org ipv6.ipv6test.f3s.buetow.org/;
 
 # optionally, only enable manually for temp time, as no password protection yet
 # push @f3s_hosts, 'registry.f3s.buetow.org';
+
+# Garage S3 buckets reachable by hostname. A client that cannot force
+# path-style S3 addressing -- Taskwarrior's stock Fedora package among them --
+# sends bucket requests to <bucket>.garage.f3s.buetow.org, which Garage maps
+# back to the bucket through its root_domain setting.
+#
+# These are ordinary f3s hosts, just one level deeper, so they are pushed onto
+# @f3s_hosts and pick up DNS records, a TLS certificate and a relayd keypair
+# from exactly the same loops as every other f3s host. Only their relayd
+# routing differs: they forward to <garage> rather than falling through to the
+# k3s cluster. Adding a bucket therefore means adding it here and re-running
+# rex -- nothing else.
+#
+# Note there is no *.garage.f3s.buetow.org shortcut available: acme-client
+# implements only the http-01 challenge, and Let's Encrypt issues wildcard
+# certificates solely through dns-01. Per-host certificates are the mechanism.
+our @garage_buckets = qw/taskwarrior/;
+our @garage_hosts   = map { "$_.garage.f3s.buetow.org" } @garage_buckets;
+push @f3s_hosts, @garage_hosts;
 
 our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
 our @dns_zones_remove = qw//;
