@@ -143,8 +143,15 @@ option requires this migration first.
   Upstream also warns that **hooks run during `task import`** and should be
   disabled for the operation; we have `hooks=1` but no `~/.task/hooks`
   directory, so there is nothing to disable today.
-* **The migration is one-way.** Taskwarrior 3.x writes
-  `taskchampion.sqlite3`; there is no path back to the 2.x flat files.
+* **The formats are incompatible, but the migration is reversible.** 2.6.2
+  keeps flat files (`pending.data`, `completed.data`, `undo.data`,
+  `backlog.data`); 3.x keeps `taskchampion.sqlite3`. Neither reads the other's,
+  and pointing 3.x at a 2.x directory reports **0 tasks with no warning** while
+  creating its own empty database alongside — see
+  [Format compatibility](#format-compatibility-tested-both-directions) for what
+  was actually tested. JSON export/import bridges them in **both** directions,
+  so a migration can be walked back; what does not survive either way is the
+  undo history.
 * **`ask` / hexai — verified compatible.** The `ask` CLI
   (`github.com/snonux/hexai` v0.42.6) shells out to whatever `task` is first in
   `PATH` (`exec.LookPath("task")`) and parses `task export` JSON. It was run
@@ -181,6 +188,40 @@ Two things to take away:
 * `undo.data` is **not** carried over — the 2.x undo history (120 MB of it) is
   lost at the boundary. That is inherent to the format change, not a bug.
 
+
+## Format compatibility (tested, both directions)
+
+The 2.6.2 and 3.x databases are **not** compatible, and the failure mode is
+silent rather than loud.
+
+Pointing 3.5.0 at a directory holding a 2.6.2 database:
+
+```
+$ task rc:rc3 count        # data.location = a 2.6.2 data dir
+0
+$ ls
+backlog.data  completed.data  pending.data  taskchampion.sqlite3  undo.data
+```
+
+It reports **zero tasks**, prints no warning, and creates its own empty
+`taskchampion.sqlite3` beside the flat files. Anyone who installs 3.x over
+`task` without migrating will conclude their task list has been destroyed.
+
+It is, however, **non-destructive**: running 2.6.2 against the same directory
+afterwards still shows all its tasks. The two versions coexist in one directory
+as two entirely independent task lists — a footgun, not a feature.
+
+The bridge is JSON, and it works **both ways**:
+
+| Direction | Result |
+|---|---|
+| 2.6.2 → 3.4.2 | 17,868 records, counts identical (242/9,124/8,396); 15m32s |
+| 3.5.0 → 2.6.2 | tasks, **annotations** and **dependencies** all survived; completed status preserved |
+
+For the downgrade test, 3.5.0 exported `depends` as a JSON *list*; 2.6.2's
+`import` accepted it and the dependency relationship came through intact. So
+migrating to 3.x is **reversible** — the one thing that does not survive in
+either direction is the undo history, since each format keeps its own.
 
 ## Custom build (verified working)
 
