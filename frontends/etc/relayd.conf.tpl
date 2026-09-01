@@ -136,7 +136,16 @@ http protocol "https" {
     <%         } elsif ($host eq 'anki.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <f3s_anki>
-    <%         } elsif ($host eq 'garage.f3s.buetow.org') {
+    <%         # taskwarrior-garage is the same Garage backend reached under a
+               # second name. Taskwarrior's stock Fedora package cannot force
+               # path-style S3 addressing, so the AWS SDK addresses the bucket
+               # as <bucket>.<endpoint>; with Garage's root_domain of
+               # ".f3s.buetow.org" the bucket "taskwarrior-garage" therefore
+               # arrives here as Host: taskwarrior-garage.f3s.buetow.org.
+               # Without this rule it falls through to the default <f3s>
+               # backend (Traefik) and never reaches Garage.
+               } elsif ($host eq 'garage.f3s.buetow.org'
+                     or $host eq 'taskwarrior-garage.f3s.buetow.org') {
     -%>
     match request header "Host" value "<%= $prefix.$host -%>" forward to <garage>
     <%         }
