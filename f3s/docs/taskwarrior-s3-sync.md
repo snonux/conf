@@ -62,6 +62,39 @@ the `<garage>` table.
 
 Implementation steps live in task `f91`.
 
+## Migration decisions (2026-09-01)
+
+**The macOS work laptop is not affected.** It is not a Syncthing peer at all —
+the only devices in this mesh are `earth.lan.buetow.org` (the Fedora laptop),
+`f3s.lan.buetow.org` (the cluster's Syncthing), `Pixel 7 Pro` and
+`Galaxy Note 20`. The `Documents` folder that holds `~/Syncthing/Documents/Taskwarrior`
+is shared with **earth and f3s only**. So the work laptop participates purely
+through the JSON tag-routing channel in
+`dotfiles/fish/conf.d/taskwarrior.fish` (via `~/git/worktime`), which the
+migration does not touch. Nothing has to change there.
+
+The `f3s` peer does hold a replica of the folder. That stops mattering once
+`data.location` moves to `~/.local/share/task`: what stays behind in the
+Syncthing tree is a frozen set of 2.x `*.data` files, safe to archive.
+
+**vit is dropped.** `dnf remove task2` takes `vit` and `python3-tasklib` with
+it, and vit's RPM requires `task2` specifically, so it cannot be reinstalled
+from Fedora afterwards. The escape hatch that existed while a custom build was
+on the table — an RPM declaring `Provides: task2` — disappeared with the
+decision to use the stock package.
+
+`tasksamurai` is the replacement, and in practice already was: it is what the
+`ts`, `tpt`, `tsp` and `agenttasks` abbreviations run and what
+`taskwarrior.fish` calls throughout, while `~/.vit/config.ini` was last modified
+in April 2025.
+
+If vit is missed, `pipx install vit` is the recovery path — the PyPI package is
+the same 2.3.4 and carries no `task2` RPM dependency, so it can sit alongside
+`task` 3.x. Whether it *works* is unverified: it pulls `tasklib` 2.5.1, the same
+version Fedora ships, which predates Taskwarrior 3 and whose version gates only
+know about 2.4.x releases. vit 2.3.4 did at least start against a 3.5.0 database
+without crashing when tested under a pty.
+
 ## Verdict
 
 **Yes — and the stock Fedora package is enough on the LAN.** A custom build is
