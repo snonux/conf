@@ -16,6 +16,16 @@ rpc_public_addr = "192.168.1.131:3901"
 [s3_api]
 api_bind_addr = "0.0.0.0:3900"
 s3_region = "garage"
+# Enables virtual-hosted-style addressing: a request whose Host is
+# <bucket>.f3s.buetow.org is resolved to that bucket. Needed because the AWS
+# SDK derives the hostname as <bucket>.<endpoint>, and Taskwarrior's stock
+# Fedora package has no sync.aws.force_path_style to fall back on. So the
+# taskwarrior-garage bucket is reached as taskwarrior-garage.f3s.buetow.org,
+# proxied by relayd on the OpenBSD frontends.
+#
+# Path-style access is unaffected and keeps working alongside this (verified),
+# so existing consumers such as watchos-app are not impacted.
+root_domain = ".f3s.buetow.org"
 
 [admin]
 api_bind_addr = "0.0.0.0:3903"
