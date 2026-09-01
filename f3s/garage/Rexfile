@@ -20,8 +20,15 @@ group garage_nodes => qw(
   f2.lan.buetow.org
 );
 
-user 'paul';
-sudo FALSE;
+# Scope the login to this group rather than calling user()/sudo() globally.
+# The top-level Rexfile requires every sub-Rexfile, and user() is a global
+# setting, so whichever file is required last would otherwise win: f3s/r-nodes
+# sets user 'root', which is required after this file and made garage_deploy
+# connect to f0/f1/f2 as root, where root login is refused.
+auth for => 'garage_nodes' => (
+    user => 'paul',
+    sudo => FALSE,
+);
 
 parallelism 1;
 
