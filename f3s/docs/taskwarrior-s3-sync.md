@@ -28,8 +28,15 @@ only needed for the off-LAN path.
    [Custom build](#custom-build-verified-working) and
    [Sync round-trip against Garage](#sync-round-trip-against-garage--verified).
 
-So the decision is narrower than it first looked: **stock package if LAN-only
-sync is acceptable, custom build if you want it to work away from home.**
+So the decision is narrower than it first looked, and the custom build is a
+**last resort rather than the plan**. Three routes reach the same place, and two
+of them use the stock Fedora package:
+
+| Route | Cost | Stock package? |
+|---|---|---|
+| Garage `root_domain` (vhost-style) | Garage config + DNS + cert + relayd rule | ✅ tested |
+| Garage by IP over WireGuard | `AllowedIPs` + forwarding on f3 | ✅ tested (by IP) |
+| Custom build (`force_path_style`) | a forked package to rebuild forever | ❌ |
 
 ## Current state
 
@@ -149,9 +156,31 @@ unhandled error: dispatch failure: io error: error trying to connect:
 dns error: failed to lookup address information: Name or service not known
 ```
 
-That is it trying to resolve `taskwarrior.garage.f3s.buetow.org`. So the stock
-package covers the **LAN** case only; the off-LAN path through the relayd edge
-still needs `sync.aws.force_path_style`, i.e. the custom build.
+That is it trying to resolve `taskwarrior.garage.f3s.buetow.org`.
+
+**But that is a Garage configuration gap, not a Taskwarrior one.** Garage can
+serve virtual-hosted style; it just is not set up for it. With `root_domain`
+set, the stock package syncs over a **hostname** endpoint too — tested against a
+local Garage v1.0.1 with `root_domain = ".s3.test.local"`, a full two-replica
+round-trip. It was genuinely vhost-style, not a silent fallback: Garage logged
+
+```
+GET /salt?x-id=GetObject
+GET /?list-type=2&prefix=s-
+```
+
+with **no bucket in the path** — path-style would be `/taskwarrior/salt` — so the
+bucket was resolved from the Host header.
+
+So `sync.aws.force_path_style`, and the custom build that supplies it, is needed
+only if Garage cannot be reconfigured. Enabling vhost-style on the real cluster
+costs: `root_domain` in `f3s/garage/etc/garage.f0.toml` (+ f1/f2) and a
+`rex garage_deploy`; a DNS record for `taskwarrior.garage.f3s.buetow.org`; TLS
+cert coverage for that name (the `*.f3s.buetow.org` wildcard does **not** cover
+it — DNS wildcards are single-label, so prefer `*.garage.f3s.buetow.org`); and a
+relayd match rule, since `frontends/etc/relayd.conf.tpl` matches only the bare
+host today. The trade-off is that the bucket name becomes part of the DNS name,
+so each future bucket needs a record and cert coverage.
 
 **Shared config does not help.** `endpoint_url` in a `~/.aws/config` profile is
 ignored, and so is the documented `[services]` / `s3 = endpoint_url` form —
