@@ -18,11 +18,13 @@ work.**
    release** and in **no Fedora package**.
 3. **A custom build from upstream `develop` does have them.** Built here in a
    throwaway Fedora 44 container in ~6.5 minutes; the resulting binary runs
-   natively on the laptop, accepts the exact Garage-shaped configuration, and
-   reads the migrated database. See
-   [Custom build](#custom-build-verified-working).
+   natively on the laptop. See [Custom build](#custom-build-verified-working).
+4. **A full sync round-trip against the homelab Garage was tested and works** —
+   in both directions, over both the LAN endpoint and the public relayd edge,
+   with no changes to Garage, DNS, TLS or relayd. See
+   [Sync round-trip against Garage](#sync-round-trip-against-garage--verified).
 
-So: S3 -> Garage is achievable today, but only by running an unreleased
+So: S3 -> Garage works today, and is proven, but only by running an unreleased
 Taskwarrior. The trade-off — an unreleased build owning every task you have —
 is discussed under [Recommendation](#recommendation).
 
@@ -94,7 +96,7 @@ Fedora 44 offers exactly one version: `task.x86_64 3.4.2-3.fc44`. There is no
 are all on 3.4.2 as well. So neither git sync (3.5.0) nor S3-compatible
 endpoints (3.6.0) are reachable from Fedora packaging today, on any release.
 
-## Why Garage will not work with 3.4.2
+## Why Garage will not work with 3.4.2 (but does with a custom build)
 
 Even ignoring the missing `endpoint_url` key, our Garage deployment is
 path-style only:
@@ -237,10 +239,57 @@ $ task status:pending count
 242
 ```
 
-**What has not been proven:** an actual `task sync` round-trip against Garage.
-That needs a Garage bucket and an access key, which nobody has created yet. The
-configuration is accepted and the code path exists; the wire protocol against
-Garage is still untested.
+### Sync round-trip against Garage — verified
+
+This was subsequently tested for real, against the homelab Garage cluster
+(f0/f1/f2, all three nodes healthy, `cargo:2.3.0`).
+
+Setup on f0 (the `garage` CLI needs `doas`, as `/usr/local/etc/garage.toml`
+is not world-readable):
+
+```sh
+doas garage bucket create taskwarrior
+doas garage key create taskwarrior-sync
+doas garage bucket allow --read --write --owner taskwarrior --key taskwarrior-sync
+```
+
+Two throwaway replicas were then pointed at it with the custom build:
+
+| Step | Result |
+|---|---|
+| P: `task add` + `task sync` | `Success! Sent 6 local operations to the server` |
+| Q: `task sync` | pulled P's task down |
+| Q: complete P's task, add its own, `task sync` | `Success! Sent 10 local operations` |
+| P: `task sync` | saw **both** Q's new task and Q's completion |
+| Q via `https://garage.f3s.buetow.org` (relayd + TLS) | `Success!` |
+| P via `http://192.168.1.130:3900` (LAN direct) | picked up what Q pushed through the edge |
+
+So **both** access paths work and share one bucket state: LAN-direct to
+`f0:3900`, and the public edge where relayd terminates TLS and forwards to the
+`<garage>` table. The off-LAN path — the one that actually matters for a laptop
+— needs no new edge configuration; the existing `garage.f3s.buetow.org` rule is
+enough. (`GET /` on that host returns 403, which is just Garage refusing an
+unsigned anonymous request.)
+
+**Path-style was the whole ballgame**: with `sync.aws.force_path_style=true`,
+Garage as currently deployed — no `root_domain`, one relayd rule, one cert — is
+usable unchanged. No Garage, DNS, TLS or relayd work is needed.
+
+**The stored objects are opaque.** The bucket holds `latest`, `salt` and a chain
+of `v-<parent>-<child>` version objects. Fetching a version object back over the
+S3 API and grepping it finds no task text — TaskChampion encrypts client-side
+with `sync.encryption_secret`, so Garage (and anyone with bucket access) sees
+ciphertext only. Verified: the strings `hello` and `replica` from the test task
+descriptions are absent from the stored bytes.
+
+The test objects were deleted afterwards, so the bucket is **empty and ready for
+real use**. Note that the test used a throwaway `sync.encryption_secret`; a real
+deployment must pick its own, and everything in the bucket must share it.
+
+Before this was run against the homelab, the identical procedure was rehearsed
+against a **single-node Garage v1.0.1 in a local container** configured the same
+way (no `root_domain`, so path-style only). It behaved identically, which makes
+it a cheap way to test changes without touching the cluster.
 
 ### Packaging gotchas found while testing
 
@@ -283,8 +332,11 @@ task config sync.aws.access_key_id     <key>
 task config sync.aws.secret_access_key <secret>
 ```
 
-Still to do before this is real: create the Garage bucket and key, prove a
-`task sync` round-trip, and decide who rebuilds the package when upstream moves.
+The bucket, the key and the round-trip are **already done and verified** — the
+`taskwarrior` bucket and `taskwarrior-sync` key exist on the cluster and the
+bucket is empty, waiting for a real `sync.encryption_secret`. What is left is
+packaging (an RPM rather than a loose binary) and deciding who rebuilds it when
+upstream moves.
 
 ### 3. Wait for task 3.6.0, then S3 -> Garage
 
@@ -339,10 +391,12 @@ from source.
 The honest framing is that this is a choice between *the backend you asked for*
 and *supported software*, and both are now known to work:
 
-* **If S3 -> Garage is the point**, take option 2. It is proven to build and
-  configure, the container build is reproducible and touches nothing on the
-  laptop, and the maintenance burden is one rebuild whenever upstream moves.
-  Package it as an RPM served from our own `f3s/pkgrepo/`, not as a loose binary.
+* **If S3 -> Garage is the point**, take option 2. It is proven end to end —
+  built, configured, and synced in both directions against the real cluster over
+  both the LAN and the edge. The container build is reproducible and touches
+  nothing on the laptop, and the maintenance burden is one rebuild whenever
+  upstream moves. Package it as an RPM served from our own `f3s/pkgrepo/`, not
+  as a loose binary.
 * **If "stop losing edits to Syncthing conflicts" is the point**, option 4
   (`taskchampion-sync-server` in k3s) gets there on the **packaged** 3.4.2, with
   no custom build to maintain, using upstream's prebuilt image and the same
@@ -399,6 +453,10 @@ gh api "repos/GothenburgBitFactory/taskwarrior/releases" --jq '.[] | "\(.tag_nam
 # custom build, fully isolated (see the Custom build section for build.sh)
 podman run --rm -v "$PWD":/work:z -v "$PWD":/out:z fedora:44 bash /work/build.sh
 strings ./task-custom | grep -E '^sync\.' | sort -u
+
+# garage admin on f0 -- note ssh is on port 22, not the *.buetow.org default of 2,
+# and the garage CLI needs doas because garage.toml is not world-readable
+ssh -p 22 paul@f0.lan.buetow.org 'doas garage status; doas garage bucket list'
 ```
 
 The 3.x migration was rehearsed against a **copy** of the real database in a
