@@ -289,27 +289,6 @@ task 'gemtexter',
     append_if_no_such_line '/etc/daily.local', '/usr/local/bin/gemtexter.sh';
   };
 
-desc 'Configure taskwarrior reminder';
-task 'taskwarrior',
-  group => 'frontends',
-  sub {
-    pkg 'taskwarrior', ensure => present;
-
-    file '/usr/local/bin/taskwarrior.sh',
-      content => template('./scripts/taskwarrior.sh.tpl'),
-      owner   => 'root',
-      group   => 'wheel',
-      mode    => '500';
-
-    file '/etc/taskrc',
-      content => template('./etc/taskrc.tpl'),
-      owner   => 'root',
-      group   => 'wheel',
-      mode    => '600';
-
-    append_if_no_such_line '/etc/daily.local', '/usr/local/bin/taskwarrior.sh';
-  };
-
 desc 'Configure ACME client';
 task 'acme',
   group => 'frontends',
@@ -890,7 +869,6 @@ task 'commons',
     run_task 'goprecords_upload';
     run_task 'httpd';
     run_task 'gemtexter';
-    run_task 'taskwarrior';
     run_task 'acme';
     run_task 'acme_invoke';
     run_task 'inetd';
