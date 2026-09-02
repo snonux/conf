@@ -1,101 +1,110 @@
-# Taskwarrior S3 sync: feasibility on the Fedora laptop
+# Taskwarrior sync to Garage S3
 
-Investigation of whether Taskwarrior can replace the current Syncthing-based
-task sync with a native S3 backend, and whether the version we run is recent
-enough. Written 2026-09-01.
+**Status: delivered.** The Fedora laptop runs Taskwarrior 3.x and syncs to the
+homelab Garage S3 cluster. This section describes what is deployed; everything
+below it is the investigation record that got there, kept for its evidence and
+measurements.
 
-## Decision (2026-09-01)
+Delivered 2026-09-01/02.
 
-**Stock Fedora `task` package. No custom build.** Off-LAN sync reaches Garage
-through the OpenBSD frontends and relayd, and Garage is reconfigured to serve
-virtual-hosted-style requests so the stock package can address it by hostname.
+## What is deployed
 
 | | |
 |---|---|
-| Package | Fedora's `task` (3.4.2), **not** a custom build |
-| Bucket | `taskwarrior-garage` |
-| Endpoint | `https://f3s.buetow.org` |
-| Garage | `root_domain = ".f3s.buetow.org"` |
-| Hostname on the wire | `taskwarrior-garage.f3s.buetow.org` |
+| Package | Fedora's **stock** `task`, 3.4.2 — no custom build |
+| Database | `taskchampion.sqlite3` in `~/.task` |
+| Endpoint | `https://garage.f3s.buetow.org` |
+| Bucket | `taskwarrior` |
+| Wire hostname | `taskwarrior.garage.f3s.buetow.org` |
+| Garage | `root_domain = ".garage.f3s.buetow.org"` on f0/f1/f2 |
+| Credentials | `~/.config/garage/taskwarrior-sync.env` (mode 0600) |
+| Sync command | `tasksync` (fish), or `AWS_ENDPOINT_URL_S3="$GARAGE_ENDPOINT" task sync` |
 
-**The hostname is not freely chosen.** The AWS SDK derives it as
-`<bucket>.<endpoint-host>`, so the hyphen has to come from the *bucket name* —
-hence bucket `taskwarrior-garage` with `f3s.buetow.org` as the endpoint, rather
-than bucket `taskwarrior` with `garage.f3s.buetow.org` (which would produce the
-four-label `taskwarrior.garage.f3s.buetow.org`). The three-label form fits the
-existing `@f3s_hosts` pattern in `frontends/Rexfile`, which auto-generates DNS
-records, Let's Encrypt certs and relayd keypairs.
+### Why the endpoint is configured this way
 
-Tested before committing to it:
+The stock package has **no** `sync.aws.endpoint_url` and **no**
+`sync.aws.force_path_style` — both landed upstream after v3.5.0 and are in no
+release. Two consequences follow, and they are the whole design:
 
-* Stock 3.4.2 + hostname endpoint + Garage with `root_domain` → full
-  two-replica round-trip.
-* Genuinely virtual-hosted, not a silent fallback: Garage logged `GET /salt`
-  and `GET /?list-type=2` with **no bucket in the path**.
-* The hyphenated shape works: bucket `taskwarrior-garage`, endpoint
-  `test.local`, `root_domain = ".test.local"` → round-trip.
-* **The bare endpoint host is never contacted.** Sync still succeeded with
-  `test.local` removed from resolution entirely, so the SDK only ever talks to
-  `<bucket>.<endpoint>`. Using `f3s.buetow.org` as the endpoint therefore has
-  zero interaction with the `f3s.buetow.org` landing page, which relayd routes
-  to `<f3s_static_proxy>`.
-* **Enabling `root_domain` is non-breaking.** Path-style access still works
-  alongside it (`GET /taskwarrior/…`, bucket in the path), so the existing
-  `watchos-app` bucket consumer is unaffected.
+1. **The endpoint comes from the environment**, via the AWS SDK's own
+   `AWS_ENDPOINT_URL_S3`, because it cannot live in `taskrc`. It is set
+   per-invocation and never exported: a global value would redirect every
+   SDK-based S3 client on the machine at Garage, and `~/.aws` holds a live
+   `[default]` profile.
+2. **Garage was reconfigured rather than Taskwarrior patched.** Without
+   `force_path_style`, an SDK addresses a bucket as `<bucket>.<endpoint-host>`,
+   so `root_domain` on Garage makes `taskwarrior.garage.f3s.buetow.org` resolve
+   to the bucket. That name is an ordinary f3s host one level deeper: it gets
+   its own DNS records, its own Let's Encrypt certificate and its own relayd
+   keypair from the same loops as every other f3s host, and relayd routes the
+   subtree to `<garage>` by suffix. Adding a future bucket is one entry in
+   `@garage_buckets` in `frontends/Rexfile` plus a rex run.
 
-Rejected alternatives:
+Path-style still works alongside it — the existing `watchos-app` consumer was
+unaffected. An IP endpoint such as `http://192.168.1.130:3900` gets path-style
+automatically and needs none of the above, but only works on the LAN.
 
-* **WireGuard IP routing** — would work with the stock package (an IP endpoint
-  gets path-style for free), but off-LAN traffic is to go through the frontends,
-  not direct over wg.
-* **Custom build with `sync.aws.force_path_style`** — proven working against the
-  bare `garage.f3s.buetow.org` with no DNS, cert or relayd changes at all, but
-  means maintaining a forked package for the rest of its life. Kept as the
-  fallback if the vhost route hits an obstacle.
+`taskrc` holds no secrets: it expands environment variables, so it refers to
+`$GARAGE_*` and `$TASK_SYNC_SECRET`. It is managed at
+`dotfiles:taskwarrior/taskrc` and installed by the `home_taskwarrior` Rex task,
+which is **Linux-only** by design.
 
-Known trade-off: with vhost-style the bucket name becomes part of the DNS name,
-so each future bucket needs its own `@f3s_hosts` entry, DNS records and cert —
-acme-client uses HTTP-01 and cannot issue wildcards. And `root_domain =
-".f3s.buetow.org"` makes Garage read *any* `Host: X.f3s.buetow.org` as bucket
-`X`; that is contained only because relayd forwards just the matched hosts to
-the `<garage>` table.
+### The fleet
 
-Implementation steps live in task `f91`.
+| Host | State |
+|---|---|
+| Fedora laptop | Taskwarrior 3.4.2, syncs to Garage |
+| macOS work laptop | stays on 2.6.2, local file storage, no sync backend; exchanges tasks only through the JSON tag-routing channel in `~/git/worktime` |
+| rocky VM | 2.6.2 built from source (Rocky 9 packages no `task` at all); JSON channel only |
+| OpenBSD frontends | Taskwarrior retired — the reminder had been dead since Jan 2024 |
 
-## Migration decisions (2026-09-01)
+Because the laptop is currently the only 3.x replica, `task sync` is in practice
+an encrypted off-machine backup rather than device-to-device sync. It becomes
+real sync as soon as a second replica exists (the phone, or the rocky VM).
 
-**The macOS work laptop is not affected.** It is not a Syncthing peer at all —
-the only devices in this mesh are `earth.lan.buetow.org` (the Fedora laptop),
-`f3s.lan.buetow.org` (the cluster's Syncthing), `Pixel 7 Pro` and
-`Galaxy Note 20`. The `Documents` folder that holds `~/Syncthing/Documents/Taskwarrior`
-is shared with **earth and f3s only**. So the work laptop participates purely
-through the JSON tag-routing channel in
-`dotfiles/fish/conf.d/taskwarrior.fish` (via `~/git/worktime`), which the
-migration does not touch. Nothing has to change there.
+Syncthing still replicates `~/.task`, including `taskchampion.sqlite3`, by
+explicit choice. The trade-off is recorded under *Cost of the 2.6.2 -> 3.x
+upgrade* below: SQLite runs in WAL mode, so a mid-write capture can be
+inconsistent and a conflict copy of a binary database cannot be merged. The
+frozen 2.x flat files were moved to `~/.task/v2-archive/` because 3.x otherwise
+prints a migration warning on every command.
 
-The `f3s` peer does hold a replica of the folder. That stops mattering once
-`data.location` moves to `~/.local/share/task`: what stays behind in the
-Syncthing tree is a frozen set of 2.x `*.data` files, safe to archive.
+### Migration facts worth keeping
 
-**vit is dropped.** `dnf remove task2` takes `vit` and `python3-tasklib` with
-it, and vit's RPM requires `task2` specifically, so it cannot be reinstalled
-from Fedora afterwards. The escape hatch that existed while a custom build was
-on the table — an RPM declaring `Provides: task2` — disappeared with the
-decision to use the stock package.
+- **It is reversible.** JSON export/import bridges 2.6.2 and 3.x in *both*
+  directions; annotations, dependencies and completed status all survive. Only
+  the undo history is lost either way.
+- **The import is slow**: 17m15s for 17,885 records.
+- **Verified by round-trip**: the whole database was pulled back out of Garage
+  into an empty replica in 9s, matching on all four status counts and on 15,726
+  tasks carrying the `track` UDA, 3,683 annotations and 1,027 dependencies.
+- Backups: `~/taskwarrior-2.6.2-backup-*.tar.gz` and
+  `~/taskwarrior-migrate-*.json`, sha256 recorded in task `591`.
 
-`tasksamurai` is the replacement, and in practice already was: it is what the
-`ts`, `tpt`, `tsp` and `agenttasks` abbreviations run and what
-`taskwarrior.fish` calls throughout, while `~/.vit/config.ini` was last modified
-in April 2025.
+### Phone
 
-If vit is missed, `pipx install vit` is the recovery path — the PyPI package is
-the same 2.3.4 and carries no `task2` RPM dependency, so it can sit alongside
-`task` 3.x. Whether it *works* is unverified: it pulls `tasklib` 2.5.1, the same
-version Fedora ships, which predates Taskwarrior 3 and whose version gates only
-know about 2.4.x releases. vit 2.3.4 did at least start against a 3.5.0 database
-without crashing when tested under a pty.
+`~/Notes/TaskwarriorPhoneSync.md` has the settings to paste into a phone client,
+including the point that trips people up: the encryption secret is not an S3
+setting, and a wrong value makes sync appear to succeed while showing nothing.
 
-## Verdict
+## See also
+
+- `f3s-workloads` skill → `references/garage.md` — Garage operations, addressing
+  modes, adding a bucket hostname
+- `dotfiles:fish/conf.d/tasksync.fish`, `dotfiles:taskwarrior/taskrc`
+- `https://code.f3s.buetow.org/snonux/temp-taskwarrior` — the custom build and
+  its test harness, kept as a fallback should the vhost route ever need
+  replacing with `force_path_style`
+
+---
+
+# Investigation record
+
+Everything below documents how the above was arrived at, including two
+conclusions that were later overturned by testing. It is kept for the evidence
+and the measured numbers, not as current guidance.
+
+## Verdict (as it stood mid-investigation; superseded by the delivered state above)
 
 **Yes — and the stock Fedora package is enough on the LAN.** A custom build is
 only needed for the off-LAN path.
@@ -197,7 +206,7 @@ Fedora 44 offers exactly one version: `task.x86_64 3.4.2-3.fc44`. There is no
 are all on 3.4.2 as well. So neither git sync (3.5.0) nor S3-compatible
 endpoints (3.6.0) are reachable from Fedora packaging today, on any release.
 
-## Why Garage will not work with 3.4.2 (but does with a custom build)
+## Why Garage looked incompatible with 3.4.2 (superseded)
 
 Even ignoring the missing `endpoint_url` key, our Garage deployment is
 path-style only:
