@@ -7,6 +7,10 @@
 # host's zone for a week, leaving the two nameservers advertising different
 # masters and breaking Let's Encrypt validation fleet-wide.
 readonly LOOKUP_TIMEOUT=10
+# Brief HTTPS blips (especially IPv6 to fishfinger) used to flip DNS on a
+# single failed ftp(1). Require this many consecutive failures before the
+# master is considered down.
+readonly HEALTH_TRIES=3
 
 ZONES_DIR=/var/nsd/zones/master/
 DEFAULT_MASTER=fishfinger.buetow.org
@@ -32,6 +36,32 @@ lookup_into () {
     echo "$result" >"$target_file"
 }
 
+# One IP-family HTTPS probe. proto is 4 or 6 (passed to ftp -4/-6).
+health_check_once () {
+    local -r proto=$1
+    local -r master=$2
+
+    timeout $LOOKUP_TIMEOUT ftp -$proto -o - "https://$master/index.txt" \
+        | grep -q "Welcome to $master"
+}
+
+# Retry a single family so a one-shot TLS/EOF blip does not trigger failover.
+health_check_family () {
+    local -r proto=$1
+    local -r master=$2
+    local -i attempt=1
+
+    while [ $attempt -le $HEALTH_TRIES ]; do
+        if health_check_once "$proto" "$master"; then
+            return 0
+        fi
+        echo "https://$master/index.txt IPv$proto health check failed (try $attempt/$HEALTH_TRIES)"
+        attempt=$((attempt + 1))
+    done
+
+    return 1
+}
+
 determine_master_and_standby () {
     local master=$DEFAULT_MASTER
     local standby=$DEFAULT_STANDBY
@@ -45,11 +75,9 @@ determine_master_and_standby () {
     fi
 
     local -i health_ok=1
-    if ! timeout $LOOKUP_TIMEOUT ftp -4 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
-        echo "https://$master/index.txt IPv4 health check failed"
+    if ! health_check_family 4 "$master"; then
         health_ok=0
-    elif ! timeout $LOOKUP_TIMEOUT ftp -6 -o - https://$master/index.txt | grep -q "Welcome to $master"; then
-        echo "https://$master/index.txt IPv6 health check failed"
+    elif ! health_check_family 6 "$master"; then
         health_ok=0
     fi
 
