@@ -63,7 +63,7 @@ Buckets by filename prefix / known creator (exact counts):
 | YouTube / other untitled | 45 | 39.9 GiB | Numbered `N Min…` titles, fragments, orphan m4a, plus a few untitled creator flows |
 | Breathe and Flow | 3 | 2.2 GiB | 4K |
 | Boho Beautiful | 1 | 1.8 GiB | 4K |
-| Kassandra / Man Flow / Fightmaster / Travis Eliot | 4 | 1.5 GiB | Mixed |
+| Kassandra / Man Flow / Fightmaster / Travis Eliot | 4 | 1.6 GiB | Mixed |
 
 One extra file mentions Charlie Follows in the title but does not start with that prefix: `MANDALA … with Charlie Follows [H8RPcn9rW7E].m4a` (counted under YouTube / other untitled; listed in Tier A2).
 
@@ -73,10 +73,10 @@ Median video bitrate from `size / duration`:
 
 | Resolution | Median | P90 | Max |
 |------------|-------:|----:|----:|
-| 4K | 6.7 Mbps | 14.9 Mbps | 17.9 Mbps |
+| 4K | 6.6 Mbps | 14.9 Mbps | 17.9 Mbps |
 | 1080p / 720p / 480p | ~3.7 Mbps | ~3.7 Mbps | ~3.7 Mbps |
 
-Gaia encodes are consistently ~3.7 Mbps (fine for 1080p; the 480p files are long, not high-bitrate). Several Charlie Follows 4K files sit at **14–18 Mbps** and 4–6+ GiB each — keepable for quality, but the main “space hog” class if storage gets tight.
+Most Gaia files sit near ~3.7 Mbps; a minority (~17 files) are lower (~1.4–2.5 Mbps). The 480p Gaia files are long, not high-bitrate. Several Charlie Follows 4K files sit at **14–18 Mbps** and 4–6+ GiB each — keepable for quality, but the main “space hog” class if storage gets tight.
 
 ## Age vs quality
 
@@ -112,7 +112,8 @@ These are not useful as Jellyfin video entries, but deleting them **drops the on
 |-----:|------|------|
 | 0.62 GiB | incomplete `.part`; only file for id `LkqKz9xf35A` | `…[LkqKz9xf35A].f401.mp4.part` |
 | 0.02 GiB | labeled `[audio only]` | `Charlie Follows — 30 Min Daily Yoga Flow … [audio only] …` |
-| 0.01 GiB each | orphan `.m4a`, no video for that id | `[I8tlg3xd1lo]`, `[a8vyQDUjc6w]`, `[ZFbEt_TzeNI]`, `[NTqVG9Kt070]`, `[F2zJ6y3ZDzY]`, `[H8RPcn9rW7E].m4a` |
+| 0.01 GiB each | orphan `.m4a`, no video for that id | `[I8tlg3xd1lo]`, `[a8vyQDUjc6w]`, `[ZFbEt_TzeNI]`, `[NTqVG9Kt070]`, `[F2zJ6y3ZDzY].m4a` |
+| 0.02 GiB | orphan `.m4a`, no video for that id | `MANDALA … with Charlie Follows [H8RPcn9rW7E].m4a` |
 | 0.01 GiB | orphan `.m4a` id `QzVhDYWWx4s`; a **different** id (`WmpYhGn8o2k`) has a 4K `.webm` with the same title text — not a proven substitute | `…[QzVhDYWWx4s].m4a` |
 
 **A2 total ≈ 0.7 GiB.** Treat as cleanup after deciding whether to re-fetch those workouts.
