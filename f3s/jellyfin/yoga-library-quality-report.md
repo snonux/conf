@@ -90,7 +90,7 @@ mtime is download time, not publish date:
 
 ## Recommendations
 
-### Tier A — safe deletes (finished sibling exists) ≈ 9.4 GiB
+### Tier A — safe deletes (finished sibling exists) ≈ 9.8 GiB
 
 Only files where a finished playable copy of the **same YouTube id / same title+duration** remains:
 
@@ -101,8 +101,9 @@ Only files where a finished playable copy of the **same YouTube id / same title+
 | 0.02 GiB | audio-only fragment of same id | `…[HbQfzWDZ2M4].f251.webm` |
 | 0.01 GiB | audio stub; video sibling `.webm` exists | `…[6Oz0tyMQNbM].m4a` |
 | 6.31 GiB | worse encode of exact duplicate (same title, ~3622s, 4K) | `Charlie Follows — 60 Min Yoga Flow Full Body Yoga for All Levels (1h00m22s, 4K).mp4` (VP9) — **keep** the AV1 `.webm` at 3.33 GiB |
+| 0.40 GiB | identical encode under two names (same size `429849367`, duration `1839.068s`, AV1) | delete either `[asPVznpZOh8].webm` **or** `Charlie Follows — 30 Min Intermediate Yoga Flow Full Body Yoga Routine (30m39s, 4K).webm` — keep one |
 
-**Reclaim if Tier A applied: ≈ 9.4 GiB.**
+**Reclaim if Tier A applied: ≈ 9.8 GiB.**
 
 ### Tier A2 — incomplete / audio-only with **no** video sibling (optional, content loss)
 
@@ -173,4 +174,4 @@ Avoid “delete all 4K to save space” unless storage is critical — that free
 
 ## Verdict
 
-You should **not** wipe the library for being “old and low-res.” ~95% of bytes are already 1080p or 4K. Clear safe cleanup is **Tier A (~9.4 GiB)** — confirmed fragments/temp plus one worse 4K duplicate. Separately consider **orphan audio / incomplete downloads (~0.7 GiB)** and optionally **Gaia ≤720p (~21.4 GiB)** if you only want HD+.
+You should **not** wipe the library for being “old and low-res.” ~95% of bytes are already 1080p or 4K. Clear safe cleanup is **Tier A (~9.8 GiB)** — confirmed fragments/temp, one worse 4K duplicate encode, and one identical rename pair. Separately consider **orphan audio / incomplete downloads (~0.7 GiB)** and optionally **Gaia ≤720p (~21.4 GiB)** if you only want HD+.
