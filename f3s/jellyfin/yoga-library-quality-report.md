@@ -7,9 +7,11 @@ No files were deleted; this is investigation + recommendation only.
 ## Method
 
 1. Listed every file under the yoga library (`find`, `du`, extension counts).
-2. Ran `ffprobe` stream probe on each file for codec / width / height / pix_fmt (written to `/tmp/yoga-probe.csv` on `f0`; note: stream CSV field order from ffprobe is `codec|width|height|…`, not the header’s `width|height|codec` — analysis accounted for that).
-3. Ran a second `ffprobe` format probe for `duration` + `bit_rate` (`/tmp/yoga-duration.csv`; 480 of 489 paths — the 9 audio-only / odd files were handled separately).
-4. Bitrate medians use `8 * size / duration` when duration is available.
+2. Ran `ffprobe` stream probe on each file for codec / width / height / pix_fmt (`/tmp/yoga-probe.csv` on `f0`).
+   - Video rows: ffprobe CSV field order is `codec|width|height|…`, not the file header’s `width|height|codec`.
+   - Audio-only / no-video rows: those columns instead hold format `duration|bitrate|audio_codec` (e.g. m4a `1850.35|48693|aac`) — do not apply the video field swap blindly.
+3. Ran a second `ffprobe` format probe for `duration` + `bit_rate` (`/tmp/yoga-duration.csv`): **480 paths** listed; **9 absent** (8×`.m4a` + 1×`.part`); **1 listed path** (`…[HbQfzWDZ2M4].temp.webm`) has `duration=N/A` → **479 usable** durations for bitrate math.
+4. Bitrate medians use `8 * size / duration` when a usable duration is available.
 
 ## Summary
 
@@ -31,7 +33,7 @@ The library is dominated by **Gaia at 1080p** (~277 GiB) plus a smaller **Charli
 | ≤480p | 22 | 19.8 GiB | 4.6% |
 | No video (audio/junk) | 10 | 0.1 GiB | ~0% |
 
-Of the 68 “4K” rows, **3 are junk/incomplete** that still probe as 2160p (~3.7 GiB total): `[HbQfzWDZ2M4].f401.mp4`, `[HbQfzWDZ2M4].temp.webm`, and `[LkqKz9xf35A].f401.mp4.part`. Finished unique 4K is closer to **65 files / ~128.6 GiB**.
+Of the 68 “4K” rows, **3 are junk/incomplete** that still probe as 2160p (~3.7 GiB total): `[HbQfzWDZ2M4].f401.mp4`, `[HbQfzWDZ2M4].temp.webm`, and `[LkqKz9xf35A].f401.mp4.part`. After also dropping the worse VP9 duplicate of the same Charlie Follows 60‑min title, finished unique 4K is **64 files / ~122.3 GiB**.
 
 ## Codec / container
 
@@ -52,12 +54,18 @@ Of the 68 “4K” rows, **3 are junk/incomplete** that still probe as 2160p (~3
 
 ## By collection
 
+Buckets by filename prefix / known creator (exact counts):
+
 | Collection | Files | Size | Notes |
 |------------|------:|-----:|-------|
 | Gaia | 398 | 297.7 GiB | 373×1080p, 3×720p, 22×≤480p — **all sub-HD video is Gaia** |
-| Charlie Follows (named) | 39 | 91.5 GiB | Mostly 4K; some very high bitrate encodes |
-| YouTube-raw (`N Min … [id]`) | 40 | 37.0 GiB | Mostly Charlie-style AV1/WebM 4K + leftover m4a/fragments |
-| Other (Boho, Breathe and Flow, Kassandra, …) | 12 | ~8 GiB | Mostly 4K |
+| Charlie Follows (`startswith`) | 38 | 91.5 GiB | Mostly 4K; some very high bitrate encodes |
+| YouTube / other untitled | 45 | 39.9 GiB | Numbered `N Min…` titles, fragments, orphan m4a, plus a few untitled creator flows |
+| Breathe and Flow | 3 | 2.2 GiB | 4K |
+| Boho Beautiful | 1 | 1.8 GiB | 4K |
+| Kassandra / Man Flow / Fightmaster / Travis Eliot | 4 | 1.5 GiB | Mixed |
+
+One extra file mentions Charlie Follows in the title but does not start with that prefix: `MANDALA … with Charlie Follows [H8RPcn9rW7E].m4a` (counted under YouTube / other untitled; listed in Tier A2).
 
 ## Bitrate (encode efficiency)
 
@@ -152,7 +160,7 @@ All **25 Gaia files below 1080p**. None have a 1080p counterpart in this folder.
 | Charlie Follows / YouTube 4K (finished files) | Best visual quality |
 | Other 4K creators | Small footprint |
 
-Avoid “delete all 4K to save space” unless storage is critical — that frees ~128+ GiB of finished 4K but throws away the best-looking workouts. Prefer re-encoding obese VP9/high-bitrate 4K to AV1 later if you need space without losing resolution.
+Avoid “delete all 4K to save space” unless storage is critical — that frees ~122 GiB of finished unique 4K but throws away the best-looking workouts. Prefer re-encoding obese VP9/high-bitrate 4K to AV1 later if you need space without losing resolution.
 
 ### Suggested policy going forward
 
