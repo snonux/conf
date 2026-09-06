@@ -21,7 +21,7 @@ No files were deleted; this is investigation + recommendation only.
 | Total size | **434.6 GiB** |
 | Layout | Flat directory (no subfolders) |
 
-The library is dominated by **Gaia at 1080p** (~277 GiB) plus a smaller **Charlie Follows / YouTube 4K** set. True “old low-res” content is a **Gaia 480p/720p** pocket (~21 GiB) with **no HD remux** of those titles. Most space is already decent quality; the easy wins are confirmed junk leftovers, one worse 4K duplicate encode, and an optional cull of sub-1080p Gaia.
+The library is dominated by **Gaia at 1080p** (~276 GiB) plus a smaller **Charlie Follows / YouTube 4K** set. True “old low-res” content is a **Gaia 480p/720p** pocket (~21 GiB) with **no HD remux** of those titles. Most space is already decent quality; the easy wins are confirmed junk leftovers, one worse 4K duplicate encode, and an optional cull of sub-1080p Gaia.
 
 ## Resolution breakdown
 
@@ -33,7 +33,7 @@ The library is dominated by **Gaia at 1080p** (~277 GiB) plus a smaller **Charli
 | ≤480p | 22 | 19.8 GiB | 4.6% |
 | No video (audio/junk) | 10 | 0.1 GiB | ~0% |
 
-Of the 68 “4K” rows, **3 are junk/incomplete** that still probe as 2160p (~3.7 GiB total): `[HbQfzWDZ2M4].f401.mp4`, `[HbQfzWDZ2M4].temp.webm`, and `[LkqKz9xf35A].f401.mp4.part`. After also dropping the worse VP9 duplicate of the same Charlie Follows 60‑min title, finished unique 4K is **64 files / ~122.3 GiB**.
+Of the 68 “4K” rows, **3 are junk/incomplete** that still probe as 2160p (~3.7 GiB total): `[HbQfzWDZ2M4].f401.mp4`, `[HbQfzWDZ2M4].temp.webm`, and `[LkqKz9xf35A].f401.mp4.part`. After also dropping the worse VP9 duplicate of the same Charlie Follows 60‑min title, **64 finished 4K files / ~122.3 GiB** remain — but two of those are the same encode under different names (`[asPVznpZOh8].webm` and `Charlie Follows — 30 Min Intermediate Yoga Flow Full Body Yoga Routine (30m39s, 4K).webm`, identical size + duration). Content-unique finished 4K is therefore **63 files / ~121.9 GiB**.
 
 ## Codec / container
 
@@ -82,11 +82,11 @@ Most Gaia files sit near ~3.7 Mbps; a minority (~17 files) are lower (~1.4–2.5
 
 mtime is download time, not publish date:
 
-- **2024–early 2025:** mix of 1080p Gaia and early 4K Charlie Follows
-- **2025-05 / 2025-06:** bulk Gaia import (hundreds of 1080p + the 480p/720p set)
+- **2024–early 2025:** mix of 1080p Gaia and early 4K Charlie Follows (includes one 480p Gaia: `Core Strengthening`, mtime 2025-02-23)
+- **2025-05 / 2025-06:** bulk Gaia import (hundreds of 1080p + the rest of the 480p/720p set)
 - **2025-10 → 2026-09:** continued 4K Charlie / YouTube AV1 downloads
 
-“Older” does **not** mean low-res across the board. Low-res is almost entirely the Gaia ≤720p set from the May/June 2025 Gaia import.
+“Older” does **not** mean low-res across the board. Low-res is almost entirely Gaia ≤720p from the May/June 2025 Gaia import (plus that one February 480p file).
 
 ## Recommendations
 
@@ -161,7 +161,7 @@ All **25 Gaia files below 1080p**. None have a 1080p counterpart in this folder.
 | Charlie Follows / YouTube 4K (finished files) | Best visual quality |
 | Other 4K creators | Small footprint |
 
-Avoid “delete all 4K to save space” unless storage is critical — that frees ~122 GiB of finished unique 4K but throws away the best-looking workouts. Prefer re-encoding obese VP9/high-bitrate 4K to AV1 later if you need space without losing resolution.
+Avoid “delete all 4K to save space” unless storage is critical — that frees ~122 GiB of finished 4K (or ~121.9 GiB of distinct encodes after collapsing the identical `[asPVznpZOh8]` rename pair) but throws away the best-looking workouts. Prefer re-encoding obese VP9/high-bitrate 4K to AV1 later if you need space without losing resolution.
 
 ### Suggested policy going forward
 
