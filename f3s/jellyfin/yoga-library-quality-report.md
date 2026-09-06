@@ -174,4 +174,6 @@ Avoid “delete all 4K to save space” unless storage is critical — that free
 
 ## Verdict
 
-You should **not** wipe the library for being “old and low-res.” ~95% of bytes are already 1080p or 4K. Clear safe cleanup is **Tier A (~9.8 GiB)** — confirmed fragments/temp, one worse 4K duplicate encode, and one identical rename pair. Separately consider **orphan audio / incomplete downloads (~0.7 GiB)** and optionally **Gaia ≤720p (~21.4 GiB)** if you only want HD+.
+**Policy (applied 2026-09-06):** keep **1080p minimum**. Deleted **35 files / 21.58 GiB** (all Gaia ≤720p plus audio-only / no-video stubs). Library now **454 files / ~413 GiB**, all with a video stream at ≥1080p.
+
+Still optional later (not done here): Tier A finished-sibling junk that is itself 4K — e.g. `[HbQfzWDZ2M4].f401.mp4` / `.temp.webm`, the VP9 60‑min duplicate, and the identical `[asPVznpZOh8]` rename pair (~9.8 GiB).
