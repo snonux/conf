@@ -17,20 +17,6 @@ ZONES_DIR=/var/nsd/zones/master/
 DEFAULT_MASTER=fishfinger.buetow.org
 DEFAULT_STANDBY=blowfish.buetow.org
 
-# Map public FQDN -> WireGuard /etc/hosts alias. Health checks use plain HTTP
-# to httpd:8080 over wg0 on purpose: public https:// through relayd flakes when
-# the CA/privsep path hits "privenc poll timeout" under scanner/TLS load
-# (ftp then reports "Receiving HTTP reply: Undefined error: 0"), which caused
-# false DNS failovers. Gogios still watches public TLS; this script only needs
-# "is the master VM up and serving".
-wg_host () {
-    case $1 in
-        fishfinger.buetow.org) echo fishfinger.wg0 ;;
-        blowfish.buetow.org)   echo blowfish.wg0 ;;
-        *)                     echo '' ;;
-    esac
-}
-
 # Resolve one address and store it, but only if the lookup actually returned
 # something. Writing the file unconditionally is what produced the 0-byte
 # /var/nsd/run/standby_a seen on blowfish: a failed lookup emptied the file,
@@ -66,30 +52,28 @@ publish_role () {
     echo "$role" >"$target_file"
 }
 
-# One IP-family probe over WireGuard to local httpd (proto is 4 or 6).
+# One IP-family HTTPS probe (proto is 4 or 6, passed to ftp -4/-6).
+# Public HTTPS is fine again now that only the DNS standby runs gogios plugin
+# checks, so relayd/CA is under less concurrent TLS load.
 health_check_once () {
     local -r proto=$1
     local -r master=$2
-    local -r wg=$(wg_host "$master")
 
-    [ -n "$wg" ] || return 1
-
-    timeout $LOOKUP_TIMEOUT ftp -$proto -o - "http://$wg:8080/index.txt" \
+    timeout $LOOKUP_TIMEOUT ftp -$proto -o - "https://$master/index.txt" \
         | grep -q "Welcome to $master"
 }
 
-# Retry a single family so a one-shot blip does not trigger failover.
+# Retry a single family so a one-shot TLS/EOF blip does not trigger failover.
 health_check_family () {
     local -r proto=$1
     local -r master=$2
-    local -r wg=$(wg_host "$master")
     local -i attempt=1
 
     while [ $attempt -le $HEALTH_TRIES ]; do
         if health_check_once "$proto" "$master"; then
             return 0
         fi
-        echo "http://$wg:8080/index.txt IPv$proto health check failed (try $attempt/$HEALTH_TRIES)"
+        echo "https://$master/index.txt IPv$proto health check failed (try $attempt/$HEALTH_TRIES)"
         if [ $attempt -lt $HEALTH_TRIES ]; then
             sleep $HEALTH_RETRY_SLEEP
         fi
