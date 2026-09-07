@@ -9,8 +9,9 @@
 readonly LOOKUP_TIMEOUT=10
 # Brief HTTPS blips (especially IPv6 to fishfinger) used to flip DNS on a
 # single failed ftp(1). Require this many consecutive failures before the
-# master is considered down.
+# master is considered down, with a short pause between attempts.
 readonly HEALTH_TRIES=3
+readonly HEALTH_RETRY_SLEEP=2
 
 ZONES_DIR=/var/nsd/zones/master/
 DEFAULT_MASTER=fishfinger.buetow.org
@@ -26,7 +27,9 @@ lookup_into () {
     local -r hostname=$2
     local -r pattern=$3
 
-    local -r result=$(timeout $LOOKUP_TIMEOUT host "$hostname" | awk "$pattern { print \$(NF) }")
+    # First address only: a multi-line value breaks the sed script in transform().
+    local -r result=$(timeout $LOOKUP_TIMEOUT host "$hostname" \
+        | awk "$pattern { print \$(NF); exit }")
 
     if [ -z "$result" ]; then
         echo "Lookup of $hostname ($pattern) failed or timed out, keeping $target_file"
@@ -56,6 +59,9 @@ health_check_family () {
             return 0
         fi
         echo "https://$master/index.txt IPv$proto health check failed (try $attempt/$HEALTH_TRIES)"
+        if [ $attempt -lt $HEALTH_TRIES ]; then
+            sleep $HEALTH_RETRY_SLEEP
+        fi
         attempt=$((attempt + 1))
     done
 
@@ -128,27 +134,40 @@ zone_is_ok () {
 failover_zone () {
     local -r zone_file=$1
     local -r zone=$(basename $zone_file)
+    # $$ so overlapping runs (e.g. duplicate cron lines) do not steal each
+    # other's temps; rm below only clears this run's files.
+    local -r new_tmp=$zone_file.new.$$.tmp
+    local -r new_noserial_tmp=$zone_file.new.noserial.$$.tmp
+    local -r old_noserial_tmp=$zone_file.old.noserial.$$.tmp
 
     # Race condition (e.g. script execution abored in the middle previous run)
     if [ -f $zone_file.bak ]; then
         mv $zone_file.bak $zone_file
     fi
 
-    cat $zone_file | transform > $zone_file.new.tmp 
+    cat $zone_file | transform >"$new_tmp"
 
-    grep -v ' ; serial' $zone_file.new.tmp > $zone_file.new.noserial.tmp
-    grep -v ' ; serial' $zone_file > $zone_file.old.noserial.tmp
+    # A missing/empty transform used to look like "delete the whole zone" and
+    # trigger a bogus failover mail every minute when two cron instances raced.
+    if [ ! -s "$new_tmp" ]; then
+        echo "Transform of $zone_file produced no output, skipping"
+        rm -f "$new_tmp"
+        return 2
+    fi
+
+    grep -v ' ; serial' "$new_tmp" >"$new_noserial_tmp"
+    grep -v ' ; serial' $zone_file >"$old_noserial_tmp"
 
     echo "Has zone $zone_file changed?"
-    if diff -u $zone_file.old.noserial.tmp $zone_file.new.noserial.tmp; then
+    if diff -u "$old_noserial_tmp" "$new_noserial_tmp"; then
         echo "The zone $zone_file hasn't changed"
-        rm $zone_file.*.tmp
+        rm -f "$new_tmp" "$new_noserial_tmp" "$old_noserial_tmp"
         return 0
     fi
 
     cp $zone_file $zone_file.bak
-    mv $zone_file.new.tmp $zone_file
-    rm $zone_file.*.tmp
+    mv "$new_tmp" $zone_file
+    rm -f "$new_noserial_tmp" "$old_noserial_tmp"
     echo "Reloading nsd"
     nsd-control reload
 
@@ -172,7 +191,19 @@ failover_zone () {
     return 1
 }
 
+# OpenBSD cron -s is per crontab *line*. Duplicate lines (uniq only collapses
+# adjacent copies) therefore run in parallel and race on zone temps. Refuse a
+# second instance even if cron did not.
+acquire_lock () {
+    if ! mkdir /var/run/dns-failover.lock 2>/dev/null; then
+        echo "Another dns-failover.ksh is already running, exiting"
+        exit 0
+    fi
+    trap 'rmdir /var/run/dns-failover.lock' EXIT INT TERM HUP
+}
+
 main () {
+    acquire_lock
     determine_master_and_standby
 
     local -i ec=0

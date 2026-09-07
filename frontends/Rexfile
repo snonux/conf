@@ -266,8 +266,10 @@ task 'rsync',
       content => "*/5\t*\t*\t*\t*\t-ns /usr/local/bin/rsync.sh",
       mode    => '600';
 
-    run '{ crontab -l -u root ; cat /tmp/rsync.cron; } | uniq | crontab -u root -';
-    run 'rm /tmp/rsync.cron';
+    run 'crontab -l -u root 2>/dev/null | grep -vF /usr/local/bin/rsync.sh > /tmp/root.cron.new || true';
+    run 'cat /tmp/rsync.cron >> /tmp/root.cron.new';
+    run 'crontab -u root /tmp/root.cron.new';
+    run 'rm /tmp/rsync.cron /tmp/root.cron.new';
   };
 
 desc 'Configure the gemtexter sites';
@@ -517,13 +519,18 @@ task 'nsd_failover',
       group  => 'wheel',
       mode   => '500';
 
-    file '/tmp/root.cron',
+    # Strip any existing copies first. `uniq` alone is not enough: non-adjacent
+    # duplicates survive (we had two dns-failover lines and -s is per-line, so
+    # both fired every minute and raced on zone temp files).
+    file '/tmp/dns-failover.cron',
       ensure  => 'file',
       content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/dns-failover.ksh",
       mode    => '600';
 
-    run '{ crontab -l -u root ; cat /tmp/root.cron; } | uniq | crontab -u root -';
-    run 'rm /tmp/root.cron';
+    run 'crontab -l -u root 2>/dev/null | grep -vF /usr/local/bin/dns-failover.ksh > /tmp/root.cron.new || true';
+    run 'cat /tmp/dns-failover.cron >> /tmp/root.cron.new';
+    run 'crontab -u root /tmp/root.cron.new';
+    run 'rm /tmp/dns-failover.cron /tmp/root.cron.new';
   };
 
 # Install or update dtail from the custom package repository.
@@ -843,8 +850,10 @@ task 'pf',
       content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/pf-labels-exporter.sh",
       mode    => '600';
 
-    run '{ crontab -l -u root ; cat /tmp/pflabels.cron; } | uniq | crontab -u root -';
-    run 'rm /tmp/pflabels.cron';
+    run 'crontab -l -u root 2>/dev/null | grep -vF /usr/local/bin/pf-labels-exporter.sh > /tmp/root.cron.new || true';
+    run 'cat /tmp/pflabels.cron >> /tmp/root.cron.new';
+    run 'crontab -u root /tmp/root.cron.new';
+    run 'rm /tmp/pflabels.cron /tmp/root.cron.new';
 
     # node_exporter only reads a textfile directory if told to; without this
     # flag the .prom file above is written but never exported.
