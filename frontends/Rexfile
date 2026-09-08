@@ -105,7 +105,7 @@ our @f3s_hosts =
 # Note there is no *.garage.f3s.buetow.org shortcut available: acme-client
 # implements only the http-01 challenge, and Let's Encrypt issues wildcard
 # certificates solely through dns-01. Per-host certificates are the mechanism.
-our @garage_buckets = qw/taskwarrior/;
+our @garage_buckets = qw/taskwarrior quicklog/;
 our @garage_hosts   = map { "$_.garage.f3s.buetow.org" } @garage_buckets;
 push @f3s_hosts, @garage_hosts;
 
