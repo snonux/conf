@@ -135,7 +135,7 @@ server "<%= $prefix %>dtail.dev" {
   listen on * port 8080
   log style forwarded 
   location * {
-    block return 302 "https://gitub.com/snonux/dtail"
+    block return 302 "https://github.com/snonux/dtail"
   }
 }
 <% } -%>
