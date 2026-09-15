@@ -1,6 +1,6 @@
 # Unattended security upgrades — implementation plan
 
-**Status: implementation plan only — nothing implemented yet.** All shell code in this repo must be **ksh** (house rule), hence the wrapper script uses `#!/bin/ksh`.
+**Status: IMPLEMENTED on blowfish (2026-09-15, deployed via gonf `frontends_unattended_*` tasks — no Rex).** fishfinger stays disabled until the gated fishfinger-enablement task after the blowfish soak. The source of truth for the wrapper is [`frontends/scripts/unattended-upgrade.sh`](../scripts/unattended-upgrade.sh); this doc no longer embeds a copy. All shell code in this repo must be **ksh** (house rule), hence the wrapper script uses `#!/bin/ksh`.
 
 Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) — design rationale, research summary, and decisions. This document is the build & rollout playbook.
 
@@ -8,12 +8,12 @@ Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) �
 
 | # | Artifact | Target on host | Repo location | Via |
 |---|---|---|---|---|
-| 1 | Wrapper script (`ksh`) | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | `frontends/scripts/unattended-upgrade.sh` (plain file, identical on both hosts) | new Rex task |
-| 2 | Daemon restart list | `/etc/unattended-upgrade-services` (0644) | inline in Rex task | new Rex task |
-| 3 | Staggered cron lines (root) | root crontab | generated in Rex task | new Rex task (rsync/dns-failover idiom) |
-| 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` | already-deployed file |
+| 1 | Wrapper script (`ksh`) | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | `frontends/scripts/unattended-upgrade.sh` (plain file, identical on both hosts) | gonf `frontends_unattended_script` (Privileged) |
+| 2 | Daemon restart list | `/etc/unattended-upgrade-services` (0644) | inline in the gonf task (`unattended.go` const) | gonf `frontends_unattended_services` (Privileged) |
+| 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_unattended_cron_{blowfish,fishfinger}` (Privileged, `WhenHostnameContains` gate) |
+| 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_unattended_newsyslog` (Privileged) + the Rex-deployed wholesale copy stays in sync |
 | 5 | Root mail routing | `root: paul` | **already done** (`etc/mail/aliases`, deployed with `newaliases` on change) | — |
-| 6 | State/log dirs | `/var/run/unattended-upgrade`, `/var/run/unattended-upgrade.lock`, `/var/db/unattended-upgrade` | created by script | — |
+| 6 | State dirs | `/var/run/unattended-upgrade` (needs-reboot flag), `/var/run/unattended-upgrade.lock` (2 h stale-lock recovery) | created by script | — |
 
 No secrets involved.
 
@@ -40,144 +40,23 @@ Cron lines as they must land in root's crontab (OpenBSD cron; **no `-n` flag** �
 10 23 * * * /usr/local/sbin/unattended-upgrade reboot
 ```
 
-## 3. The wrapper script — full draft (ksh)
+## 3. The wrapper script
 
-Deploy as `frontends/scripts/unattended-upgrade.sh` → `/usr/local/sbin/unattended-upgrade`.
+The source of truth is `frontends/scripts/unattended-upgrade.sh` (deployed by the gonf task `frontends_unattended_script` to `/usr/local/sbin/unattended-upgrade`, 0755 root:wheel). The design below from the planning phase still describes intent; the **rollout hardening round (2026-09-15, blowfish) changed these details**:
 
-```ksh
-#!/bin/ksh
-#
-# unattended-upgrade — unattended security-only updates for OpenBSD.
-#
-#   base    apply base-system errata via syspatch(8)
-#   pkgs    update packages via pkg_add(1) -u, restart affected daemons
-#   reboot  reboot if a patched kernel is pending
-#
-# Intended for root's crontab. Everything it prints is mailed to root by
-# cron AND appended to /var/log/unattended-upgrade.log (rotated via
-# newsyslog(8)). Silence = clean no-op; mail = change or failure.
-# Companion docs: frontends/docs/unattended-upgrades*.md
-
-PATH=/usr/bin:/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
-export PATH
-
-LOG=/var/log/unattended-upgrade.log
-SERVICES=/etc/unattended-upgrade-services
-RUNDIR=/var/run/unattended-upgrade
-LOCK=/var/run/unattended-upgrade.lock
-
-mode=${1:-}
-case $mode in
-base|pkgs|reboot) ;;
-*) print -u2 "usage: $0 base|pkgs|reboot"; exit 64 ;;
-esac
-
-mkdir -p "$RUNDIR" || exit 1
-
-# Jitter only for cron runs (no tty); manual runs are instant.
-[[ -t 0 ]] || sleep $((RANDOM % 1200))
-
-# Whole-job lock; an overlapping cron run just exits quietly.
-if ! mkdir "$LOCK" 2>/dev/null; then
-    logger -t unattended-upgrade "skipped $mode: another run holds the lock"
-    exit 0
-fi
-trap 'rmdir "$LOCK" 2>/dev/null' EXIT
-
-# Emit to stdout (cron mails it) and append the same lines to the log file.
-log() {
-    printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
-}
-
-restart_services() {
-    [[ -f $SERVICES ]] || return 0
-    while IFS= read -r svc; do
-        [[ -n $svc && $svc != \#* ]] || continue
-        if rcctl check "$svc" >/dev/null 2>&1; then
-            log "restarting $svc"
-            rcctl restart "$svc" >/dev/null 2>&1 \
-                || log "WARNING: rcctl restart $svc failed"
-        else
-            log "not running: $svc — skipped"
-        fi
-    done <"$SERVICES"
-}
-
-case $mode in
-
-base)
-    # syspatch rc: 0 = patches applied, 2 = clean no-op,
-    # >0 = failure (mirror outage, release EOL, ...).
-    before=$(syspatch -l)
-    out=$(syspatch 2>&1)
-    rc=$?
-    case $rc in
-    2) exit 0 ;;
-    0)
-        log "syspatch applied base patches:"
-        printf '%s\n' "$out" | tee -a "$LOG"
-        if [[ $before != $(syspatch -l) ]]; then
-            if grep -qi reboot <<<"$out"; then
-                touch "$RUNDIR/needs-reboot"
-                log "kernel patched — reboot queued for 'reboot' mode"
-            else
-                log "non-kernel base patch — restarting base daemons"
-                restart_services
-            fi
-        fi
-        ;;
-    *)
-        log "syspatch FAILED (rc=$rc) — see message below"
-        printf '%s\n' "$out" | tee -a "$LOG"
-        exit 1
-        ;;
-    esac
-    ;;
-
-pkgs)
-    avail=$(df -k / | awk 'NR==2 {print $4}')
-    if [[ $avail -lt 1048576 ]]; then
-        log "pkgs aborted: only ${avail}KB free on / (need 1GB)"
-        exit 1
-    fi
-    out=$(pkg_add -Iu 2>&1)
-    rc=$?
-    if [[ $rc -ne 0 ]]; then
-        log "pkg_add -u FAILED (rc=$rc) — investigate"
-        printf '%s\n' "$out" | tee -a "$LOG"
-        exit 1
-    fi
-    [[ -z $out ]] && exit 0     # nothing to update
-    log "pkg_add -u updated:"
-    printf '%s\n' "$out" | tee -a "$LOG"
-    restart_services
-    ;;
-
-reboot)
-    if [[ -f $RUNDIR/needs-reboot ]]; then
-        log "rebooting to activate the patched kernel"
-        rm -f "$RUNDIR/needs-reboot"
-        sync
-        sleep 2
-        reboot
-    fi
-    ;;
-esac
-
-exit 0
-```
-
-Behavior notes (verified points to re-check during dry-run):
-
-- `syspatch` exit 2 = "requested but no additional patch was installed" → treated as success. The `before`/`after` diff via `syspatch -l` guards against false "applied" reports.
-- The kernel-detection `grep -qi reboot` keys on syspatch's reboot-required message; **verify the exact wording at the first real kernel errata** during the observation phase.
-- Reboot flag lifecycle is safe against double reboots: the flag is only set when a *new* kernel patch is applied in that run, and it is removed before `reboot`. `/var/run` leftovers are moot because the flag is only consumed by `reboot` mode.
-- `$RANDOM` is supported by ksh; cron has no tty so jitter applies to scheduled runs only.
-- OpenBSD `pkg_add -u` on a no-op day prints nothing and exits 0 — confirm; if it ever emits noise, the mail just shows that noise (harmless).
+| Planning-phase design | As deployed (verified on blowfish) |
+|---|---|
+| Disk guard: 1 GB free on `/`, `/usr`, `/var` | **256 MB** — 1 GB is unreachable on the frontends' small `/` (760 MB) and `/var` (956 MB) |
+| Reboot detection: `/bsd` newer than `/var/run/dmesg.boot` | **KARL-safe version compare**: OpenBSD re-links `/bsd` at *every* boot, so the mtime check always reported a pending reboot; the script now compares `what(1)`'s build version of `/bsd` against the booted version in `dmesg.boot` line 1. `reboot` mode re-verifies; a wrong version string means NO reboot (fail-safe) |
+| `PATH` without `/sbin` | `/sbin` added so `reboot(8)` resolves |
+| Plain `pkg_add -Iu` | `PKG_PATH=installpath:<custom fleet repo>` exported in `pkgs` mode (root crontabs source no `/root/.profile`; without it `pkg_add -u` fails on custom packages) |
+| No partner gate | **All modes refuse to run while the partner frontend is not operational** — same check as `dns-failover.ksh` (`timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family). Skips are logged and mailed; the `needs-reboot` flag is not consumed by a skip |
+| — | `umask 077` (log file mode matches the newsyslog 600 declaration before the first rotation) |
+| — | Lock is released explicitly before `reboot` (the EXIT trap is not guaranteed to run under reboot(8)) |
 
 ## 4. Daemon restart list
 
-Draft `/etc/unattended-upgrade-services` (deployed by the Rex task):
+`/etc/unattended-upgrade-services` (deployed by the gonf task `frontends_unattended_services`):
 
 ```
 # Daemons to restart after unattended security updates (one per line).
@@ -190,9 +69,12 @@ smtpd
 sshd
 inetd
 uptimed
-#dserver
+node_exporter
+dserver
 #gorum
 ```
+
+Curated against `doas rcctl ls on` on 2026-09-15: `dserver` (DTail) and `node_exporter` run on **both** frontends and are therefore restarted; `gorum` runs on neither and stays commented.
 
 Curation at implementation time (per host): compare with `doas rcctl ls on`, add custom rc.d daemons (`dserver`, `gorum`) if they run there, remove entries that `rcctl check` reports as not enabled. Rationale:
 
@@ -200,7 +82,9 @@ Curation at implementation time (per host): compare with `doas rcctl ls on`, add
 - `uptimed` is a **package** daemon (`pkg_scripts` in `rc.conf.local`) — restarted after package updates.
 - Restarting a service that wasn't touched is harmless churn and only happens on errata days, never daily.
 
-## 5. Rexfile task (draft, mirrors existing idioms)
+## 5. Original Rexfile draft — SUPERSEDED by the gonf implementation
+
+The deployment was implemented in gonf instead (see `gonf/internal/tasks/unattended.go`, registered in `cmd/gonf/main.go`); the original Rex draft is kept below for history.
 
 ```perl
 desc 'Unattended security upgrades: syspatch + pkg_add -Iu (docs/unattended-upgrades.implementation.md)';
@@ -279,9 +163,9 @@ crontab -l -u root              # see what's there; note daily(8) 03:01
 
 ```
 rex -H blowfish.buetow.org unattended_upgrades   # single-host deploy (adapt to repo's Rex invocation)
-ssh rex@blowfish.buetow.org 'doas /usr/local/sbin/unattended-upgrade base'
-ssh rex@blowfish.buetow.org 'doas pkg_add -Inu'   # DRY RUN: what would update?
-ssh rex@blowfish.buetow.org 'doas /usr/local/sbin/unattended-upgrade pkgs'
+ssh -t rex@blowfish.buetow.org 'doas /usr/local/sbin/unattended-upgrade base'
+ssh -t rex@blowfish.buetow.org 'doas pkg_add -Inu'   # DRY RUN: what would update? (no -t => cron-style jitter applies!)
+ssh -t rex@blowfish.buetow.org 'doas /usr/local/sbin/unattended-upgrade pkgs'
 tail -20 /var/log/unattended-upgrade.log
 ```
 
@@ -289,6 +173,9 @@ Checks:
 
 - First runs may clear a **backlog** (many syspatches at once) — that's why manual runs come *before* cron is enabled; expect a first scheduled reboot on the next kernel-patch day.
 - `syspatch -l` shows the applied patches; log file has timestamped entries.
+- **Mail delivery end-to-end**: `echo "unattended-upgrade test" | mail -s "test $(hostname)" root` → confirm it lands in the Proton mailbox (aliases exist, but cron mail only actually arrives if smtpd's outbound relay works).
+- **Patch completeness**: run `syspatch -c` before applying, then compare `syspatch -l` — syspatch silently skips patches for missing filesets ("If any sets are missing, patches are skipped accordingly"), so confirm nothing was skipped.
+- **DNS HA interaction**: while restarting daemons manually, watch dns-failover — it probes every minute but needs 3 consecutive failures before flipping zones, so seconds-long restarts must not flip anything (`/var/nsd/run/current_master` unchanged). A real reboot *will* flip zones by design and flip back.
 - Lock test: `mkdir /var/run/unattended-upgrade.lock` then run `base` → logs "skipped ... lock held", exit 0; remove lock dir afterwards.
 - `reboot` mode test with **no** flag present → instant silent exit. (Test the real reboot path only when a kernel patch is actually pending.)
 
@@ -307,15 +194,18 @@ Checks:
 
 ## 8. Acceptance criteria
 
-- [ ] Both hosts: `sysctl -n kern.version` is a supported `-release`; `/etc/installurl` sane.
-- [ ] Manual `base` run: silent no-op when nothing to do; log + mail when patches applied.
-- [ ] Manual `pkgs` run: silent no-op; on updates prints list and restarts listed daemons (`rcctl check` respected).
-- [ ] Second concurrent run exits 0 with "skipped" (lock works).
+- [x] blowfish: OpenBSD 7.8 -release, default installurl (fishfinger pending).
+- [x] Manual `base` run on blowfish: cleared a 57-patch backlog (syspatch itself applied 001 then exited 2; completed manually with the updated tool); log + mail present.
+- [x] Manual `pkgs` run on blowfish: quirks-7.147 updated; quirks-only bump correctly did NOT restart daemons.
+- [ ] Second concurrent run exits 0 with "skipped" (lock works) — lock steal verified by code review; concurrency not exercised live yet.
 - [ ] Cron fires at 06:10/06:40/07:10 (blowfish) and 22:10/22:40/23:10 (fishfinger) — verify in `/var/cron/log` and the log file.
 - [ ] Job output reaches the Proton mailbox via the existing root alias (do **not** use cron's `-n` flag).
 - [ ] newsyslog rotates `/var/log/unattended-upgrade.log` (verify entry parses; watch first size-triggered rotation).
 - [ ] gogios page stays green through a full cycle; no false CRITICALs from the windows.
-- [ ] `needs-reboot` lifecycle: set only on kernel-patch days, consumed exactly once by `reboot` mode.
+- [x] Test mail to root arrived at the Proton mailbox 2026-09-15 21:17 (verified via the local Bridge IMAP).
+- [ ] No spurious dns-failover zone flips during restart tests; reboot-driven failover flips zones and back automatically.
+- [ ] First manual `base` run applied everything `syspatch -c` advertised (no patches silently skipped due to missing filesets).
+- [x] `needs-reboot` lifecycle: kernel patch day set the flag, `reboot` mode consumed it exactly once and loaded the patched kernel (#20); stale-flag self-heal verified (removed, no reboot).
 
 ## 9. Runbook
 
@@ -383,3 +273,17 @@ A second review suggested the same three layers, but with a different packages m
 - The "semi-attended check + notify" start mode corresponds to our staged rollout: manual dry-runs (`syspatch`, `pkg_add -Inu`) happen before cron is enabled (Phase 2).
 - Release upgrades: our plan triggers via the EOL mail and uses attended `sysupgrade`; "clean reinstall" is a heavier fleet pattern, unnecessary for these two hosts.
 - The `packages-stable` tree they point at is real (verified: `pub/OpenBSD/7.9/packages-stable/amd64/`, updated Sep 2026, patchlevel bumps like `apache-httpd-2.4.68p0.tgz`) — and it is exactly the tree our `pkg_add -Iu` already pulls from.
+
+## 14. Changelog
+
+- **Review round 1** (self-review before implementation): replaced a `<<<` here-string (OpenBSD ksh doesn't support them — the script would have failed at parse time) with POSIX-safe constructs; made reboot detection wording-independent (`/bsd` newer than `/var/run/dmesg.boot`, syspatch message as fallback); added stale-lock recovery (OpenBSD doesn't clear `/var/run` at boot) and stale-flag self-healing in `reboot` mode; extended the disk guard to `/`, `/usr`, `/var`; suppressed daemon restarts for quirks-only updates; added dry-run checks for end-to-end mail delivery, syspatch fileset completeness, and dns-failover interaction (verified in-repo: probes every minute, flips only after 3 consecutive failures — restart blips are tolerated, reboots fail over by design).
+
+- **Rollout round (2026-09-15, blowfish only, deployed via gonf):**
+  - Disk guard 1 GB → **256 MB** per mountpoint — 1 GB is unreachable on the frontends' small `/` and `/var`, so `pkgs` mode would have aborted forever.
+  - **KARL-safe reboot detection**: OpenBSD re-links `/bsd` at every boot, so `/bsd` being newer than `/var/run/dmesg.boot` proved *nothing* (it is always true, including seconds after a clean boot — this caused the reboot-detection false positives during the rollout). The script now compares the on-disk kernel build version (`what(1)`) against the booted version (`dmesg.boot` line 1); unknown state means NO reboot (fail-safe). Verified live: stale flag self-heals, no-flag runs are silent no-ops.
+  - `/sbin` added to `PATH` so `reboot(8)` resolves (the original PATH made the `reboot` mode fail with `reboot: not found` while still consuming the flag).
+  - `pkgs` mode exports `PKG_PATH=installpath:<custom fleet repo>`: root crontabs source no `/root/.profile`, so without it `pkg_add -u` fails on custom packages (dserver/dtail/gogios). Both the official errata tree (with automatic `packages-stable` search) and the fleet repo are consulted in one run.
+  - **Partner-health gate** (user requirement): all modes refuse to run while the partner frontend is not operational — same check as `dns-failover.ksh` (KISS high-availability): `timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family, IPv4 AND IPv6. Skips are logged and mailed; the flag is not consumed.
+  - `umask 077` so the log file is created 0600, matching the newsyslog 600 declaration before the first rotation.
+  - Lock released explicitly before `reboot` (the EXIT trap is not guaranteed to run under reboot(8)).
+  - Restart list curated against `rcctl ls on`: `node_exporter` and `dserver` added (they run on both frontends), `gorum` stays commented (runs on neither).

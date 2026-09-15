@@ -20,7 +20,8 @@ smtpd
 sshd
 inetd
 uptimed
-#dserver
+node_exporter
+dserver
 #gorum
 `
 

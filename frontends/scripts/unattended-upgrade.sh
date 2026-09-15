@@ -20,15 +20,20 @@
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
 export PATH
 
+# Everything the script creates (lock dir, log lines via tee -a, needs-reboot
+# flag) is root-only; tee's default 0644 log file would contradict the 600
+# mode declared in the newsyslog rotation entry until the first rotation.
+umask 077
+
 LOG=/var/log/unattended-upgrade.log
 SERVICES=/etc/unattended-upgrade-services
 RUNDIR=/var/run/unattended-upgrade
 LOCK=/var/run/unattended-upgrade.lock
 
 # Same health-check constants as dns-failover.ksh.
-LOOKUP_TIMEOUT=10
-HEALTH_TRIES=3
-HEALTH_RETRY_SLEEP=2
+readonly LOOKUP_TIMEOUT=10
+readonly HEALTH_TRIES=3
+readonly HEALTH_RETRY_SLEEP=2
 
 mode=${1:-}
 case $mode in
@@ -214,6 +219,8 @@ reboot)
             rm -f "$RUNDIR/needs-reboot"
             sync
             sleep 2
+            rmdir "$LOCK" 2>/dev/null   # deterministic release: reboot(8) may not run the EXIT trap
+            trap - EXIT
             reboot
         else
             log "stale needs-reboot flag removed (kernel already current)"

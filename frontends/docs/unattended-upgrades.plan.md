@@ -85,14 +85,15 @@ A `ksh` script (`#!/bin/ksh` — house rule: shell scripts are ksh), root-only, 
 2. **`base` mode**:
    - Pre-check: `sysctl -n kern.osrelease`; if `syspatch` reports the release unsupported → mail a loud "EOL — schedule sysupgrade" alert and skip everything else this window.
    - `before=$(syspatch -l)`; run `syspatch`; `after=$(syspatch -l)`.
-   - Diff empty → exit silently. Diff non-empty → log + mail the applied patch list; if syspatch output mentions a required reboot, `touch /var/run/unattended-upgrade/needs-reboot`; non-kernel base patches (e.g. libc) instead restart the curated service list, since daemons keep old code until restarted.
+   - Diff empty → exit silently. Diff non-empty → log + mail the applied patch list; if the kernel was patched (KARL-safe check: `what(1)` build version of `/bsd` vs the booted version in `dmesg.boot` line 1 — the original `/bsd`-newer-than-`dmesg.boot` mtime idea is unusable because KARL re-links `/bsd` at every boot), `touch /var/run/unattended-upgrade/needs-reboot`; non-kernel base patches (e.g. libc) instead restart the curated service list too, since daemons keep old code until restarted.
 3. **`pkgs` mode**:
-   - Pre-check: `df -k /` ≥ 1 GB free, else mail + abort.
-   - Run `pkg_add -Iu`, capture output. Nothing to do → silent. Otherwise log + mail the update list.
+   - Pre-check: ≥ 256 MB free on `/`, `/usr`, `/var` each, else mail + abort (1 GB was unreachable on the frontends' small root).
+   - Export `PKG_PATH=installpath:<custom fleet repo>` (root crontabs source no profile), run `pkg_add -Iu`, capture output. Nothing to do → silent. Otherwise log + mail the update list.
    - Restart services from a per-host curated list file (`/etc/unattended-upgrade-services`): for each, `rcctl check <svc> && rcctl restart <svc>`. Candidates from the repo facts: base daemons `relayd httpd nsd smtpd sshd inetd`, pkg-owned `uptimed`, optionally custom `dserver`/`gorum`. Note: gogios is cron-driven (no daemon) and rsync is inetd-spawned — the long-running `inetd` listener is listed instead. Final list from `rcctl ls on`. `acme.sh` (daily.local) needs nothing special.
-4. **`reboot` mode**: if `/var/run/unattended-upgrade/needs-reboot` exists → log, `reboot` (rc scripts bring up relayd/httpd/nsd/etc.; brief downtime inside the host's own window, hosts staggered).
-5. All output `tee`-d to `/var/log/unattended-upgrade.log`; cron mail goes to root.
-6. Sets its own `PATH` (cron's default lacks `/usr/sbin`).
+4. **`reboot` mode**: if `/var/run/unattended-upgrade/needs-reboot` exists **and** the kernel check confirms it → log, `reboot` (rc scripts bring up relayd/httpd/nsd/etc.; brief downtime inside the host's own window, hosts staggered). Stale flags are cleared, never acted on. dns-failover flips zones during a reboot by design (its 3-consecutive-failure threshold tolerates mere restart blips) and flips back afterwards.
+5. All output `tee`-d to `/var/log/unattended-upgrade.log` (created 0600 via `umask 077`); cron mail goes to root.
+7. **Partner gate** (added 2026-09-15): every mode refuses to run while the partner frontend is not operational (same `https://<partner>/index.txt` Welcome-banner check over IPv4+IPv6 as `dns-failover.ksh`, `timeout`-wrapped, 3 consecutive failures per family) — patching/rebooting the only healthy host would cause total downtime. Skips are logged and mailed.
+6. Sets its own `PATH` including `/sbin` (cron's default lacks `/usr/sbin` and `reboot(8)` lives in `/sbin`).
 
 ### 4.4 Supporting pieces
 
@@ -105,9 +106,10 @@ A `ksh` script (`#!/bin/ksh` — house rule: shell scripts are ksh), root-only, 
 | Risk | Mitigation |
 |---|---|
 | Blind update breaks a frontend | Errata-only tree, `-I` non-interactive, curated restart list, gogios checks catch breakage fast; morning/evening split makes blowfish's run the day's canary for fishfinger |
-| Kernel patch needs reboot | Reboot is an explicit, parsed, separate step — never a blind `&& reboot` |
+| Kernel patch needs reboot | Reboot is an explicit, version-verified, separate step — never a blind `&& reboot`; only when the on-disk kernel actually differs from the booted one |
+| Partner frontend down during our window | Partner gate skips the run (logged + mailed); patches and the reboot flag wait for a healthy-partner window |
 | Release-day package-tree lag (Stuart Henderson's caveat) | syspatch-unsupported/EOL check skips and mails; release bumps stay manual (sysupgrade, out of scope) |
-| Overlapping/partial runs | Lock dir; separate `base` and `pkgs` steps 30 min apart |
+| Overlapping/partial runs | Lock dir with 2 h stale-lock recovery (OpenBSD doesn't clear /var/run at boot); separate `base` and `pkgs` steps 30 min apart |
 | Broken change needs undo | syspatch rollback tarballs in `/var/syspatch`; `syspatch -r` reverts the latest patch; daily(8) keeps `/var/backups` of `/etc` |
 | Disk exhaustion during pkg updates | df pre-check |
 | Root mailbox fills silently | mail alias |
