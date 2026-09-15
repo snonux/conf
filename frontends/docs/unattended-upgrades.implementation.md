@@ -13,7 +13,7 @@ Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) �
 | 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_unattended_cron_{blowfish,fishfinger}` (Privileged, `WhenHostnameContains` gate) |
 | 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_unattended_newsyslog` (Privileged) + the Rex-deployed wholesale copy stays in sync |
 | 5 | Root mail routing | `root: paul` | **already done** (`etc/mail/aliases`, deployed with `newaliases` on change) | — |
-| 6 | State dirs | `/var/run/unattended-upgrade` (needs-reboot flag), `/var/run/unattended-upgrade.lock` (2 h stale-lock recovery) | created by script | — |
+| 6 | State | `/var/run/unattended-upgrade.lock` (2 h stale-lock recovery); NO needs-reboot flag — the reboot decision is derived from the kernel version compare | created by script | — |
 
 No secrets involved.
 
@@ -53,6 +53,8 @@ The source of truth is `frontends/scripts/unattended-upgrade.sh` (deployed by th
 | No partner gate | **All modes refuse to run while the partner frontend is not operational** — same check as `dns-failover.ksh` (`timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family). Skips are logged and mailed; the `needs-reboot` flag is not consumed by a skip |
 | — | `umask 077` (log file mode matches the newsyslog 600 declaration before the first rotation) |
 | — | Lock is released explicitly before `reboot` (the EXIT trap is not guaranteed to run under reboot(8)) |
+| `needs-reboot` flag in `/var/run/unattended-upgrade` | **REMOVED** — the KARL-safe kernel version compare *is* the pending state; `reboot` mode decides purely on it (self-healing, no flag lifecycle, picks up manually applied patches too) |
+| single `syspatch` run | **Re-runs once after the tool self-updates** (001_syspatch exits 2 with errata still pending) — one `base` run clears the whole backlog, no manual follow-up syspatch |
 
 ## 4. Daemon restart list
 
@@ -287,3 +289,6 @@ A second review suggested the same three layers, but with a different packages m
   - `umask 077` so the log file is created 0600, matching the newsyslog 600 declaration before the first rotation.
   - Lock released explicitly before `reboot` (the EXIT trap is not guaranteed to run under reboot(8)).
   - Restart list curated against `rcctl ls on`: `node_exporter` and `dserver` added (they run on both frontends), `gorum` stays commented (runs on neither).
+- **Fishfinger rollout round (2026-09-15, k22 — gate overridden by paul):** deployed the full stack via gonf (evening cron 22:10/22:40/23:10 verified, blowfish schedule absent), base cleared the 57-patch backlog, pkgs updated quirks (no restarts), pending-kernel detection armed for the 23:10 reboot slot, mail verified end-to-end.
+  - **All runtime state removed**: the `needs-reboot` flag and its `/var/run/unattended-upgrade` dir are gone — `reboot` mode decides solely on the KARL-safe kernel version compare (`what(1)` vs `dmesg.boot`), which also picks up manually applied kernel patches. `reboot` releases the lock explicitly before rebooting.
+  - **syspatch self-update quirk automated**: `base` re-runs syspatch once when the first run only installed the tool update (exit 2 with errata pending) — a single run now clears an entire backlog; success is judged by the `syspatch -l` diff, not the exit code.

@@ -27,7 +27,6 @@ umask 077
 
 LOG=/var/log/unattended-upgrade.log
 SERVICES=/etc/unattended-upgrade-services
-RUNDIR=/var/run/unattended-upgrade
 LOCK=/var/run/unattended-upgrade.lock
 
 # Same health-check constants as dns-failover.ksh.
@@ -45,8 +44,6 @@ esac
 log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
 }
-
-mkdir -p "$RUNDIR" || exit 1
 
 # Jitter only for cron runs (no tty); manual runs are instant.
 [ -t 0 ] || sleep $((RANDOM % 1200))
@@ -123,6 +120,7 @@ fi
 # versions instead: dmesg.boot records the booted kernel, what(1) reads
 # /bsd's — the two differ only while a relinked (patched) kernel is waiting
 # to be booted. Fail-safe: unknown state (no version found) means NO reboot.
+# This check is the SOLE reboot decision — no runtime flag state exists.
 kernel_reboot_pending() {
     [ -f /var/run/dmesg.boot ] || return 1
     booted=$(sed -n '1{s/[[:space:]]*$//;p;}' /var/run/dmesg.boot)
@@ -150,23 +148,46 @@ case $mode in
 base)
     # syspatch rc: 0 = patches applied, 2 = clean no-op,
     # >0 = failure (mirror outage, release EOL, ...).
+    # Quirk: on a backlog the FIRST syspatch run may install only
+    # 001_syspatch — the tool's own update — and exit 2 with errata still
+    # pending. Re-run once with the updated tool so a single base run
+    # clears the whole backlog; no manual follow-up syspatch is needed.
     before=$(syspatch -l)
-    out=$(syspatch 2>&1)
-    rc=$?
+    out=""
+    rc=0
+    for attempt in 1 2; do
+        step=$(syspatch 2>&1)
+        rc=$?
+        if [ -n "$step" ]; then
+            out="${out}${step}
+"
+        fi
+        case $rc in
+        0|2) ;;
+        *) break ;;   # hard failure — stop re-running
+        esac
+        if [ "$(syspatch -c 2>/dev/null | wc -l | tr -d ' ')" -eq 0 ] \
+            || [ $attempt -eq 2 ]; then
+            break
+        fi
+        log "syspatch updated its own tool — running again with the new one"
+    done
+    # Judge success by the patch-list diff, not the last exit code: the
+    # self-update quirk makes the final rc unreliable (2 while patches were
+    # applied in an earlier iteration).
     case $rc in
-    2) exit 0 ;;
-    0)
+    0|2)
+        if [ "$before" = "$(syspatch -l)" ]; then
+            exit 0      # clean no-op: silent
+        fi
         log "syspatch applied base patches:"
         printf '%s\n' "$out" | tee -a "$LOG"
-        if [ "$before" != "$(syspatch -l)" ]; then
-            if kernel_reboot_pending \
-                || printf '%s\n' "$out" | grep -qi reboot; then
-                touch "$RUNDIR/needs-reboot"
-                log "kernel patched — reboot queued for 'reboot' mode"
-            else
-                log "non-kernel base patch — restarting base daemons"
-                restart_services
-            fi
+        if kernel_reboot_pending \
+            || printf '%s\n' "$out" | grep -qi reboot; then
+            log "kernel patched — reboot queued for the next 'reboot' window"
+        else
+            log "non-kernel base patch — restarting base daemons"
+            restart_services
         fi
         ;;
     *)
@@ -213,19 +234,16 @@ pkgs)
     ;;
 
 reboot)
-    if [ -f "$RUNDIR/needs-reboot" ]; then
-        if kernel_reboot_pending; then
-            log "rebooting to activate the patched kernel"
-            rm -f "$RUNDIR/needs-reboot"
-            sync
-            sleep 2
-            rmdir "$LOCK" 2>/dev/null   # deterministic release: reboot(8) may not run the EXIT trap
-            trap - EXIT
-            reboot
-        else
-            log "stale needs-reboot flag removed (kernel already current)"
-            rm -f "$RUNDIR/needs-reboot"
-        fi
+    # No runtime flag: the KARL-safe version compare IS the pending state.
+    # A patched-but-not-booted kernel (from this automation or a manual
+    # syspatch) is picked up here; an up-to-date kernel is a silent no-op.
+    if kernel_reboot_pending; then
+        log "rebooting to activate the patched kernel"
+        sync
+        sleep 2
+        rmdir "$LOCK" 2>/dev/null   # deterministic release (EXIT trap not guaranteed under reboot(8))
+        trap - EXIT
+        reboot
     fi
     ;;
 esac
