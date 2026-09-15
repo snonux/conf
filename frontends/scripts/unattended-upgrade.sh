@@ -10,6 +10,11 @@
 # cron AND appended to /var/log/unattended-upgrade.log (rotated via
 # newsyslog(8)). Silence = clean no-op; mail = change or failure.
 # Companion docs: frontends/docs/unattended-upgrades*.md
+#
+# Every mode is gated on the partner frontend being operational (same
+# https://<host>/index.txt health check as dns-failover.ksh, see the KISS
+# high-availability write-up): patching or rebooting the only healthy host
+# would take the sites down completely. Skips are logged and mailed.
 
 # /sbin is needed for reboot(8) (and other base system tools).
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
@@ -20,16 +25,64 @@ SERVICES=/etc/unattended-upgrade-services
 RUNDIR=/var/run/unattended-upgrade
 LOCK=/var/run/unattended-upgrade.lock
 
+# Same health-check constants as dns-failover.ksh.
+LOOKUP_TIMEOUT=10
+HEALTH_TRIES=3
+HEALTH_RETRY_SLEEP=2
+
 mode=${1:-}
 case $mode in
 base|pkgs|reboot) ;;
 *) print -u2 "usage: $0 base|pkgs|reboot"; exit 64 ;;
 esac
 
+# Emit to stdout (cron mails it) and append the same lines to the log file.
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
+}
+
 mkdir -p "$RUNDIR" || exit 1
 
 # Jitter only for cron runs (no tty); manual runs are instant.
 [ -t 0 ] || sleep $((RANDOM % 1200))
+
+# The partner of this host. Unknown hostnames skip the upgrade: without a
+# known partner there is no proof that a second healthy server exists.
+case $(hostname -s) in
+blowfish) PARTNER=fishfinger.buetow.org ;;
+fishfinger) PARTNER=blowfish.buetow.org ;;
+*) PARTNER= ;;
+esac
+
+# Operational check of the partner frontend, same check as the failover in
+# dns-failover.ksh (KISS high-availability with OpenBSD): fetch the partner's
+# /index.txt over IPv4 AND IPv6 with ftp(1) and expect its Welcome banner.
+# Every lookup is wrapped in timeout(1) — a hung query must not wedge the
+# job — and each family must pass HEALTH_TRIES consecutive attempts, so a
+# brief blip does not pause the upgrades. Residual risk: the partner may go
+# down just after a passing check; the once-per-minute dns-failover covers
+# the sites meanwhile, and this window is accepted.
+partner_up() {
+    [ -n "$PARTNER" ] || return 1
+    local proto
+    local -i attempt
+    for proto in 4 6; do
+        local -i ok=0
+        attempt=1
+        while [ $attempt -le $HEALTH_TRIES ]; do
+            if timeout $LOOKUP_TIMEOUT ftp -$proto -o - \
+                "https://$PARTNER/index.txt" 2>/dev/null \
+                | grep -q "Welcome to $PARTNER"; then
+                ok=1
+                break
+            fi
+            attempt=$((attempt + 1))
+            [ $attempt -le $HEALTH_TRIES ] && sleep $HEALTH_RETRY_SLEEP
+        done
+        [ $ok -eq 1 ] || return 1
+    done
+    return 0
+}
 
 # Whole-job lock. A previous run killed mid-flight (crash, power loss)
 # leaves the dir behind — OpenBSD does not wipe /var/run at boot — so
@@ -45,10 +98,18 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
-# Emit to stdout (cron mails it) and append the same lines to the log file.
-log() {
-    printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
-}
+# Refuse to upgrade while the partner is down (or unknown): this host could
+# be the only one serving the sites, and a patch, daemon restart, or reboot
+# would then cause total downtime. The flag and the patches simply wait for
+# a later window in which the partner is healthy again.
+if ! partner_up; then
+    if [ -n "$PARTNER" ]; then
+        log "skipped $mode: partner $PARTNER not operational"
+    else
+        log "skipped $mode: no partner configured for $(hostname)"
+    fi
+    exit 0
+fi
 
 # Wording-independent reboot-pending detection, KARL-safe. Comparing /bsd's
 # mtime with /var/run/dmesg.boot does NOT work: OpenBSD re-links /bsd at
