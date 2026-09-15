@@ -10,7 +10,7 @@ Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) �
 |---|---|---|---|---|
 | 1 | Wrapper script (`ksh`) | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | `frontends/scripts/unattended-upgrade.sh` (plain file, identical on both hosts) | gonf `frontends_unattended_script` (Privileged) |
 | 2 | Daemon restart list | `/etc/unattended-upgrade-services` (0644) | inline in the gonf task (`unattended.go` const) | gonf `frontends_unattended_services` (Privileged) |
-| 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_unattended_cron_{blowfish,fishfinger}` (Privileged, `WhenHostnameContains` gate) |
+| 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_unattended_cron` (Privileged; per-host schedule selected inside the body via the `WhenHostname` recipe — one task, both hosts) |
 | 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_unattended_newsyslog` (Privileged) + the Rex-deployed wholesale copy stays in sync |
 | 5 | Root mail routing | `root: paul` | **already done** (`etc/mail/aliases`, deployed with `newaliases` on change) | — |
 | 6 | State | `/var/run/unattended-upgrade.lock` (2 h stale-lock recovery); NO needs-reboot flag — the reboot decision is derived from the kernel version compare | created by script | — |

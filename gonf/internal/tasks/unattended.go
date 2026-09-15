@@ -2,6 +2,8 @@
 package tasks
 
 import (
+	"sort"
+
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -31,8 +33,17 @@ dserver
 // the Rex-deployed wholesale copy carries too, so both mechanisms converge.
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t600  5     1024  *     Z"
 
-// Unattended tasks on Frontends live in this file; the struct declaration
-// and the pipeline-test Ping task are in frontends.go.
+// unattendedCronWindows maps frontend hosts to their daily unattended-upgrade
+// cron hours (base, pkgs, reboot); the minutes are fixed at 10/40/10
+// (implementation doc section 2: blowfish in the morning, fishfinger in the
+// evening, staggered so both hosts never upgrade simultaneously).
+var unattendedCronWindows = map[string][3]string{
+	"blowfish":   {"6", "6", "7"},
+	"fishfinger": {"22", "22", "23"},
+}
+
+// The unattended tasks below are methods on Frontends (declared in
+// frontends.go alongside the pipeline-test Ping task).
 
 // DescUnattendedScript returns the description for the wrapper deployment.
 func (Frontends) DescUnattendedScript() string {
@@ -64,51 +75,43 @@ func (Frontends) UnattendedServices() {
 		WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 }
 
-// DescUnattendedCronBlowfish returns the blowfish cron schedule.
-func (Frontends) DescUnattendedCronBlowfish() string {
-	return "Root cron on blowfish: base 06:10, pkgs 06:40, reboot 07:10"
+// DescUnattendedCron returns the description for the per-host cron schedule.
+func (Frontends) DescUnattendedCron() string {
+	return "Root cron: unattended-upgrade base/pkgs/reboot, per-host schedule"
 }
 
-// OptsUnattendedCronBlowfish gates the blowfish cron jobs by destination
-// hostname (plan recipe, evaluated at apply time) and marks them privileged.
-func (Frontends) OptsUnattendedCronBlowfish() TaskOptions {
-	return TaskOptions{Privileged(), WhenHostnameContains("blowfish")}
-}
+// OptsUnattendedCron marks the cron deployment as privileged. The per-host
+// schedule selection happens inside the task body via WhenHostname recipes.
+func (Frontends) OptsUnattendedCron() TaskOptions { return TaskOptions{Privileged()} }
 
-// UnattendedCronBlowfish installs blowfish's three root cron jobs.
-func (Frontends) UnattendedCronBlowfish() {
-	unattendedCronJobs("6", "6", "7")
-}
-
-// DescUnattendedCronFishfinger returns the fishfinger cron schedule.
-func (Frontends) DescUnattendedCronFishfinger() string {
-	return "Root cron on fishfinger: base 22:10, pkgs 22:40, reboot 23:10"
-}
-
-// OptsUnattendedCronFishfinger gates the fishfinger cron jobs by destination
-// hostname (plan recipe) and marks them privileged.
-func (Frontends) OptsUnattendedCronFishfinger() TaskOptions {
-	return TaskOptions{Privileged(), WhenHostnameContains("fishfinger")}
-}
-
-// UnattendedCronFishfinger installs fishfinger's three root cron jobs.
-func (Frontends) UnattendedCronFishfinger() {
-	unattendedCronJobs("22", "22", "23")
+// UnattendedCron installs the three root cron jobs on every frontend host,
+// each host with its own window (morning on blowfish, evening on
+// fishfinger): record once, evaluate per destination.
+func (Frontends) UnattendedCron() {
+	hosts := make([]string, 0, len(unattendedCronWindows))
+	for host := range unattendedCronWindows {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts) // deterministic plan op order
+	for _, host := range hosts {
+		w := unattendedCronWindows[host]
+		WhenHostname(host, func() { unattendedCronJobs(w) })
+	}
 }
 
 // unattendedCronJobs registers the three unattended-upgrade root cron jobs
 // (base, pkgs, reboot) with the given base, pkgs, and reboot hours. The
 // minutes come from the decided schedule (10/40/10).
-func unattendedCronJobs(baseHour, pkgsHour, rebootHour string) {
+func unattendedCronJobs(w [3]string) {
 	Cron("unattended-upgrade-base",
 		WithCommand("/usr/local/sbin/unattended-upgrade base"),
-		WithMinute("10"), WithHour(baseHour))
+		WithMinute("10"), WithHour(w[0]))
 	Cron("unattended-upgrade-pkgs",
 		WithCommand("/usr/local/sbin/unattended-upgrade pkgs"),
-		WithMinute("40"), WithHour(pkgsHour))
+		WithMinute("40"), WithHour(w[1]))
 	Cron("unattended-upgrade-reboot",
 		WithCommand("/usr/local/sbin/unattended-upgrade reboot"),
-		WithMinute("10"), WithHour(rebootHour))
+		WithMinute("10"), WithHour(w[2]))
 }
 
 // DescUnattendedNewsyslog returns the description for the rotation line.
