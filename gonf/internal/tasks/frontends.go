@@ -6,8 +6,15 @@ import (
 	. "github.com/snonux/gonf/api/options"
 )
 
-// Frontends holds the frontend host tasks. Its methods are registered from
-// main with the frontends_ prefix.
+// Frontends holds the frontend host tasks, including the unattended-upgrade
+// deployment per frontends/docs/unattended-upgrades.implementation.md
+// (methods in unattended.go). Every unattended task needs root on the
+// OpenBSD frontends (Privileged companions); the per-host cron schedules
+// are gated with the serializable WhenHostnameContains plan recipes,
+// evaluated on the destination host at apply time. Note: the frontends
+// aggregate expands via Matching over LOCALLY activated tasks, so
+// hostname-gated cron tasks are absent from aggregate pushes recorded on
+// the controller — push the task names explicitly to deploy everything.
 type Frontends struct{}
 
 // DescPing returns the description shown for the frontends_ping task.

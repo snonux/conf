@@ -30,55 +30,69 @@ uptimed
 // the Rex-deployed wholesale copy carries too, so both mechanisms converge.
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t600  5     1024  *     Z"
 
-// RegisterUnattended queues the unattended-upgrade tasks
-// (frontends/docs/unattended-upgrades.implementation.md). Every task needs
-// root on the OpenBSD frontends, so each one is Privileged; the per-host
-// cron schedules are selected with WhenHostnameContains plan recipes, which
-// are evaluated on the destination host at apply time.
-//
-// Note: the frontends aggregate expands via Matching over LOCALLY activated
-// tasks, so the hostname-gated cron tasks are absent from aggregate pushes
-// recorded on the controller. Push the four task names explicitly to deploy
-// everything.
-func RegisterUnattended() {
-	Task("frontends_unattended_script",
-		"Install /usr/local/sbin/unattended-upgrade wrapper (0755 root:wheel)",
-		func() {
-			InstallFile("/usr/local/sbin/unattended-upgrade",
-				paths.Frontends+"/scripts/unattended-upgrade.sh",
-				WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		},
-		Privileged())
+// Unattended tasks on Frontends live in this file; the struct declaration
+// and the pipeline-test Ping task are in frontends.go.
 
-	Task("frontends_unattended_services",
-		"Install /etc/unattended-upgrade-services (0644 root:wheel)",
-		func() {
-			File("/etc/unattended-upgrade-services",
-				WithContent(unattendedServicesContent),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-		},
-		Privileged())
+// DescUnattendedScript returns the description for the wrapper deployment.
+func (Frontends) DescUnattendedScript() string {
+	return "Install /usr/local/sbin/unattended-upgrade wrapper (0755 root:wheel)"
+}
 
-	Task("frontends_unattended_cron_blowfish",
-		"Root cron on blowfish: base 06:10, pkgs 06:40, reboot 07:10",
-		func() {
-			unattendedCronJobs("6", "6", "7")
-		},
-		Privileged(), WhenHostnameContains("blowfish"))
+// OptsUnattendedScript marks the wrapper deployment as privileged.
+func (Frontends) OptsUnattendedScript() []TaskOption { return []TaskOption{Privileged()} }
 
-	Task("frontends_unattended_cron_fishfinger",
-		"Root cron on fishfinger: base 22:10, pkgs 22:40, reboot 23:10",
-		func() {
-			unattendedCronJobs("22", "22", "23")
-		},
-		Privileged(), WhenHostnameContains("fishfinger"))
+// UnattendedScript installs the hardened ksh wrapper script.
+func (Frontends) UnattendedScript() {
+	InstallFile("/usr/local/sbin/unattended-upgrade",
+		paths.Frontends+"/scripts/unattended-upgrade.sh",
+		WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+}
 
-	Task("frontends_unattended_newsyslog",
-		"Append unattended-upgrade log rotation to /etc/newsyslog.conf",
-		func() {
-			File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
-		},
-		Privileged())
+// DescUnattendedServices returns the description for the restart list.
+func (Frontends) DescUnattendedServices() string {
+	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
+}
+
+// OptsUnattendedServices marks the restart-list deployment as privileged.
+func (Frontends) OptsUnattendedServices() []TaskOption { return []TaskOption{Privileged()} }
+
+// UnattendedServices installs the daemon restart list.
+func (Frontends) UnattendedServices() {
+	File("/etc/unattended-upgrade-services",
+		WithContent(unattendedServicesContent),
+		WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+}
+
+// DescUnattendedCronBlowfish returns the blowfish cron schedule.
+func (Frontends) DescUnattendedCronBlowfish() string {
+	return "Root cron on blowfish: base 06:10, pkgs 06:40, reboot 07:10"
+}
+
+// OptsUnattendedCronBlowfish gates the blowfish cron jobs by destination
+// hostname (plan recipe, evaluated at apply time) and marks them privileged.
+func (Frontends) OptsUnattendedCronBlowfish() []TaskOption {
+	return []TaskOption{Privileged(), WhenHostnameContains("blowfish")}
+}
+
+// UnattendedCronBlowfish installs blowfish's three root cron jobs.
+func (Frontends) UnattendedCronBlowfish() {
+	unattendedCronJobs("6", "6", "7")
+}
+
+// DescUnattendedCronFishfinger returns the fishfinger cron schedule.
+func (Frontends) DescUnattendedCronFishfinger() string {
+	return "Root cron on fishfinger: base 22:10, pkgs 22:40, reboot 23:10"
+}
+
+// OptsUnattendedCronFishfinger gates the fishfinger cron jobs by destination
+// hostname (plan recipe) and marks them privileged.
+func (Frontends) OptsUnattendedCronFishfinger() []TaskOption {
+	return []TaskOption{Privileged(), WhenHostnameContains("fishfinger")}
+}
+
+// UnattendedCronFishfinger installs fishfinger's three root cron jobs.
+func (Frontends) UnattendedCronFishfinger() {
+	unattendedCronJobs("22", "22", "23")
 }
 
 // unattendedCronJobs registers the three unattended-upgrade root cron jobs
@@ -94,4 +108,18 @@ func unattendedCronJobs(baseHour, pkgsHour, rebootHour string) {
 	Cron("unattended-upgrade-reboot",
 		WithCommand("/usr/local/sbin/unattended-upgrade reboot"),
 		WithMinute("10"), WithHour(rebootHour))
+}
+
+// DescUnattendedNewsyslog returns the description for the rotation line.
+func (Frontends) DescUnattendedNewsyslog() string {
+	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
+}
+
+// OptsUnattendedNewsyslog marks the rotation line as privileged.
+func (Frontends) OptsUnattendedNewsyslog() []TaskOption { return []TaskOption{Privileged()} }
+
+// UnattendedNewsyslog appends the rotation line; the explicit mode matches
+// the deployed file (0644) so no attribute churn happens on apply.
+func (Frontends) UnattendedNewsyslog() {
+	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }

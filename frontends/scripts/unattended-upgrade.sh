@@ -11,7 +11,8 @@
 # newsyslog(8)). Silence = clean no-op; mail = change or failure.
 # Companion docs: frontends/docs/unattended-upgrades*.md
 
-PATH=/usr/bin:/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+# /sbin is needed for reboot(8) (and other base system tools).
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
 export PATH
 
 LOG=/var/log/unattended-upgrade.log
@@ -49,10 +50,18 @@ log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
 }
 
-# Wording-independent kernel-patch detection: syspatch relinks /bsd, while
-# /var/run/dmesg.boot is written at boot — if /bsd is newer, a reboot is due.
-kernel_is_newer_than_boot() {
-    [ -f /var/run/dmesg.boot ] && [ -n "$(find /bsd -newer /var/run/dmesg.boot 2>/dev/null)" ]
+# Wording-independent reboot-pending detection, KARL-safe. Comparing /bsd's
+# mtime with /var/run/dmesg.boot does NOT work: OpenBSD re-links /bsd at
+# every boot (KARL), so /bsd is always the newer file and the mtime check
+# would demand a reboot after every non-kernel patch too. Compare build
+# versions instead: dmesg.boot records the booted kernel, what(1) reads
+# /bsd's — the two differ only while a relinked (patched) kernel is waiting
+# to be booted. Fail-safe: unknown state (no version found) means NO reboot.
+kernel_reboot_pending() {
+    [ -f /var/run/dmesg.boot ] || return 1
+    booted=$(sed -n '1{s/[[:space:]]*$//;p;}' /var/run/dmesg.boot)
+    ondisk=$(what /bsd 2>/dev/null | grep -m1 'OpenBSD' | sed 's/^[[:space:]]*//')
+    [ -n "$ondisk" ] && [ "$booted" != "$ondisk" ]
 }
 
 restart_services() {
@@ -84,7 +93,7 @@ base)
         log "syspatch applied base patches:"
         printf '%s\n' "$out" | tee -a "$LOG"
         if [ "$before" != "$(syspatch -l)" ]; then
-            if kernel_is_newer_than_boot \
+            if kernel_reboot_pending \
                 || printf '%s\n' "$out" | grep -qi reboot; then
                 touch "$RUNDIR/needs-reboot"
                 log "kernel patched — reboot queued for 'reboot' mode"
@@ -103,13 +112,24 @@ base)
     ;;
 
 pkgs)
+    # 256MB per mountpoint: errata packages are tens of MB; the original 1GB
+    # threshold was unreachable on the frontends' small / and /var (impl doc
+    # section 8 acceptance requires the pkgs run to work).
     for mp in / /usr /var; do
         avail=$(df -k "$mp" | awk 'NR==2 {print $4}')
-        if [ "${avail:-0}" -lt 1048576 ]; then
-            log "pkgs aborted: only ${avail}KB free on $mp (need 1GB)"
+        if [ "${avail:-0}" -lt 262144 ]; then
+            log "pkgs aborted: only ${avail}KB free on $mp (need 256MB)"
             exit 1
         fi
     done
+    # Root crontabs have no /root/.profile, so PKG_PATH must include the
+    # custom fleet repo (see frontends Rexfile pkgrepo_setup) alongside the
+    # official installurl tree, or pkg_add -u fails on custom packages
+    # (dserver, dtail, gogios, ...). 'installpath' resolves installurl(5)
+    # and keeps the automatic packages-stable errata search.
+    ver=$(uname -r)
+    PKG_PATH="installpath:https://pkgrepo.f3s.buetow.org/openbsd/${ver}/packages/amd64/"
+    export PKG_PATH
     out=$(pkg_add -Iu 2>&1)
     rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -128,7 +148,7 @@ pkgs)
 
 reboot)
     if [ -f "$RUNDIR/needs-reboot" ]; then
-        if kernel_is_newer_than_boot; then
+        if kernel_reboot_pending; then
             log "rebooting to activate the patched kernel"
             rm -f "$RUNDIR/needs-reboot"
             sync

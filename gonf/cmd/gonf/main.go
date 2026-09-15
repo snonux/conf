@@ -12,7 +12,6 @@ import (
 func main() {
 	fleet.Register()
 	RegisterMethods(tasks.Frontends{}, WithPrefix("frontends_"))
-	tasks.RegisterUnattended()
 	Aggregate("frontends", "Install all frontends_* configuration", "^frontends_")
 	os.Exit(cli.CLI())
 }
