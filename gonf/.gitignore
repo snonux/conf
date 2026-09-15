@@ -1,0 +1,6 @@
+/gonf
+/*.exe
+*.test
+*.out
+plan.jsonl
+blobs/
