@@ -40,7 +40,7 @@ func (Frontends) DescUnattendedScript() string {
 }
 
 // OptsUnattendedScript marks the wrapper deployment as privileged.
-func (Frontends) OptsUnattendedScript() []TaskOption { return []TaskOption{Privileged()} }
+func (Frontends) OptsUnattendedScript() TaskOptions { return TaskOptions{Privileged()} }
 
 // UnattendedScript installs the hardened ksh wrapper script.
 func (Frontends) UnattendedScript() {
@@ -55,7 +55,7 @@ func (Frontends) DescUnattendedServices() string {
 }
 
 // OptsUnattendedServices marks the restart-list deployment as privileged.
-func (Frontends) OptsUnattendedServices() []TaskOption { return []TaskOption{Privileged()} }
+func (Frontends) OptsUnattendedServices() TaskOptions { return TaskOptions{Privileged()} }
 
 // UnattendedServices installs the daemon restart list.
 func (Frontends) UnattendedServices() {
@@ -71,8 +71,8 @@ func (Frontends) DescUnattendedCronBlowfish() string {
 
 // OptsUnattendedCronBlowfish gates the blowfish cron jobs by destination
 // hostname (plan recipe, evaluated at apply time) and marks them privileged.
-func (Frontends) OptsUnattendedCronBlowfish() []TaskOption {
-	return []TaskOption{Privileged(), WhenHostnameContains("blowfish")}
+func (Frontends) OptsUnattendedCronBlowfish() TaskOptions {
+	return TaskOptions{Privileged(), WhenHostnameContains("blowfish")}
 }
 
 // UnattendedCronBlowfish installs blowfish's three root cron jobs.
@@ -87,8 +87,8 @@ func (Frontends) DescUnattendedCronFishfinger() string {
 
 // OptsUnattendedCronFishfinger gates the fishfinger cron jobs by destination
 // hostname (plan recipe) and marks them privileged.
-func (Frontends) OptsUnattendedCronFishfinger() []TaskOption {
-	return []TaskOption{Privileged(), WhenHostnameContains("fishfinger")}
+func (Frontends) OptsUnattendedCronFishfinger() TaskOptions {
+	return TaskOptions{Privileged(), WhenHostnameContains("fishfinger")}
 }
 
 // UnattendedCronFishfinger installs fishfinger's three root cron jobs.
@@ -117,7 +117,7 @@ func (Frontends) DescUnattendedNewsyslog() string {
 }
 
 // OptsUnattendedNewsyslog marks the rotation line as privileged.
-func (Frontends) OptsUnattendedNewsyslog() []TaskOption { return []TaskOption{Privileged()} }
+func (Frontends) OptsUnattendedNewsyslog() TaskOptions { return TaskOptions{Privileged()} }
 
 // UnattendedNewsyslog appends the rotation line; the explicit mode matches
 // the deployed file (0644) so no attribute churn happens on apply.
