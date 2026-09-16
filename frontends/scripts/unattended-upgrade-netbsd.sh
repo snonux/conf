@@ -156,16 +156,33 @@ pkgs)
 	# repositories.conf — pkgin never touches dtail/f3sctl).
 	# pkgin always prints "calculating dependencies...done." — a non-empty
 	# body is NOT a change. Real no-ops end with "nothing to do."
+	# Quirk: upgrading pkgin itself prints "Re-run pkgin upgrade" and exits
+	# cleanly with keepables still pending — re-run once (same pattern as
+	# OpenBSD syspatch self-update).
 	pkgin_changed=""
-	out=$(pkgin -y upgrade 2>&1)
-	rc=$?
-	if [ "$rc" -ne 0 ]; then
-		log "pkgin -y upgrade FAILED (rc=$rc) — investigate"
-		printf '%s\n' "$out" | tee -a "$LOG"
-		exit 1
-	fi
+	out=""
+	for attempt in 1 2; do
+		step=$(pkgin -y upgrade 2>&1)
+		rc=$?
+		if [ -n "$step" ]; then
+			out="${out}${step}
+"
+		fi
+		if [ "$rc" -ne 0 ]; then
+			log "pkgin -y upgrade FAILED (rc=$rc) — investigate"
+			printf '%s\n' "$out" | tee -a "$LOG"
+			exit 1
+		fi
+		printf '%s\n' "$step" | grep -q 'Re-run.*pkgin upgrade' || break
+		[ "$attempt" -eq 1 ] && log "pkgin upgraded its own tool — running again"
+	done
 	if printf '%s\n' "$out" | grep -q 'nothing to do'; then
-		: # clean no-op
+		: # clean no-op (may still appear after a tool-only first pass)
+		if printf '%s\n' "$out" | grep -q 'upgrading '; then
+			pkgin_changed=1
+			log "pkgin -y upgrade:"
+			printf '%s\n' "$out" | tee -a "$LOG"
+		fi
 	else
 		pkgin_changed=1
 		log "pkgin -y upgrade:"
