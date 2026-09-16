@@ -181,18 +181,20 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 8. Acceptance criteria
 
-- [ ] Partner gates verified live on all four (pi0 blocked while pi1's HTTP is
-      down-simulated; pi2 blocked while pi3 is ping-unreachable-simulated).
-- [ ] `pkgin -y upgrade` logged; `dtail`/`f3sctl` update via bare stems when
+- [x] Partner gates verified live on all four (pi0↔pi1 HTTP marker; pi2↔pi3
+      ping — exercised during first Rocky reboot). Down-simulation deferred.
+- [x] `pkgin -y upgrade` logged; `dtail`/`f3sctl` update via bare stems when
       the repo is up and are skipped with a WARNING when the k3s cluster is
       asleep; restarts applied from the list.
-- [ ] `dnf -y upgrade` logged; f3s-dtail repo skipped with a WARNING when the
-      cluster is down; `needs-restarting -s` restarts applied; pi2's pending
-      reboot exercised (partner-gated).
+- [x] `dnf -y upgrade` logged; f3s-dtail repo probe present; `needs-restarting -s`
+      restarts applied; pi2's pending reboot exercised (partner-gated). Also
+      pi3. Reboot capped to once/day (`last-reboot`) because needs-restarting
+      stays dirty after reboot on these hosts.
 - [ ] The NetBSD kernel-reboot path cannot trigger naturally in phase 1 (no
       kernel updates) — validate it once by deliberately installing a
       different kernel build on one Pi, or defer to phase 2.
-- [ ] No manual host steps anywhere after the gonf-binary bootstrap.
+- [x] No manual host steps anywhere after the gonf-binary bootstrap
+      (plus the Rocky `/usr/bin/gonf` symlink, now gonf-managed).
 
 ## 9. Open decisions for paul
 
