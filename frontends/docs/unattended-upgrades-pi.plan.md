@@ -190,16 +190,20 @@ are **online only occasionally** (powered off for energy savings), so a fixed
 cron time would mostly miss them. Instead they get a **systemd timer that
 fires hourly** and a **once-per-day gate**:
 
+Per-host **minute offsets** make the timers deterministic and disjoint — two
+Rocky hosts never start an update in the same minute (and the ping gates
+prevent simultaneous reboots, since a reboot requires the partner(s)
+reachable):
+
 ```ini
-# /etc/systemd/system/unattended-upgrade-rocky.timer
+# /etc/systemd/system/unattended-upgrade-rocky.timer   (pi2)
 [Unit]
 Description=Hourly unattended-upgrade check (updates once per day)
 
 [Timer]
-OnBootSec=10min          # first check shortly after an on-demand boot
-OnUnitActiveSec=1h       # then every hour while the host is up
-RandomizedDelaySec=15min
-Persistent=true          # catch up after a missed schedule
+OnBootSec=10min              # first check shortly after an on-demand boot
+OnCalendar=*-*-* *:05:00     # pi2: :05 past every hour
+Persistent=true              # catch up after a missed schedule
 
 [Install]
 WantedBy=timers.target
@@ -213,6 +217,21 @@ After=network-online.target
 Type=oneshot
 ExecStart=/usr/local/sbin/unattended-upgrade-rocky daily
 ```
+
+| Host | OnCalendar (hourly) | Partner gate |
+|---|---|---|
+| pi2 | `*:05:00` | pi3 pingable (`192.168.1.128`) |
+| pi3 | `*:35:00` | pi2 pingable (`192.168.1.127`) |
+| r0 | `*:05:00` | **both** r1 + r2 pingable |
+| r1 | `*:25:00` | **both** r0 + r2 pingable |
+| r2 | `*:45:00` | **both** r0 + r1 pingable |
+
+No `RandomizedDelaySec`: the fixed minute offsets are the anti-coincidence
+mechanism (deterministic; a random delay could collapse two hosts into the
+same window). A long-running update on one host overlapping the next host's
+tick is harmless — the hosts have independent package databases and only
+read from the repos; reboots are still partner-gated (a host reboots only
+while its partner(s) are pingable).
 
 Script behaviour for the new `daily` mode (Rocky script):
 
@@ -235,10 +254,10 @@ the update happens within an hour of the host coming online, exactly once per
 day.
 
 **Cluster safety for reboots (proposal):** r0/r1/r2 are k3s server nodes (HA
-tolerates one node down). Reboots are additionally staggered **by weekday**
+tolerates one node down). Their update/reboot gate requires **both siblings
+pingable**, and reboots are additionally staggered **by weekday**
 (`date +%u % 3`: r0 → day 1, r1 → day 2, r2 → day 3) so two cluster nodes
-never reboot on the same day, and each host's reboot is skipped unless at
-least one sibling is reachable.
+never reboot on the same day.
 
 **Deployment via gonf:** the two unit files go in via gonf `File` tasks +
 `DaemonReload` + enabling the timer; the Rocky script gains the `daily` mode.
