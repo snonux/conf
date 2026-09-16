@@ -15,7 +15,7 @@ by a fresh-context review the same day).
 
 | Pair | Hosts | OS | Partner gate ("operational") | In scope |
 |---|---|---|---|---|
-| static-site pair | pi0, pi1 | NetBSD 11.0 (evbarm-aarch64) | partner **online AND serving HTTP**: fetch `http://<partner>.lan.buetow.org/` (resolvable via `/etc/hosts`, bozohttpd listens on `*.80`) and require the expected page content — grep the static site's marker (verified live; bozohttpd runs `-X`, so a merely non-empty body could be a directory listing of a broken docroot) | pkgsrc packages (`pkgin -y upgrade`), custom fleet packages (`pkg_add -u` from pkgrepo), daemon restarts, reboot on kernel change (phase 2) |
+| static-site pair | pi0, pi1 | NetBSD 11.0 (evbarm-aarch64) | partner **online AND serving HTTP**: fetch `http://<partner>.lan.buetow.org/` (resolvable via `/etc/hosts`, bozohttpd listens on `*.80`) and require the expected page content — grep for **`Hello, it works`** (verified live 2026-09-16; bozohttpd runs `-X`, so a merely non-empty body could be a directory listing of a broken docroot) | pkgsrc packages (`pkgin -y upgrade`), custom fleet packages (`pkg_add -u` from pkgrepo), daemon restarts, reboot on kernel change (phase 2) |
 | Pi-hole/LAN-DNS pair | pi2, pi3 | Rocky Linux 9.7 (aarch64) | partner **reachable**: `ping -c1 -W3 <partner-IP>` | dnf updates (official Rocky repos + the probe-gated `f3s-dtail` repo), service restarts, reboot when `needs-restarting -r` says so |
 
 Out of scope: Pi-hole container updates (`pihole -up` — deliberate, manual);
