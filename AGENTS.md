@@ -33,7 +33,7 @@ gonf/
   internal/fleet/    # Host / Fleet inventory (SSH + per-host WithValue)
   internal/frontends/openbsd/unattended.go
   internal/pis/netbsd/unattended.go
-  internal/pis/rocky/unattended.go
+  internal/rocky/unattended.go   # Rocky Pis + k3s r-nodes (not under pis/)
   internal/paths/    # repo-relative path constants
 ```
 
@@ -51,7 +51,7 @@ RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithFleet(fleet.
 |----------------|-------------------|
 | `NameFrontends` | `frontends` / `frontends_*` |
 | `NameNetBSDPis` | `pis_netbsd` / `pis_netbsd_*` |
-| `NameRockyAll` | `pis_rocky` / `pis_rocky_*` |
+| `NameRockyAll` | `rocky` / `rocky_*` |
 
 - Iterate with `FleetHosts()` (the fleet from `WithFleet` on the current task).
 - Store schedules on the host: `WithValue(fleet.ValueUnattendedCron, …)` /
@@ -70,7 +70,7 @@ multi-path `File`/`Dir`, `WhenHostname`, `EachKV`).
 
 ```bash
 ./gonf.sh -list
-./gonf.sh fleet rocky-all pis_rocky
+./gonf.sh fleet rocky-all rocky
 ./gonf.sh fleet netbsd-pis pis_netbsd
 ./gonf.sh fleet frontends frontends
 ```

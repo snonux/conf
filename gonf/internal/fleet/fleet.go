@@ -11,7 +11,7 @@ import . "github.com/snonux/gonf/api"
 //	fleet            → Aggregate / deploy
 //	NameFrontends    → frontends / frontends_*
 //	NameNetBSDPis    → pis_netbsd / pis_netbsd_*
-//	NameRockyAll     → pis_rocky / pis_rocky_*
+//	NameRockyAll     → rocky / rocky_*
 const (
 	NameFrontends = "frontends"
 	NameNetBSDPis = "netbsd-pis"
