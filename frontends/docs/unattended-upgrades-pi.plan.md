@@ -174,3 +174,65 @@ Windows are clear of the frontends' morning/evening cycles (06:10–07:10,
 
 - **2026-09-16**: initial plan written from live host probes (no changes made
   to any Pi — everything will go through gonf per paul's directive).
+
+## 12. Reuse on r0/r1/r2 (on-demand hosts): systemd hourly + once-per-day
+
+The Rocky recipe is intended for reuse on the k3s hosts r0/r1/r2. Those hosts
+are **online only occasionally** (powered off for energy savings), so a fixed
+cron time would mostly miss them. Instead they get a **systemd timer that
+fires hourly** and a **once-per-day gate**:
+
+```ini
+# /etc/systemd/system/unattended-upgrade-rocky.timer
+[Unit]
+Description=Hourly unattended-upgrade check (updates once per day)
+
+[Timer]
+OnBootSec=10min          # first check shortly after an on-demand boot
+OnUnitActiveSec=1h       # then every hour while the host is up
+RandomizedDelaySec=15min
+Persistent=true          # catch up after a missed schedule
+
+[Install]
+WantedBy=timers.target
+
+# /etc/systemd/system/unattended-upgrade-rocky.service
+[Unit]
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/unattended-upgrade-rocky daily
+```
+
+Script behaviour for the new `daily` mode (Rocky script):
+
+1. Read the stamp `/var/lib/unattended-upgrade/last-daily` (a plain
+   `date +%F` string, persistent across reboots).
+2. Stamp equals today → **skip silently** (exit 0) — "skip until next day".
+3. Otherwise run the full update flow exactly once: partner/cluster gate,
+   pkgrepo probe (skip the f3s-dtail repo with a WARNING when the cluster is
+   down), `dnf -y upgrade`.
+4. On **success** → write the stamp. On **failure** → no stamp, so the next
+   hourly tick retries automatically.
+5. The **reboot check runs on every tick** (not daily-gated): if
+   `needs-restarting -r` reports a pending kernel and the gates allow it, the
+   host reboots at the next hourly tick — a kernel updated at 09:05 reboots at
+   10:05, not a day later.
+
+The hourly unit replaces a fixed cron for on-demand hosts: a daily cron at a
+fixed time would simply miss most days, while the hourly tick + stamp means
+the update happens within an hour of the host coming online, exactly once per
+day.
+
+**Cluster safety for reboots (proposal):** r0/r1/r2 are k3s server nodes (HA
+tolerates one node down). Reboots are additionally staggered **by weekday**
+(`date +%u % 3`: r0 → day 1, r1 → day 2, r2 → day 3) so two cluster nodes
+never reboot on the same day, and each host's reboot is skipped unless at
+least one sibling is reachable.
+
+**Deployment via gonf:** the two unit files go in via gonf `File` tasks +
+`DaemonReload` + enabling the timer; the Rocky script gains the `daily` mode.
+The gonf binary on r0/r1/r2 is bootstrapped once (the same single manual step
+as everywhere else).
