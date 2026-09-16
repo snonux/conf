@@ -1,6 +1,7 @@
 # Unattended upgrades — pi0/pi1 (NetBSD) & pi2/pi3 (Rocky)
 
-**Status: PLAN ONLY — nothing implemented yet. Deployment will be gonf-only** (per
+**Status: NetBSD pair LIVE (pi0/pi1, 2026-09-16 via gonf `pis_netbsd`)** —
+Rocky pair still pending (`pis_rocky` / task z22). Deployment is gonf-only (per
 paul's directive: no manual host manipulation or installation; the one-time
 gonf-binary bootstrap per host is the sole exception, identical to how the
 OpenBSD frontends were bootstrapped). Companion doc for the OpenBSD frontends:
@@ -223,6 +224,12 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 11. Changelog
 
+- **2026-09-16 (NetBSD rollout)**: gonf Hosts/fleets registered; scripts and
+  `pis_netbsd_*` tasks landed; gonf 0.8.1 bootstrapped on all four Pis; pi0/pi1
+  deployed and validated (partner marker, pkgin with self-upgrade re-run,
+  custom pkg_add probe, rc.d restarts, reboot no-op). Open decisions §9 taken
+  as plan defaults (schedule accepted; phase-1 no base; pihole out; Rocky ksh;
+  logs/journal only). Rocky pair still pending.
 - **2026-09-16 (review round 1, fresh-context)**: fixed the NetBSD reboot
   detection (dmesg.boot line 1 is the copyright line — use
   `sysctl -n kern.version` vs `what /netbsd`); fixed the custom-package flow
