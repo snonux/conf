@@ -9,19 +9,19 @@ import (
 	"codeberg.org/snonux/conf/gonf/internal/paths"
 )
 
-// rockyTimerSource maps short hostnames to the per-host timer unit file
+// rockyOnCalendar maps short hostnames to staggered OnCalendar= expressions
 // (plan §6/§12: pi2/r0 *:05, r1 *:25, pi3 *:35, r2 *:45).
-var rockyTimerSource = map[string]string{
-	"pi2": paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.pi2",
-	"pi3": paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.pi3",
-	"r0":  paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.r0",
-	"r1":  paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.r1",
-	"r2":  paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.r2",
+var rockyOnCalendar = map[string]string{
+	"pi2": "*-*-* *:05:00",
+	"pi3": "*-*-* *:35:00",
+	"r0":  "*-*-* *:05:00",
+	"r1":  "*-*-* *:25:00",
+	"r2":  "*-*-* *:45:00",
 }
 
 func rockyHosts() []string {
-	hosts := make([]string, 0, len(rockyTimerSource))
-	for host := range rockyTimerSource {
+	hosts := make([]string, 0, len(rockyOnCalendar))
+	for host := range rockyOnCalendar {
 		hosts = append(hosts, host)
 	}
 	sort.Strings(hosts)
@@ -99,26 +99,27 @@ func (Rocky) UnattendedStampDir() {
 	}
 }
 
-// DescUnattendedUnits returns the description for systemd unit files.
+// DescUnattendedUnits returns the description for systemd timer install.
 func (Rocky) DescUnattendedUnits() string {
-	return "Install unattended-upgrade-rocky.service + per-host .timer"
+	return "Install unattended-upgrade-rocky SystemdTimer (oneshot + per-host calendar)"
 }
 
-// UnattendedUnits installs the oneshot service and per-host timer, then
-// reloads systemd and enables the timer.
+// UnattendedUnits installs the oneshot+timer pair via SystemdTimer and
+// enables the timer (no hand-maintained unit files).
 func (Rocky) UnattendedUnits() {
-	svcSrc := paths.Frontends + "/systemd/unattended-upgrade-rocky.service"
 	for _, host := range rockyHosts() {
-		timerSrc := rockyTimerSource[host]
+		calendar := rockyOnCalendar[host]
 		WhenHostname(host, func() {
-			svc := InstallFile("/etc/systemd/system/unattended-upgrade-rocky.service",
-				svcSrc,
-				WithMode(0o644), WithOwner("root"), WithGroup("root"))
-			timer := InstallFile("/etc/systemd/system/unattended-upgrade-rocky.timer",
-				timerSrc,
-				WithMode(0o644), WithOwner("root"), WithGroup("root"))
-			reload := DaemonReload(DependsOn(svc, timer), IfChanged)
-			Timer("unattended-upgrade-rocky", DependsOn(reload))
+			SystemdTimer("unattended-upgrade-rocky",
+				WithCommand("/usr/local/sbin/unattended-upgrade-rocky daily"),
+				WithOnCalendar(calendar),
+				WithOnBootSec("10min"),
+				WithPersistent,
+				WithDescription("Hourly unattended-upgrade check (updates once per day)"),
+				WithServiceDescription("Unattended upgrade (Rocky daily mode)"),
+				WithAfter("network-online.target"),
+				WithWants("network-online.target"),
+			)
 		})
 	}
 }

@@ -1,4 +1,4 @@
-github.com/snonux/gonf v0.8.1 h1:aLW1njcFRpTnBR+pGxMMbvcMSOeWHs5B/JgETTbQ1PE=
-github.com/snonux/gonf v0.8.1/go.mod h1:iYCFrYVtkh28vQs01wz8TecmhzaZppLVf8h0Z7qbRNQ=
+github.com/snonux/gonf v0.9.0 h1:QffTpQBNMn2HBMN8ZR3UAUxiGWqKocTWsCdRqr8L1Rw=
+github.com/snonux/gonf v0.9.0/go.mod h1:iYCFrYVtkh28vQs01wz8TecmhzaZppLVf8h0Z7qbRNQ=
 golang.org/x/sync v0.23.0 h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk=
 golang.org/x/sync v0.23.0/go.mod h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0=

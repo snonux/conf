@@ -1,11 +1,9 @@
 # Unattended upgrades — pi0/pi1 (NetBSD) & pi2/pi3 (Rocky)
 
-**Status: LIVE on pi0–pi3 and r0/r1 (2026-09-16 via gonf).** r2 is registered
-and will get the same `pis_rocky` push when f2/r2 is next powered on (WoL of
-f2 did not bring it up during rollout; partner gates correctly skip while r2
-is down). Deployment is gonf-only (per paul's directive: no manual host
-manipulation or installation; the one-time gonf-binary bootstrap per host is
-the sole exception). Companion doc for the OpenBSD frontends:
+**Status: LIVE on pi0–pi3 and r0/r1/r2 (2026-09-16 via gonf).** Deployment is
+gonf-only (per paul's directive: no manual host manipulation or installation;
+the one-time gonf-binary bootstrap per host is the sole exception). Companion
+doc for the OpenBSD frontends:
 [`unattended-upgrades.implementation.md`](./unattended-upgrades.implementation.md).
 
 Facts verified live on 2026-09-16 (read-only probes; independently re-verified
@@ -227,12 +225,16 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 11. Changelog
 
+- **2026-09-16 (SystemdTimer + r2)**: gonf **0.9.0** adds declarative
+  `SystemdTimer` (plan schema v7); Rocky `UnattendedUnits` uses it instead of
+  hand-maintained `.service`/`.timer` files under `frontends/systemd/`.
+  Bootstrapped 0.9.0 on pi2/pi3/r0/r1/r2; `fleet rocky-all pis_rocky` — r2
+  first full apply (timer *:45 live); others converged (unit content unchanged).
 - **2026-09-16 (r0/r1/r2)**: registered `root@rN.wg0` Hosts + `rocky-k3s` /
   `rocky-all` fleets; timer offsets *:05/*:25/*:45; `yum-utils` added to
   Rocky packages task; gonf linux/amd64 bootstrapped and `pis_rocky` deployed
-  on r0/r1 (partner gate skipped with r2 down — as designed). r2 still off
-  (f2 did not wake); bootstrap+push when next online:
-  `scp gonf root@r2.wg0:/tmp && …; ./gonf.sh fleet rocky-k3s pis_rocky`.
+  on r0/r1 (partner gate skipped with r2 down — as designed). r2 completed
+  later the same day once f2 came back.
 - **2026-09-16 (Rocky rollout)**: `pis_rocky_*` deployed to pi2/pi3; timers
   live. Fixed: skip restarting our own oneshot unit; at-most-one reboot per
   day (`last-reboot` stamp) because `needs-restarting -r` still reports
@@ -272,8 +274,12 @@ gate** deduplicates. Per-host minute offsets keep the timers deterministic
 and disjoint **within each pair/cluster** (pi2 and r0 share `*:05` —
 cross-pair, harmless: independent hosts, read-only repos).
 
-```ini
-# /etc/systemd/system/unattended-upgrade-rocky.timer   (pi2)
+```text
+# Installed by gonf SystemdTimer("unattended-upgrade-rocky", …) — not
+# hand-maintained unit files. Example for pi2 (OnCalendar minute varies
+# per host; see table below):
+
+# /etc/systemd/system/unattended-upgrade-rocky.timer
 [Unit]
 Description=Hourly unattended-upgrade check (updates once per day)
 
@@ -288,6 +294,7 @@ WantedBy=timers.target
 
 # /etc/systemd/system/unattended-upgrade-rocky.service
 [Unit]
+Description=Unattended upgrade (Rocky daily mode)
 Wants=network-online.target
 After=network-online.target
 
