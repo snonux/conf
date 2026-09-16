@@ -86,6 +86,21 @@ partner_up() {
     return 0
 }
 
+# Operational check of the custom fleet repo (k3s-backed). The relayd
+# fronting it serves an HTML "Server turned off" page with HTTP 200 when
+# the k3s backend is down, so an HTTP-200 body alone proves nothing: the
+# repo is considered up only when the fetched listing is non-empty, free
+# of the down page, and contains package entries.
+pkgrepo_up() {
+    local body
+    body=$(timeout $LOOKUP_TIMEOUT ftp -o - \
+        "https://pkgrepo.f3s.buetow.org/openbsd/$(uname -r)/packages/amd64/" \
+        2>/dev/null) || return 1
+    [ -n "$body" ] || return 1
+    printf '%s' "$body" | grep -q "Server turned off" && return 1
+    printf '%s' "$body" | grep -q "\.tgz"
+}
+
 # Whole-job lock. A previous run killed mid-flight (crash, power loss)
 # leaves the dir behind — OpenBSD does not wipe /var/run at boot — so
 # steal locks older than 2 h instead of skipping forever.
@@ -214,12 +229,35 @@ pkgs)
     # official installurl tree, or pkg_add -u fails on custom packages
     # (dserver, dtail, gogios, ...). 'installpath' resolves installurl(5)
     # and keeps the automatic packages-stable errata search.
+    #
+    # The custom repo is k3s-backed; when it is down (relayd "Server turned
+    # off" page) skip its packages for this window and update the official
+    # errata tree only — unattended upgrades must not fail because the
+    # cluster is down. The custom packages are picked up by a later window
+    # once the repo is back.
     ver=$(uname -r)
-    PKG_PATH="installpath:https://pkgrepo.f3s.buetow.org/openbsd/${ver}/packages/amd64/"
-    export PKG_PATH
+    custom="https://pkgrepo.f3s.buetow.org/openbsd/${ver}/packages/amd64/"
+    customSkipped=""
+    if pkgrepo_up; then
+        PKG_PATH="installpath:${custom}"
+        export PKG_PATH
+    else
+        log "WARNING: ${custom} not operational — skipping custom-repo packages this window"
+        PKG_PATH="installpath"
+        export PKG_PATH
+        customSkipped=1
+    fi
     out=$(pkg_add -Iu 2>&1)
     rc=$?
     if [ "$rc" -ne 0 ]; then
+        if [ -n "$customSkipped" ] \
+            && printf '%s\n' "$out" | grep -q "Couldn't find updates"; then
+            # Expected with the custom repo skipped: the unresolvable stems
+            # are the custom packages (dtail, gogios, dserver, ...).
+            log "WARNING: pkg_add -u rc=$rc with the custom repo skipped — official updates applied, custom packages deferred"
+            printf '%s\n' "$out" | tee -a "$LOG"
+            exit 0
+        fi
         log "pkg_add -u FAILED (rc=$rc) — investigate"
         printf '%s\n' "$out" | tee -a "$LOG"
         exit 1
