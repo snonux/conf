@@ -51,6 +51,8 @@ func Register() {
 		WithSSHHost("blowfish.buetow.org"),
 		WithSSHPort(2),
 		WithPrivilege(PrivilegeDoas),
+		WithGOOS("openbsd"),
+		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCron, [3]string{"6", "6", "7"}),
 	)
 	fishfinger := Host("fishfinger",
@@ -58,6 +60,8 @@ func Register() {
 		WithSSHHost("fishfinger.buetow.org"),
 		WithSSHPort(2),
 		WithPrivilege(PrivilegeDoas),
+		WithGOOS("openbsd"),
+		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCron, [3]string{"22", "22", "23"}),
 	)
 	Fleet(NameFrontends, blowfish, fishfinger)
@@ -67,6 +71,8 @@ func Register() {
 		WithSSHHost("pi0.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeDoas),
+		WithGOOS("netbsd"),
+		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedCron, [2]string{"2", "2"}),
 	)
 	pi1 := Host("pi1",
@@ -74,6 +80,8 @@ func Register() {
 		WithSSHHost("pi1.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeDoas),
+		WithGOOS("netbsd"),
+		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedCron, [2]string{"22", "22"}),
 	)
 	pi2 := Host("pi2",
@@ -81,6 +89,8 @@ func Register() {
 		WithSSHHost("pi2.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeSudo),
+		WithGOOS("linux"),
+		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:05:00"),
 	)
 	pi3 := Host("pi3",
@@ -88,6 +98,8 @@ func Register() {
 		WithSSHHost("pi3.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeSudo),
+		WithGOOS("linux"),
+		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:35:00"),
 	)
 	// OS-pair fleets are the default deploy targets for OS-specific work
@@ -103,6 +115,8 @@ func Register() {
 		WithSSHHost("r0.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeSudo),
+		WithGOOS("linux"),
+		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:05:00"),
 	)
 	r1 := Host("r1",
@@ -110,6 +124,8 @@ func Register() {
 		WithSSHHost("r1.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeSudo),
+		WithGOOS("linux"),
+		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:25:00"),
 	)
 	r2 := Host("r2",
@@ -117,6 +133,8 @@ func Register() {
 		WithSSHHost("r2.lan.buetow.org"),
 		WithSSHPort(22),
 		WithPrivilege(PrivilegeSudo),
+		WithGOOS("linux"),
+		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:45:00"),
 	)
 	// rocky-k3s = r0/r1/r2 only. rocky-all = every Rocky unattended host
