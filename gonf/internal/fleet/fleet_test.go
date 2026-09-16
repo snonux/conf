@@ -7,7 +7,7 @@ import (
 	. "github.com/snonux/gonf/api"
 )
 
-func TestRegisterPiHostsAndFleets(t *testing.T) {
+func TestRegisterHostsAndFleets(t *testing.T) {
 	ResetInventory()
 	fleet.Register()
 
@@ -36,6 +36,18 @@ func TestRegisterPiHostsAndFleets(t *testing.T) {
 			Name: "pi3", User: "paul",
 			SSHHost: "pi3.lan.buetow.org", Port: 22, Privilege: "sudo",
 		},
+		"r0": {
+			Name: "r0", User: "root",
+			SSHHost: "r0.wg0", Port: 22, Privilege: "sudo",
+		},
+		"r1": {
+			Name: "r1", User: "root",
+			SSHHost: "r1.wg0", Port: 22, Privilege: "sudo",
+		},
+		"r2": {
+			Name: "r2", User: "root",
+			SSHHost: "r2.wg0", Port: 22, Privilege: "sudo",
+		},
 	}
 
 	got := map[string]HostInfo{}
@@ -63,6 +75,8 @@ func TestRegisterPiHostsAndFleets(t *testing.T) {
 		"netbsd-pis": {"pi0", "pi1"},
 		"rocky-pis":  {"pi2", "pi3"},
 		"pis":        {"pi0", "pi1", "pi2", "pi3"},
+		"rocky-k3s":  {"r0", "r1", "r2"},
+		"rocky-all":  {"pi2", "pi3", "r0", "r1", "r2"},
 	}
 	gotFleets := map[string][]string{}
 	for _, f := range Fleets() {

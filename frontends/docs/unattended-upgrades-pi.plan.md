@@ -1,10 +1,11 @@
 # Unattended upgrades — pi0/pi1 (NetBSD) & pi2/pi3 (Rocky)
 
-**Status: LIVE on all four Pis (2026-09-16 via gonf `pis_netbsd` /
-`pis_rocky`)** — Deployment is gonf-only (per paul's directive: no manual host
+**Status: LIVE on pi0–pi3 and r0/r1 (2026-09-16 via gonf).** r2 is registered
+and will get the same `pis_rocky` push when f2/r2 is next powered on (WoL of
+f2 did not bring it up during rollout; partner gates correctly skip while r2
+is down). Deployment is gonf-only (per paul's directive: no manual host
 manipulation or installation; the one-time gonf-binary bootstrap per host is
-the sole exception, identical to how the OpenBSD frontends were bootstrapped).
-Companion doc for the OpenBSD frontends:
+the sole exception). Companion doc for the OpenBSD frontends:
 [`unattended-upgrades.implementation.md`](./unattended-upgrades.implementation.md).
 
 Facts verified live on 2026-09-16 (read-only probes; independently re-verified
@@ -156,7 +157,7 @@ script (decision #4 in §9).
 | pi1 | fixed cron | 22:10 pkgs / 22:50 reboot — **outside the gogios window** (a 20:50 reboot would false-alarm; verified gogios cron `*/5 8-22` and pi1 checks exist); overlaps fishfinger's frontend window harmlessly (independent hosts) |
 | pi2 | systemd hourly + once-per-day | `*:05`; runs within ~1 h of the host being up |
 | pi3 | systemd hourly + once-per-day | `*:35` |
-| r0/r1/r2 (later) | systemd hourly + once-per-day | `*:05` / `*:25` / `*:45` (see §12) |
+| r0/r1/r2 | systemd hourly + once-per-day | `*:05` / `*:25` / `*:45` (see §12) |
 
 The NetBSD fixed windows are clear of the frontends' cycles and the gogios
 window. The Rocky hourly design fires at any hour by design — harmless: the
@@ -258,7 +259,7 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 12. Rocky hosts on the on-demand design: systemd hourly + once-per-day
 
-**One way for every Rocky host** (pi2, pi3 now; the k3s hosts r0/r1/r2 later —
+**One way for every Rocky host** (pi2, pi3, and the k3s hosts r0/r1/r2 —
 those are online only occasionally for power saving, so a fixed cron time
 would miss most days): a **systemd timer fires hourly** and a **once-per-day
 gate** deduplicates. Per-host minute offsets keep the timers deterministic

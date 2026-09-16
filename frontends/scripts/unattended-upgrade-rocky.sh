@@ -1,7 +1,7 @@
 #!/bin/ksh
 #
-# unattended-upgrade-rocky — unattended package updates for Rocky pi2/pi3
-# (and later r0/r1/r2 on the same pattern).
+# unattended-upgrade-rocky — unattended package updates for Rocky hosts:
+# pi2/pi3 and the k3s nodes r0/r1/r2 (same on-demand pattern).
 #
 #   daily   once-per-day dnf upgrade (stamp-gated) + every-tick reboot check
 #

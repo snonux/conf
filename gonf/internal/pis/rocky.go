@@ -10,10 +10,13 @@ import (
 )
 
 // rockyTimerSource maps short hostnames to the per-host timer unit file
-// (OnCalendar *:05 on pi2, *:35 on pi3 — plan §12).
+// (plan §6/§12: pi2/r0 *:05, r1 *:25, pi3 *:35, r2 *:45).
 var rockyTimerSource = map[string]string{
 	"pi2": paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.pi2",
 	"pi3": paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.pi3",
+	"r0":  paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.r0",
+	"r1":  paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.r1",
+	"r2":  paths.Frontends + "/systemd/unattended-upgrade-rocky.timer.r2",
 }
 
 func rockyHosts() []string {
@@ -25,7 +28,8 @@ func rockyHosts() []string {
 	return hosts
 }
 
-// Rocky carries the unattended-upgrade deployment for pi2/pi3.
+// Rocky carries the unattended-upgrade deployment for all Rocky hosts:
+// pi2/pi3 and the k3s nodes r0/r1/r2.
 type Rocky struct {
 	RequiresRoot
 }
@@ -45,16 +49,18 @@ func (Rocky) UnattendedGonfLink() {
 	}
 }
 
-// DescUnattendedKsh returns the description for the ksh package.
-func (Rocky) DescUnattendedKsh() string {
-	return "Install ksh (Rocky AT&T ksh93) for the unattended-upgrade script"
+// DescUnattendedPackages returns the description for required packages.
+func (Rocky) DescUnattendedPackages() string {
+	return "Install ksh + yum-utils (needs-restarting) for unattended-upgrade"
 }
 
-// UnattendedKsh installs ksh via dnf.
-func (Rocky) UnattendedKsh() {
+// UnattendedPackages installs ksh (script interpreter) and yum-utils
+// (needs-restarting -s/-r).
+func (Rocky) UnattendedPackages() {
 	for _, host := range rockyHosts() {
 		WhenHostname(host, func() {
 			Package("ksh")
+			Package("yum-utils")
 		})
 	}
 }
