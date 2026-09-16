@@ -87,7 +87,7 @@ Curation at implementation time (per host): compare with `doas rcctl ls on`, add
 
 ## 5. Original Rexfile draft — SUPERSEDED by the gonf implementation
 
-The deployment was implemented in gonf instead (see `gonf/internal/frontends/unattended.go`, registered in `cmd/gonf/main.go`); the original Rex draft is kept below for history.
+The deployment was implemented in gonf instead (see `gonf/internal/frontends/openbsd/unattended.go`, registered in `cmd/gonf/main.go`); the original Rex draft is kept below for history.
 
 ```perl
 desc 'Unattended security upgrades: syspatch + pkg_add -Iu (docs/unattended-upgrades.implementation.md)';

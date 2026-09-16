@@ -230,7 +230,7 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
   hand-maintained `.service`/`.timer` files under `frontends/systemd/`.
   Bootstrapped 0.9.0 on pi2/pi3/r0/r1/r2; `fleet rocky-all pis_rocky` — r2
   first full apply (timer *:45 live); others converged (unit content unchanged).
-- **2026-09-16 (r0/r1/r2)**: registered `root@rN.wg0` Hosts + `rocky-k3s` /
+- **2026-09-16 (r0/r1/r2)**: registered `root@rN.lan.buetow.org` Hosts + `rocky-k3s` /
   `rocky-all` fleets; timer offsets *:05/*:25/*:45; `yum-utils` added to
   Rocky packages task; gonf linux/amd64 bootstrapped and `pis_rocky` deployed
   on r0/r1 (partner gate skipped with r2 down — as designed). r2 completed

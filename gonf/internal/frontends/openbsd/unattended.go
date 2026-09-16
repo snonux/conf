@@ -1,14 +1,13 @@
-// Package frontends declares the frontend host tasks for the conf
-// repository (the OpenBSD gateway fleet) — most notably the
+// Package openbsd declares OpenBSD frontend host tasks for the conf
+// repository — most notably the
 // unattended-upgrade deployment per frontends/docs/unattended-upgrades.*.
-package frontends
+package openbsd
 
 import (
-	"sort"
-
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
+	"codeberg.org/snonux/conf/gonf/internal/fleet"
 	"codeberg.org/snonux/conf/gonf/internal/paths"
 )
 
@@ -35,22 +34,11 @@ dserver
 // the Rex-deployed wholesale copy carries too, so both mechanisms converge.
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t600  5     1024  *     Z"
 
-// unattendedCronWindows maps frontend hosts to their daily unattended-upgrade
-// cron hours (base, pkgs, reboot); the minutes are fixed at 10/40/10
-// (implementation doc section 2: blowfish in the morning, fishfinger in the
-// evening, staggered so both hosts never upgrade simultaneously).
-var unattendedCronWindows = map[string][3]string{
-	"blowfish":   {"6", "6", "7"},
-	"fishfinger": {"22", "22", "23"},
-}
-
 // Unattended carries the unattended-upgrade deployment tasks for the
 // frontend hosts. The embedded RequiresRoot marker declares the execution
 // contract on the struct itself: every task applies as root on the OpenBSD
-// frontends. The per-host cron schedule is selected inside the cron task
-// body with the WhenHostname recipe, which is plan-serializable and
-// evaluated on the destination — so the task is safe for aggregate pushes
-// and `gonf fleet` runs (record once, apply per host).
+// frontends. Register with WithFleet(fleet.NameFrontends). Per-host cron
+// hours live on each Host via WithValue(fleet.ValueUnattendedCron, …).
 type Unattended struct {
 	RequiresRoot
 }
@@ -106,13 +94,8 @@ func (Unattended) DescUnattendedCron() string {
 // each host with its own window (morning on blowfish, evening on
 // fishfinger): record once, evaluate per destination.
 func (Unattended) UnattendedCron() {
-	hosts := make([]string, 0, len(unattendedCronWindows))
-	for host := range unattendedCronWindows {
-		hosts = append(hosts, host)
-	}
-	sort.Strings(hosts) // deterministic plan op order
-	for _, host := range hosts {
-		w := unattendedCronWindows[host]
+	for _, host := range FleetHosts() {
+		w := MustHostValue[[3]string](host, fleet.ValueUnattendedCron)
 		WhenHostname(host, func() { unattendedCronJobs(w) })
 	}
 }
