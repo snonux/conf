@@ -119,17 +119,20 @@ script (decision point, see §7).
 - Privilege: pi0/pi1 `PrivilegeDoas`, pi2/pi3 `PrivilegeSudo` — both
   passwordless (verified).
 
-## 6. Cron schedule proposal (staggered; decision for paul)
+## 6. Schedule proposal (staggered; decision for paul)
 
-| Host | base/pkgsrc | packages | reboot |
-|---|---|---|---|
-| pi0 | 05:10 (+jitter) | 05:30 | 05:50 |
-| pi1 | 20:10 (+jitter) | 20:30 | 20:50 |
-| pi2 | 12:10 (+jitter) | — (single dnf window) | 12:30 (only when needed) |
-| pi3 | 12:40 (+jitter) | — | 13:00 (only when needed) |
+| Host | Mechanism | Window |
+|---|---|---|
+| pi0 | fixed cron | 05:10 base (+jitter) / 05:30 pkgs / 05:50 reboot |
+| pi1 | fixed cron | 20:10 base / 20:30 pkgs / 20:50 reboot |
+| pi2 | **systemd hourly + once-per-day** | runs within ~1 h of the host being up; once per day |
+| pi3 | **systemd hourly + once-per-day** | same |
+| r0/r1/r2 (later) | **systemd hourly + once-per-day** | same (see §12) |
 
 Windows are clear of the frontends' morning/evening cycles (06:10–07:10,
-22:10–23:10) and of the gogios check window.
+22:10–23:10) and of the gogios check window. The Rocky hosts use the
+on-demand design (hourly systemd timer + once-per-day stamp, §12) so pi2,
+pi3 and later r0/r1/r2 are configured the **one** way.
 
 ## 7. Rollout stages
 
@@ -138,7 +141,7 @@ Windows are clear of the frontends' morning/evening cycles (06:10–07:10,
 1. Deploy via gonf to **pi0** (script, cron, log rotation) → validate one
    cycle → **pi1** (the partner gates make the pair safe: an update runs only
    while the partner is up and serving).
-2. Deploy via gonf to **pi2** → validate → **pi3**.
+2. Deploy via gonf to **pi2** (ksh via a gonf Package task, the daily-mode Rocky script, the systemd timer+service) → validate → **pi3**.
 3. Observe full cycles (logs, mail, gogios green).
 
 ## 8. Acceptance criteria
@@ -175,7 +178,12 @@ Windows are clear of the frontends' morning/evening cycles (06:10–07:10,
 - **2026-09-16**: initial plan written from live host probes (no changes made
   to any Pi — everything will go through gonf per paul's directive).
 
-## 12. Reuse on r0/r1/r2 (on-demand hosts): systemd hourly + once-per-day
+## 12. Rocky hosts on the on-demand design: systemd hourly + once-per-day
+
+**One way for every Rocky host** (pi2, pi3 now; r0/r1/r2 later — the k3s
+cluster hosts, online only occasionally for power saving): instead of a fixed
+cron time that would miss most days on an occasionally-online host, a
+**systemd timer fires hourly** and a **once-per-day gate** deduplicates:
 
 The Rocky recipe is intended for reuse on the k3s hosts r0/r1/r2. Those hosts
 are **online only occasionally** (powered off for energy savings), so a fixed
