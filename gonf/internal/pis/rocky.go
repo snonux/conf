@@ -30,6 +30,21 @@ type Rocky struct {
 	RequiresRoot
 }
 
+// DescUnattendedGonfLink returns the description for the sudo PATH link.
+func (Rocky) DescUnattendedGonfLink() string {
+	return "Symlink /usr/bin/gonf → /usr/local/bin/gonf (sudo secure_path)"
+}
+
+// UnattendedGonfLink puts gonf on sudo's secure_path so privileged push
+// works (sudo -n gonf …). The bootstrap installs to /usr/local/bin.
+func (Rocky) UnattendedGonfLink() {
+	for _, host := range rockyHosts() {
+		WhenHostname(host, func() {
+			Link("/usr/bin/gonf", WithSymlink("/usr/local/bin/gonf"))
+		})
+	}
+}
+
 // DescUnattendedKsh returns the description for the ksh package.
 func (Rocky) DescUnattendedKsh() string {
 	return "Install ksh (Rocky AT&T ksh93) for the unattended-upgrade script"

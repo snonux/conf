@@ -21,6 +21,7 @@ LOG=/var/log/unattended-upgrade.log
 LOCK=/var/run/unattended-upgrade.lock
 STAMP_DIR=/var/lib/unattended-upgrade
 STAMP=$STAMP_DIR/last-daily
+REBOOT_STAMP=$STAMP_DIR/last-reboot
 
 readonly LOOKUP_TIMEOUT=10
 readonly HEALTH_TRIES=3
@@ -99,9 +100,15 @@ last=""
 [ -f "$STAMP" ] && last=$(cat "$STAMP")
 
 # Reboot check runs every tick (not daily-gated). Partner gate applies.
-# Weekday stagger for r0/r1/r2 so two k3s nodes never reboot the same day
-# (date +%u % 3: Mon/Thu/Sun→r0, Tue/Fri→r1, Wed/Sat→r2).
+# At most one unattended reboot per calendar day: on these Rocky Pis,
+# needs-restarting -r can still report pending after a fresh reboot
+# (dbus/glibc/linux-firmware/systemd), which would otherwise loop with
+# OnBootSec. Weekday stagger for r0/r1/r2 so two k3s nodes never reboot
+# the same day (date +%u % 3: Mon/Thu/Sun→r0, Tue/Fri→r1, Wed/Sat→r2).
 maybe_reboot() {
+	if [ -f "$REBOOT_STAMP" ] && [ "$(cat "$REBOOT_STAMP")" = "$today" ]; then
+		return 0
+	fi
 	if ! partners_up; then
 		log "reboot check deferred: partner(s) not reachable"
 		return 0
@@ -116,6 +123,9 @@ maybe_reboot() {
 	rc=$?
 	if [ "$rc" -eq 1 ]; then
 		log "rebooting: needs-restarting -r reports pending updates"
+		mkdir -p "$STAMP_DIR"
+		printf '%s\n' "$today" >"$REBOOT_STAMP.tmp.$$" \
+			&& mv "$REBOOT_STAMP.tmp.$$" "$REBOOT_STAMP"
 		sync
 		sleep 2
 		rmdir "$LOCK" 2>/dev/null
@@ -177,10 +187,14 @@ fi
 
 # Restart units that need it after library/package updates — before stamping
 # so a crash mid-restart leaves the day unstamped and retries next hour.
+# Skip our own oneshot unit: restarting it SIGTERMs this run before the stamp.
 units=$(needs-restarting -s 2>/dev/null)
 if [ -n "$units" ]; then
 	printf '%s\n' "$units" | while IFS= read -r unit; do
 		[ -n "$unit" ] || continue
+		case $unit in
+		unattended-upgrade-rocky.service) continue ;;
+		esac
 		log "restarting $unit"
 		systemctl restart "$unit" >/dev/null 2>&1 \
 			|| log "WARNING: systemctl restart $unit failed"

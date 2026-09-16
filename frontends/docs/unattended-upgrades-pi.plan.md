@@ -1,10 +1,10 @@
 # Unattended upgrades — pi0/pi1 (NetBSD) & pi2/pi3 (Rocky)
 
-**Status: NetBSD pair LIVE (pi0/pi1, 2026-09-16 via gonf `pis_netbsd`)** —
-Rocky pair still pending (`pis_rocky` / task z22). Deployment is gonf-only (per
-paul's directive: no manual host manipulation or installation; the one-time
-gonf-binary bootstrap per host is the sole exception, identical to how the
-OpenBSD frontends were bootstrapped). Companion doc for the OpenBSD frontends:
+**Status: LIVE on all four Pis (2026-09-16 via gonf `pis_netbsd` /
+`pis_rocky`)** — Deployment is gonf-only (per paul's directive: no manual host
+manipulation or installation; the one-time gonf-binary bootstrap per host is
+the sole exception, identical to how the OpenBSD frontends were bootstrapped).
+Companion doc for the OpenBSD frontends:
 [`unattended-upgrades.implementation.md`](./unattended-upgrades.implementation.md).
 
 Facts verified live on 2026-09-16 (read-only probes; independently re-verified
@@ -224,12 +224,18 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 11. Changelog
 
+- **2026-09-16 (Rocky rollout)**: `pis_rocky_*` deployed to pi2/pi3; timers
+  live. Fixed: skip restarting our own oneshot unit; at-most-one reboot per
+  day (`last-reboot` stamp) because `needs-restarting -r` still reports
+  dbus/glibc/linux-firmware/systemd after a fresh reboot on these hosts
+  (contradicts the plan's "fresh boot ⇒ no pending" assumption); `/usr/bin/gonf`
+  symlink for sudo secure_path. pi2/pi3 both stamped and rebooted once.
 - **2026-09-16 (NetBSD rollout)**: gonf Hosts/fleets registered; scripts and
   `pis_netbsd_*` tasks landed; gonf 0.8.1 bootstrapped on all four Pis; pi0/pi1
   deployed and validated (partner marker, pkgin with self-upgrade re-run,
   custom pkg_add probe, rc.d restarts, reboot no-op). Open decisions §9 taken
   as plan defaults (schedule accepted; phase-1 no base; pihole out; Rocky ksh;
-  logs/journal only). Rocky pair still pending.
+  logs/journal only).
 - **2026-09-16 (review round 1, fresh-context)**: fixed the NetBSD reboot
   detection (dmesg.boot line 1 is the copyright line — use
   `sysctl -n kern.version` vs `what /netbsd`); fixed the custom-package flow
