@@ -53,6 +53,14 @@ var unattendedCronWindows = map[string][3]string{
 // for aggregate pushes and `gonf fleet` runs (record once, apply per host).
 type Unattended struct{}
 
+// Opts is the struct-level default: every unattended task needs root on the
+// OpenBSD frontends. A method's own OptsX companion replaces this default.
+func (Unattended) Opts() TaskOptions { return TaskOptions{Privileged()} }
+
+// OptsSmoke opts Ping out of the struct-level Privileged default: the
+// pipeline smoke test must stay unprivileged.
+func (Unattended) OptsPing() TaskOptions { return TaskOptions{} }
+
 // DescPing returns the description shown for the frontends_ping task.
 func (Unattended) DescPing() string {
 	return "Verify the gonf push pipeline to this host"
@@ -72,9 +80,6 @@ func (Unattended) DescUnattendedScript() string {
 	return "Install /usr/local/sbin/unattended-upgrade wrapper (0755 root:wheel)"
 }
 
-// OptsUnattendedScript marks the wrapper deployment as privileged.
-func (Unattended) OptsUnattendedScript() TaskOptions { return TaskOptions{Privileged()} }
-
 // UnattendedScript installs the hardened ksh wrapper script.
 func (Unattended) UnattendedScript() {
 	InstallFile("/usr/local/sbin/unattended-upgrade",
@@ -87,9 +92,6 @@ func (Unattended) DescUnattendedServices() string {
 	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
 }
 
-// OptsUnattendedServices marks the restart-list deployment as privileged.
-func (Unattended) OptsUnattendedServices() TaskOptions { return TaskOptions{Privileged()} }
-
 // UnattendedServices installs the daemon restart list.
 func (Unattended) UnattendedServices() {
 	File("/etc/unattended-upgrade-services",
@@ -101,10 +103,6 @@ func (Unattended) UnattendedServices() {
 func (Unattended) DescUnattendedCron() string {
 	return "Root cron: unattended-upgrade base/pkgs/reboot, per-host schedule"
 }
-
-// OptsUnattendedCron marks the cron deployment as privileged. The per-host
-// schedule selection happens inside the task body via WhenHostname recipes.
-func (Unattended) OptsUnattendedCron() TaskOptions { return TaskOptions{Privileged()} }
 
 // UnattendedCron installs the three root cron jobs on every frontend host,
 // each host with its own window (morning on blowfish, evening on
@@ -140,9 +138,6 @@ func unattendedCronJobs(w [3]string) {
 func (Unattended) DescUnattendedNewsyslog() string {
 	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
 }
-
-// OptsUnattendedNewsyslog marks the rotation line as privileged.
-func (Unattended) OptsUnattendedNewsyslog() TaskOptions { return TaskOptions{Privileged()} }
 
 // UnattendedNewsyslog appends the rotation line; the explicit mode matches
 // the deployed file (0644) so no attribute churn happens on apply.
