@@ -227,6 +227,12 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 11. Changelog
 
+- **2026-09-16 (r0/r1/r2)**: registered `root@rN.wg0` Hosts + `rocky-k3s` /
+  `rocky-all` fleets; timer offsets *:05/*:25/*:45; `yum-utils` added to
+  Rocky packages task; gonf linux/amd64 bootstrapped and `pis_rocky` deployed
+  on r0/r1 (partner gate skipped with r2 down — as designed). r2 still off
+  (f2 did not wake); bootstrap+push when next online:
+  `scp gonf root@r2.wg0:/tmp && …; ./gonf.sh fleet rocky-k3s pis_rocky`.
 - **2026-09-16 (Rocky rollout)**: `pis_rocky_*` deployed to pi2/pi3; timers
   live. Fixed: skip restarting our own oneshot unit; at-most-one reboot per
   day (`last-reboot` stamp) because `needs-restarting -r` still reports
