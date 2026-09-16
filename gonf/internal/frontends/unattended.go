@@ -46,11 +46,11 @@ var unattendedCronWindows = map[string][3]string{
 
 // Unattended carries the unattended-upgrade deployment tasks for the
 // frontend hosts. Every unattended task needs root on the OpenBSD
-// frontends (struct-level Privileged default). The per-host cron schedule
-// is selected inside
-// the cron task body with the WhenHostname recipe, which is
-// plan-serializable and evaluated on the destination — so the task is safe
-// for aggregate pushes and `gonf fleet` runs (record once, apply per host).
+// frontends (the struct-level Privileged default). The per-host cron
+// schedule is selected inside the cron task body with the WhenHostname
+// recipe, which is plan-serializable and evaluated on the destination —
+// so the task is safe for aggregate pushes and `gonf fleet` runs (record
+// once, apply per host).
 type Unattended struct{}
 
 // Opts is the struct-level default: every unattended task needs root on the
