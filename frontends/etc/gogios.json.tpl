@@ -166,6 +166,10 @@
          # Server FQDNs have dedicated checks; ipv4./ipv6. have their own loop.
          next if $host eq 'blowfish.buetow.org' or $host eq 'fishfinger.buetow.org';
          next if $host =~ /^(ipv4|ipv6)\./;
+         # Garage's unauthenticated root endpoint returns 403 for both the
+         # service hostname and each virtual-hosted S3 bucket hostname.
+         $https_expect{$host} = 'HTTP/1.1 403'
+           if $host =~ /(?:^|\.)garage\.f3s\.buetow\.org$/;
          # ychat is currently unresponsive over HTTPS (socket timeout); adding a
          # check would alert on a known-broken legacy service. Re-enable by
          # removing this skip once it serves again.
