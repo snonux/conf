@@ -2,7 +2,10 @@
 // repository.
 package cluster
 
-import . "github.com/snonux/gonf/api"
+import (
+	"codeberg.org/snonux/conf/gonf/frontends"
+	. "github.com/snonux/gonf/api"
+)
 
 // Cluster names — the source of truth for which hosts a task package targets.
 // RegisterMethods(..., WithCluster(Name…)) so recipes use ClusterHosts() /
@@ -21,6 +24,7 @@ const (
 	NameRockyK3s  = "rocky-k3s"
 	NameRockyAll  = "rocky-all"
 	NameFreeBSD   = "freebsd-hosts"
+	NameGarage    = "garage"
 )
 
 // Per-host recipe value keys (WithValue). Every cluster member that a recipe
@@ -30,6 +34,7 @@ const (
 	ValueUnattendedOnCalendar  = "unattended.on_calendar"  // rocky OnCalendar= string
 	ValueUnattendedCronMinute  = "unattended.cron_minute"  // freebsd hourly minute string
 	ValueUnattendedAllowReboot = "unattended.allow_reboot" // freebsd bool; false on f3
+	ValueFrontendServer        = "frontends.server"        // frontends.Server address and role data
 )
 
 // Register registers the OpenBSD frontend hosts, the four Raspberry Pis, the
@@ -60,6 +65,7 @@ func Register() {
 		WithGOOS("openbsd"),
 		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCron, [3]string{"6", "6", "7"}),
+		WithValue(ValueFrontendServer, frontends.MustServer("blowfish")),
 	)
 	fishfinger := Host("fishfinger",
 		WithSSHUser("rex"),
@@ -69,8 +75,9 @@ func Register() {
 		WithGOOS("openbsd"),
 		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCron, [3]string{"22", "22", "23"}),
+		WithValue(ValueFrontendServer, frontends.MustServer("fishfinger")),
 	)
-	Cluster(NameFrontends, blowfish, fishfinger)
+	Cluster(NameFrontends, blowfish, fishfinger).Parallel(5)
 
 	pi0 := Host("pi0",
 		WithSSHUser("paul"),
@@ -145,7 +152,7 @@ func Register() {
 	)
 	// rocky-k3s = r0/r1/r2 only. rocky-all = every Rocky unattended host
 	// (Pis + k3s). Prefer OS-pair / role clusters for deploys.
-	Cluster(NameRockyK3s, r0, r1, r2)
+	Cluster(NameRockyK3s, r0, r1, r2).Parallel(3)
 	Cluster(NameRockyAll, pi2, pi3, r0, r1, r2)
 
 	f0 := Host("f0",
@@ -191,4 +198,5 @@ func Register() {
 	// freebsd-hosts = all FreeBSD hypervisors. f3 never auto-reboots
 	// (allow_reboot=false); script also hardcodes that for defense in depth.
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
+	Cluster(NameGarage, f0, f1, f2).Parallel(1)
 }

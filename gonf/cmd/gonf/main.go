@@ -4,23 +4,12 @@ import (
 	"os"
 
 	"codeberg.org/snonux/conf/gonf/cluster"
-	"codeberg.org/snonux/conf/gonf/freebsd"
-	"codeberg.org/snonux/conf/gonf/netbsd"
-	"codeberg.org/snonux/conf/gonf/openbsd"
-	"codeberg.org/snonux/conf/gonf/rocky"
-	. "github.com/snonux/gonf/api"
+	"codeberg.org/snonux/conf/gonf/tasks"
 	"github.com/snonux/gonf/cli"
 )
 
 func main() {
 	cluster.Register()
-	RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
-	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), WithCluster(cluster.NameNetBSDPis))
-	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), WithCluster(cluster.NameRockyAll))
-	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), WithCluster(cluster.NameFreeBSD))
-	Aggregate("frontends", "Install all frontends_* configuration", "^frontends_")
-	Aggregate("pis_netbsd", "Install all pis_netbsd_* configuration", "^pis_netbsd_")
-	Aggregate("rocky", "Install all rocky_* configuration", "^rocky_")
-	Aggregate("freebsd", "Install all freebsd_* configuration", "^freebsd_")
+	tasks.Register()
 	os.Exit(cli.CLI())
 }

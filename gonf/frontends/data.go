@@ -1,0 +1,168 @@
+// Package frontends holds the shared, source-controlled frontend topology used
+// by the migrated OpenBSD configuration tasks and their templates.
+package frontends
+
+import "fmt"
+
+const (
+	// Domain is the DNS suffix for the two public OpenBSD frontend hosts.
+	Domain = "buetow.org"
+
+	// Master and Standby name the active and failover frontend roles used by
+	// NSD and failover configuration.
+	Master  = "fishfinger"
+	Standby = "blowfish"
+)
+
+// Server is the stable per-frontend data that Rex previously derived from its
+// %ips map. It is suitable for WithTemplateData and WithValue.
+type Server struct {
+	Name string
+	FQDN string
+	IPv4 string
+	IPv6 string
+}
+
+// WireGuardAddress is a frontend-visible WireGuard peer address.
+type WireGuardAddress struct {
+	Name string
+	IPv4 string
+	IPv6 string
+}
+
+// Data is the shared collection data consumed by frontend configuration
+// templates. All fields are JSON-compatible for WithTemplateData.
+type Data struct {
+	Domain         string
+	Prefixes       []string
+	AcmeHosts      []string
+	F3SHosts       []string
+	GarageBuckets  []string
+	DNSZones       []string
+	DNSZonesRemove []string
+}
+
+var servers = map[string]Server{
+	"blowfish": {
+		Name: "blowfish",
+		FQDN: "blowfish." + Domain,
+		IPv4: "23.88.35.144",
+		IPv6: "2a01:4f8:c17:20f1::42",
+	},
+	"fishfinger": {
+		Name: "fishfinger",
+		FQDN: "fishfinger." + Domain,
+		IPv4: "46.23.94.99",
+		IPv6: "2a03:6000:6f67:624::99",
+	},
+}
+
+var prefixes = []string{"", "www.", "standby."}
+
+var f3sHosts = []string{
+	"f3s.buetow.org",
+	"ychat.f3s.buetow.org",
+	"player.f3s.buetow.org",
+	"xplayer.f3s.buetow.org",
+	"pihole.f3s.buetow.org",
+	"jellyfin.f3s.buetow.org",
+	"navidrome.f3s.buetow.org",
+	"code.f3s.buetow.org",
+	"immich.f3s.buetow.org",
+	"argocd.f3s.buetow.org",
+	"keybr.f3s.buetow.org",
+	"anki.f3s.buetow.org",
+	"bag.f3s.buetow.org",
+	"flux.f3s.buetow.org",
+	"audiobookshelf.f3s.buetow.org",
+	"garage.f3s.buetow.org",
+	"grafana.f3s.buetow.org",
+	"radicale.f3s.buetow.org",
+	"syncthing.f3s.buetow.org",
+	"koreader.f3s.buetow.org",
+	"filebrowser.f3s.buetow.org",
+	"webdav.f3s.buetow.org",
+	"pkgrepo.f3s.buetow.org",
+	"goprecords.f3s.buetow.org",
+	"ipv6test.f3s.buetow.org",
+	"ipv4.ipv6test.f3s.buetow.org",
+	"ipv6.ipv6test.f3s.buetow.org",
+}
+
+var garageBuckets = []string{"taskwarrior", "quicklog"}
+
+var acmeHosts = []string{
+	"buetow.org",
+	"git.buetow.org",
+	"paul.buetow.org",
+	"dory.buetow.org",
+	"ecat.buetow.org",
+	"znc.buetow.org",
+	"dtail.dev",
+	"foo.zone",
+	"stats.foo.zone",
+	"irregular.ninja",
+	"alt.irregular.ninja",
+	"snonux.foo",
+	"gogios.buetow.org",
+	"blowfish.buetow.org",
+	"fishfinger.buetow.org",
+}
+
+var dnsZones = []string{"buetow.org", "dtail.dev", "foo.zone", "irregular.ninja", "snonux.foo"}
+
+var wireGuardAddresses = []WireGuardAddress{
+	{Name: "blowfish", IPv4: "192.168.2.110", IPv6: "fd42:beef:cafe:2::110"},
+	{Name: "fishfinger", IPv4: "192.168.2.111", IPv6: "fd42:beef:cafe:2::111"},
+	{Name: "f0", IPv4: "192.168.2.130", IPv6: "fd42:beef:cafe:2::130"},
+	{Name: "f1", IPv4: "192.168.2.131", IPv6: "fd42:beef:cafe:2::131"},
+	{Name: "f2", IPv4: "192.168.2.132", IPv6: "fd42:beef:cafe:2::132"},
+	{Name: "r0", IPv4: "192.168.2.120", IPv6: "fd42:beef:cafe:2::120"},
+	{Name: "r1", IPv4: "192.168.2.121", IPv6: "fd42:beef:cafe:2::121"},
+	{Name: "r2", IPv4: "192.168.2.122", IPv6: "fd42:beef:cafe:2::122"},
+	{Name: "rocky", IPv4: "192.168.2.123", IPv6: "fd42:beef:cafe:2::123"},
+	{Name: "pi0", IPv4: "192.168.2.203", IPv6: "fd42:beef:cafe:2::203"},
+	{Name: "pi1", IPv4: "192.168.2.204", IPv6: "fd42:beef:cafe:2::204"},
+}
+
+// ServerFor returns one frontend's stable addressing data.
+func ServerFor(name string) (Server, bool) {
+	server, ok := servers[name]
+	return server, ok
+}
+
+// MustServer returns one frontend's stable addressing data. An unknown name
+// is a programmer error in static consumer inventory.
+func MustServer(name string) Server {
+	server, ok := ServerFor(name)
+	if !ok {
+		panic(fmt.Sprintf("unknown frontend server %q", name))
+	}
+	return server
+}
+
+// TemplateData returns independent slices so callers may safely derive a
+// task-specific template payload without mutating the shared topology.
+func TemplateData() Data {
+	f3s := append([]string(nil), f3sHosts...)
+	for _, bucket := range garageBuckets {
+		f3s = append(f3s, bucket+".garage.f3s.buetow.org")
+	}
+	acme := append([]string(nil), acmeHosts...)
+	acme = append(acme, f3s...)
+	return Data{
+		Domain:         Domain,
+		Prefixes:       append([]string(nil), prefixes...),
+		AcmeHosts:      acme,
+		F3SHosts:       f3s,
+		GarageBuckets:  append([]string(nil), garageBuckets...),
+		DNSZones:       append([]string(nil), dnsZones...),
+		DNSZonesRemove: []string{},
+	}
+}
+
+// WireGuardAddresses returns independent peer rows for /etc/hosts and
+// monitoring configuration.
+func WireGuardAddresses() []WireGuardAddress {
+	return append([]WireGuardAddress(nil), wireGuardAddresses...)
+}
