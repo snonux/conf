@@ -1,0 +1,44 @@
+#
+# $OpenBSD: acme-client.conf,v 1.4 2020/09/17 09:13:06 florian Exp $
+#
+authority letsencrypt {
+	api url "https://acme-v02.api.letsencrypt.org/directory"
+	account key "/etc/acme/letsencrypt-privkey.pem"
+}
+
+authority letsencrypt-staging {
+	api url "https://acme-staging-v02.api.letsencrypt.org/directory"
+	account key "/etc/acme/letsencrypt-staging-privkey.pem"
+}
+
+authority buypass {
+	api url "https://api.buypass.com/acme/directory"
+	account key "/etc/acme/buypass-privkey.pem"
+	contact "mailto:me@example.com"
+}
+
+authority buypass-test {
+	api url "https://api.test4.buypass.no/acme/directory"
+	account key "/etc/acme/buypass-test-privkey.pem"
+	contact "mailto:me@example.com"
+}
+
+{{range .Domains}}
+domain {{.Name}} {
+	alternative names { {{range .AlternativeNames}}{{.}} {{end}}}
+	domain key "/etc/ssl/private/{{.Name}}.key"
+	domain full chain certificate "/etc/ssl/{{.Name}}.fullchain.pem"
+	sign with letsencrypt
+}
+domain standby.{{.Name}} {
+	domain key "/etc/ssl/private/standby.{{.Name}}.key"
+	domain full chain certificate "/etc/ssl/standby.{{.Name}}.fullchain.pem"
+	sign with letsencrypt
+}
+{{end}}
+# Current server's FQDN; no www/standby variants for server hostnames.
+domain {{.ServerFQDN}} {
+	domain key "/etc/ssl/private/{{.ServerFQDN}}.key"
+	domain full chain certificate "/etc/ssl/{{.ServerFQDN}}.fullchain.pem"
+	sign with letsencrypt
+}

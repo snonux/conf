@@ -4,6 +4,7 @@ package tasks
 import (
 	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/freebsd"
+	"codeberg.org/snonux/conf/gonf/frontends"
 	"codeberg.org/snonux/conf/gonf/garage"
 	"codeberg.org/snonux/conf/gonf/netbsd"
 	"codeberg.org/snonux/conf/gonf/openbsd"
@@ -17,6 +18,7 @@ import (
 // than extending main directly.
 func Register() {
 	RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
+	RegisterMethods(frontends.Maintenance{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), WithCluster(cluster.NameNetBSDPis))
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), WithCluster(cluster.NameRockyAll))
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), WithCluster(cluster.NameRockyK3s))

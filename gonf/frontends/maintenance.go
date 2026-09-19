@@ -1,0 +1,311 @@
+package frontends
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	. "github.com/snonux/gonf/api"
+	. "github.com/snonux/gonf/api/options"
+
+	"codeberg.org/snonux/conf/gonf/paths"
+)
+
+const (
+	dailyLocal       = "/etc/daily.local"
+	frontendAssetDir = "gonf/frontends/assets"
+)
+
+// Maintenance carries the root-only, non-network frontend maintenance tasks.
+// Its package, content, and schedule policy comes directly from the matching
+// Rex tasks, while the host-specific facts live in cluster inventory.
+type Maintenance struct {
+	RequiresRoot
+}
+
+type serviceAccount struct {
+	Name       string
+	Home       string
+	LoginClass string
+}
+
+var frontendServiceAccounts = []serviceAccount{
+	{Name: "_dserver", Home: "/var/run/dserver", LoginClass: "nologin"},
+	{Name: "_gogios", Home: "/var/run/gogios"},
+	{Name: "_gorum", Home: "/var/run/gorum", LoginClass: "nologin"},
+}
+
+// DescServiceAccounts returns the description shown for the frontend account
+// task.
+func (Maintenance) DescServiceAccounts() string {
+	return "Create frontend service accounts with their declared homes"
+}
+
+// ServiceAccounts makes the Rex service identities declarative, separately
+// from the custom packages that supply their binaries. User creation is
+// additive-only, so the guarded command preserves Rex's explicit existing
+// account home convergence without extending User's portable contract.
+func (Maintenance) ServiceAccounts() {
+	onFrontends(func() {
+		for _, spec := range frontendServiceAccounts {
+			opts := []LocalUserOption{WithPrimaryGroup(spec.Name), WithHome(spec.Home)}
+			if spec.LoginClass != "" {
+				opts = append(opts, WithLoginClass(spec.LoginClass))
+			}
+			account := User(spec.Name, opts...)
+			Command("usermod", List("-d", spec.Home, spec.Name),
+				DependsOn(account),
+				Unless("sh", List("-c", accountHomeGuard(spec))),
+				WithName("usermod-home-"+spec.Name))
+		}
+	})
+}
+
+// DescBase returns the description shown for the frontend base task.
+func (Maintenance) DescBase() string {
+	return "Install frontend base packages and local administration helpers"
+}
+
+// Base installs the common operator packages and the small rc files owned by
+// the Rex base task. DTail is merely named in pkg_scripts here; its package,
+// account, and service are deliberately owned by the later custom-package
+// migration task.
+func (Maintenance) Base() {
+	for _, host := range ClusterHosts() {
+		server := MustHostValue[Server](host, ValueServer)
+		WhenHostname(host, func() {
+			Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
+			EnsureFile("/etc/rc.local")
+			File("/etc/rc.conf.local", WithLine(pkgScriptsLine(server.Name)))
+		})
+	}
+}
+
+// DescMyname returns the description shown for the frontend hostname task.
+func (Maintenance) DescMyname() string {
+	return "Set each frontend's OpenBSD hostname"
+}
+
+// Myname writes the stable FQDN from inventory rather than rendering the Rex
+// closure-based template on the destination.
+func (Maintenance) Myname() {
+	for _, host := range ClusterHosts() {
+		server := MustHostValue[Server](host, ValueServer)
+		WhenHostname(host, func() {
+			File("/etc/myname", WithContent(server.FQDN+"\n"),
+				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+		})
+	}
+}
+
+// DescWireGuardHosts returns the description shown for the hosts task.
+func (Maintenance) DescWireGuardHosts() string {
+	return "Append WireGuard mesh IPv4 and IPv6 host entries"
+}
+
+// WireGuardHosts appends the source-controlled mesh rows without replacing
+// administrator-owned /etc/hosts content.
+func (Maintenance) WireGuardHosts() {
+	onFrontends(func() { File("/etc/hosts", WithLines(WireGuardHostLines()...)) })
+}
+
+// DescUptimed returns the description shown for the uptime recorder task.
+func (Maintenance) DescUptimed() string {
+	return "Install and enable the uptimed service"
+}
+
+// Uptimed installs the recorder and converges it to enabled/running.
+func (Maintenance) Uptimed() {
+	onFrontends(func() {
+		uptimed := Package("uptimed")
+		Service("uptimed", DependsOn(uptimed))
+	})
+}
+
+// DescGoprecords returns the description shown for the optional uploader task.
+func (Maintenance) DescGoprecords() string {
+	return "Install optional daily uptimed uploads to goprecords"
+}
+
+// Goprecords installs the uploader on every frontend. A host lacking its
+// controller-side token receives no token, hook, or schedule, matching Rex's
+// safe skip behavior while keeping a missing token out of plans and logs.
+func (Maintenance) Goprecords() {
+	for _, host := range ClusterHosts() {
+		server := MustHostValue[Server](host, ValueServer)
+		token, ok := OptionalSecret(paths.FrontendSecret("etc/goprecords/" + server.Name + ".token"))
+		WhenHostname(host, func() {
+			Package("curl")
+			if !ok {
+				return
+			}
+			token = strings.TrimRight(token, "\r\n")
+			if token == "" {
+				return
+			}
+			File("/etc/goprecords-upload.token", WithContent(token+"\n"),
+				WithMode(0o600), WithOwner("root"), WithGroup("wheel"))
+			uploader := InstallFile("/usr/local/bin/goprecords-upload-client.sh",
+				legacyFrontendAsset("scripts/goprecords-upload-client.sh"),
+				WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+			NoFile("/usr/local/bin/goprecords-upload.sh")
+			File(dailyLocal,
+				WithoutLine("/usr/local/bin/goprecords-upload.sh"),
+				WithLine("GOPRECORDS_HOST="+server.Name+" /usr/local/bin/goprecords-upload-client.sh"),
+				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(uploader))
+		})
+	}
+}
+
+// DescRsync returns the description shown for the frontend rsync task.
+func (Maintenance) DescRsync() string {
+	return "Install frontend rsync service configuration and synchronization cron"
+}
+
+// Rsync installs the common daemon configuration and the existing root cron
+// behavior. The command intentionally retains Rex's leading -ns argument.
+func (Maintenance) Rsync() {
+	onFrontends(func() {
+		rsync := Package("rsync")
+		File("/etc/rsyncd.conf", WithContent(rsyncdConfig),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+		script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
+			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+		Cron("frontend-rsync", WithCommand("-ns /usr/local/bin/rsync.sh"), WithMinute("*/5"), DependsOn(rsync, script))
+	})
+}
+
+// DescGemtexter returns the description shown for the static-site task.
+func (Maintenance) DescGemtexter() string {
+	return "Install the daily Gemtexter content updater"
+}
+
+// Gemtexter installs the source-controlled updater and appends it to the
+// existing daily.local file without replacing other maintenance hooks.
+func (Maintenance) Gemtexter() {
+	onFrontends(func() {
+		script := InstallFile("/usr/local/bin/gemtexter.sh", legacyFrontendAsset("scripts/gemtexter.sh.tpl"),
+			WithMode(0o744), WithOwner("root"), WithGroup("wheel"))
+		File(dailyLocal, WithLine("/usr/local/bin/gemtexter.sh"),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(script))
+	})
+}
+
+// DescACME returns the description shown for the certificate setup task.
+func (Maintenance) DescACME() string {
+	return "Install per-frontend ACME client configuration and daily renewal hook"
+}
+
+// ACME installs Go-native equivalents of the former Perl templates. The
+// actual invocation remains a separate network-service task so a setup plan
+// cannot request certificates or restart daemons.
+func (Maintenance) ACME() {
+	for _, host := range ClusterHosts() {
+		server := MustHostValue[Server](host, ValueServer)
+		WhenHostname(host, func() {
+			data := acmeData(server)
+			config := InstallFile("/etc/acme-client.conf", frontendAsset("acme-client.conf.tmpl"),
+				WithTemplateData(data), WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+			script := InstallFile("/usr/local/bin/acme.sh", frontendAsset("acme.sh.tmpl"),
+				WithTemplateData(data), WithMode(0o744), WithOwner("root"), WithGroup("wheel"))
+			File(dailyLocal, WithLine("/usr/local/bin/acme.sh"),
+				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(config, script))
+		})
+	}
+}
+
+type acmeTemplateData struct {
+	Domains         []acmeDomain
+	NonStandbyHosts []string
+	ServerFQDN      string
+}
+
+type acmeDomain struct {
+	Name             string
+	AlternativeNames []string
+}
+
+func acmeData(server Server) acmeTemplateData {
+	topology := TemplateData()
+	domains := make([]acmeDomain, 0, len(topology.AcmeHosts))
+	nonStandbyHosts := make([]string, 0, 2)
+	for _, host := range topology.AcmeHosts {
+		if host == "blowfish.buetow.org" || host == "fishfinger.buetow.org" {
+			continue
+		}
+		if strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.") {
+			nonStandbyHosts = append(nonStandbyHosts, host)
+			continue
+		}
+		alternativeNames := []string{"www." + host}
+		for _, candidate := range topology.AcmeHosts {
+			if candidate == "ipv4."+host || candidate == "ipv6."+host {
+				alternativeNames = append(alternativeNames, candidate)
+			}
+		}
+		domains = append(domains, acmeDomain{
+			Name:             host,
+			AlternativeNames: alternativeNames,
+		})
+	}
+	return acmeTemplateData{
+		Domains:         domains,
+		NonStandbyHosts: nonStandbyHosts,
+		ServerFQDN:      server.FQDN,
+	}
+}
+
+func frontendAsset(name string) string {
+	return filepath.Join(paths.Conf, frontendAssetDir, name)
+}
+
+func accountHomeGuard(spec serviceAccount) string {
+	return fmt.Sprintf("awk -F: '$1 == %q && $6 == %q { found = 1 } END { exit !found }' /etc/passwd", spec.Name, spec.Home)
+}
+
+func onFrontends(fn func()) {
+	WhenHostname(ClusterHosts(), fn)
+}
+
+func legacyFrontendAsset(name string) string {
+	return filepath.Join(paths.Frontends, name)
+}
+
+func pkgScriptsLine(name string) string {
+	scripts := []string{"uptimed", "httpd", "dserver", "icinga2"}
+	if name == "fishfinger" {
+		scripts = append(scripts, "znc")
+	}
+	return fmt.Sprintf("pkg_scripts=\"%s\"", strings.Join(scripts, " "))
+}
+
+const rsyncdConfig = `max connections = 5
+timeout = 300
+
+[joernshtdocs]
+comment = Joerns htdocs
+path = /var/www/htdocs/joern
+read only = yes
+list = yes
+uid = www
+gid = www
+hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
+
+[irregular-ninja]
+comment = Irregular Ninja photo album (push from k3s over wg0)
+path = /var/www/htdocs/irregular.ninja
+read only = no
+list = yes
+uid = www
+gid = www
+hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
+
+[alt-irregular-ninja]
+comment = Alternative Irregular Ninja photo album (push from k3s over wg0)
+path = /var/www/htdocs/alt.irregular.ninja
+read only = no
+list = yes
+uid = www
+gid = www
+hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
+`

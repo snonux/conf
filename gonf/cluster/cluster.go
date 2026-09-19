@@ -34,7 +34,7 @@ const (
 	ValueUnattendedOnCalendar  = "unattended.on_calendar"  // rocky OnCalendar= string
 	ValueUnattendedCronMinute  = "unattended.cron_minute"  // freebsd hourly minute string
 	ValueUnattendedAllowReboot = "unattended.allow_reboot" // freebsd bool; false on f3
-	ValueFrontendServer        = "frontends.server"        // frontends.Server address and role data
+	ValueFrontendServer        = frontends.ValueServer     // frontends.Server address and role data
 	ValueGarageRPCPublicAddr   = "garage.rpc_public_addr"  // Garage node RPC address, including port
 )
 

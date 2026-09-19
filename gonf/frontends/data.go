@@ -12,6 +12,11 @@ const (
 	// NSD and failover configuration.
 	Master  = "fishfinger"
 	Standby = "blowfish"
+
+	// ValueServer is the inventory key for one frontend's stable addressing
+	// facts. It lives with Server so frontend task packages can consume the
+	// value without creating an import cycle through cluster.
+	ValueServer = "frontends.server"
 )
 
 // Server is the stable per-frontend data that Rex previously derived from its
@@ -114,15 +119,17 @@ var dnsZones = []string{"buetow.org", "dtail.dev", "foo.zone", "irregular.ninja"
 var wireGuardAddresses = []WireGuardAddress{
 	{Name: "blowfish", IPv4: "192.168.2.110", IPv6: "fd42:beef:cafe:2::110"},
 	{Name: "fishfinger", IPv4: "192.168.2.111", IPv6: "fd42:beef:cafe:2::111"},
-	{Name: "f0", IPv4: "192.168.2.130", IPv6: "fd42:beef:cafe:2::130"},
-	{Name: "f1", IPv4: "192.168.2.131", IPv6: "fd42:beef:cafe:2::131"},
-	{Name: "f2", IPv4: "192.168.2.132", IPv6: "fd42:beef:cafe:2::132"},
 	{Name: "r0", IPv4: "192.168.2.120", IPv6: "fd42:beef:cafe:2::120"},
 	{Name: "r1", IPv4: "192.168.2.121", IPv6: "fd42:beef:cafe:2::121"},
 	{Name: "r2", IPv4: "192.168.2.122", IPv6: "fd42:beef:cafe:2::122"},
 	{Name: "rocky", IPv4: "192.168.2.123", IPv6: "fd42:beef:cafe:2::123"},
+	{Name: "f0", IPv4: "192.168.2.130", IPv6: "fd42:beef:cafe:2::130"},
+	{Name: "f1", IPv4: "192.168.2.131", IPv6: "fd42:beef:cafe:2::131"},
+	{Name: "f2", IPv4: "192.168.2.132", IPv6: "fd42:beef:cafe:2::132"},
 	{Name: "pi0", IPv4: "192.168.2.203", IPv6: "fd42:beef:cafe:2::203"},
 	{Name: "pi1", IPv4: "192.168.2.204", IPv6: "fd42:beef:cafe:2::204"},
+	{Name: "earth", IPv4: "192.168.2.200", IPv6: "fd42:beef:cafe:2::200"},
+	{Name: "pixel7pro", IPv4: "192.168.2.201", IPv6: "fd42:beef:cafe:2::201"},
 }
 
 // ServerFor returns one frontend's stable addressing data.
@@ -165,4 +172,19 @@ func TemplateData() Data {
 // monitoring configuration.
 func WireGuardAddresses() []WireGuardAddress {
 	return append([]WireGuardAddress(nil), wireGuardAddresses...)
+}
+
+// WireGuardHostLines returns the legacy /etc/hosts rows in their established
+// IPv4-then-IPv6 order. Consumers append these lines instead of replacing
+// administrator-owned host entries.
+func WireGuardHostLines() []string {
+	peers := WireGuardAddresses()
+	lines := make([]string, 0, len(peers)*2)
+	for _, peer := range peers {
+		lines = append(lines, peer.IPv4+" "+peer.Name+".wg0.wan.buetow.org "+peer.Name+".wg0")
+	}
+	for _, peer := range peers {
+		lines = append(lines, peer.IPv6+" "+peer.Name+".wg0.wan.buetow.org "+peer.Name+".wg0")
+	}
+	return lines
 }
