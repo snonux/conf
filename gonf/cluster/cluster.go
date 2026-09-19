@@ -35,6 +35,7 @@ const (
 	ValueUnattendedCronMinute  = "unattended.cron_minute"  // freebsd hourly minute string
 	ValueUnattendedAllowReboot = "unattended.allow_reboot" // freebsd bool; false on f3
 	ValueFrontendServer        = "frontends.server"        // frontends.Server address and role data
+	ValueGarageRPCPublicAddr   = "garage.rpc_public_addr"  // Garage node RPC address, including port
 )
 
 // Register registers the OpenBSD frontend hosts, the four Raspberry Pis, the
@@ -164,6 +165,7 @@ func Register() {
 		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCronMinute, "5"),
 		WithValue(ValueUnattendedAllowReboot, true),
+		WithValue(ValueGarageRPCPublicAddr, "192.168.1.130:3901"),
 	)
 	f1 := Host("f1",
 		WithSSHUser("paul"),
@@ -174,6 +176,7 @@ func Register() {
 		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCronMinute, "25"),
 		WithValue(ValueUnattendedAllowReboot, true),
+		WithValue(ValueGarageRPCPublicAddr, "192.168.1.131:3901"),
 	)
 	f2 := Host("f2",
 		WithSSHUser("paul"),
@@ -184,6 +187,7 @@ func Register() {
 		WithGOARCH("amd64"),
 		WithValue(ValueUnattendedCronMinute, "45"),
 		WithValue(ValueUnattendedAllowReboot, true),
+		WithValue(ValueGarageRPCPublicAddr, "192.168.1.132:3901"),
 	)
 	f3 := Host("f3",
 		WithSSHUser("paul"),

@@ -1,21 +1,21 @@
-replication_factor = 3
-consistency_mode = "consistent"
+replication_factor = {{.ReplicationFactor}}
+consistency_mode = "{{.ConsistencyMode}}"
 
-metadata_dir = "/var/db/garage/meta"
+metadata_dir = "{{.MetadataDir}}"
 data_dir = [
-  { path = "/var/db/garage/data", capacity = "23G" }
+  { path = "{{.DataDir}}", capacity = "{{.DataCapacity}}" }
 ]
-metadata_auto_snapshot_interval = "6h"
+metadata_auto_snapshot_interval = "{{.MetadataAutoSnapshotInterval}}"
 
-db_engine = "lmdb"
+db_engine = "{{.DBEngine}}"
 
-rpc_secret = "__RPC_SECRET__"
-rpc_bind_addr = "0.0.0.0:3901"
-rpc_public_addr = "192.168.1.131:3901"
+rpc_secret = {{.RPCSecret}}
+rpc_bind_addr = "{{.RPCBindAddr}}"
+rpc_public_addr = "{{.RPCPublicAddr}}"
 
 [s3_api]
-api_bind_addr = "0.0.0.0:3900"
-s3_region = "garage"
+api_bind_addr = "{{.S3APIBindAddr}}"
+s3_region = "{{.S3Region}}"
 # Enables virtual-hosted-style addressing: a request whose Host is
 # <bucket>.garage.f3s.buetow.org is resolved to that bucket. Needed because the AWS
 # SDK derives the hostname as <bucket>.<endpoint>, and Taskwarrior's stock
@@ -25,7 +25,7 @@ s3_region = "garage"
 #
 # Path-style access is unaffected and keeps working alongside this (verified),
 # so existing consumers such as watchos-app are not impacted.
-root_domain = ".garage.f3s.buetow.org"
+root_domain = "{{.RootDomain}}"
 
 [admin]
-api_bind_addr = "0.0.0.0:3903"
+api_bind_addr = "{{.AdminAPIBindAddr}}"

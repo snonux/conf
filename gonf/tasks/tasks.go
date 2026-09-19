@@ -4,6 +4,7 @@ package tasks
 import (
 	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/freebsd"
+	"codeberg.org/snonux/conf/gonf/garage"
 	"codeberg.org/snonux/conf/gonf/netbsd"
 	"codeberg.org/snonux/conf/gonf/openbsd"
 	"codeberg.org/snonux/conf/gonf/rnodes"
@@ -20,10 +21,12 @@ func Register() {
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), WithCluster(cluster.NameRockyAll))
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), WithCluster(cluster.NameRockyK3s))
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), WithCluster(cluster.NameFreeBSD))
+	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), WithCluster(cluster.NameGarage))
 
 	Aggregate("frontends", "Install all frontends_* configuration", "^frontends_")
 	Aggregate("pis_netbsd", "Install all pis_netbsd_* configuration", "^pis_netbsd_")
 	Aggregate("rocky", "Install all rocky_* configuration", "^rocky_")
 	Aggregate("rnodes", "Install all rnodes_* configuration", "^rnodes_")
 	Aggregate("freebsd", "Install all freebsd_* configuration", "^freebsd_")
+	Aggregate("garage", "Install all Garage configuration", "^garage_")
 }

@@ -1,14 +1,18 @@
-# Garage cluster on FreeBSD f0–f2. Run rex from repo root unless noted.
+# Garage cluster on FreeBSD f0–f2. Run Gonf from repo root unless noted.
 ssh_host := "paul@f0.lan.buetow.org"
 _garage_dir := justfile_directory()
 
-# Deploy TOML (RPC secret from secrets/rpc_secret) and restart garage on all nodes
+# Deploy TOML (RPC secret from gonf/secrets/garage/rpc_secret) and restart
+# Garage only when the managed config changed. The gonf task uses the f0–f2
+# inventory with paul@…:22 + doas.
 deploy:
-    cd "{{_garage_dir}}/../.." && rex garage_deploy
+    cd "{{_garage_dir}}/../.." && ./gonf.sh cluster garage garage_config
 
-# Ensure secrets/rpc_secret exists (openssl rand -hex 32)
+# Ensure gonf/secrets/garage/rpc_secret exists (openssl rand -hex 32).
+# An existing Rex-era secret is copied once, preserving the live cluster's
+# shared RPC identity instead of silently rotating it during the migration.
 init-secrets:
-    mkdir -p "{{_garage_dir}}/secrets" && ( test -f "{{_garage_dir}}/secrets/rpc_secret" || openssl rand -hex 32 > "{{_garage_dir}}/secrets/rpc_secret" ) && chmod 600 "{{_garage_dir}}/secrets/rpc_secret"
+    cd "{{_garage_dir}}/../.." && mkdir -p gonf/secrets/garage && if test ! -f gonf/secrets/garage/rpc_secret; then if test -f f3s/garage/secrets/rpc_secret; then install -m 600 f3s/garage/secrets/rpc_secret gonf/secrets/garage/rpc_secret; else openssl rand -hex 32 > gonf/secrets/garage/rpc_secret; fi; fi && chmod 600 gonf/secrets/garage/rpc_secret
 
 # garage service status on f0
 status:
