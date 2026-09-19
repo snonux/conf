@@ -127,7 +127,7 @@ script (decision #4 in §9).
 
 ## 5. gonf integration
 
-- Fleet `Host`s (in `internal/fleet`): pi0/pi1 (`paul@piN.lan.buetow.org`,
+- Fleet `Host`s (in `cluster`): pi0/pi1 (`paul@piN.lan.buetow.org`,
   **`WithSSHPort(22)`**, `WithPrivilege(PrivilegeDoas)`) and pi2/pi3
   (`paul@…:22`, `WithPrivilege(PrivilegeSudo)`). The port override is
   mandatory (§2 gotcha).
@@ -226,7 +226,7 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 ## 11. Changelog
 
 - **2026-09-16 (SystemdTimer + r2)**: gonf **0.9.0** adds declarative
-  `SystemdTimer` (plan schema v7); Rocky `UnattendedUnits` uses it instead of
+  `SystemdTimer` (plan schema v7); Rocky `Units` uses it instead of
   hand-maintained `.service`/`.timer` files under `frontends/systemd/`.
   Bootstrapped 0.9.0 on pi2/pi3/r0/r1/r2; `fleet rocky-all pis_rocky` — r2
   first full apply (timer *:45 live); others converged (unit content unchanged).

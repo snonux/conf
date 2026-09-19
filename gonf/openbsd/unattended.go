@@ -7,8 +7,8 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/internal/fleet"
-	"codeberg.org/snonux/conf/gonf/internal/paths"
+	"codeberg.org/snonux/conf/gonf/cluster"
+	"codeberg.org/snonux/conf/gonf/paths"
 )
 
 // unattendedServicesContent is the daemon restart list deployed to
@@ -37,8 +37,8 @@ const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t
 // Unattended carries the unattended-upgrade deployment tasks for the
 // frontend hosts. The embedded RequiresRoot marker declares the execution
 // contract on the struct itself: every task applies as root on the OpenBSD
-// frontends. Register with WithFleet(fleet.NameFrontends). Per-host cron
-// hours live on each Host via WithValue(fleet.ValueUnattendedCron, …).
+// frontends. Register with WithCluster(cluster.NameFrontends). Per-host cron
+// hours live on each Host via WithValue(cluster.ValueUnattendedCron, …).
 type Unattended struct {
 	RequiresRoot
 }
@@ -61,41 +61,41 @@ func (Unattended) Ping() {
 	)
 }
 
-// DescUnattendedScript returns the description for the wrapper deployment.
-func (Unattended) DescUnattendedScript() string {
+// DescScript returns the description for the wrapper deployment.
+func (Unattended) DescScript() string {
 	return "Install /usr/local/sbin/unattended-upgrade wrapper (0755 root:wheel)"
 }
 
-// UnattendedScript installs the hardened ksh wrapper script.
-func (Unattended) UnattendedScript() {
+// Script installs the hardened ksh wrapper script.
+func (Unattended) Script() {
 	InstallFile("/usr/local/sbin/unattended-upgrade",
 		paths.Frontends+"/scripts/unattended-upgrade.sh",
 		WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 }
 
-// DescUnattendedServices returns the description for the restart list.
-func (Unattended) DescUnattendedServices() string {
+// DescServices returns the description for the restart list.
+func (Unattended) DescServices() string {
 	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
 }
 
-// UnattendedServices installs the daemon restart list.
-func (Unattended) UnattendedServices() {
+// Services installs the daemon restart list.
+func (Unattended) Services() {
 	File("/etc/unattended-upgrade-services",
 		WithContent(unattendedServicesContent),
 		WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 }
 
-// DescUnattendedCron returns the description for the per-host cron schedule.
-func (Unattended) DescUnattendedCron() string {
+// DescCron returns the description for the per-host cron schedule.
+func (Unattended) DescCron() string {
 	return "Root cron: unattended-upgrade base/pkgs/reboot, per-host schedule"
 }
 
-// UnattendedCron installs the three root cron jobs on every frontend host,
+// Cron installs the three root cron jobs on every frontend host,
 // each host with its own window (morning on blowfish, evening on
 // fishfinger): record once, evaluate per destination.
-func (Unattended) UnattendedCron() {
-	for _, host := range FleetHosts() {
-		w := MustHostValue[[3]string](host, fleet.ValueUnattendedCron)
+func (Unattended) Cron() {
+	for _, host := range ClusterHosts() {
+		w := MustHostValue[[3]string](host, cluster.ValueUnattendedCron)
 		WhenHostname(host, func() { unattendedCronJobs(w) })
 	}
 }
@@ -115,13 +115,13 @@ func unattendedCronJobs(w [3]string) {
 		WithMinute("10"), WithHour(w[2]))
 }
 
-// DescUnattendedNewsyslog returns the description for the rotation line.
-func (Unattended) DescUnattendedNewsyslog() string {
+// DescNewsyslog returns the description for the rotation line.
+func (Unattended) DescNewsyslog() string {
 	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
 }
 
-// UnattendedNewsyslog appends the rotation line; the explicit mode matches
+// Newsyslog appends the rotation line; the explicit mode matches
 // the deployed file (0644) so no attribute churn happens on apply.
-func (Unattended) UnattendedNewsyslog() {
+func (Unattended) Newsyslog() {
 	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }

@@ -6,8 +6,8 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/internal/fleet"
-	"codeberg.org/snonux/conf/gonf/internal/paths"
+	"codeberg.org/snonux/conf/gonf/cluster"
+	"codeberg.org/snonux/conf/gonf/paths"
 )
 
 // unattendedServicesContent is the rc.d restart list for pi0/pi1. Service name
@@ -27,20 +27,20 @@ sshd
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\troot:wheel\t600  5    1024 *    Z"
 
 // Unattended carries the unattended-upgrade deployment for pi0/pi1.
-// Register with WithFleet(fleet.NameNetBSDPis). Per-host cron hours live on
-// each Host via WithValue(fleet.ValueUnattendedCron, …).
+// Register with WithCluster(cluster.NameNetBSDPis). Per-host cron hours live on
+// each Host via WithValue(cluster.ValueUnattendedCron, …).
 type Unattended struct {
 	RequiresRoot
 }
 
-// DescUnattendedScript returns the description for the wrapper deployment.
-func (Unattended) DescUnattendedScript() string {
+// DescScript returns the description for the wrapper deployment.
+func (Unattended) DescScript() string {
 	return "Install /usr/local/sbin/unattended-upgrade-netbsd (0755 root:wheel)"
 }
 
-// UnattendedScript installs the NetBSD ksh wrapper.
-func (Unattended) UnattendedScript() {
-	WhenHostname(FleetHosts(), func() {
+// Script installs the NetBSD ksh wrapper.
+func (Unattended) Script() {
+	WhenHostname(ClusterHosts(), func() {
 		dir := EnsureDir("/usr/local/sbin",
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		InstallFile("/usr/local/sbin/unattended-upgrade-netbsd",
@@ -50,29 +50,29 @@ func (Unattended) UnattendedScript() {
 	})
 }
 
-// DescUnattendedServices returns the description for the restart list.
-func (Unattended) DescUnattendedServices() string {
+// DescServices returns the description for the restart list.
+func (Unattended) DescServices() string {
 	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
 }
 
-// UnattendedServices installs the rc.d restart list.
-func (Unattended) UnattendedServices() {
-	WhenHostname(FleetHosts(), func() {
+// Services installs the rc.d restart list.
+func (Unattended) Services() {
+	WhenHostname(ClusterHosts(), func() {
 		File("/etc/unattended-upgrade-services",
 			WithContent(unattendedServicesContent),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 	})
 }
 
-// DescUnattendedCron returns the description for the per-host cron schedule.
-func (Unattended) DescUnattendedCron() string {
+// DescCron returns the description for the per-host cron schedule.
+func (Unattended) DescCron() string {
 	return "Root cron: unattended-upgrade-netbsd pkgs/reboot, per-host schedule"
 }
 
-// UnattendedCron installs pkgs + reboot cron jobs with per-host windows.
-func (Unattended) UnattendedCron() {
-	for _, host := range FleetHosts() {
-		w := MustHostValue[[2]string](host, fleet.ValueUnattendedCron)
+// Cron installs pkgs + reboot cron jobs with per-host windows.
+func (Unattended) Cron() {
+	for _, host := range ClusterHosts() {
+		w := MustHostValue[[2]string](host, cluster.ValueUnattendedCron)
 		WhenHostname(host, func() { unattendedCronJobs(w) })
 	}
 }
@@ -86,14 +86,14 @@ func unattendedCronJobs(w [2]string) {
 		WithMinute("50"), WithHour(w[1]))
 }
 
-// DescUnattendedNewsyslog returns the description for the rotation line.
-func (Unattended) DescUnattendedNewsyslog() string {
+// DescNewsyslog returns the description for the rotation line.
+func (Unattended) DescNewsyslog() string {
 	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
 }
 
-// UnattendedNewsyslog appends the rotation line.
-func (Unattended) UnattendedNewsyslog() {
-	WhenHostname(FleetHosts(), func() {
+// Newsyslog appends the rotation line.
+func (Unattended) Newsyslog() {
+	WhenHostname(ClusterHosts(), func() {
 		File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 	})
 }

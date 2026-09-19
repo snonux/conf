@@ -1,6 +1,6 @@
 # Unattended security upgrades — implementation plan
 
-**Status: IMPLEMENTED on blowfish (2026-09-15, deployed via gonf `frontends_unattended_*` tasks — no Rex).** fishfinger stays disabled until the gated fishfinger-enablement task after the blowfish soak. The source of truth for the wrapper is [`frontends/scripts/unattended-upgrade.sh`](../scripts/unattended-upgrade.sh); this doc no longer embeds a copy. All shell code in this repo must be **ksh** (house rule), hence the wrapper script uses `#!/bin/ksh`.
+**Status: IMPLEMENTED on blowfish (2026-09-15, deployed via gonf `frontends_*` tasks — no Rex).** fishfinger stays disabled until the gated fishfinger-enablement task after the blowfish soak. The source of truth for the wrapper is [`frontends/scripts/unattended-upgrade.sh`](../scripts/unattended-upgrade.sh); this doc no longer embeds a copy. All shell code in this repo must be **ksh** (house rule), hence the wrapper script uses `#!/bin/ksh`.
 
 Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) — design rationale, research summary, and decisions. This document is the build & rollout playbook.
 
@@ -8,10 +8,10 @@ Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) �
 
 | # | Artifact | Target on host | Repo location | Via |
 |---|---|---|---|---|
-| 1 | Wrapper script (`ksh`) | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | `frontends/scripts/unattended-upgrade.sh` (plain file, identical on both hosts) | gonf `frontends_unattended_script` (Privileged) |
-| 2 | Daemon restart list | `/etc/unattended-upgrade-services` (0644) | inline in the gonf task (`unattended.go` const) | gonf `frontends_unattended_services` (Privileged) |
-| 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_unattended_cron` (Privileged; per-host schedule selected inside the body via the `WhenHostname` recipe — one task, both hosts) |
-| 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_unattended_newsyslog` (Privileged) + the Rex-deployed wholesale copy stays in sync |
+| 1 | Wrapper script (`ksh`) | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | `frontends/scripts/unattended-upgrade.sh` (plain file, identical on both hosts) | gonf `frontends_script` (Privileged) |
+| 2 | Daemon restart list | `/etc/unattended-upgrade-services` (0644) | inline in the gonf task (`unattended.go` const) | gonf `frontends_services` (Privileged) |
+| 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_cron` (Privileged; per-host schedule selected inside the body via the `WhenHostname` recipe — one task, both hosts) |
+| 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_newsyslog` (Privileged) + the Rex-deployed wholesale copy stays in sync |
 | 5 | Root mail routing | `root: paul` | **already done** (`etc/mail/aliases`, deployed with `newaliases` on change) | — |
 | 6 | State | `/var/run/unattended-upgrade.lock` (2 h stale-lock recovery); NO needs-reboot flag — the reboot decision is derived from the kernel version compare | created by script | — |
 
@@ -42,7 +42,7 @@ Cron lines as they must land in root's crontab (OpenBSD cron; **no `-n` flag** �
 
 ## 3. The wrapper script
 
-The source of truth is `frontends/scripts/unattended-upgrade.sh` (deployed by the gonf task `frontends_unattended_script` to `/usr/local/sbin/unattended-upgrade`, 0755 root:wheel). The design below from the planning phase still describes intent; the **rollout hardening round (2026-09-15, blowfish) changed these details**:
+The source of truth is `frontends/scripts/unattended-upgrade.sh` (deployed by the gonf task `frontends_script` to `/usr/local/sbin/unattended-upgrade`, 0755 root:wheel). The design below from the planning phase still describes intent; the **rollout hardening round (2026-09-15, blowfish) changed these details**:
 
 | Planning-phase design | As deployed (verified on blowfish) |
 |---|---|
@@ -59,7 +59,7 @@ The source of truth is `frontends/scripts/unattended-upgrade.sh` (deployed by th
 
 ## 4. Daemon restart list
 
-`/etc/unattended-upgrade-services` (deployed by the gonf task `frontends_unattended_services`):
+`/etc/unattended-upgrade-services` (deployed by the gonf task `frontends_services`):
 
 ```
 # Daemons to restart after unattended security updates (one per line).
@@ -87,7 +87,7 @@ Curation at implementation time (per host): compare with `doas rcctl ls on`, add
 
 ## 5. Original Rexfile draft — SUPERSEDED by the gonf implementation
 
-The deployment was implemented in gonf instead (see `gonf/internal/frontends/openbsd/unattended.go`, registered in `cmd/gonf/main.go`); the original Rex draft is kept below for history.
+The deployment was implemented in gonf instead (see `gonf/openbsd/unattended.go`, registered in `cmd/gonf/main.go`); the original Rex draft is kept below for history.
 
 ```perl
 desc 'Unattended security upgrades: syspatch + pkg_add -Iu (docs/unattended-upgrades.implementation.md)';

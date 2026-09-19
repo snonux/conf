@@ -105,7 +105,7 @@ What each mode's log signature means:
 
 | Symptom | Root cause seen | Fix |
 |---|---|---|
-| `pkg_add -u FAILED (rc=1)` + `https://pkgrepo…: empty` + `Couldn't find updates for dtail… gogios…` | k3s cluster asleep → the relayd front serves its "Server turned off" page → custom index empty | **Fixed/expected with the current script** (WARNING + exit 0). If seen on an old script: redeploy `frontends_unattended_script` |
+| `pkg_add -u FAILED (rc=1)` + `https://pkgrepo…: empty` + `Couldn't find updates for dtail… gogios…` | k3s cluster asleep → the relayd front serves its "Server turned off" page → custom index empty | **Fixed/expected with the current script** (WARNING + exit 0). If seen on an old script: redeploy `frontends_script` |
 | `https://pkgrepo…/ not operational` WARNING only | cluster asleep, tolerated | none — by design |
 | `skipped <mode>: partner … not operational` | partner frontend down/rebooting | none — retried next window |
 | `reboot: not found` | PATH lost `/sbin` (fixed in the current script) | redeploy the script |
@@ -117,7 +117,7 @@ Deep checks when a run misbehaves:
 
 - Controller side (laptop, from `/home/paul/git/conf`): `./gonf.sh -version`
   (0.7.8), `./gonf.sh -list` (6 entries), record-only plan:
-  `./gonf.sh -privilege=doas plan -o /tmp/plan frontends_unattended_script` —
+  `./gonf.sh -privilege=doas plan -o /tmp/plan frontends_script` —
   inspect `/tmp/plan/plan.jsonl` (elevate flags, schedules). **Never run a
   local dry-run of the privileged tasks** (a v0.7.8 library bug applies them
   for real; use `plan -o`).
@@ -132,11 +132,11 @@ From `/home/paul/git/conf` (the controller; script + tasks live in the repo):
 
 ```sh
 # script (both hosts):
-./gonf.sh fleet frontends frontends_unattended_script
+./gonf.sh cluster frontends frontends_script
 # full stack:
-./gonf.sh fleet frontends frontends_unattended_script \
-  frontends_unattended_services frontends_unattended_cron \
-  frontends_unattended_newsyslog
+./gonf.sh cluster frontends frontends_script \
+  frontends_services frontends_cron \
+  frontends_newsyslog
 # or per host:
 ./gonf.sh -privilege=doas push rex@blowfish.buetow.org <task names…>
 ```
