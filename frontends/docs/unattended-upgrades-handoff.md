@@ -22,30 +22,35 @@ automation on **blowfish.buetow.org** and **fishfinger.buetow.org** (OpenBSD
 | privilege | `doas -n` (passwordless) | `doas -n` |
 | gonf binary | `/usr/local/bin/gonf` → **0.7.8** | same |
 | script | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | same |
-| script sha256 (first 16) | must equal the repo copy | same |
+| script sha256 (first 16) | must equal the repo copy after approved deployment | same |
 | log | `/var/log/unattended-upgrade.log` (0600 root — read via `doas`) | same |
 | services list | `/etc/unattended-upgrade-services` (0644) | same |
-| root crontab | 3 GONF marker blocks: `10 6`, `40 6`, `10 7` | `10 22`, `40 22`, `10 23` |
+| root crontab after approved deployment | 4 GONF marker blocks: `10 6`, `40 6`, `05 7`, `35 7` | `10 22`, `40 22`, `05 23`, `35 23` |
 | repo script | `/home/paul/git/conf/frontends/scripts/unattended-upgrade.sh` (conf repo) | |
 
-Compare deployed vs repo before debugging drift:
+Compare deployed vs repo before debugging drift. The hash below is historical;
+task 552 changes the repository script but does **not** deploy or verify it.
+After explicit deployment approval, record and compare the new hash:
 `ssh -p 2 -o BatchMode=yes rex@<host> 'doas -n sha256 -q /usr/local/sbin/unattended-upgrade'`
 vs `sha256sum /home/paul/git/conf/frontends/scripts/unattended-upgrade.sh`.
-As of this handoff: **74e5cd2ccf0e5112 on both hosts == repo** ✓.
+At this handoff, **74e5cd2ccf0e5112** was the deployed historical hash; it
+does not equal the changed repository source until an approved rollout.
 
 Repo: `/home/paul/git/conf` (conf). Redeploys run from `/home/paul/git/conf`
 via `./gonf.sh` (see §5).
 
 ## 2. The model (what the automation does)
 
-Root crontab per host, 3 GONF-managed jobs (blowfish morning,
+Target root crontab per host after approved deployment: 4 GONF-managed jobs
+(blowfish morning,
 fishfinger evening, staggered):
 
 | Job | Window | What it does |
 |---|---|---|
 | `base` | blowfish 06:10 / fishfinger 22:10 | `syspatch` — with an automatic **re-run after the tool self-update** (001_syspatch exits 2 with errata pending). Silence = clean no-op; patches → log + mail |
 | `pkgs` | blowfish 06:40 / fishfinger 22:40 | `pkg_add -Iu`; official repos via `installpath`, the custom fleet repo (pkgrepo.f3s.buetow.org) **probe-gated**; restarts the daemons listed in `/etc/unattended-upgrade-services` when non-quirks packages updated |
-| `reboot` | blowfish 07:10 / fishfinger 23:10 | reboots **only when the on-disk kernel (`what /bsd`) differs from the booted one (`sysctl -n kern.version`)** — no runtime flags; picks up manually applied kernel patches too |
+| `audit` | blowfish 07:05 / fishfinger 23:05 | non-mutating `pkg_add -Iun` after `pkgs` has refreshed OpenBSD's signed `quirks` metadata and before reboot; it is scheduled five minutes after the latest possible `pkgs` start, and a lock conflict reports failure rather than claiming a result. A clean audit is retained quietly in the log, while pending packages/advisories, custom-repo unavailability, and command failures mail root and exit non-zero |
+| `reboot` | blowfish 07:35 / fishfinger 23:35 | reboots **only when the on-disk kernel (`what /bsd`) differs from the booted one (`sysctl -n kern.version`)** — no runtime flags; picks up manually applied kernel patches too |
 
 Cron runs have **0–20 min jitter** (non-tty runs). Manual runs with `-tt`
 skip the jitter — for interactive debugging always use
@@ -64,6 +69,9 @@ Gates (each skips with a log line, never "fails" the host):
   custom-repo packages with a WARNING and exits 0** (official errata still
   apply). This is EXPECTED, not a failure. Custom packages (dtail/gogios)
   resume in a later window when the cluster is awake.
+- **Audit custom-repo probe**: unlike `pkgs`, `audit` fails loudly while that
+  repository is unavailable. A fallback would omit installed fleet packages
+  and make the audit result incomplete.
 
 There are **no runtime flags/needs-reboot markers** by design: the reboot
 decision is derived from the kernel version compare.
@@ -76,7 +84,7 @@ Run per host (all commands read-only):
 ssh -p 2 -o BatchMode=yes rex@<host> '
   echo "== script sha vs repo:"; doas -n sha256 -q /usr/local/sbin/unattended-upgrade
   echo "== gonf:"; gonf -version                       # expect 0.7.8
-  echo "== cron blocks (expect 3):"; doas -n crontab -l -u root | grep -c BEGIN
+  echo "== cron blocks (expect 4):"; doas -n crontab -l -u root | grep -c BEGIN
   echo "== schedules:"; doas -n crontab -l -u root | grep -A1 "BEGIN GONF"
   echo "== kernel pending? (expect: current):"
   booted=$(sed -n "1{s/[[:space:]]*\$//;p;}" /var/run/dmesg.boot)
@@ -95,6 +103,8 @@ What each mode's log signature means:
 | *(nothing for a window)* | clean no-op (base with 0 pending; pkgs with nothing to update; reboot with current kernel) — **success** |
 | `[ts] syspatch applied base patches:` + patch list | base applied errata (expect a `needs-reboot`-style reboot at the next reboot slot if the kernel was patched — the log then shows `rebooting to activate the patched kernel`) |
 | `[ts] pkg_add -u updated:` + package list | pkgs applied updates; restarts follow unless the list is quirks-only |
+| `[ts] package audit clean: …` | current OpenBSD package metadata found no pending package updates or quirks warnings; this is written quietly to the root-only log, not mailed |
+| `[ts] package audit found …` / `package audit FAILED …` | **investigate**: pending package/advisory state, unavailable custom repository, or a package-manager failure; cron mail is deliberate |
 | `[ts] WARNING: https://pkgrepo… not operational — skipping custom-repo packages this window` | the k3s cluster is asleep — EXPECTED; official updates continued |
 | `[ts] WARNING: pkg_add -u rc=1 with the custom repo skipped — official updates applied, custom packages deferred` | companion line to the above; success by design |
 | `[ts] WARNING: <partner> not operational` | partner gate skipped the window; retry at the next window |
@@ -151,8 +161,8 @@ Do **not** run local dry-runs of the privileged tasks (`./gonf.sh -n …`)
 
 ## 6. History snapshot (as of this handoff, 2026-09-16 15:5x EEST)
 
-- Both hosts: gonf 0.7.8, script sha `74e5cd2ccf0e5112` (== repo), 3 GONF
-  cron blocks, 0 syspatches pending, kernels current, no locks/stamps.
+- Both hosts: gonf 0.7.8, script sha `74e5cd2ccf0e5112` (then == repo), 3
+  GONF cron blocks, 0 syspatches pending, kernels current, no locks/stamps.
 - fishfinger rebooted **2026-09-15 23:16** via the automation (patched
   kernel #20 loaded — the first fully-automated reboot of the fleet).
 - blowfish this morning: 06:10 base silent ✓; 06:40 pkgs **FAILED** (the

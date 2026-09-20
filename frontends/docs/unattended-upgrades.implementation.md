@@ -23,7 +23,8 @@ No secrets involved.
 |---|---|---|
 | base (`syspatch`) | 06:10 | 22:10 |
 | pkgs (`pkg_add -Iu` + restarts) | 06:40 | 22:40 |
-| reboot-if-needed | 07:10 | 23:10 |
+| package audit (`pkg_add -Iun`) | 07:05 | 23:05 |
+| reboot-if-needed | 07:35 | 23:35 |
 
 Jitter (+0–20 min) happens **inside the script**, skipped for interactive runs. Windows sit outside gogios's 08:00–22:00 cron window; blowfish's run is the day's canary for fishfinger's evening run.
 
@@ -33,11 +34,13 @@ Cron lines as they must land in root's crontab (OpenBSD cron; **no `-n` flag** �
 # blowfish
 10 6 * * * /usr/local/sbin/unattended-upgrade base
 40 6 * * * /usr/local/sbin/unattended-upgrade pkgs
-10 7 * * * /usr/local/sbin/unattended-upgrade reboot
+05 7 * * * /usr/local/sbin/unattended-upgrade audit
+35 7 * * * /usr/local/sbin/unattended-upgrade reboot
 # fishfinger
 10 22 * * * /usr/local/sbin/unattended-upgrade base
 40 22 * * * /usr/local/sbin/unattended-upgrade pkgs
-10 23 * * * /usr/local/sbin/unattended-upgrade reboot
+05 23 * * * /usr/local/sbin/unattended-upgrade audit
+35 23 * * * /usr/local/sbin/unattended-upgrade reboot
 ```
 
 ## 3. The wrapper script
@@ -50,12 +53,38 @@ The source of truth is `frontends/scripts/unattended-upgrade.sh` (deployed by th
 | Reboot detection: `/bsd` newer than `/var/run/dmesg.boot` | **KARL-safe version compare**: OpenBSD re-links `/bsd` at *every* boot, so the mtime check always reported a pending reboot; the script now compares `what(1)`'s build version of `/bsd` against the booted version in `dmesg.boot` line 1. `reboot` mode re-verifies; a wrong version string means NO reboot (fail-safe) |
 | `PATH` without `/sbin` | `/sbin` added so `reboot(8)` resolves |
 | Plain `pkg_add -Iu` | `PKG_PATH=installpath:<custom fleet repo>` exported in `pkgs` mode (root crontabs source no `/root/.profile`; without it `pkg_add -u` fails on custom packages) |
-| No partner gate | **All modes refuse to run while the partner frontend is not operational** — same check as `dns-failover.ksh` (`timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family). Skips are logged and mailed; the `needs-reboot` flag is not consumed by a skip |
+| No partner gate | **Update and reboot modes** refuse to run while the partner frontend is not operational — same check as `dns-failover.ksh` (`timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family). The read-only audit is deliberately ungated so an outage cannot hide package-security status. Skips are logged and mailed; the `needs-reboot` flag is not consumed by a skip |
 | — | `umask 077` (log file mode matches the newsyslog 600 declaration before the first rotation) |
 | — | Lock is released explicitly before `reboot` (the EXIT trap is not guaranteed to run under reboot(8)) |
 | `needs-reboot` flag in `/var/run/unattended-upgrade` | **REMOVED** — the KARL-safe kernel version compare *is* the pending state; `reboot` mode decides purely on it (self-healing, no flag lifecycle, picks up manually applied patches too) |
 | `pkg_add -u` always with the custom repo in `PKG_PATH` | **Probe-gated**: `pkgs` checks the custom repo's health first (the relayd front serves an HTTP-200 "Server turned off" page when the k3s backend is down, so the probe requires a non-empty listing without that marker); when it is down the run **skips custom-repo packages, logs a WARNING, and exits 0** — unattended upgrades must not fail because the cluster is down. Custom packages resume automatically in a later window |
 | single `syspatch` run | **Re-runs once after the tool self-updates** (001_syspatch exits 2 with errata still pending) — one `base` run clears the whole backlog, no manual follow-up syspatch |
+
+## 3.1 Package advisory audit
+
+OpenBSD does not provide a generic installed-package CVE scanner. The
+authoritative supported mechanism is the package tool's signed `quirks`
+metadata: [packages(7)](https://man.openbsd.org/packages) documents that it
+identifies older packages with security issues that cannot be updated.
+
+The `audit` mode runs after `pkgs` has refreshed `quirks` and before the
+planned reboot. The latest package-job jitter starts at 07:00/23:00; the
+audit is scheduled at 07:05/23:05, five minutes after that latest possible
+start, while the reboot moves to 07:35/23:35. If a previous job still holds
+the lock, the audit reports a failed result instead of silently claiming a
+clean check. It runs non-mutating `pkg_add -Iun` over both
+`installpath` and the custom fleet repository and clears `PKG_CACHE` first so
+the dry run cannot populate it. Its normal signed `quirks-… signed on …`
+status is retained as clean metadata, not misreported as a finding. A clean
+result is appended quietly to the root-only log. Any other output, an
+unavailable custom repository, lock contention, or a non-zero package-tool
+status is logged, mailed to root, and exits non-zero.
+The custom repository is intentionally not skipped in this mode: otherwise
+the audit would silently omit installed fleet packages.
+
+This is a supported OpenBSD package-advisory/update audit, not a claim of
+complete third-party CVE enumeration. Keep following OpenBSD errata and
+ports-changes for advisory context.
 
 ## 4. Daemon restart list
 
@@ -184,7 +213,7 @@ Checks:
 
 ### Phase 3 — enable cron on blowfish, observe
 
-- The task already installed all three lines; verify with `crontab -l -u root`.
+- The task installs all four lines; verify with `crontab -l -u root`.
 - Observe the next morning cycle: log entries, root mail (only if something happened), all sites green on the gogios page, `uptime` unchanged (unless kernel patch), services up via `rcctl check`.
 
 ### Phase 4 — fishfinger
@@ -201,7 +230,7 @@ Checks:
 - [x] Manual `base` run on blowfish: cleared a 57-patch backlog (syspatch itself applied 001 then exited 2; completed manually with the updated tool); log + mail present.
 - [x] Manual `pkgs` run on blowfish: quirks-7.147 updated; quirks-only bump correctly did NOT restart daemons.
 - [ ] Second concurrent run exits 0 with "skipped" (lock works) — lock steal verified by code review; concurrency not exercised live yet.
-- [ ] Cron fires at 06:10/06:40/07:10 (blowfish) and 22:10/22:40/23:10 (fishfinger) — verify in `/var/cron/log` and the log file.
+- [ ] Cron fires at 06:10/06:40/07:05/07:35 (blowfish) and 22:10/22:40/23:05/23:35 (fishfinger) — verify in `/var/cron/log` and the log file.
 - [ ] Job output reaches the Proton mailbox via the existing root alias (do **not** use cron's `-n` flag).
 - [ ] newsyslog rotates `/var/log/unattended-upgrade.log` (verify entry parses; watch first size-triggered rotation).
 - [ ] gogios page stays green through a full cycle; no false CRITICALs from the windows.
@@ -231,7 +260,7 @@ When a new OpenBSD release lands, the old errata trees stop and the jobs start m
 - Packages: errata packages are official signed builds; regressions are rare — if needed, reinstall the previous version explicitly via `PKG_PATH`.
 
 **Disable the automation**
-Remove the three crontab lines (redeploy without them or `doas crontab -e`), optionally remove the script + service-list file.
+Remove the four crontab lines (redeploy without them or `doas crontab -e`), optionally remove the script + service-list file.
 
 ## 10. Optional hardening (later)
 
@@ -255,7 +284,7 @@ Remove the three crontab lines (redeploy without them or `doas crontab -e`), opt
 
 ## 12. Open decisions
 
-1. **Auto-reboot**: plan assumes yes for both hosts (staggered windows). If not wanted, comment out the third cron line per host — the flag then only surfaces in mail… (actually: flag would linger; in that case also make `base` mode mail "reboot needed" loudly instead of just queuing).
+1. **Auto-reboot**: plan assumes yes for both hosts (staggered windows). If not wanted, remove the `reboot` cron line per host; the kernel-version check then needs a separate loud notification path.
 2. **Restart list**: confirm per host via `rcctl ls on` (draft: `relayd httpd nsd smtpd uptimed`; optional `dserver`/`gorum`).
 3. fishfinger's 22:10 window (outside gogios's 08:00–22:00) — confirm acceptable.
 
@@ -286,11 +315,11 @@ A second review suggested the same three layers, but with a different packages m
   - **KARL-safe reboot detection**: OpenBSD re-links `/bsd` at every boot, so `/bsd` being newer than `/var/run/dmesg.boot` proved *nothing* (it is always true, including seconds after a clean boot — this caused the reboot-detection false positives during the rollout). The script now compares the on-disk kernel build version (`what(1)`) against the booted version (`dmesg.boot` line 1); unknown state means NO reboot (fail-safe). Verified live: stale flag self-heals, no-flag runs are silent no-ops.
   - `/sbin` added to `PATH` so `reboot(8)` resolves (the original PATH made the `reboot` mode fail with `reboot: not found` while still consuming the flag).
   - `pkgs` mode exports `PKG_PATH=installpath:<custom fleet repo>`: root crontabs source no `/root/.profile`, so without it `pkg_add -u` fails on custom packages (dserver/dtail/gogios). Both the official errata tree (with automatic `packages-stable` search) and the fleet repo are consulted in one run.
-  - **Partner-health gate** (user requirement): all modes refuse to run while the partner frontend is not operational — same check as `dns-failover.ksh` (KISS high-availability): `timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family, IPv4 AND IPv6. Skips are logged and mailed; the flag is not consumed.
+  - **Partner-health gate** (user requirement): update and reboot modes refuse to run while the partner frontend is not operational — same check as `dns-failover.ksh` (KISS high-availability): `timeout`-wrapped `ftp -4/-6` fetch of `https://<partner>/index.txt` expecting the `Welcome to <partner>` banner, 3 consecutive failures per family, IPv4 AND IPv6. The read-only audit remains ungated so an outage cannot hide package status. Skips are logged and mailed; the flag is not consumed.
   - `umask 077` so the log file is created 0600, matching the newsyslog 600 declaration before the first rotation.
   - Lock released explicitly before `reboot` (the EXIT trap is not guaranteed to run under reboot(8)).
   - Restart list curated against `rcctl ls on`: `node_exporter` and `dserver` added (they run on both frontends), `gorum` stays commented (runs on neither).
-- **Fishfinger rollout round (2026-09-15, k22 — gate overridden by paul):** deployed the full stack via gonf (evening cron 22:10/22:40/23:10 verified, blowfish schedule absent), base cleared the 57-patch backlog, pkgs updated quirks (no restarts), pending-kernel detection armed for the 23:10 reboot slot, mail verified end-to-end.
+- **Fishfinger rollout round (2026-09-15, k22 — gate overridden by paul):** deployed the then-current full stack via gonf (evening cron 22:10/22:40/23:10 verified, blowfish schedule absent), base cleared the 57-patch backlog, pkgs updated quirks (no restarts), pending-kernel detection armed for the 23:10 reboot slot, mail verified end-to-end. This historical rollout predates the later audit job.
   - **All runtime state removed**: the `needs-reboot` flag and its `/var/run/unattended-upgrade` dir are gone — `reboot` mode decides solely on the KARL-safe kernel version compare (`what(1)` vs `dmesg.boot`), which also picks up manually applied kernel patches. `reboot` releases the lock explicitly before rebooting.
   - **syspatch self-update quirk automated**: `base` re-runs syspatch once when the first run only installed the tool update (exit 2 with errata pending) — a single run now clears an entire backlog; success is judged by the `syspatch -l` diff, not the exit code.
   - **k3s-down tolerance (2026-09-16)**: `pkgs` probes `pkgrepo.f3s.buetow.org` before running; when the k3s backend is down (relayd "Server turned off" page), the custom-repo packages are skipped with a logged WARNING, `pkg_add -Iu` runs official-only, and an rc=1 from unresolvable custom stems is downgraded to a warning (exit 0) — official errata still apply and the failure mail noise disappears. Verified live on both hosts with the cluster down.

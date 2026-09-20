@@ -87,10 +87,10 @@ func (Unattended) Services() {
 
 // DescCron returns the description for the per-host cron schedule.
 func (Unattended) DescCron() string {
-	return "Root cron: unattended-upgrade base/pkgs/reboot, per-host schedule"
+	return "Root cron: unattended-upgrade base/pkgs/audit/reboot, per-host schedule"
 }
 
-// Cron installs the three root cron jobs on every frontend host,
+// Cron installs the four root cron jobs on every frontend host,
 // each host with its own window (morning on blowfish, evening on
 // fishfinger): record once, evaluate per destination.
 func (Unattended) Cron() {
@@ -100,9 +100,12 @@ func (Unattended) Cron() {
 	}
 }
 
-// unattendedCronJobs registers the three unattended-upgrade root cron jobs
-// (base, pkgs, reboot) with the given base, pkgs, and reboot hours. The
-// minutes come from the decided schedule (10/40/10).
+// unattendedCronJobs registers the four unattended-upgrade root cron jobs
+// (base, pkgs, audit, reboot) with the given base, pkgs, and reboot hours.
+// The audit is scheduled five minutes after the latest possible package-job
+// start and before the reboot window; lock contention reports failure rather
+// than silently losing that day's security evidence. The minutes are
+// 10/40/05/35.
 func unattendedCronJobs(w [3]string) {
 	Cron("unattended-upgrade-base",
 		WithCommand("/usr/local/sbin/unattended-upgrade base"),
@@ -110,9 +113,12 @@ func unattendedCronJobs(w [3]string) {
 	Cron("unattended-upgrade-pkgs",
 		WithCommand("/usr/local/sbin/unattended-upgrade pkgs"),
 		WithMinute("40"), WithHour(w[1]))
+	Cron("unattended-upgrade-audit",
+		WithCommand("/usr/local/sbin/unattended-upgrade audit"),
+		WithMinute("05"), WithHour(w[2]))
 	Cron("unattended-upgrade-reboot",
 		WithCommand("/usr/local/sbin/unattended-upgrade reboot"),
-		WithMinute("10"), WithHour(w[2]))
+		WithMinute("35"), WithHour(w[2]))
 }
 
 // DescNewsyslog returns the description for the rotation line.

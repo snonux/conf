@@ -4,6 +4,7 @@
 #
 #   base    apply base-system errata via syspatch(8)
 #   pkgs    update packages via pkg_add(1) -u, restart affected daemons
+#   audit   audit installed packages against current OpenBSD package metadata
 #   reboot  reboot if a patched kernel is pending
 #
 # Intended for root's crontab. Everything it prints is mailed to root by
@@ -11,13 +12,20 @@
 # newsyslog(8)). Silence = clean no-op; mail = change or failure.
 # Companion docs: frontends/docs/unattended-upgrades*.md
 #
-# Every mode is gated on the partner frontend being operational (same
-# https://<host>/index.txt health check as dns-failover.ksh, see the KISS
-# high-availability write-up): patching or rebooting the only healthy host
-# would take the sites down completely. Skips are logged and mailed.
+# Update and reboot modes are gated on the partner frontend being operational
+# (same https://<host>/index.txt health check as dns-failover.ksh, see the
+# KISS high-availability write-up): patching or rebooting the only healthy
+# host would take the sites down completely. The read-only audit is ungated
+# so an outage cannot hide package-security status.
 
-# /sbin is needed for reboot(8) (and other base system tools).
-PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
+# /sbin is needed for reboot(8) (and other base system tools). The test-only
+# prefix makes the audit harness exercise this exact script with fake commands;
+# it is never configured by the deployed root crontab.
+if [ -n "${UNATTENDED_UPGRADE_TEST_PATH:-}" ]; then
+    PATH="${UNATTENDED_UPGRADE_TEST_PATH}:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin"
+else
+    PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
+fi
 export PATH
 
 # Everything the script creates (lock dir, log lines via tee -a, needs-reboot
@@ -25,9 +33,9 @@ export PATH
 # mode declared in the newsyslog rotation entry until the first rotation.
 umask 077
 
-LOG=/var/log/unattended-upgrade.log
+LOG=${UNATTENDED_UPGRADE_TEST_LOG:-/var/log/unattended-upgrade.log}
 SERVICES=/etc/unattended-upgrade-services
-LOCK=/var/run/unattended-upgrade.lock
+LOCK=${UNATTENDED_UPGRADE_TEST_LOCK:-/var/run/unattended-upgrade.lock}
 
 # Same health-check constants as dns-failover.ksh.
 readonly LOOKUP_TIMEOUT=10
@@ -36,13 +44,30 @@ readonly HEALTH_RETRY_SLEEP=2
 
 mode=${1:-}
 case $mode in
-base|pkgs|reboot) ;;
-*) print -u2 "usage: $0 base|pkgs|reboot"; exit 64 ;;
+base|pkgs|audit|reboot) ;;
+*) print -u2 "usage: $0 base|pkgs|audit|reboot"; exit 64 ;;
 esac
 
 # Emit to stdout (cron mails it) and append the same lines to the log file.
 log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
+}
+
+# A clean audit is evidence worth retaining but not a daily mail: cron's
+# normal silence remains the success signal. Findings and failures use log(),
+# which both records them and makes root's cron mail alert visible.
+audit_clean() {
+    printf '[%s] package audit clean: pkg_add -Iun found no pending packages or quirks warnings\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" >>"$LOG" \
+        || { print -u2 "package audit FAILED: cannot append to $LOG"; return 1; }
+}
+
+# A normal pkg_add update probe always prints the signed quirks timestamp.
+# It is evidence that the metadata was fetched, not an outstanding package or
+# advisory finding. Keep every other line for the operator to investigate.
+audit_findings() {
+    printf '%s\n' "$1" | sed \
+        '/^quirks-[^[:space:]]* signed on [^[:space:]]*$/d'
 }
 
 # Jitter only for cron runs (no tty); manual runs are instant.
@@ -101,16 +126,25 @@ pkgrepo_up() {
     printf '%s' "$body" | grep -q "\.tgz"
 }
 
+lock_unavailable() {
+    if [ "$mode" = audit ]; then
+        log "package audit FAILED: another unattended-upgrade job holds $LOCK; no audit result was produced"
+        exit 1
+    fi
+    logger "unattended-upgrade: skipped $mode, another run holds the lock"
+    exit 0
+}
+
 # Whole-job lock. A previous run killed mid-flight (crash, power loss)
 # leaves the dir behind — OpenBSD does not wipe /var/run at boot — so
 # steal locks older than 2 h instead of skipping forever.
 if ! mkdir "$LOCK" 2>/dev/null; then
     if [ -n "$(find "$LOCK" -mmin +120 2>/dev/null)" ]; then
-        rmdir "$LOCK" && mkdir "$LOCK" 2>/dev/null \
-            || { logger "unattended-upgrade: stale lock unreadable, skipping $mode"; exit 0; }
+        if ! rmdir "$LOCK" || ! mkdir "$LOCK" 2>/dev/null; then
+            lock_unavailable
+        fi
     else
-        logger "unattended-upgrade: skipped $mode, another run holds the lock"
-        exit 0
+        lock_unavailable
     fi
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
@@ -119,7 +153,7 @@ trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 # be the only one serving the sites, and a patch, daemon restart, or reboot
 # would then cause total downtime. The flag and the patches simply wait for
 # a later window in which the partner is healthy again.
-if ! partner_up; then
+if [ "$mode" != audit ] && ! partner_up; then
     if [ -n "$PARTNER" ]; then
         log "skipped $mode: partner $PARTNER not operational"
     else
@@ -269,6 +303,44 @@ pkgs)
     if printf '%s\n' "$out" | grep -v '^quirks-' | grep -q .; then
         restart_services
     fi
+    ;;
+
+audit)
+    # OpenBSD has no generic CVE database for native packages. The supported
+    # package audit is pkg_add's update resolution, including its signed
+    # quirks metadata: packages(7) documents that quirks identifies older
+    # packages with security issues which cannot be updated. Run this after
+    # the normal pkgs job so its mandatory quirks refresh has already run.
+    #
+    # Unlike pkgs, an unavailable custom repo is a failure here. Falling back
+    # to installpath would hide the status of dserver, dtail, gogios, and
+    # other fleet packages, which is not an auditable all-packages result.
+    ver=$(uname -r)
+    custom="https://pkgrepo.f3s.buetow.org/openbsd/${ver}/packages/amd64/"
+    if ! pkgrepo_up; then
+        log "package audit FAILED: ${custom} not operational; custom packages cannot be audited"
+        exit 1
+    fi
+    PKG_PATH="installpath:${custom}"
+    export PKG_PATH
+    # pkg_add -n may still populate a caller-supplied PKG_CACHE. This audit
+    # must not mutate the host, so deliberately disable that optional cache.
+    unset PKG_CACHE
+    out=$(pkg_add -Iun 2>&1)
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log "package audit FAILED: pkg_add -Iun rc=$rc — investigate"
+        printf '%s\n' "$out" | tee -a "$LOG"
+        exit 1
+    fi
+    findings=$(audit_findings "$out")
+    if [ -z "$findings" ]; then
+        audit_clean || exit 1
+        exit 0
+    fi
+    log "package audit found pending packages or an OpenBSD quirks advisory:"
+    printf '%s\n' "$findings" | tee -a "$LOG"
+    exit 1
     ;;
 
 reboot)

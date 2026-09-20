@@ -52,6 +52,18 @@ Used in loops to create hostname variants:
 - `www.foo.zone`
 - `standby.foo.zone`
 
+## Unattended updates and package advisory audit
+
+The OpenBSD frontend unattended-upgrade wrapper is deployed by Gonf
+(`frontends_script` and `frontends_cron`), not by the legacy Rex aggregate.
+Its post-update `audit` mode is intentionally a native OpenBSD package audit:
+`pkg_add -Iun` uses the signed `quirks` metadata and the configured official
+plus fleet package repositories. It is not a generic CVE scanner. A clean run
+is retained in `/var/log/unattended-upgrade.log`; pending packages, quirks
+advisories, repository failures, and package-tool failures are mailed to root
+and exit non-zero. Never make the audit fall back to official packages alone,
+because that would omit installed fleet packages.
+
 ## Template Processing
 
 Rex processes `.tpl` files using embedded Perl:
