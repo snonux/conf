@@ -263,7 +263,7 @@ func addHostChecks(checks map[string]gogiosCheck, host string) {
 	}
 	for _, prefix := range []string{"", "standby.", "www."} {
 		name := prefix + host
-		depends := MustServer(Master).FQDN
+		depends := "master.buetow.org"
 		if prefix == "standby." {
 			depends = "standby.buetow.org"
 		}
