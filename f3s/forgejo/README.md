@@ -146,9 +146,9 @@ Deploy order matters — relayd loads `tls keypair code.f3s.buetow.org` at start
 so the certificate has to exist first:
 
 ```sh
-cd frontends
-rex -H blowfish.buetow.org:2 nsd httpd acme acme_invoke relayd gogios
-rex -H fishfinger.buetow.org:2 nsd httpd acme acme_invoke relayd gogios
+cd /home/paul/git/conf
+./gonf.sh push -- -p 2 rex@blowfish.buetow.org frontends_nsd frontends_httpd frontends_acme frontends_acme_invoke frontends_relayd frontends_gogios
+./gonf.sh push -- -p 2 rex@fishfinger.buetow.org frontends_nsd frontends_httpd frontends_acme frontends_acme_invoke frontends_relayd frontends_gogios
 ```
 
 `acme.sh` copies the `foo.zone` cert as a placeholder for any host that has none

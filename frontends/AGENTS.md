@@ -206,14 +206,15 @@ Examples: blowfish.buetow.org, fishfinger.buetow.org
 ## Deployment Process
 
 ```bash
-rex httpd relayd  # Deploy to both servers
+cd /home/paul/git/conf
+./gonf.sh cluster frontends frontends_httpd frontends_relayd
 ```
 
 Process:
-1. Rex connects to both blowfish and fishfinger in parallel
-2. For each server, processes templates with server-specific `$hostname`
-3. Generates `/etc/httpd.conf` and `/etc/relayd.conf`
-4. Writes files and restarts services via `on_change` handlers
+1. Gonf records controller-rendered, host-specific plans for both gateways
+2. The frontend cluster pushes them to blowfish and fishfinger in parallel
+3. Each plan validates `/etc/httpd.conf` and `/etc/relayd.conf` before a live write
+4. Change gates restart services only after a changed validated configuration
 5. Each server gets identical config structure but different hostname values
 
 ## Monitoring System (Gogios)

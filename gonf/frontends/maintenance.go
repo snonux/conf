@@ -196,6 +196,22 @@ func (Maintenance) ACME() {
 	}
 }
 
+// DescIRCBouncer returns the description shown for the fishfinger-only ZNC
+// service task.
+func (Maintenance) DescIRCBouncer() string {
+	return "Install and enable the fishfinger IRC bouncer"
+}
+
+// IRCBouncer keeps Rex's separate service group and applies only to the host
+// with the existing runtime configuration; it does not enter the all-frontend
+// aggregate.
+func (Maintenance) IRCBouncer() {
+	WhenHostname(Master, func() {
+		znc := Package("znc")
+		Service("znc", DependsOn(znc))
+	})
+}
+
 type acmeTemplateData struct {
 	Domains         []acmeDomain
 	NonStandbyHosts []string

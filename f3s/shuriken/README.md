@@ -81,8 +81,8 @@ NOT SSH -- no key/Secret needed. The frontends run rsyncd via inetd with
 `hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the k3s pods run on r-nodes
 with `.wg0` (WireGuard) connectivity, so they're authorized to push over the
 mesh. The writable modules `irregular-ninja` and `alt-irregular-ninja` are
-declared in `frontends/etc/rsyncd.conf.tpl` (deploy with `rex -f
-frontends/Rexfile rsync`).
+declared in `frontends/etc/rsyncd.conf.tpl` (deploy with
+`./gonf.sh cluster frontends frontends_rsync` from the repository root).
 
 It only publishes a site whose content actually **changed**: each site's
 `dist/status.json` (`image_count` + `total_size_bytes`, extracted with
@@ -100,7 +100,7 @@ just uses the rsync protocol.
 
 ### Frontend setup (one-time)
 
-1. Deploy the rsyncd modules: `rex -f frontends/Rexfile rsync`.
+1. Deploy the rsyncd modules: `./gonf.sh cluster frontends frontends_rsync`.
 2. The modules drop to `uid=www`; ensure the web dirs are www-writable. If
    migrating from the old SSH sync (files owned by `admin`):
    `doas chown -R www:www /var/www/htdocs/irregular.ninja /var/www/htdocs/alt.irregular.ninja` on both frontends.
