@@ -64,6 +64,23 @@ advisories, repository failures, and package-tool failures are mailed to root
 and exit non-zero. Never make the audit fall back to official packages alone,
 because that would omit installed fleet packages.
 
+## Mail and authoritative DNS
+
+Gonf owns frontend OpenSMTPD, NSD, and DNS failover through
+`frontends_smtpd`, `frontends_nsd`, and `frontends_dns_failover`. Both daemon
+recipes stage controller-rendered candidates and validate them before their
+live inputs may change: OpenSMTPD uses `smtpd -n -f`, while NSD runs
+`nsd-checkzone` for every zone followed by `nsd-checkconf`. Restart fan-in is
+deliberate: aliases run `newaliases` only, SMTPD restarts for its configuration
+or lookup tables, and NSD restarts for its key, config, zones, or flags.
+
+The NSD TSIG source is controller-local and ignored at
+`gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` (0600). Use the Gonf secret
+helper; never put its value in a resource name, description, command argument,
+log line, or standard-output plan. The DNS-failover cron migration removes
+only legacy unmarked command lines before creating its named Gonf block, so do
+not reintroduce raw crontab surgery in Rex or a shell helper.
+
 ## Template Processing
 
 Rex processes `.tpl` files using embedded Perl:
@@ -289,12 +306,16 @@ Before deploying:
 ```bash
 ssh rex@server "doas httpd -n"   # Test httpd config syntax
 ssh rex@server "doas relayd -n"  # Test relayd config syntax
+ssh rex@server "doas smtpd -n"   # Test OpenSMTPD configuration syntax
+ssh rex@server "doas nsd-checkconf /var/nsd/etc/nsd.conf"
+ssh rex@server "doas nsd-checkzone <zone> /var/nsd/zones/master/<zone>.zone"
 ```
 
 After deploying:
 ```bash
 ssh rex@server "doas rcctl check httpd"
 ssh rex@server "doas rcctl check relayd"
+ssh rex@server "doas rcctl check smtpd nsd"
 ```
 ## Relayd TLS Certificate Loading with Many Keypairs
 
