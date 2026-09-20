@@ -187,14 +187,16 @@ crontab -l -u root              # see what's there; note daily(8) 03:01
 ### Phase 1 — repo commit
 
 - `frontends/scripts/unattended-upgrade.sh` (script from §3)
-- Rexfile task `unattended_upgrades` (§5)
+- Gonf tasks `frontends_script`, `frontends_services`, `frontends_cron`, and
+  `frontends_newsyslog` (§5)
 - `etc/newsyslog.conf` rotation line (§6)
 - Mark both docs as implemented after rollout.
 
 ### Phase 2 — deploy + manual dry-run on **blowfish** only
 
 ```
-rex -H blowfish.buetow.org unattended_upgrades   # single-host deploy (adapt to repo's Rex invocation)
+cd /home/paul/git/conf
+./gonf.sh push -- -p 2 rex@blowfish.buetow.org frontends_script frontends_services frontends_cron frontends_newsyslog
 ssh -t rex@blowfish.buetow.org 'doas /usr/local/sbin/unattended-upgrade base'
 ssh -t rex@blowfish.buetow.org 'doas pkg_add -Inu'   # DRY RUN: what would update? (no -t => cron-style jitter applies!)
 ssh -t rex@blowfish.buetow.org 'doas /usr/local/sbin/unattended-upgrade pkgs'
