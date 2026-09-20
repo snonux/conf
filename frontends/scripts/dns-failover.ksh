@@ -1,5 +1,10 @@
 #!/bin/ksh
 
+# Legacy direct zone writer. The d52 contract makes blowfish the sole DNS
+# publisher and keeps fishfinger as an NSD transfer slave. e52 replaces this
+# implementation with that locked publication path; do not add another writer
+# or use wall-clock time as an SOA serial source here.
+
 # Every outbound lookup here is wrapped in timeout(1). Without it a single
 # hung DNS query wedges the whole script, and because the cron entry uses -s
 # (single instance) no later run can start either -- which is exactly what

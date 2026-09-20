@@ -80,6 +80,10 @@ func (MailDNS) DescNSD() string {
 // and zones are kept below NSD's chroot so nsd-checkconf validates the same
 // path interpretation as the live daemon. The TSIG value never appears in a
 // command argument, resource name, description, or controller stdout.
+//
+// This direct zone writer predates the d52 DNS publication contract. e52 must
+// replace it with the single DNSPublisher publication path; do not add another
+// writer here or in DNSFailover.
 func (MailDNS) NSD() {
 	onFrontends(func() {
 		flags := File("/etc/rc.conf.local", WithLine("nsd_flags="), WithName("rc-conf-nsd-flags"))
@@ -131,7 +135,8 @@ func (MailDNS) DescDNSFailover() string {
 
 // DNSFailover uses a marker-managed cron resource instead of the Rex
 // temporary-crontab surgery. The script's own lock remains defence in depth
-// while an old unmanaged Rex entry exists during a staged migration.
+// while an old unmanaged Rex entry exists during a staged migration. e52 will
+// make this task invoke the sole DNSPublisher instead of editing zones itself.
 func (MailDNS) DNSFailover() {
 	onFrontends(func() {
 		script := InstallFile(dnsFailoverCommand, legacyFrontendAsset("scripts/dns-failover.ksh"),

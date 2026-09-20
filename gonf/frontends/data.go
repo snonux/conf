@@ -9,9 +9,14 @@ const (
 	Domain = "buetow.org"
 
 	// Master and Standby name the active and failover frontend roles used by
-	// NSD and failover configuration.
+	// public service records. They do not select the DNS publication host.
 	Master  = "fishfinger"
 	Standby = "blowfish"
+
+	// DNSPublisher is the d52 contract's sole stable host for publishing
+	// effective NSD zone files and SOA serials. It is independent of
+	// Master/Standby service-routing roles; e52 enforces the contract.
+	DNSPublisher = "blowfish"
 
 	// ValueServer is the inventory key for one frontend's stable addressing
 	// facts. It lives with Server so frontend task packages can consume the
