@@ -76,7 +76,8 @@ func (Maintenance) Base() {
 		WhenHostname(host, func() {
 			Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
 			EnsureFile("/etc/rc.local")
-			File("/etc/rc.conf.local", WithLine(pkgScriptsLine(server.Name)))
+			File("/etc/rc.conf.local", WithLine(pkgScriptsLine(server.Name)),
+				WithName("rc-conf-pkg-scripts-"+server.Name))
 		})
 	}
 }
