@@ -210,14 +210,14 @@ func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
 	var builder strings.Builder
 	appendf(&builder, "include: %q\n\n", keyPath)
 	appendString(&builder, `server:
-\thide-version: yes
-\tverbosity: 1
-\tdatabase: "" # disable database
-\tdebug-mode: no
+	hide-version: yes
+	verbosity: 1
+	database: "" # disable database
+	debug-mode: no
 
 remote-control:
-\tcontrol-enable: yes
-\tcontrol-interface: /var/run/nsd.sock
+	control-enable: yes
+	control-interface: /var/run/nsd.sock
 `)
 	for _, zone := range zones {
 		appendf(&builder, "\nzone:\n\tname: %q\n\tzonefile: %q\n", zone, filepath.Join(zoneDir, zone+".zone"))
