@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
@@ -17,9 +15,10 @@ import (
 
 const (
 	smtpdValidationDir = "/var/tmp/gonf-smtpd"
-	nsdValidationDir   = "/var/nsd/etc/gonf-validate"
-	nsdValidationZones = "/var/nsd/zones/gonf-validate"
 	dnsFailoverCommand = "/usr/local/bin/dns-failover.ksh"
+	dnsPublishCommand  = "/usr/local/bin/dns-publish.ksh"
+	dnsPublisherDir    = "/var/nsd/etc/gonf-publisher"
+	dnsPublisherZones  = dnsPublisherDir + "/zones"
 )
 
 const legacyDNSFailoverCronPresent = `crontab -l -u root 2>/dev/null | awk '
@@ -76,55 +75,34 @@ func (MailDNS) DescNSD() string {
 	return "Render, validate, and converge frontend authoritative NSD zones"
 }
 
-// NSD renders the legacy zone data controller-side. Candidate keys, config,
-// and zones are kept below NSD's chroot so nsd-checkconf validates the same
-// path interpretation as the live daemon. The TSIG value never appears in a
-// command argument, resource name, description, or controller stdout.
-//
-// This direct zone writer predates the d52 DNS publication contract. e52 must
-// replace it with the single DNSPublisher publication path; do not add another
-// writer here or in DNSFailover.
+// NSD installs immutable publisher inputs and invokes the sole publisher on
+// blowfish. The publisher, not this task, owns effective zones, SOA serials,
+// failover state, validation, locking, and reload/rollback. Fishfinger only
+// receives those effective zones through NSD zone transfer.
 func (MailDNS) NSD() {
 	onFrontends(func() {
 		flags := File("/etc/rc.conf.local", WithLine("nsd_flags="), WithName("rc-conf-nsd-flags"))
 		key := strings.TrimSpace(MustSecret(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")))
 		data := TemplateData()
-		contents := renderZones(data, time.Now().Unix())
 
-		validationDir := Dir(nsdValidationDir, WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
-		validationZones := Dir(nsdValidationZones, WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
-		candidateKey := File(filepath.Join(nsdValidationDir, "key.conf"), WithContent(renderNSDKey(key)),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(validationDir))
+		WhenHostname(DNSPublisher, func() {
+			publisherScript := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
+				WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
+			inputs := dnsPublisherInputs(data, key)
+			deps := append([]resource.Dependency{flags, publisherScript}, inputs...)
+			publisher := Command(dnsPublishCommand, List(), DependsOn(deps...), WithName("publish-nsd-zones"))
+			Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
+		})
 
-		zoneChecks := make([]resource.Dependency, 0, len(data.DNSZones))
-		for _, zone := range data.DNSZones {
-			candidate := File(filepath.Join(nsdValidationZones, zone+".zone"), WithContent(contents[zone]),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(validationZones))
-			zoneChecks = append(zoneChecks, Command("nsd-checkzone", List(zone, filepath.Join(nsdValidationZones, zone+".zone")),
-				DependsOn(candidate), WithName("validate-nsd-zone-"+zone)))
-		}
-		candidateConfig := File(filepath.Join(nsdValidationDir, "nsd.conf"),
-			WithContent(renderNSDConfig(filepath.Join(nsdValidationDir, "key.conf"), data.DNSZones, "gonf-validate")),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(validationDir, candidateKey))
-		checkDeps := append([]resource.Dependency{candidateConfig, candidateKey}, zoneChecks...)
-		check := Command("nsd-checkconf", List(filepath.Join(nsdValidationDir, "nsd.conf")),
-			DependsOn(checkDeps...), WithName("validate-nsd-config"))
-
-		live := make([]resource.Dependency, 0, len(data.DNSZones)+2)
-		liveKey := File("/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
-			WithMode(0o640), WithOwner("root"), WithGroup("_nsd"), DependsOn(check))
-		live = append(live, liveKey)
-		liveConfig := File("/var/nsd/etc/nsd.conf", WithContent(renderNSDConfig("/var/nsd/etc/key.conf", data.DNSZones, "master")),
-			WithMode(0o640), WithOwner("root"), WithGroup("_nsd"), DependsOn(check))
-		live = append(live, liveConfig)
-		for _, zone := range data.DNSZones {
-			live = append(live, File(filepath.Join("/var/nsd/zones/master", zone+".zone"), WithContent(contents[zone]),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(check)))
-		}
-		for _, zone := range data.DNSZonesRemove {
-			live = append(live, NoFile(filepath.Join("/var/nsd/zones/master", zone+".zone"), DependsOn(check)))
-		}
-		Service("nsd", WithRestart, OnChange(append([]resource.Dependency{flags}, live...)...))
+		WhenHostname(Master, func() {
+			// The standby has no source templates and no zone-writing command.
+			// Its master-file path is solely NSD's transfer destination.
+			liveKey := File("/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
+				WithMode(0o640), WithOwner("root"), WithGroup("_nsd"))
+			config := File("/var/nsd/etc/nsd.conf", WithContent(renderNSDSlaveConfig("/var/nsd/etc/key.conf", data.DNSZones)),
+				WithMode(0o640), WithOwner("root"), WithGroup("_nsd"), DependsOn(liveKey))
+			Service("nsd", WithRestart, OnChange(flags, liveKey, config))
+		})
 	})
 }
 
@@ -133,19 +111,37 @@ func (MailDNS) DescDNSFailover() string {
 	return "Install the frontend DNS failover script and root cron entry"
 }
 
-// DNSFailover uses a marker-managed cron resource instead of the Rex
-// temporary-crontab surgery. The script's own lock remains defence in depth
-// while an old unmanaged Rex entry exists during a staged migration. e52 will
-// make this task invoke the sole DNSPublisher instead of editing zones itself.
+// DNSFailover installs the health decision client. It never writes an effective
+// zone: successful role changes are handed to dns-publish.ksh, which shares the
+// same lock and transaction as ordinary Gonf publication.
 func (MailDNS) DNSFailover() {
 	onFrontends(func() {
 		script := InstallFile(dnsFailoverCommand, legacyFrontendAsset("scripts/dns-failover.ksh"),
 			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
+		publisher := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
+			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
 		cleanup := Command("sh", List("-ceu", removeLegacyDNSFailoverCron),
 			OnlyIf("sh", List("-c", legacyDNSFailoverCronPresent)),
 			WithName("remove-legacy-dns-failover-cron"))
-		Cron("frontend-nsd-failover", WithCommand("-ns "+dnsFailoverCommand), WithMinute("*"), DependsOn(script, cleanup))
+		Cron("frontend-nsd-failover", WithCommand("-ns "+dnsFailoverCommand), WithMinute("*"), DependsOn(script, publisher, cleanup))
 	})
+}
+
+func dnsPublisherInputs(data Data, key string) []resource.Dependency {
+	inputDir := Dir(dnsPublisherDir, WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
+	zoneDir := Dir(dnsPublisherZones, WithMode(0o700), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir))
+	inputs := []resource.Dependency{inputDir, zoneDir}
+	for _, zone := range data.DNSZones {
+		inputs = append(inputs, File(filepath.Join(dnsPublisherZones, zone+".zone.tpl"),
+			WithContent(renderZoneTemplate(zone, data.F3SHosts)), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(zoneDir)))
+	}
+	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "publisher.conf"),
+		WithContent(renderDNSPublisherConfig(data.DNSZones, data.DNSZonesRemove)), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
+	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "key.conf"), WithContent(renderNSDKey(key)),
+		WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
+	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "nsd.conf"),
+		WithContent(renderNSDConfig("/var/nsd/etc/key.conf", data.DNSZones, "master")), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
+	return inputs
 }
 
 func smtpdCandidates(server Server, validationDir Resource) []resource.Dependency {
@@ -230,27 +226,51 @@ remote-control:
 	return builder.String()
 }
 
-func renderZones(data Data, serial int64) map[string]string {
-	contents := make(map[string]string, len(data.DNSZones))
-	master := MustServer(Master)
-	standby := MustServer(Standby)
-	for _, zone := range data.DNSZones {
-		contents[zone] = renderZone(zone, data.F3SHosts, master, standby, serial)
+func renderNSDSlaveConfig(keyPath string, zones []string) string {
+	var builder strings.Builder
+	appendf(&builder, "include: %q\n\n", keyPath)
+	appendString(&builder, `server:
+	hide-version: yes
+	verbosity: 1
+	database: "" # disable database
+	debug-mode: no
+
+remote-control:
+	control-enable: yes
+	control-interface: /var/run/nsd.sock
+`)
+	for _, zone := range zones {
+		appendf(&builder, "\nzone:\n\tname: %q\n\tzonefile: %q\n\tallow-notify: %q\n\trequest-xfr: AXFR %q\n",
+			zone, filepath.Join("slave", zone+".zone"), DNSPublisher+"."+Domain, DNSPublisher+"."+Domain)
 	}
-	return contents
+	return builder.String()
 }
 
-func renderZone(zone string, f3sHosts []string, master, standby Server, serial int64) string {
+func renderDNSPublisherConfig(zones, removedZones []string) string {
+	master := MustServer(Master)
+	standby := MustServer(Standby)
+	var builder strings.Builder
+	appendf(&builder, "DEFAULT_ROLE=%q\n", Master)
+	appendf(&builder, "MASTER_NAME=%q\nMASTER_IPV4=%q\nMASTER_IPV6=%q\n", master.Name, master.IPv4, master.IPv6)
+	appendf(&builder, "STANDBY_NAME=%q\nSTANDBY_IPV4=%q\nSTANDBY_IPV6=%q\n", standby.Name, standby.IPv4, standby.IPv6)
+	appendf(&builder, "PUBLISHER_FQDN=%q\n", DNSPublisher+"."+Domain)
+	appendf(&builder, "ZONES=%q\n", strings.Join(zones, " "))
+	appendf(&builder, "REMOVED_ZONES=%q\n", strings.Join(removedZones, " "))
+	return builder.String()
+}
+
+func renderZoneTemplate(zone string, f3sHosts []string) string {
 	content := mustReadFrontendAsset(filepath.Join("var/nsd/zones/master", zone+".zone.tpl"))
 	if zone == "buetow.org" {
-		content = replaceLegacyF3SZoneLoop(content, renderF3SZoneRecords(f3sHosts, master, standby))
+		content = replaceLegacyF3SZoneLoop(content, renderF3SZoneTemplateRecords(f3sHosts))
 	}
 	replacer := strings.NewReplacer(
-		"<%= time() %>", strconv.FormatInt(serial, 10),
-		"<%= $ips->{current_master}{ipv4} %>", master.IPv4,
-		"<%= $ips->{current_master}{ipv6} %>", master.IPv6,
-		"<%= $ips->{current_standby}{ipv4} %>", standby.IPv4,
-		"<%= $ips->{current_standby}{ipv6} %>", standby.IPv6,
+		"<%= time() %>", "@SERIAL@",
+		"<%= $ips->{current_master}{ipv4} %>", "@MASTER_IPV4@",
+		"<%= $ips->{current_master}{ipv6} %>", "@MASTER_IPV6@",
+		"<%= $ips->{current_standby}{ipv4} %>", "@STANDBY_IPV4@",
+		"<%= $ips->{current_standby}{ipv6} %>", "@STANDBY_IPV6@",
+		"fishfinger.buetow.org. hostmaster.buetow.org.", DNSPublisher+"."+Domain+". hostmaster."+Domain+".",
 	)
 	content = replacer.Replace(content)
 	if strings.Contains(content, "<%") {
@@ -268,14 +288,14 @@ func replaceLegacyF3SZoneLoop(content, records string) string {
 	return content[:start] + records + content[end+2:]
 }
 
-func renderF3SZoneRecords(hosts []string, master, standby Server) string {
+func renderF3SZoneTemplateRecords(hosts []string) string {
 	var builder strings.Builder
 	for _, host := range hosts {
 		if !strings.HasPrefix(host, "ipv6.") {
-			appendf(&builder, "%s.         300 IN A %s ; Enable failover\nwww.%s.     300 IN A %s ; Enable failover\nstandby.%s. 300 IN A %s ; Enable failover\n", host, master.IPv4, host, master.IPv4, host, standby.IPv4)
+			appendf(&builder, "%s.         300 IN A @MASTER_IPV4@ ; Enable failover\nwww.%s.     300 IN A @MASTER_IPV4@ ; Enable failover\nstandby.%s. 300 IN A @STANDBY_IPV4@ ; Enable failover\n", host, host, host)
 		}
 		if !strings.HasPrefix(host, "ipv4.") {
-			appendf(&builder, "%s.         300 IN AAAA %s ; Enable failover\nwww.%s.     300 IN AAAA %s ; Enable failover\nstandby.%s. 300 IN AAAA %s ; Enable failover\n", host, master.IPv6, host, master.IPv6, host, standby.IPv6)
+			appendf(&builder, "%s.         300 IN AAAA @MASTER_IPV6@ ; Enable failover\nwww.%s.     300 IN AAAA @MASTER_IPV6@ ; Enable failover\nstandby.%s. 300 IN AAAA @STANDBY_IPV6@ ; Enable failover\n", host, host, host)
 		}
 	}
 	return builder.String()
