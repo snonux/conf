@@ -13,7 +13,7 @@ import (
 	. "github.com/snonux/gonf/api"
 )
 
-const frontendAggregatePattern = `^frontends_(acme|base|cron|dns_failover|gemtexter|goprecords|httpd|inetd|myname|newsyslog|nsd|pf|ping|relayd|rsync|script|service_accounts|services|smtpd|uptimed|wire_guard_hosts)$`
+const frontendAggregatePattern = `^frontends_(acme|base|cron|dns_failover|d_tail|foostats|gemtexter|gogios|goprecords|httpd|inetd|myname|newsyslog|nsd|pf|ping|pkg_repo|relayd|rsync|script|service_accounts|services|smtpd|uptimed|wire_guard_hosts)$`
 
 // Register makes every current recipe group and its deployment aggregate
 // available to the CLI. Future Rex ports join this composition root rather
@@ -21,6 +21,7 @@ const frontendAggregatePattern = `^frontends_(acme|base|cron|dns_failover|gemtex
 func Register() {
 	RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.Maintenance{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
+	RegisterMethods(frontends.Monitoring{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.Web{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.MailDNS{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), WithCluster(cluster.NameNetBSDPis))

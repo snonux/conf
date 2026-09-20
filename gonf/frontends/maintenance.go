@@ -29,35 +29,16 @@ type serviceAccount struct {
 	LoginClass string
 }
 
-var frontendServiceAccounts = []serviceAccount{
-	{Name: "_dserver", Home: "/var/run/dserver", LoginClass: "nologin"},
-	{Name: "_gogios", Home: "/var/run/gogios"},
-	{Name: "_gorum", Home: "/var/run/gorum", LoginClass: "nologin"},
-}
-
-// DescServiceAccounts returns the description shown for the frontend account
-// task.
+// DescServiceAccounts retains the disabled Gorum identity as a separately
+// applicable account-only task. DTail and Gogios declare their own accounts
+// with their respective services so either task is independently usable.
 func (Maintenance) DescServiceAccounts() string {
-	return "Create frontend service accounts with their declared homes"
+	return "Create the disabled Gorum service account"
 }
 
-// ServiceAccounts makes the Rex service identities declarative, separately
-// from the custom packages that supply their binaries. User creation is
-// additive-only, so the guarded command preserves Rex's explicit existing
-// account home convergence without extending User's portable contract.
 func (Maintenance) ServiceAccounts() {
 	onFrontends(func() {
-		for _, spec := range frontendServiceAccounts {
-			opts := []LocalUserOption{WithPrimaryGroup(spec.Name), WithHome(spec.Home)}
-			if spec.LoginClass != "" {
-				opts = append(opts, WithLoginClass(spec.LoginClass))
-			}
-			account := User(spec.Name, opts...)
-			Command("usermod", List("-d", spec.Home, spec.Name),
-				DependsOn(account),
-				Unless("sh", List("-c", accountHomeGuard(spec))),
-				WithName("usermod-home-"+spec.Name))
-		}
+		frontendAccount(serviceAccount{Name: "_gorum", Home: "/var/run/gorum", LoginClass: "nologin"})
 	})
 }
 
