@@ -1,7 +1,9 @@
 # Gonf controller secrets
 
 `api.MustSecret` and `api.OptionalSecret` intentionally read only below this
-directory. They never read the legacy Rex secret roots directly. This keeps a
+directory, through gonf's default file secret provider (`secret.FileProvider`,
+see gonf's `docs/secrets.md`); this repository configures no other provider.
+They never read the legacy Rex secret roots directly. This keeps a
 gonf plan's controller inputs explicit and makes the logical paths used by
 recipes stable:
 
@@ -14,7 +16,13 @@ Run gonf through `./gonf.sh …` from the repository root (the supported
 wrapper changes into `./gonf`), or run `cd gonf && go run ./cmd/gonf …`.
 Do not invoke the command from the repository root: `MustSecret` deliberately
 resolves its `secrets` directory relative to the recipe process working
-directory, and the canonical root is `gonf/secrets`.
+directory, and the canonical root is `gonf/secrets`. With a gonf release that
+includes the typed provider contract, running from the wrong directory fails
+recording with `secrets directory "secrets" not found in the working
+directory` for both helpers; older releases treated that as every secret
+missing, so `OptionalSecret` silently dropped the goprecords tokens.
+`OptionalSecret` skips a host only when its own token file is absent below an
+existing `gonf/secrets`.
 
 Bootstrap a checkout before running any task that needs a secret. Run these
 commands from the repository root; they copy files without printing their
