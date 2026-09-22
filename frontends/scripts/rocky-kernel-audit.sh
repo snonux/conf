@@ -28,8 +28,11 @@
 # AltArch kernel exists, so it exits 0 and is reported against a baseline
 # (the affected list of the previous successful assessment): CVEs newly
 # affecting the kernel, and any status change, are logged at warning
-# priority and listed in $NEW_FILE (plus the dated $HISTORY_FILE); an
-# unchanged VULNERABLE result is a notice. Journal priorities use the
+# priority and listed in $NEW_FILE (plus the dated $HISTORY_FILE, one line
+# per CVE with the date of the run that first alerted it); CVEs that no
+# longer affect it (fixed by a range change, withdrawn) are logged at notice
+# priority and listed in $REMOVED_FILE; an unchanged VULNERABLE result is a
+# notice. Journal priorities use the
 # sd-daemon "<N>" stdout prefix; every line is also appended to the shared
 # /var/log/unattended-upgrade.log.
 #
@@ -105,10 +108,13 @@ BASELINE_RECORDS=$STATE_DIR/baseline-cve-records
 # "<count> <streak>" of a record-count drop still awaiting acceptance.
 DROP_FILE=$STATE_DIR/drop-candidate
 # new-cves: the latest run's batch (empty when nothing is new).
-# new-cves.history: "<YYYY-MM-DD> <CVE>" lines for HISTORY_DAYS, so a batch
-# stays visible after the next (quiet) run overwrites new-cves.
+# new-cves.history: "<YYYY-MM-DD> <CVE>" lines for HISTORY_DAYS, one per
+# CVE (the first alerting run's date), so a batch stays visible after the
+# next (quiet) run overwrites new-cves.
 NEW_FILE=$STATE_DIR/new-cves
 HISTORY_FILE=$STATE_DIR/new-cves.history
+# removed-cves: baseline CVEs that the latest run no longer finds affecting.
+REMOVED_FILE=$STATE_DIR/removed-cves
 RESULTS=$STATE_DIR/results.tmp
 
 # jq filter over the concatenated OSV records. Per record it prints
@@ -169,7 +175,10 @@ repo_newest=unknown
 fetch=skipped
 feed_newest=none
 typeset -i cves=0 affected=0 unassessable=0 new_count=0 baseline_cves=0
-typeset -i drop_streak=0
+typeset -i removed_count=0
+# drop_streak: -1 until check_record_drop runs; write_status then reports
+# the frozen on-disk streak (drop_prev_streak) instead.
+typeset -i drop_streak=-1 drop_prev_count=0 drop_prev_streak=0
 # Set by commit_baseline when it fails: which state file could not be written.
 commit_error=""
 
@@ -288,7 +297,6 @@ feed_age_hours() {
 # or the lower count has held for DROP_ACCEPT_RUNS consecutive runs. Only
 # fresh, above-floor feeds reach it, so stale runs do not count.
 check_record_drop() {
-	typeset prev_count prev_streak
 	drop_streak=1
 	if [ $((cves * 100)) -ge $((baseline_cves * (100 - MAX_RECORD_DROP_PCT))) ]
 	then
@@ -296,17 +304,17 @@ check_record_drop() {
 		rm -f "$DROP_FILE"
 		return 0
 	fi
-	if [ -f "$DROP_FILE" ] && read -r prev_count prev_streak <"$DROP_FILE"; then
-		case $prev_count:$prev_streak in
-		*[!0-9:]* | :* | *:) ;;
-		*) [ $((cves * 100)) -ge $((prev_count * DROP_HOLD_PCT)) ] \
-			&& drop_streak=$((prev_streak + 1)) ;;
-		esac
+	if [ "$drop_prev_streak" -gt 0 ] \
+		&& [ $((cves * 100)) -ge $((drop_prev_count * DROP_HOLD_PCT)) ]; then
+		drop_streak=$((drop_prev_streak + 1))
 	fi
 	# Recorded even when accepting: commit_baseline removes it, so an
 	# accepted run that ends UNKNOWN for another reason still counts.
-	printf '%d %d\n' "$cves" "$drop_streak" >"$DROP_FILE" \
-		|| log 4 "WARNING: cannot record the drop streak in $DROP_FILE"
+	if ! { printf '%d %d\n' "$cves" "$drop_streak" >"$DROP_FILE.tmp" \
+		&& mv "$DROP_FILE.tmp" "$DROP_FILE"; }; then
+		rm -f "$DROP_FILE.tmp"
+		log 4 "WARNING: cannot record the drop streak in $DROP_FILE"
+	fi
 	if [ "$drop_streak" -ge "$DROP_ACCEPT_RUNS" ]; then
 		log 4 "WARNING: accepting $cves CVE records (was $baseline_cves) after $drop_streak consecutive runs"
 		return 0
@@ -315,6 +323,26 @@ check_record_drop() {
 	reason="$reason (> ${MAX_RECORD_DROP_PCT}% drop, run $drop_streak of"
 	reason="$reason $DROP_ACCEPT_RUNS before it is accepted): truncated"
 	return 1
+}
+
+# Loads a pending drop streak from $DROP_FILE into drop_prev_count/streak;
+# a malformed file is discarded with a warning (the streak restarts).
+read_drop_candidate() {
+	typeset line
+	[ -f "$DROP_FILE" ] || return 0
+	line=$(cat "$DROP_FILE" 2>/dev/null)
+	case $line in
+	[0-9]*' '[0-9]*)
+		read -r drop_prev_count drop_prev_streak <<<"$line"
+		case $drop_prev_count:$drop_prev_streak in
+		*[!0-9:]*) ;;
+		*) return 0 ;;
+		esac
+		;;
+	esac
+	drop_prev_count=0 drop_prev_streak=0
+	log 4 "WARNING: discarding malformed $DROP_FILE ('$line'), the drop streak restarts"
+	rm -f "$DROP_FILE"
 }
 
 # Sets status/reason from the counts. Staleness and truncation make the
@@ -352,7 +380,8 @@ baseline_valid() {
 }
 
 # After a successful assessment: $NEW_FILE = CVEs not in the previous
-# baseline (all of them on the first run). An invalid baseline (hand-edited,
+# baseline (all of them on the first run), $REMOVED_FILE = baseline CVEs no
+# longer affecting (none on the first run). An invalid baseline (hand-edited,
 # corrupt) is treated as missing with a warning rather than failing every
 # run: UNKNOWN runs never replace it, so it would never recover. The
 # baseline itself is replaced only by commit_baseline, after the status
@@ -371,12 +400,18 @@ compute_new() {
 	fi
 	LC_ALL=C comm -13 "$base" "$AFFECTED_NEXT" >"$NEW_FILE.tmp" \
 		&& mv "$NEW_FILE.tmp" "$NEW_FILE" || return 1
+	LC_ALL=C comm -23 "$base" "$AFFECTED_NEXT" >"$REMOVED_FILE.tmp" \
+		&& mv "$REMOVED_FILE.tmp" "$REMOVED_FILE" || return 1
 	new_count=$(wc -l <"$NEW_FILE")
+	removed_count=$(wc -l <"$REMOVED_FILE")
 }
 
 # Rebuilds $HISTORY_FILE atomically: the entries of the last HISTORY_DAYS
-# plus this run's new CVEs dated today (same-day repeats collapse). On
-# failure the previous history stays as it was.
+# plus this run's new CVEs dated today, one line per CVE keeping the OLDEST
+# date. A CVE re-reported after a failed commit (report logs NEW on that
+# UNKNOWN run too) therefore keeps the date of the run that first alerted
+# it, and re-commits cannot duplicate it. On failure the previous history
+# stays as it was.
 update_history() {
 	typeset today cutoff
 	today=$(date -u +%F)
@@ -384,7 +419,7 @@ update_history() {
 	{
 		[ -f "$HISTORY_FILE" ] && awk -v c="$cutoff" '$1 >= c' "$HISTORY_FILE"
 		awk -v d="$today" '{ print d, $0 }' "$NEW_FILE"
-	} | awk '!seen[$0]++' >"$HISTORY_FILE.tmp" \
+	} | awk '!seen[$2]++' >"$HISTORY_FILE.tmp" \
 		&& mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
 }
 
@@ -452,6 +487,8 @@ run_audit() {
 # key=value status record for operators and later monitoring checks. Written
 # to a temp file first: a failed write (full SD card) keeps the old record.
 write_status() {
+	typeset -i shown_streak=$drop_streak
+	[ "$drop_streak" -ge 0 ] || shown_streak=$drop_prev_streak
 	cat >"$STATUS_FILE.tmp" <<EOF && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
 checked_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 status=$status
@@ -472,7 +509,9 @@ affected_list=$AFFECTED_FILE
 new_list=$NEW_FILE
 new_history=$HISTORY_FILE
 baseline_cve_records=$baseline_cves
-drop_streak=$drop_streak
+drop_streak=$shown_streak
+removed=$removed_count
+removed_list=$REMOVED_FILE
 EOF
 }
 
@@ -481,13 +520,19 @@ report() {
 	typeset summary ids
 	summary="$status: $reason (kernel ${krel:-?}, installed newest"
 	summary="$summary $installed_newest, repo newest $repo_newest, fetch $fetch)"
-	[ "$status" = UNKNOWN ] && { log 3 "$summary"; exit 3; }
-	if [ "$status" != "$previous_status" ]; then
-		log 4 "status changed: $previous_status -> $status"
-	fi
+	# Batches first: they are only non-zero after an assessment, and a run
+	# whose commit then failed (UNKNOWN) still alerts on what it found.
 	if [ "$new_count" -gt 0 ]; then
 		ids=$(head -n "$NEW_IDS_IN_LOG" "$NEW_FILE" | tr '\n' ' ')
 		log 4 "NEW: $new_count CVE(s) newly affect the kernel: ${ids}(list: $NEW_FILE)"
+	fi
+	if [ "$removed_count" -gt 0 ]; then
+		ids=$(head -n "$NEW_IDS_IN_LOG" "$REMOVED_FILE" | tr '\n' ' ')
+		log 5 "RESOLVED: $removed_count CVE(s) no longer affect the kernel (range change or withdrawn): ${ids}(list: $REMOVED_FILE)"
+	fi
+	[ "$status" = UNKNOWN ] && { log 3 "$summary"; exit 3; }
+	if [ "$status" != "$previous_status" ]; then
+		log 4 "status changed: $previous_status -> $status"
 	fi
 	case $status in
 	OK) log 6 "$summary" ;;
@@ -511,6 +556,7 @@ main() {
 	fi
 	[ -n "$previous_status" ] || previous_status=none
 	read_baseline_records
+	read_drop_candidate
 	run_audit
 	if ! write_status; then
 		rm -f "$STATUS_FILE.tmp"

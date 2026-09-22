@@ -64,8 +64,9 @@ func (KernelAudit) DescStateDir() string {
 // StateDir creates the directory holding the run lock, the cached feed, the
 // status record, the affected-CVE baseline (affected-cves) with its record
 // count (baseline-cve-records), a pending record-count drop
-// (drop-candidate, accepted after 3 consecutive runs), and the new-CVE list
-// plus its dated 90-day history. Operator overrides: deleting
+// (drop-candidate, accepted after 3 consecutive runs), the new-CVE list plus
+// its dated 90-day history (one line per CVE, first alert date) and the
+// removed-CVE list. Operator overrides: deleting
 // baseline-cve-records accepts a lower feed record count at once; deleting
 // affected-cves re-baselines (every affected CVE is reported as new once).
 func (KernelAudit) StateDir() {

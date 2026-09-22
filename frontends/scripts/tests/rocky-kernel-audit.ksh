@@ -164,6 +164,7 @@ feed() {
 
 feed vuln "$fresh" affected newer older withdrawn gsd
 feed vulnmore "$fresh" affected affected2 newer older
+feed vulnfixed "$fresh" affected newer older fixedat
 feed clean "$fresh" newer older gsd
 feed cleanbig "$fresh" newer older fixedat listmiss
 feed last "$fresh" last newer
@@ -341,9 +342,35 @@ has "$state/status" '^reason=cannot update the baseline' \
 	'baseline commit reason'
 has "$work/out" '^<3>UNKNOWN: cannot update the baseline' \
 	'baseline commit error'
+# That run found and alerted the CVE, so the history dates it on that run
+# (simulated as yesterday); the re-report must not add a second line.
+has "$work/out" '^<4>NEW: 1 CVE(s) newly affect the kernel: CVE-2024-0001' \
+	'failed-commit run must still alert'
+yesterday=$(date -u -d '-1 day' +%F)
+sed "s/^[0-9-]* /$yesterday /" "$state/new-cves.history" >"$work/h" \
+	&& cp "$work/h" "$state/new-cves.history"
 run_audit "$work/vuln.zip"
 expect 0 VULNERABLE 'after a failed baseline commit'
 field 'new_cves=1' 'failed commit must not consume the new CVEs'
+[ "$(grep -c 'CVE-2024-0001' "$state/new-cves.history")" -eq 1 ] \
+	|| fail 'history duplicated a re-reported CVE'
+has "$state/new-cves.history" "^$yesterday CVE-2024-0001\$" \
+	'history must keep the first alerting date'
+
+# CVEs that leave the affected list are reported as resolved at notice.
+fresh_state
+run_audit "$work/vulnmore.zip"
+field 'removed=0' 'nothing removed on the first run'
+run_audit "$work/vulnfixed.zip"
+expect 0 VULNERABLE 'CVE resolved'
+field 'removed=1' 'removed count'
+has "$state/removed-cves" '^CVE-2024-0007$' 'removed list'
+hasnt "$state/removed-cves" 'CVE-2024-0001' 'still-affecting CVE listed as removed'
+has "$work/out" '^<5>RESOLVED: 1 CVE(s) no longer affect the kernel' \
+	'resolved notice'
+hasnt "$work/out" '^<4>' 'a resolved CVE alone must not warn'
+run_audit "$work/vulnfixed.zip"
+field 'removed=0' 'removed batch not reset'
 
 # A record count that drops by more than 20% against the last assessment
 # is a truncated export; the baseline count survives the UNKNOWN run.
@@ -382,6 +409,31 @@ has "$work/out" '^<4>WARNING: accepting 2 CVE records (was 4)' \
 run_audit "$work/clean.zip"
 expect 0 OK 'after acceptance'
 field 'drop_streak=0' 'no drop after acceptance'
+
+# Runs that stop before the drop check (stale feed, unknown kernel) report
+# the frozen on-disk streak, not 0.
+fresh_state
+run_audit "$work/cleanbig.zip"
+run_audit "$work/clean.zip"
+field 'drop_streak=1' 'streak before the frozen runs'
+run_audit "$work/stale.zip"
+expect 3 UNKNOWN 'stale run during a drop streak'
+field 'drop_streak=1' 'stale run must report the frozen streak'
+run_audit "$work/clean.zip" FAKE_RPM=no
+field 'drop_streak=1' 'unknown-kernel run must report the frozen streak'
+run_audit "$work/clean.zip"
+field 'drop_streak=2' 'streak continues after the frozen runs'
+
+# A malformed drop-candidate is discarded with a warning; the streak
+# restarts, and the file is rewritten via a temp file.
+printf 'garbage\n' >"$state/drop-candidate"
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'malformed drop-candidate'
+has "$work/out" '^<4>WARNING: discarding malformed .*drop-candidate' \
+	'malformed drop-candidate warning'
+field 'drop_streak=1' 'malformed drop-candidate restarts the streak'
+[ "$(cat "$state/drop-candidate")" = '2 1' ] || fail 'drop-candidate content'
+[ ! -e "$state/drop-candidate.tmp" ] || fail 'drop-candidate temp left over'
 
 # Operator override: deleting baseline-cve-records accepts a drop at once.
 fresh_state

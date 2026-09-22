@@ -494,15 +494,20 @@ aggregate and also belong to the `rocky` aggregate. Each run:
    and counts affected / not affected / unassessable CVE records. Withdrawn
    and legacy `GSD-*` records are ignored.
 3. compares the affected list with the **baseline** `affected-cves`, i.e. the
-   list from the last OK/VULNERABLE run, and writes the difference to
-   `new-cves`. A baseline that is unsorted or holds anything other than CVE
-   ids is treated as empty, with a warning. Otherwise it could never recover,
-   because UNKNOWN runs never replace it.
+   list from the last OK/VULNERABLE run. CVEs not in the baseline go to
+   `new-cves`. Baseline CVEs that no longer affect the kernel (a range
+   change, or a withdrawn record) go to `removed-cves`. A baseline that is
+   unsorted or holds anything other than CVE ids is treated as empty, with a
+   warning. Otherwise it could never recover, because UNKNOWN runs never
+   replace it.
 4. writes `/var/lib/rocky-kernel-audit/status` via a temp file. The record is
    key=value: `checked_at`, `status`, `previous_status`, `reason`,
    running/installed/repo-newest kernel, `fetch`, `feed_newest_record`,
-   `cve_records`, `affected`, `new_cves`, `unassessable`,
-   `baseline_cve_records`.
+   `cve_records`, `affected`, `new_cves`, `removed`, `unassessable`,
+   `baseline_cve_records`, `drop_streak`. `drop_streak` is the pending
+   streak from `drop-candidate`, frozen as-is on runs that stop before the
+   drop check: stale feed, floor, unknown kernel, or fetch/corrupt
+   failures.
 5. commits, only after the status write succeeded and never after an
    UNKNOWN result. The dated batch goes into `new-cves.history` first. Only
    then are the baseline `affected-cves` and its record count
@@ -513,13 +518,19 @@ aggregate and also belong to the `rocky` aggregate. Each run:
    update the baseline …" or "cannot update the baseline count …". A history
    failure leaves the baseline untouched. CVEs that appear during an outage,
    or during a run that could not record its result, are therefore still
-   reported as new later.
+   reported as new later. A run whose commit failed still logs its
+   `NEW:`/`RESOLVED:` lines before the UNKNOWN line, so the history entry
+   it wrote belongs to a run that actually alerted.
 
 **Retention:** `new-cves` holds only the latest run's batch and is emptied
-by the next quiet run. `new-cves.history` keeps `<YYYY-MM-DD> <CVE>` lines
-for 90 days, rebuilt atomically on every successful run (pruned, same-day
-repeats collapsed; the first run adds the whole initial list). A batch
-therefore stays visible after it has left `new-cves` and the journal.
+by the next quiet run, and `removed-cves` behaves the same way.
+`new-cves.history` keeps `<YYYY-MM-DD> <CVE>` lines for 90 days. It is
+rebuilt atomically on every committing run: old entries are pruned, and
+there is one line per CVE carrying the date of the first run that alerted
+it, so a re-report after a failed commit cannot duplicate or re-date it.
+The first run adds the whole initial list. A batch therefore stays visible
+after it has left `new-cves` and the journal. A CVE that is resolved and
+then affects the kernel again within 90 days keeps its first date.
 
 **Truncation guards:** the feed must hold at least 10000 CVE records, an
 absolute floor for a broken first download (about 15.8k in 2026-09). After
@@ -528,8 +539,9 @@ truncated. The count only grows in normal operation, because the kernel CNA
 rejects few records. The drop check runs only on fresh, above-floor feeds.
 A legitimate shrink recovers by itself:
 
-- Each drop run records `<count> <streak>` in `drop-candidate`, and the
-  status record carries `drop_streak=`.
+- Each drop run records `<count> <streak>` in `drop-candidate` via a temp
+  file, and the status record carries `drop_streak=`. A malformed
+  `drop-candidate` is discarded with a warning and the streak restarts.
 - The streak continues while the count stays within 95% of the previous
   drop run.
 - On the 3rd consecutive drop run (about 3 days) the lower count is
@@ -564,6 +576,7 @@ exists, so it must not look like broken coverage:
 | warning (`<4>`) `status changed: A -> B` | any status transition (e.g. UNKNOWN → VULNERABLE, VULNERABLE → OK after a kernel fix) | same |
 | warning (`<4>`) `WARNING: feed download failed` / `not a valid zip` | fetch problem; still assessed from a fresh cache | same |
 | warning (`<4>`) `WARNING: baseline … unsorted or malformed` | baseline reset: every affected CVE is reported as new once | same |
+| notice (`<5>`) `RESOLVED: n CVE(s) no longer affect the kernel …` | baseline CVEs no longer matched (range change or withdrawn record) | `journalctl -u rocky-kernel-audit`, `removed-cves`, `removed=` |
 | notice (`<5>`) / info (`<6>`) | unchanged VULNERABLE / OK summary | `journalctl -u rocky-kernel-audit` |
 
 Nothing reports OK without a fresh, complete, fully assessed feed.
@@ -606,13 +619,18 @@ Python `zip`/`unzip` shims via `TEST_EXTRA_PATH`. It covers:
   baseline (warning, treated as empty, then recovered); a failed baseline
   commit (consistent UNKNOWN record; the next run reports the CVEs again);
   a failed history write (its own reason, baseline untouched, the CVEs
-  re-reported and recorded once).
+  re-reported and recorded once); a failed baseline commit after the
+  history was written (that run still alerts NEW; the later success leaves
+  exactly one history line, keeping the first alerting date); resolved
+  CVEs (`removed=`, `removed-cves`, RESOLVED notice, no warning).
 - coverage failures: unassessable records; a stale feed; an unreachable
   source with no cache, a fresh cache and a stale cache; 304; a corrupt
   download that keeps the cache; a truncated feed (floor); a > 20% record
   drop against the baseline count: a one-off drop (the streak restarts at 1
   after a normal run), a persistent drop accepted on the 3rd run (and the
-  new count adopted), and the operator override; an unknown kernel
+  new count adopted), the operator override, the frozen `drop_streak`
+  on stale and unknown-kernel runs, and a malformed `drop-candidate`
+  (warning, streak restarts, temp-file rewrite); an unknown kernel
   (`fetch=skipped`); a held lock; a failed status write that keeps the old
   record and does not consume new CVEs; an uncreatable state directory.
 
