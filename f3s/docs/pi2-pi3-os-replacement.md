@@ -1,5 +1,12 @@
 # pi2/pi3: replacing Rocky SIG AltArch (task 852)
 
+> **Decision (2026-09-22):** the owner rejected the Debian migration below;
+> pi2/pi3 stay on Rocky 9 SIG AltArch. The follow-up tasks l82, m82, n82
+> and o82 were dropped, and the l82 recipes were reverted (conf 0c88b37).
+> The mitigation in place is the daily kernel CVE audit (task 752,
+> `rocky-kernel-audit`) plus the p82 reboot-loop fix.
+
+
 **Status: recommendation, nothing changed.** Research and read-only probes
 done on 2026-09-22. No host has been reinstalled or reconfigured. Carrying out
 the migration needs paul's explicit approval (follow-up tasks are listed in
