@@ -325,12 +325,19 @@ render_candidate_config() {
         "$INPUT_DIR/nsd.conf" >"$STAGE_DIR/nsd.conf"
 }
 
+# validate_candidate is called as 'validate_candidate || ...', which disables
+# set -e for every command inside it (POSIX: set -e does not apply to a
+# command that is not the last in a && / || list, and that reaches into
+# function bodies called from such a context). Each check below must
+# therefore be tested explicitly with '|| return 1': relying on set -e, or on
+# a check being the function's last statement, would silently accept a zone
+# or configuration that NSD itself would reject.
 validate_candidate() {
     typeset zone
     for zone in $ZONES; do
-        nsd-checkzone "$zone" "$STAGE_DIR/$zone.zone"
+        nsd-checkzone "$zone" "$STAGE_DIR/$zone.zone" || return 1
     done
-    nsd-checkconf "$STAGE_DIR/nsd.conf"
+    nsd-checkconf "$STAGE_DIR/nsd.conf" || return 1
 }
 
 install_atomic() {

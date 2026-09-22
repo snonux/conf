@@ -4,9 +4,10 @@
 # rewritten into a scratch tree; hostname, rcctl, nsd-control, sleep, the NSD
 # checkers, install(1) and gonf's dns-zone-* subcommands are faked. The fake
 # rcctl keeps NSD's running state in a file and refuses to start NSD while
-# the live nsd.conf contains BROKEN (or while FAIL_START is set). Requires
-# a ksh, OpenBSD's or ksh93 (both scripts use print; bash cannot run them);
-# the harness itself avoids ksh93-only syntax.
+# the live nsd.conf contains BROKEN (or while FAIL_START is set). nsd-checkzone
+# fails with FAIL_CHECKZONE set. Requires a ksh, OpenBSD's or ksh93 (both
+# scripts use print; bash cannot run them); the harness itself avoids
+# ksh93-only syntax.
 #
 # Covers: first publication and a key or nsd.conf change restart NSD; a
 # zone-only change reloads it; an unchanged run does nothing; a failed
@@ -15,7 +16,9 @@
 # keeps the journal and refuses later publications until NSD starts; a
 # stopped NSD is left alone; a finished run releases the publication lock;
 # a live publisher's lock makes a Gonf (role-less) run wait and fail, a
-# failover (-r) run exit 0, and is never stolen.
+# failover (-r) run exit 0, and is never stolen; a zone that fails
+# nsd-checkzone refuses publication instead of installing the broken zone
+# (fb2), and the same change publishes once nsd-checkzone passes.
 
 set -eu
 
@@ -70,9 +73,19 @@ cat >"$fake/nsd-control" <<EOF
 echo "nsd-control \$*" >>"$log"
 EOF
 
-for checker in nsd-checkconf nsd-checkzone; do
-    printf '#!/bin/sh\nexit 0\n' >"$fake/$checker"
-done
+printf '#!/bin/sh\nexit 0\n' >"$fake/nsd-checkconf"
+
+# FAIL_CHECKZONE makes nsd-checkzone fail with realistic zonec(8) stderr, so
+# a case can confirm validate_candidate actually refuses a broken zone
+# instead of silently accepting it (fb2).
+cat >"$fake/nsd-checkzone" <<'EOF'
+#!/bin/sh
+if [ -n "${FAIL_CHECKZONE:-}" ]; then
+    echo "zonec[1]: error: $1:2: parse error near '@STANDBY_IPV4@'" >&2
+    exit 1
+fi
+exit 0
+EOF
 
 # install -m mode -o owner -g group source destination; ownership is ignored
 # because the test does not run as root. FAIL_INSTALL makes the key install
@@ -228,6 +241,17 @@ run_case "a failover run skips a live lock" 0 "" -- -r fishfinger
 check "the live publisher's lock is kept" test -f "$lock/owner"
 rm -rf "$lock"
 run_case "the change is published once the lock is gone" 0 "nsd-control reload"
+
+# validate_candidate is called as 'validate_candidate || ...', which disables
+# ksh's set -e inside the whole function; a nsd-checkzone that fails inside
+# its loop must still be caught explicitly rather than being silently
+# outvoted by nsd-checkconf's own (unrelated) exit status (fb2).
+printf 'serial @SERIAL@\nwww A @STANDBY_IPV4@\n' >"$inputs/zones/example.org.zone.tpl"
+run_case "a failing nsd-checkzone refuses publication" 1 "" FAIL_CHECKZONE=1
+check "the rejected zone is not installed" grep -q 'A 192.0.2.1' "$root/zones/master/example.org.zone"
+check "the rejected journal is not left behind" test ! -e "$journal"
+run_case "the same change publishes once nsd-checkzone passes" 0 "nsd-control reload"
+check "the previously rejected zone is now installed" grep -q 'A 192.0.2.2' "$root/zones/master/example.org.zone"
 
 # The publisher's own messages are shown only on failure.
 if [ "$failures" -ne 0 ]; then
