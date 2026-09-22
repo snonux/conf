@@ -4,13 +4,14 @@ package paths
 import (
 	"path"
 	"path/filepath"
-
-	. "github.com/snonux/gonf/api"
 )
 
-// Repo roots used when declaring resources.
+// Repo roots used when declaring resources. Conf is this repository's
+// checkout on the controller: ~/git/conf, or GONF_CONF_ROOT when set, which
+// gonf.sh sets to the checkout it runs from so a second worktree records its
+// own assets.
 var (
-	Conf      = Home("git/conf")
+	Conf      = checkoutRoot("GONF_CONF_ROOT", "conf")
 	Frontends = filepath.Join(Conf, "frontends")
 	Garage    = filepath.Join(Conf, "f3s", "garage")
 	RNodes    = filepath.Join(Conf, "f3s", "r-nodes")

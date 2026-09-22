@@ -9,6 +9,8 @@ import (
 
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
+
+	"codeberg.org/snonux/conf/gonf/paths"
 )
 
 const (
@@ -126,18 +128,22 @@ func (Monitoring) Foostats() {
 }
 
 // shurikenAgePlugin is the Gogios album-age plugin in the controller's
-// shuriken.sh checkout (~/git/shuriken.sh), its one source of truth as in
-// Rex; there is no in-repo copy to fall back to.
+// shuriken.sh checkout (paths.Shuriken, ~/git/shuriken.sh by default), its
+// one source of truth as in Rex; there is no in-repo copy to fall back to,
+// so a missing checkout fails the Gogios recording saying how to fix it.
 func shurikenAgePlugin() string {
-	return Home("git", "shuriken.sh", "contrib", "check_shuriken_age")
+	return paths.RequireFile(filepath.Join(paths.Shuriken, "contrib", "check_shuriken_age"),
+		"frontends_gogios (check_shuriken_age plugin)",
+		"clone shuriken.sh to ~/git/shuriken.sh or set GONF_SHURIKEN_ROOT to its checkout")
 }
 
 // foostatsSource returns the controller-local source of a Foostats file: the
-// controller's foostats checkout (~/git/foostats) when it has the file,
-// otherwise the copy kept under frontends/scripts, as Rex fell back to it.
-// Unlike Rex, the in-repo copy is not refreshed from the checkout.
+// controller's foostats checkout (paths.Foostats, ~/git/foostats by default)
+// when it has the file, otherwise the copy kept under frontends/scripts, as
+// Rex fell back to it. Unlike Rex, the in-repo copy is not refreshed from the
+// checkout.
 func foostatsSource(name string) string {
-	if checkout := Home("git", "foostats", name); isRegularFile(checkout) {
+	if checkout := filepath.Join(paths.Foostats, name); isRegularFile(checkout) {
 		return checkout
 	}
 	return legacyFrontendAsset(filepath.Join("scripts", name))

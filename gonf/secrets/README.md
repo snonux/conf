@@ -12,11 +12,12 @@ recipes stable:
 - `paths.GarageSecret("rpc_secret")` reads
 `gonf/secrets/garage/rpc_secret`.
 
-Run gonf through `./gonf.sh …` from the repository root (the supported
-wrapper changes into `./gonf`), or run `cd gonf && go run ./cmd/gonf …`.
-Do not invoke the command from the repository root: `MustSecret` deliberately
-resolves its `secrets` directory relative to the recipe process working
-directory, and the canonical root is `gonf/secrets`. With a gonf release that
+Run gonf through the repository's `gonf.sh` wrapper (from any working
+directory: it changes into this checkout's `gonf` directory itself and passes
+its arguments through verbatim), or run `cd gonf && go run ./cmd/gonf …`.
+Do not run `go run ./gonf/cmd/gonf` from the repository root: `MustSecret`
+deliberately resolves its `secrets` directory relative to the recipe process
+working directory, and the canonical root is `gonf/secrets`. With a gonf release that
 includes the typed provider contract, running from the wrong directory fails
 recording with `secrets directory "secrets" not found in the working
 directory` for both helpers; older releases treated that as every secret
