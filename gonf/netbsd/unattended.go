@@ -66,7 +66,7 @@ func (Unattended) Services() {
 
 // DescCron returns the description for the per-host cron schedule.
 func (Unattended) DescCron() string {
-	return "Root cron: unattended-upgrade-netbsd pkgs/reboot, per-host schedule"
+	return "Root cron: unattended-upgrade-netbsd pkgs/reboot, per-host schedule (needs pis_netbsd_script, pis_netbsd_services)"
 }
 
 // Cron installs pkgs + reboot cron jobs with per-host windows.

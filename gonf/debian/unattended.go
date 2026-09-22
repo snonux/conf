@@ -98,7 +98,7 @@ func (Unattended) AptConfig() {
 
 // DescScript returns the description for the wrapper deployment.
 func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-debian (0755 root:root)"
+	return "Install /usr/local/sbin/unattended-upgrade-debian (0755 root:root; needs debian_pis_packages)"
 }
 
 // Script installs the bash wrapper. The script itself refuses to run unless
@@ -129,7 +129,7 @@ func (Unattended) StampDir() {
 
 // DescUnits returns the description for systemd timer install.
 func (Unattended) DescUnits() string {
-	return "Install unattended-upgrade-debian SystemdTimer (oneshot + per-host calendar)"
+	return "Install unattended-upgrade-debian SystemdTimer (oneshot + per-host calendar; needs debian_pis_script, _stamp_dir)"
 }
 
 // Units installs the oneshot+timer pair and enables the timer, with the

@@ -41,7 +41,7 @@ func (KernelAudit) Packages() {
 
 // DescScript returns the description for the audit script deployment.
 func (KernelAudit) DescScript() string {
-	return "Install /usr/local/sbin/rocky-kernel-audit (0755 root:root)"
+	return "Install /usr/local/sbin/rocky-kernel-audit (0755 root:root; needs rocky_kernel_audit_packages)"
 }
 
 // Script installs the ksh audit script.
@@ -78,7 +78,7 @@ func (KernelAudit) StateDir() {
 
 // DescUnits returns the description for the audit timer.
 func (KernelAudit) DescUnits() string {
-	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
+	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar; needs rocky_kernel_audit_script, _state_dir)"
 }
 
 // Units installs the daily oneshot+timer pair. Persistent catches a run

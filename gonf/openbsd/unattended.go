@@ -89,7 +89,7 @@ func (Unattended) Services() {
 
 // DescCron returns the description for the per-host cron schedule.
 func (Unattended) DescCron() string {
-	return "Root cron: unattended-upgrade base/pkgs/audit/reboot, per-host schedule"
+	return "Root cron: unattended-upgrade base/pkgs/audit/reboot, per-host schedule (needs frontends_script, frontends_services)"
 }
 
 // Cron installs the four root cron jobs on every frontend host,

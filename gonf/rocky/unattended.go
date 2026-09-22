@@ -48,7 +48,7 @@ func (Unattended) Packages() {
 
 // DescScript returns the description for the wrapper deployment.
 func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-rocky (0755 root:root)"
+	return "Install /usr/local/sbin/unattended-upgrade-rocky (0755 root:root; needs rocky_packages)"
 }
 
 // Script installs the Rocky ksh wrapper.
@@ -78,7 +78,7 @@ func (Unattended) StampDir() {
 
 // DescUnits returns the description for systemd timer install.
 func (Unattended) DescUnits() string {
-	return "Install unattended-upgrade-rocky SystemdTimer (oneshot + per-host calendar)"
+	return "Install unattended-upgrade-rocky SystemdTimer (oneshot + per-host calendar; needs rocky_script, rocky_stamp_dir)"
 }
 
 // Units installs the oneshot+timer pair via SystemdTimer and

@@ -1,18 +1,22 @@
-# Garage cluster on FreeBSD f0–f2. Run Gonf from repo root unless noted.
+# Garage cluster on FreeBSD f0–f2. The recipes call the repository's
+# gonf.sh wrapper, which works from any directory.
 ssh_host := "paul@f0.lan.buetow.org"
 _garage_dir := justfile_directory()
 
-# Deploy TOML (RPC secret from gonf/secrets/garage/rpc_secret) and restart
-# Garage only when the managed config changed. The gonf task uses the f0–f2
-# inventory with paul@…:22 + doas.
+# The RPC secret comes from gonf/secrets/garage/rpc_secret, and Garage
+# restarts only when the managed config changed. The gonf task uses the f0–f2
+# inventory with paul@…:22 + doas. It deploys configuration only: the garage
+# package, its group, /var/db/garage and the cluster layout must already
+# exist, as first-host provisioning is not a gonf task.
+# Deploy the Garage TOML to f0–f2 (configuration only, no provisioning)
 deploy:
-    cd "{{_garage_dir}}/../.." && ./gonf.sh cluster garage garage_config
+    "{{_garage_dir}}/../../gonf.sh" cluster garage garage_config
 
 # Ensure gonf/secrets/garage/rpc_secret exists (openssl rand -hex 32).
 # An existing Rex-era secret is copied once, preserving the live cluster's
 # shared RPC identity instead of silently rotating it during the migration.
 init-secrets:
-    cd "{{_garage_dir}}/../.." && mkdir -p gonf/secrets/garage && if test ! -f gonf/secrets/garage/rpc_secret; then if test -f f3s/garage/secrets/rpc_secret; then install -m 600 f3s/garage/secrets/rpc_secret gonf/secrets/garage/rpc_secret; else openssl rand -hex 32 > gonf/secrets/garage/rpc_secret; fi; fi && chmod 600 gonf/secrets/garage/rpc_secret
+    cd "{{_garage_dir}}/../.." && umask 077 && mkdir -p gonf/secrets/garage && if test ! -f gonf/secrets/garage/rpc_secret; then if test -f f3s/garage/secrets/rpc_secret; then install -m 600 f3s/garage/secrets/rpc_secret gonf/secrets/garage/rpc_secret; else openssl rand -hex 32 > gonf/secrets/garage/rpc_secret; fi; fi && chmod 600 gonf/secrets/garage/rpc_secret
 
 # garage service status on f0
 status:

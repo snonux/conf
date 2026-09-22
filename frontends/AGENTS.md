@@ -23,13 +23,24 @@ Internet → relayd (port 443) → routing decision → httpd (port 8080) or f3s
 - Serves static content for various domains
 - Has server-specific blocks for each server's own hostname
 
-**Rexfile** - Configuration management using Rex (Perl):
-- Defines configuration arrays (`@acme_hosts`, `@f3s_hosts`, etc.)
-- Templates use these arrays to generate httpd and relayd configs
-- Deploys to both blowfish and fishfinger servers in parallel
-- Each server receives templates processed with its own `$hostname` value
+**Gonf** (`../gonf/frontends`, tasks `frontends_*`) - configuration management:
+- `data.go` holds the topology lists (`acmeHosts`, `f3sHosts`,
+  `garageBuckets`, `prefixes`) and the per-site policy derived from them
+  (`Site`/`SiteFor`: single-family ipv4./ipv6. names, frontend FQDNs, f3s
+  sites, dedicated TLS ports, expected HTTPS statuses, relayd upstreams)
+- `web.go`, `maildns.go`, `monitoring.go` and `acme.go` render httpd,
+  relayd, NSD, Gogios and ACME from that one model on the controller, per
+  frontend (`ForHosts` over the inventory's `Server` values)
+- `./gonf.sh cluster frontends ...` deploys to both frontends in parallel
+- The legacy `Rexfile` and its `.tpl` Perl templates are no longer deployed;
+  the Perl snippets below document where the rules came from, and the Go
+  renderers keep the same rules
 
 ## Configuration Arrays
+
+The `@name` arrays are the Rexfile's names; Gonf's are `acmeHosts`,
+`f3sHosts` and `prefixes` in `../gonf/frontends/data.go` (`TemplateData`
+appends the f3s hosts and Garage bucket names to the ACME hosts).
 
 ### @acme_hosts
 Controls which hosts get:
@@ -85,9 +96,11 @@ not adopted and would run next to the Gonf job, so check `crontab -l` before
 changing a command, and do not reintroduce raw crontab surgery in Rex or a
 shell helper.
 
-## Template Processing
+## Template Processing (legacy Rex)
 
-Rex processes `.tpl` files using embedded Perl:
+Historical: Rex processed `.tpl` files using embedded Perl. Gonf renders the
+same output in Go; the frontend FQDN skips below are `Site.FrontendHost`,
+the ipv4./ipv6. handling is `Site.Family`.
 
 ```perl
 <% ... -%>        # Perl code (- suppresses trailing newline)
@@ -225,7 +238,9 @@ Process:
 
 ### Configuration
 - Runs as user `_gogios`
-- Config: `/etc/gogios.json` (generated from `etc/gogios.json.tpl`)
+- Config: `/etc/gogios.json` (typed `gogiosConfig` rendered by
+  `renderGogios` in `../gonf/frontends/monitoring.go`; `etc/gogios.json.tpl`
+  is the legacy Rex template)
 - Output: `/var/www/htdocs/buetow.org/self/gogios/index.html`
 - State: `/var/run/gogios/state.json`
 - Cron schedule: Every 5 minutes between 08:00-22:00
@@ -233,7 +248,7 @@ Process:
 
 **Important**: Check intervals (`RunInterval`) are independent from cron schedule. A check with 3600s interval won't re-run just because cron triggered, it runs only when interval expires.
 
-### Template Pattern (gogios.json.tpl)
+### Template Pattern (legacy gogios.json.tpl; Go: addFrontendHostChecks / addSiteChecks)
 
 **Dedicated server checks (lines 29-46)**: Bare hostnames only
 ```perl

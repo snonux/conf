@@ -48,7 +48,7 @@ func (Unattended) Packages() {
 
 // DescScript returns the description for the wrapper deployment.
 func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-freebsd (0755 root:wheel)"
+	return "Install /usr/local/sbin/unattended-upgrade-freebsd (0755 root:wheel; needs freebsd_packages)"
 }
 
 // Script installs the FreeBSD ksh wrapper.
@@ -92,7 +92,7 @@ func (Unattended) StampDir() {
 
 // DescCron returns the description for the hourly cron.
 func (Unattended) DescCron() string {
-	return "Root cron: unattended-upgrade-freebsd daily, per-host hourly minute"
+	return "Root cron: unattended-upgrade-freebsd daily, per-host hourly minute (needs freebsd_script, freebsd_stamp_dir)"
 }
 
 // Cron installs the hourly daily-mode job (stamp-gated in-script).

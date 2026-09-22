@@ -40,13 +40,20 @@ type tomlData struct {
 // Deployment carries the root-only Garage configuration task. The config is
 // written by the privileged plan chunk, so secret material is never staged in
 // a login-owned temporary file on the destination.
+//
+// It deploys configuration, not a Garage node: installing the garage
+// package, creating its garage group, the metadata/data storage
+// (/var/db/garage) and the cluster layout (garage layout assign/apply) are
+// first-host provisioning steps outside gonf (see f3s/garage/Justfile and
+// the f3s Garage docs). On a host without them the config install fails on
+// the missing group, or the restart fails, instead of provisioning.
 type Deployment struct {
 	RequiresRoot
 }
 
 // DescConfig returns the description for the Garage configuration deployment.
 func (Deployment) DescConfig() string {
-	return "Render and install Garage TOML on f0, f1, and f2"
+	return "Render and install Garage TOML on f0, f1, and f2 (config only; Garage must already be installed and provisioned)"
 }
 
 // Config installs each node's Garage configuration and only restarts Garage
