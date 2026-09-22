@@ -158,12 +158,15 @@ lock_owner() {
     ' "$LOCK/owner"
 }
 
+# The "|" separator must be quoted: a bare | inside these patterns is pattern
+# alternation in OpenBSD's ksh and in ksh93, so ${owner%%|*} expanded to ""
+# and every owner record, even a live publisher's, looked stale.
 split_lock_owner() {
     typeset owner=$1 rest
-    LOCK_OWNER_PID=${owner%%|*}
-    rest=${owner#*|}
-    LOCK_OWNER_START=${rest%%|*}
-    LOCK_OWNER_TOKEN=${rest#*|}
+    LOCK_OWNER_PID=${owner%%"|"*}
+    rest=${owner#*"|"}
+    LOCK_OWNER_START=${rest%%"|"*}
+    LOCK_OWNER_TOKEN=${rest#*"|"}
     [ "$LOCK_OWNER_PID" != "$owner" ] && [ "$LOCK_OWNER_START" != "$rest" ]
 }
 
