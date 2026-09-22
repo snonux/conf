@@ -14,8 +14,9 @@
 # without a cached copy), corrupt download, truncated feed, unassessable
 # records, record-count drops (one-off, persistent and accepted after 3
 # distinct fresh runs, a cached or byte-identical rerun that must not
-# confirm it, operator override), unknown kernel, uncreatable state dir,
-# failed status, history and baseline writes.
+# confirm it, a legacy two-field drop-candidate upgraded without losing its
+# streak, operator override), unknown kernel, uncreatable state dir, failed
+# status, history and baseline writes.
 
 set -eu
 
@@ -482,6 +483,31 @@ field 'drop_streak=1' \
 run_audit "$work/clean2.zip"
 expect 3 UNKNOWN 'same-feed drop, then a genuinely new fetch'
 field 'drop_streak=2' 'a fetch with different content finally confirms it'
+
+# Backward compatibility: a drop-candidate left over from before gb2 added
+# the identity column ("<count> <streak>", two fields) must keep its streak
+# rather than being discarded as malformed -- a script already mid-streak on
+# the day this fix deploys must not lose that history. Reading it must not
+# log the "discarding malformed" warning. The next run still needs a
+# genuinely new fetch to confirm it (an unknown identity is not a free
+# pass), and upgrades the file to the current three-field format.
+fresh_state
+run_audit "$work/cleanbig.zip"
+printf '2 1\n' >"$state/drop-candidate"
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'legacy drop-candidate, genuine confirming fetch'
+hasnt "$work/out" 'discarding malformed' \
+	'a legacy two-field drop-candidate must not be treated as malformed'
+field 'drop_streak=2' 'legacy streak of 1 continues to 2, not reset to 1'
+[ "$(cat "$state/drop-candidate")" = "2 2 $fresh" ] \
+	|| fail 'legacy drop-candidate not upgraded to the three-field format'
+run_audit unchanged
+expect 3 UNKNOWN 'legacy drop-candidate, cached rerun after the upgrade'
+field 'drop_streak=2' 'a 304 rerun must not advance the upgraded streak'
+run_audit "$work/clean2.zip"
+expect 0 OK 'legacy drop-candidate, accepted on the 3rd genuine confirmation'
+[ "$(cat "$state/baseline-cve-records")" = 2 ] \
+	|| fail 'legacy-streak drop not adopted as the new baseline'
 
 # Operator override: deleting baseline-cve-records accepts a drop at once.
 fresh_state

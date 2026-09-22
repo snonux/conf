@@ -115,7 +115,9 @@ BASELINE_RECORDS=$STATE_DIR/baseline-cve-records
 # "<count> <streak> <feed-identity>" of a record-count drop still awaiting
 # acceptance; the identity (feed_newest of the run that set or last
 # confirmed the streak) stops a rerun on the same cached feed from
-# advancing the streak by itself.
+# advancing the streak by itself. read_drop_candidate also accepts the old
+# two-field "<count> <streak>" format (pre gb2, no identity column) so a
+# streak already in progress survives the upgrade to this format.
 DROP_FILE=$STATE_DIR/drop-candidate
 # new-cves: the latest run's batch (empty when nothing is new).
 # new-cves.history: "<YYYY-MM-DD> <CVE>" lines for HISTORY_DAYS, one per
@@ -355,10 +357,18 @@ check_record_drop() {
 }
 
 # Loads a pending drop streak and the feed identity that produced it from
-# $DROP_FILE into drop_prev_count/streak/identity; a malformed file --
-# including the old two-field "<count> <streak>" format from before the
-# identity column existed -- is discarded with a warning (the streak
-# restarts).
+# $DROP_FILE into drop_prev_count/streak/identity. Accepts the current
+# three-field "<count> <streak> <identity>" format and, for backward
+# compatibility, the old two-field "<count> <streak>" format written before
+# gb2 added the identity column: a script already mid-streak on the day this
+# fix deploys must not lose that history, so a legacy file keeps its count
+# and streak with drop_prev_identity left empty ("unknown"). check_record_drop
+# treats an empty identity as different from any feed_newest, so the streak
+# is neither force-reset nor blindly advanced by that alone: the very next
+# run still needs fetch=updated to confirm it, exactly as a same-format file
+# would, and this run's identity is then recorded, upgrading the file to the
+# three-field format. Any other malformed content is discarded with a
+# warning (the streak restarts).
 read_drop_candidate() {
 	typeset line
 	[ -f "$DROP_FILE" ] || return 0
@@ -366,6 +376,13 @@ read_drop_candidate() {
 	case $line in
 	[0-9]*' '[0-9]*' '*)
 		read -r drop_prev_count drop_prev_streak drop_prev_identity <<<"$line"
+		case $drop_prev_count:$drop_prev_streak in
+		*[!0-9:]*) ;;
+		*) return 0 ;;
+		esac
+		;;
+	[0-9]*' '[0-9]*)
+		read -r drop_prev_count drop_prev_streak <<<"$line"
 		case $drop_prev_count:$drop_prev_streak in
 		*[!0-9:]*) ;;
 		*) return 0 ;;
