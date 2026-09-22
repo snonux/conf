@@ -357,6 +357,16 @@ field 'new_cves=1' 'failed commit must not consume the new CVEs'
 has "$state/new-cves.history" "^$yesterday CVE-2024-0001\$" \
 	'history must keep the first alerting date'
 
+# A failure writing only the removed-CVE list names that file and still
+# alerts the run's new CVEs.
+fresh_state
+run_audit "$work/vuln.zip" FAKE_MV_FAIL=removed-cves
+expect 3 UNKNOWN 'removed-list write failure'
+has "$state/status" '^reason=cannot write the removed-CVE list' \
+	'removed-list failure reason'
+has "$work/out" '^<4>NEW: 1 CVE(s) newly affect the kernel: CVE-2024-0001' \
+	'removed-list failure must still alert new CVEs'
+
 # CVEs that leave the affected list are reported as resolved at notice.
 fresh_state
 run_audit "$work/vulnmore.zip"

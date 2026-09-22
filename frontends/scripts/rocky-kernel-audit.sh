@@ -400,9 +400,11 @@ compute_new() {
 	fi
 	LC_ALL=C comm -13 "$base" "$AFFECTED_NEXT" >"$NEW_FILE.tmp" \
 		&& mv "$NEW_FILE.tmp" "$NEW_FILE" || return 1
-	LC_ALL=C comm -23 "$base" "$AFFECTED_NEXT" >"$REMOVED_FILE.tmp" \
-		&& mv "$REMOVED_FILE.tmp" "$REMOVED_FILE" || return 1
+	# Counted before the removed list is written, so a run that fails only
+	# on the removed list still alerts its new CVEs (return code 2).
 	new_count=$(wc -l <"$NEW_FILE")
+	LC_ALL=C comm -23 "$base" "$AFFECTED_NEXT" >"$REMOVED_FILE.tmp" \
+		&& mv "$REMOVED_FILE.tmp" "$REMOVED_FILE" || return 2
 	removed_count=$(wc -l <"$REMOVED_FILE")
 }
 
@@ -478,10 +480,19 @@ run_audit() {
 	summarize_results || { reason="cannot summarize results"; return 0; }
 	decide_status
 	[ "$status" = UNKNOWN ] && return 0
-	compute_new || {
+	typeset -i rc=0
+	compute_new || rc=$?
+	case $rc in
+	0) ;;
+	2)
+		status=UNKNOWN
+		reason="cannot write the removed-CVE list in $STATE_DIR"
+		;;
+	*)
 		status=UNKNOWN
 		reason="cannot write the new-CVE list in $STATE_DIR"
-	}
+		;;
+	esac
 }
 
 # key=value status record for operators and later monitoring checks. Written
