@@ -17,7 +17,9 @@ by a fresh-context review the same day).
 | Pi-hole/LAN-DNS pair | pi2, pi3 | Rocky Linux 9.7 (aarch64) | partner **reachable**: `ping -c1 -W3 <partner-IP>` | dnf updates (official Rocky repos + the probe-gated `f3s-dtail` repo), service restarts, reboot when `needs-restarting -r` says so |
 
 Out of scope: Pi-hole container updates (`pihole -up` — deliberate, manual);
-NetBSD base-system updates in phase 1 (see §3).
+NetBSD base-system updates in phase 1 (see §3). Base-system and package
+vulnerability *status* is audited daily on pi0/pi1 (§14), but remediation of
+base findings stays manual.
 
 Everything is deployed and managed via gonf. Cron/timers, scripts, packages
 and reboots are automation-managed; no runtime flags.
@@ -84,6 +86,9 @@ DNS/SSH gotchas verified live:
   source, or accept that base updates are periodic **manual** release
   upgrades (`sysupgrade`) — out of unattended scope. Phase 1 ships without
   base updates; the reboot path stays armed for whenever a kernel changes.
+  The daily `netbsd-vuln-audit` (§14) reports when the installed release
+  needs such a manual upgrade (advisory, newer point release, or an
+  unsupported series); it never upgrades anything itself.
 - **Reboot detection**: version compare — `what(1)` on `/netbsd` vs
   `sysctl -n kern.version` (verified: both yield the identical
   `NetBSD 11.0 (GENERIC64) #0: …` string on a healthy host). **Do NOT use
@@ -240,6 +245,13 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 | Silent failures (no mail on the Pis) | §9.5 decision; journal/log checks in the observation phase |
 
 ## 11. Changelog
+
+- **2026-09-22 (task 652)**: added the daily NetBSD vulnerability audit for
+  pi0/pi1 (§14): pkgsrc packages via the pkgsrc-security
+  `pkg-vulnerabilities` list and `pkg_admin audit` (the list was absent on
+  both Pis, so `pkg_admin audit` failed), and the base system via the
+  NetBSD supported-release list and security advisories, with UNKNOWN for
+  any coverage gap. Not deployed yet (needs approval).
 
 - **2026-09-22 (task p82)**: pi2/pi3 rebooted every day at 00:05/00:35.
   Root cause, verified read-only on both Pis: `needs-restarting -r` listed
@@ -665,3 +677,174 @@ Then verify on each Pi with `sudo systemctl start rocky-kernel-audit.service;
 sudo cat /var/lib/rocky-kernel-audit/status`. The expected result is
 VULNERABLE, with the unit succeeding and the first run's NEW warning in the
 journal.
+
+## 14. NetBSD pi0/pi1: package and base-system vulnerability audit (task 652)
+
+**Why:** `pkgin -y upgrade` finding nothing to do does not mean the installed
+packages are free of known vulnerabilities. The pkgsrc tool for that,
+`pkg_admin audit`, failed on both Pis because
+`/usr/pkg/pkgdb/pkg-vulnerabilities` had never been fetched (the stock
+`/etc/daily` leaves `fetch_pkg_vulnerabilities` unset). The base system and
+kernel are deliberately not updated unattended (§3), so they had no auditable
+security signal at all.
+
+**Sources** (all HTTPS, verified reachable from pi0/pi1 on 2026-09-22):
+
+| Component | Source | Integrity / freshness |
+|---|---|---|
+| pkgs | `https://cdn.NetBSD.org/pub/NetBSD/packages/vulns/pkg-vulnerabilities.gz`, the pkgsrc-security list (≈30k lines, revision 1.794 of 2026-09-16) | `pkg_admin check-pkg-vulnerabilities` checks the format and the embedded SHA512 hash, which also catches truncation. The list's own `$NetBSD` date must be at most 30 days old. A server copy with a lower revision is never installed. |
+| base | "Supported Releases" section of `https://www.netbsd.org/releases/` | must contain the section and `</html>` |
+| base | advisory index `https://cdn.NetBSD.org/pub/NetBSD/security/advisories/` plus each in-scope `NetBSD-SA*.txt.asc` | index must end in `</html>`, list at least 250 advisories (289 in 2026-09), and still list every cached in-scope advisory |
+
+The embedded OpenPGP signature of `pkg-vulnerabilities` is not verified. That
+needs the pkgsrc-security key in a netpgp keyring (`GPG_KEYRING_PKGVULN`),
+and `pkg_admin -s` fails without one (checked on pi0). HTTPS from the NetBSD
+CDN plus the hash check is the trust model. If the key is ever shipped, the
+audit can add `-s`.
+
+**Package mapping:** the verified list is installed where pkg_admin looks for
+it (`pkg_admin config-var PKGVULNDIR` = `/usr/pkg/pkgdb`, 0644), so
+interactive `pkg_admin audit` and the `/etc/security` check in `/etc/daily`
+work again as well. `pkg_admin audit` covers every installed package,
+including the custom fleet packages (`dtail`, `f3sctl`), which simply have no
+entries. Each output line `Package <name>-<version> has a <type>
+vulnerability, see <url>` becomes the finding `pkg <pkgbase> <url>`. The key
+has no version, so an update that is still vulnerable does not re-alert, and
+a fixed advisory is reported as resolved.
+
+**Base mapping:** the installed formal release (`uname -r` = `11.0`) and the
+kernel build date (`uname -v`, 2026-07-30) are the inputs. A kernel that is
+not a formal `X.Y` release (for example `11.0_STABLE`) is UNKNOWN. Findings:
+
+- `base eol NetBSD-11.x`: the series is not in the supported list, so it gets
+  no security fixes.
+- `base release NetBSD-11.1`: the supported list names a newer release of the
+  series. Branch fixes, security fixes included, reach a formal release only
+  through the next point release.
+- `base advisory NetBSD-SA<id>`: an advisory from the kernel build year minus
+  2 or later concerns the release. The first matching rule decides:
+  1. a `Version:` line for the release itself (`NetBSD 11.0:`): affected
+     (also partially, or "affected prior to", since a release is not
+     patched in place) or not;
+  2. otherwise the `Fixed:` line `NetBSD-11 branch:`: a fix date after the
+     kernel build date means affected; N/A or "not affected" means not;
+  3. otherwise a series line (`NetBSD 11.*:` / `NetBSD 11:`);
+  4. an advisory that names the series some other way (for example only
+     `NetBSD 11.0_RC1`), or has no `Version:` block, cannot be assessed and
+     makes base UNKNOWN.
+
+  Replayed against the real 2016–2024 advisories, this gives the expected
+  answers for 9.2, 9.3 and 10.0: for example SA2024-002 (regreSSHion)
+  affects 10.0, and SA2022-002 (fixed on the 9 branch after 9.3 was built)
+  affects 9.3. No advisory has been published since SA2024-002, so the
+  advisory feed is currently silent for 11.0. The release-list checks are
+  the working part of the base signal today.
+
+**Implementation:** `frontends/scripts/netbsd-vuln-audit.sh` is installed as
+`/usr/local/sbin/netbsd-vuln-audit` (ksh, runs under NetBSD's pdksh). It runs
+from root cron once a day, after the host's pkgs/reboot window and before
+`/etc/daily`: pi0 03:40, pi1 23:40 (`cluster.ValueVulnAuditCron`
+`{minute, hour}`). The gonf tasks are `pis_netbsd_vuln_audit_packages`
+(`curl`), `pis_netbsd_vuln_audit_script`, `pis_netbsd_vuln_audit_state_dir`
+(`/var/db/netbsd-vuln-audit`, 0700) and `pis_netbsd_vuln_audit_cron`. They
+are `VulnAudit*` methods on `netbsd.Unattended`, in `gonf/netbsd/vulnaudit.go`,
+so they are part of the `pis_netbsd` aggregate. Each run:
+
+1. refreshes the three sources with conditional GETs. A failed, corrupt or
+   older download keeps the previous copy with a warning. Only a verified
+   answer (or HTTP 304) is recorded as contact, in `contact.<source>`.
+   More than 36 h without contact makes that component UNKNOWN: one missed
+   daily run is tolerated, the second one is not. A deleted list in
+   `/usr/pkg/pkgdb` is restored from the cache.
+2. assesses each component on its own (`pkg_status`, `base_status`). pkgs is
+   also UNKNOWN when `pkg_info` lists no packages, when `pkg_admin audit`
+   writes to stderr or prints a line the parser does not know, or when it
+   exits non-zero without findings.
+3. compares each assessed component's findings with its lines in the
+   baseline `findings`: new ones go to `new-findings`, gone ones to
+   `resolved-findings`. An UNKNOWN component keeps its baseline lines and
+   reports nothing, so findings that appear during an outage are reported
+   once coverage returns. An unsorted or malformed baseline is treated as
+   empty, with a warning.
+4. writes `status` via a temp file, then commits: first the dated
+   `new-findings.history` (90 days, one line per finding carrying its first
+   alerting date), then the baseline. A failed status write keeps the old
+   record and consumes nothing. A failed commit rewrites the record as
+   UNKNOWN, naming the file.
+
+| Status | Exit | When |
+|---|---|---|
+| OK | 0 | both components assessed from fresh, verified data; no finding |
+| VULNERABLE | 0 | at least one finding (package advisory, base advisory, newer release, unsupported series) |
+| UNKNOWN | 3 | either component unassessed: a source never fetched or without contact for > 36 h, `pkg-vulnerabilities` missing, invalid or older than 30 days, pkg_admin errors or unparsable output, no packages, releases page or index unparsable, truncated, below the floor or missing a cached advisory, an advisory not downloadable or not assessable, a non-release kernel, state that cannot be written |
+
+**Alerting:** there is no MTA on the Pis (§9.5). Every line goes to
+`/var/log/unattended-upgrade.log` (tag `vuln-audit:`) and to syslog (tag
+`netbsd-vuln-audit`, facility `daemon`, i.e. `/var/log/messages`), where DTail
+can read it. Only `err` and `warning` lines are printed, so cron's mail to
+root (should the Pis ever get a relay, §9.5 option b) carries alerts only and
+a quiet run mails nothing.
+
+| Signal | Meaning |
+|---|---|
+| `err`: `UNKNOWN: …`, exit 3 | coverage is broken and needs fixing |
+| `warning`: `NEW: n finding(s): …` | findings not in the baseline (the first run reports all of them) |
+| `warning`: `status changed: A -> B` | any status transition |
+| `warning`: `WARNING: download failed` / `incomplete page` / `fails verification` / `older than the installed one` / `cannot refresh advisories` / `restored` / `baseline … malformed` | a refresh problem that still leaves usable coverage |
+| `notice`: `RESOLVED: …`, unchanged VULNERABLE summary; `info`: OK summary | quiet runs |
+
+**Known gap:** as on pi2/pi3 (§13), nothing forwards these signals off the
+host, and nothing notices a cron job that stopped running (`checked_at` in
+`status` has no consumer). The fix is the same §9.5 decision, for example a
+gogios check reading `status`/`checked_at` from both Pis.
+
+**Operator actions** (as root in `/var/db/netbsd-vuln-audit`):
+
+- `cat status` shows the result. `pkg-audit.out` has the raw `pkg_admin
+  audit` lines, `findings` the current findings.
+- Delete `findings` to re-baseline. The next run reports everything as new
+  once.
+- Delete `advisories/NetBSD-SA….txt.asc` to accept that the index no longer
+  lists that advisory.
+- Remediation is manual: package findings go away when pkgin gets a fixed
+  package (or the package is removed). A base finding means a release
+  upgrade by hand (`sysupgrade` to the newer point release, or to a
+  supported series), per §3/§9.2.
+
+**First result (2026-09-22, run as paul on pi0 and pi1 against the live
+sources, with the list installed into a temporary PKGVULNDIR, since nothing
+may change on the hosts before deployment):** `VULNERABLE` on both Pis. pkgs
+had 6 findings over 34 packages: libxml2-2.15.1 (CVE-2025-8732,
+CVE-2026-0989, CVE-2026-0990, CVE-2026-0992, CVE-2026-1757) and
+perl-5.42.3 (CVE-2011-4116, a permanent pkgsrc entry). Base was OK: 11.0 is
+the newest release of the supported 11.x series, and neither in-scope
+advisory (SA2024-001/002) concerns it. A run takes 3–5 s. pkgin had no
+pending updates, so the libxml2 advisories are open upstream in pkgsrc.
+
+**Tests:** `frontends/scripts/tests/netbsd-vuln-audit.ksh` fakes `uname`,
+`pkg_admin`, `pkg_info`, `curl` and `logger`, and uses the real
+gzip/awk/sort/comm/date. It passed under bash and ksh93 on the workstation
+and under NetBSD's `/bin/ksh` on pi0 (in `/tmp`). It covers clean and
+vulnerable runs, the conditional GET and 304, deltas across package updates,
+history pruning and deduplication, every advisory rule plus the
+unassessable cases, a newer release, an unsupported series, and the
+per-component baseline in both directions. The negative cases: never
+fetched, one tolerated refresh failure, then UNKNOWN past 36 h, truncated
+and non-gzip downloads, an older revision, a stale list, a restored list,
+pkg_admin stderr, unparsable output or a non-zero exit, no packages,
+incomplete and truncated pages, a section without series, an index below the
+floor or missing a cached advisory (and the operator override), an advisory
+that cannot be downloaded (with and without a cache), a non-release kernel
+and an unparsable build date, invalid baselines, failed history, baseline,
+resolved-list and status writes, a held lock, and an uncreatable state
+directory.
+
+**Deployment:** not yet deployed. It needs explicit approval (task 652
+acceptance). When approved, run it from a tree that builds against the
+committed gonf module version:
+`./gonf.sh cluster netbsd-pis pis_netbsd_vuln_audit_packages pis_netbsd_vuln_audit_script pis_netbsd_vuln_audit_state_dir pis_netbsd_vuln_audit_cron`.
+Then verify on each Pi with `doas /usr/local/sbin/netbsd-vuln-audit; echo
+$?; doas cat /var/db/netbsd-vuln-audit/status; doas crontab -l | grep -A1
+'Cron\[netbsd-vuln-audit\]'; pkg_admin audit`. The expected result is
+VULNERABLE (the six package findings above), exit 0, and the first run's NEW
+warning. `pkg_admin audit` now works interactively.

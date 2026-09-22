@@ -37,6 +37,7 @@ const (
 	ValueUnattendedCron        = "unattended.cron"          // frontend [3]string hours; netbsd [2]string hours
 	ValueUnattendedOnCalendar  = "unattended.on_calendar"   // rocky OnCalendar= string
 	ValueKernelAuditOnCalendar = "kernel_audit.on_calendar" // rocky-pis daily kernel CVE audit OnCalendar= string
+	ValueVulnAuditCron         = "vuln_audit.cron"          // netbsd-pis daily vulnerability audit [2]string{minute, hour}
 	ValueUnattendedCronMinute  = "unattended.cron_minute"   // freebsd hourly minute string
 	ValueUnattendedAllowReboot = "unattended.allow_reboot"  // freebsd bool; false on f3
 	ValueFrontendServer        = frontends.ValueServer      // frontends.Server address and role data
@@ -93,6 +94,9 @@ func Register() {
 		WithGOOS("netbsd"),
 		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedCron, [2]string{"2", "2"}),
+		// After the 02:10 pkgs / 02:50 reboot window (each with up to
+		// 20 min jitter), before /etc/daily at 04:15.
+		WithValue(ValueVulnAuditCron, [2]string{"40", "3"}),
 	)
 	pi1 := Host("pi1",
 		WithSSHUser("paul"),
@@ -102,6 +106,8 @@ func Register() {
 		WithGOOS("netbsd"),
 		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedCron, [2]string{"22", "22"}),
+		// After the 22:10 pkgs / 22:50 reboot window.
+		WithValue(ValueVulnAuditCron, [2]string{"40", "23"}),
 	)
 	pi2 := Host("pi2",
 		WithSSHUser("paul"),
