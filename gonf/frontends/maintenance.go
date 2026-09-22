@@ -184,9 +184,10 @@ func (Maintenance) DescACME() string {
 	return "Install per-frontend ACME client configuration and daily renewal hook"
 }
 
-// ACME installs Go-native equivalents of the former Perl templates. The
-// actual invocation remains a separate network-service task so a setup plan
-// cannot request certificates or restart daemons.
+// ACME installs Go-native equivalents of the former Perl templates, both
+// rendered from one certificate list (acmeData, see acme.go). The actual
+// invocation remains a separate network-service task so a setup plan cannot
+// request certificates or restart daemons.
 func (Maintenance) ACME() {
 	ForHosts(ValueServer, func(_ string, server Server) {
 		data := acmeData(server)
@@ -218,47 +219,6 @@ func (Maintenance) IRCBouncer() {
 		znc := Package("znc")
 		Service("znc", DependsOn(znc))
 	})
-}
-
-type acmeTemplateData struct {
-	Domains         []acmeDomain
-	NonStandbyHosts []string
-	ServerFQDN      string
-}
-
-type acmeDomain struct {
-	Name             string
-	AlternativeNames []string
-}
-
-func acmeData(server Server) acmeTemplateData {
-	topology := TemplateData()
-	domains := make([]acmeDomain, 0, len(topology.AcmeHosts))
-	nonStandbyHosts := make([]string, 0, 2)
-	for _, host := range topology.AcmeHosts {
-		if host == "blowfish.buetow.org" || host == "fishfinger.buetow.org" {
-			continue
-		}
-		if strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.") {
-			nonStandbyHosts = append(nonStandbyHosts, host)
-			continue
-		}
-		alternativeNames := []string{"www." + host}
-		for _, candidate := range topology.AcmeHosts {
-			if candidate == "ipv4."+host || candidate == "ipv6."+host {
-				alternativeNames = append(alternativeNames, candidate)
-			}
-		}
-		domains = append(domains, acmeDomain{
-			Name:             host,
-			AlternativeNames: alternativeNames,
-		})
-	}
-	return acmeTemplateData{
-		Domains:         domains,
-		NonStandbyHosts: nonStandbyHosts,
-		ServerFQDN:      server.FQDN,
-	}
 }
 
 func frontendAsset(name string) string {

@@ -23,22 +23,15 @@ authority buypass-test {
 	contact "mailto:me@example.com"
 }
 
-{{range .Domains}}
-domain {{.Name}} {
-	alternative names { {{range .AlternativeNames}}{{.}} {{end}}}
-	domain key "/etc/ssl/private/{{.Name}}.key"
+{{/* One entry per acmeCertificate (frontends/acme.go), the same list
+acme.sh requests. A site entry opens a blank-line-separated group with its
+standby twin; the server FQDN has no www/standby variants. */ -}}
+{{range .Certificates}}{{if ne .Kind "standby"}}
+{{end}}{{if eq .Kind "host"}}# Current server's FQDN; no www/standby variants for server hostnames.
+{{end}}domain {{.Name}} {
+{{if .AlternativeNames}}	alternative names { {{range .AlternativeNames}}{{.}} {{end}}}
+{{end}}	domain key "/etc/ssl/private/{{.Name}}.key"
 	domain full chain certificate "/etc/ssl/{{.Name}}.fullchain.pem"
 	sign with letsencrypt
 }
-domain standby.{{.Name}} {
-	domain key "/etc/ssl/private/standby.{{.Name}}.key"
-	domain full chain certificate "/etc/ssl/standby.{{.Name}}.fullchain.pem"
-	sign with letsencrypt
-}
 {{end}}
-# Current server's FQDN; no www/standby variants for server hostnames.
-domain {{.ServerFQDN}} {
-	domain key "/etc/ssl/private/{{.ServerFQDN}}.key"
-	domain full chain certificate "/etc/ssl/{{.ServerFQDN}}.fullchain.pem"
-	sign with letsencrypt
-}

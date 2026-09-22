@@ -305,11 +305,10 @@ func renderRelayd(data webConfigData) string {
 	var builder strings.Builder
 	appendString(&builder, relaydPreamble)
 	appendString(&builder, "http protocol \"https\" {\n")
-	for _, host := range data.AcmeHosts {
-		if host == "blowfish.buetow.org" || host == "fishfinger.buetow.org" || strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.") {
-			continue
-		}
-		appendf(&builder, "     tls keypair %s\n     tls keypair standby.%s\n", host, host)
+	// The keypairs are the ACME site certificates and their standby twins
+	// (acmeSites, the list acme.sh requests), then the server's own FQDN.
+	for _, site := range acmeSites(data.AcmeHosts) {
+		appendf(&builder, "     tls keypair %s\n     tls keypair standby.%s\n", site.Name, site.Name)
 	}
 	appendf(&builder, relaydHTTPSStart, data.Server.FQDN)
 	for _, prefix := range data.Prefixes {
