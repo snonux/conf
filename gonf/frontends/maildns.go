@@ -14,11 +14,14 @@ import (
 )
 
 const (
-	smtpdValidationDir = "/var/tmp/gonf-smtpd"
-	dnsFailoverCommand = "/usr/local/bin/dns-failover.ksh"
-	dnsPublishCommand  = "/usr/local/bin/dns-publish.ksh"
-	dnsPublisherDir    = "/var/nsd/etc/gonf-publisher"
-	dnsPublisherZones  = dnsPublisherDir + "/zones"
+	// legacySMTPDValidationDir held the fixed-path SMTPD candidates before
+	// the ConfigSet migration; SMTPD removes it (a no-op once gone). Drop the
+	// cleanup when no host has the directory any more.
+	legacySMTPDValidationDir = "/var/tmp/gonf-smtpd"
+	dnsFailoverCommand       = "/usr/local/bin/dns-failover.ksh"
+	dnsPublishCommand        = "/usr/local/bin/dns-publish.ksh"
+	dnsPublisherDir          = "/var/nsd/etc/gonf-publisher"
+	dnsPublisherZones        = dnsPublisherDir + "/zones"
 )
 
 // MailDNS contains the frontend SMTP and authoritative-DNS recipes. The
@@ -33,22 +36,21 @@ func (MailDNS) DescSMTPD() string {
 	return "Render, validate, and converge frontend OpenSMTPD"
 }
 
-// SMTPD stages every table plus a host-specific configuration, validates the
-// staged configuration, and only then permits its live inputs to change.
-// newaliases is intentionally limited to aliases changes; smtpd restarts for
-// its own configuration and lookup-table changes, matching the Rex behavior.
+// SMTPD publishes every lookup table plus the host-specific configuration as
+// one Gonf ConfigSet: the complete set is staged privately under /etc/mail and
+// validated with `smtpd -n` before any live table or configuration changes.
+// newaliases is intentionally limited to the aliases member; smtpd restarts for
+// its own configuration and the other lookup tables, matching the Rex behavior.
+// The obsolete fixed-path candidate directory of the previous recipe is
+// removed.
 func (MailDNS) SMTPD() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
-			validationDir := Dir(smtpdValidationDir, WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
-			candidates := smtpdCandidates(server, validationDir)
-			check := Command("smtpd", List("-n", "-f", filepath.Join(smtpdValidationDir, "smtpd.conf")),
-				DependsOn(candidates...), WithName("validate-smtpd-config"))
-			live := smtpdLiveFiles(server, check)
-			aliases := live[0]
-			newAliases := Command("newaliases", List(), OnChange(aliases), WithName("rebuild-mail-aliases"))
-			Service("smtpd", WithRestart, DependsOn(newAliases), OnChange(live[1:]...))
+			NoDir(legacySMTPDValidationDir, WithPrune)
+			mail := ConfigSet("smtpd", smtpdConfigSet(server)...)
+			newAliases := Command("newaliases", List(), OnChange(mail.Member("aliases")), WithName("rebuild-mail-aliases"))
+			Service("smtpd", WithRestart, DependsOn(newAliases), OnChange(mail.Members(smtpdRestartMembers()...)...))
 		})
 	}
 }
@@ -79,12 +81,17 @@ func (MailDNS) NSD() {
 
 		WhenHostname(Master, func() {
 			// The standby has no source templates and no zone-writing command.
-			// Its master-file path is solely NSD's transfer destination.
-			liveKey := File("/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
-				WithMode(0o640), WithOwner("root"), WithGroup("_nsd"))
-			config := File("/var/nsd/etc/nsd.conf", WithContent(renderNSDSlaveConfig("/var/nsd/etc/key.conf", data.DNSZones)),
-				WithMode(0o640), WithOwner("root"), WithGroup("_nsd"), DependsOn(liveKey))
-			Service("nsd", WithRestart, OnChange(flags, liveKey, config))
+			// Its master-file path is solely NSD's transfer destination. The
+			// key include and the configuration are validated together with
+			// nsd-checkconf, staged inside NSD's chroot, before either is live.
+			config := ConfigSet("nsd",
+				ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
+					WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
+				ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(renderNSDSlaveConfig(MemberPath("key.conf"), data.DNSZones)),
+					WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
+				WithChroot("/var/nsd"),
+				WithSetValidation("nsd-checkconf", List(MemberPath("nsd.conf"))))
+			Service("nsd", WithRestart, OnChange(flags, config))
 		})
 	})
 }
@@ -125,26 +132,31 @@ func dnsPublisherInputs(data Data, key string) []resource.Dependency {
 	return inputs
 }
 
-func smtpdCandidates(server Server, validationDir Resource) []resource.Dependency {
-	candidates := make([]resource.Dependency, 0, len(mailTableNames)+1)
+// smtpdConfigSet returns the SMTPD set: every lookup table (keyed by its file
+// name), smtpd.conf referencing them through member placeholders, and the
+// `smtpd -n` validator run against the staged configuration.
+func smtpdConfigSet(server Server) []ConfigSetOption {
+	opts := make([]ConfigSetOption, 0, len(mailTableNames)+2)
 	for _, name := range mailTableNames {
-		candidates = append(candidates, InstallFile(filepath.Join(smtpdValidationDir, name), legacyFrontendAsset(filepath.Join("etc/mail", name)),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(validationDir)))
+		opts = append(opts, ConfigFile(name, filepath.Join("/etc/mail", name), WithSource(legacyFrontendAsset(filepath.Join("etc/mail", name))),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel")))
 	}
-	candidates = append(candidates, File(filepath.Join(smtpdValidationDir, "smtpd.conf"),
-		WithContent(renderSMTPD(server, smtpdValidationDir)), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(validationDir)))
-	return candidates
+	return append(opts,
+		ConfigFile("smtpd.conf", "/etc/mail/smtpd.conf", WithContent(renderSMTPD(server)),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel")),
+		WithSetValidation("smtpd", List("-n", "-f", MemberPath("smtpd.conf"))))
 }
 
-func smtpdLiveFiles(server Server, check Resource) []resource.Dependency {
-	live := make([]resource.Dependency, 0, len(mailTableNames)+1)
+// smtpdRestartMembers are the members whose publication restarts smtpd:
+// everything except aliases, which only rebuilds the alias database.
+func smtpdRestartMembers() []string {
+	members := make([]string, 0, len(mailTableNames))
 	for _, name := range mailTableNames {
-		live = append(live, InstallFile(filepath.Join("/etc/mail", name), legacyFrontendAsset(filepath.Join("etc/mail", name)),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(check)))
+		if name != "aliases" {
+			members = append(members, name)
+		}
 	}
-	live = append(live, File("/etc/mail/smtpd.conf", WithContent(renderSMTPD(server, "/etc/mail")),
-		WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(check)))
-	return live
+	return append(members, "smtpd.conf")
 }
 
 var mailTableNames = []string{
@@ -156,17 +168,20 @@ var mailTableNames = []string{
 	"reject-recipients",
 }
 
-func renderSMTPD(server Server, tableDir string) string {
+// renderSMTPD renders smtpd.conf. Table paths are ConfigSet member
+// placeholders: Gonf renders them as the staged tables while validating and as
+// /etc/mail/<table> when publishing.
+func renderSMTPD(server Server) string {
 	return fmt.Sprintf(`# This file is managed by Gonf; validate before applying.
 pki "buetow_org_tls" cert "/etc/ssl/%[1]s.fullchain.pem"
 pki "buetow_org_tls" key "/etc/ssl/private/%[1]s.key"
 
-table aliases file:%[2]s/aliases
-table virtualdomains file:%[2]s/virtualdomains
-table virtualusers file:%[2]s/virtualusers
-table reject-senders file:%[2]s/reject-senders
-table reject-domains file:%[2]s/reject-domains
-table reject-recipients file:%[2]s/reject-recipients
+table aliases file:%[2]s
+table virtualdomains file:%[3]s
+table virtualusers file:%[4]s
+table reject-senders file:%[5]s
+table reject-domains file:%[6]s
+table reject-recipients file:%[7]s
 
 listen on socket
 listen on all tls pki "buetow_org_tls" hostname "%[1]s"
@@ -181,7 +196,8 @@ match from any for rcpt-to <reject-recipients> reject
 match from any for domain <virtualdomains> action receive
 match from local for local action localmail
 match from local for any action outbound
-`, server.FQDN, tableDir)
+`, server.FQDN, MemberPath("aliases"), MemberPath("virtualdomains"), MemberPath("virtualusers"),
+		MemberPath("reject-senders"), MemberPath("reject-domains"), MemberPath("reject-recipients"))
 }
 
 func renderNSDKey(key string) string {
@@ -207,9 +223,12 @@ remote-control:
 	return builder.String()
 }
 
+// renderNSDSlaveConfig renders the standby configuration. keyPath is a
+// ConfigSet member placeholder, which contains NUL bytes: it is concatenated
+// rather than %q-formatted, because quoting would escape the placeholder.
 func renderNSDSlaveConfig(keyPath string, zones []string) string {
 	var builder strings.Builder
-	appendf(&builder, "include: %q\n\n", keyPath)
+	appendString(&builder, "include: \""+keyPath+"\"\n\n")
 	appendString(&builder, `server:
 	hide-version: yes
 	verbosity: 1
