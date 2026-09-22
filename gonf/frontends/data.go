@@ -200,8 +200,11 @@ type Site struct {
 	RelaydUpstream string
 }
 
-// SiteFor returns the policy of name. Names outside the topology lists get
-// the default policy, which callers only rely on for the frontend FQDNs.
+// SiteFor returns the policy of name, derived from the topology lists and
+// the site* exception tables. It does not check that name is listed: a name
+// outside the lists gets the default policy (dual-stack, not f3s, port 443,
+// any HTTPS status, HTTPS-checked, generic routing), and callers pass only
+// topology names (Sites, F3SHosts).
 func SiteFor(name string) Site {
 	site := Site{
 		Name:           name,
