@@ -395,14 +395,28 @@ rollback() {
     restore_file "$JOURNAL/files/key" "$LIVE_KEY" "$JOURNAL/present/key" || return 1
     restore_file "$JOURNAL/files/config" "$LIVE_CONFIG" "$JOURNAL/present/config" || return 1
     restore_file "$JOURNAL/files/state" "$STATE" "$JOURNAL/present/state" || return 1
-    reload_nsd
+    # The interrupted commit may have installed a new key or nsd.conf before it
+    # failed, and the running daemon may already have loaded it, so the restored
+    # set is always applied with a restart rather than a zone reload.
+    apply_nsd restart
 }
 
-reload_nsd() {
+# apply_nsd makes the running daemon serve the committed files. "reload" is
+# enough when only zone files changed: `nsd-control reload` rereads zone
+# files but not nsd.conf or the TSIG key include. "restart" is required when
+# the key or nsd.conf changed (added/removed zones, notify/provide-xfr, key
+# rotation, server options), as in the Rex recipe; `nsd-control reconfig`
+# would miss server: options, so it is not used.
+apply_nsd() {
+    typeset how=$1
     # First installation has no daemon to reload. Service convergence follows
     # this transaction and starts NSD after the zones have been committed.
     rcctl check nsd >/dev/null 2>&1 || return 0
-    nsd-control reload
+    case $how in
+    reload) nsd-control reload ;;
+    restart) rcctl restart nsd ;;
+    *) print -u2 "invalid NSD apply mode: $how"; return 1 ;;
+    esac
 }
 
 recover() {
@@ -423,17 +437,25 @@ write_state() {
 }
 
 commit() {
-    typeset zone
+    # Not named "mode": install_atomic has a typeset mode, and a POSIX-style
+    # function's typeset is global in ksh93 (the test harness's shell).
+    typeset zone apply=reload
     for zone in $ZONES; do
         [ ! -f "$STAGE_DIR/.changed-$zone" ] || install_atomic "$STAGE_DIR/$zone.zone" "$ZONE_DIR/$zone.zone" 0644 wheel || return 1
     done
     for zone in $REMOVED_ZONES; do
         [ ! -f "$STAGE_DIR/.remove-$zone" ] || rm -f "$ZONE_DIR/$zone.zone" || return 1
     done
-    [ ! -f "$STAGE_DIR/.changed-key" ] || install_atomic "$INPUT_KEY" "$LIVE_KEY" 0640 _nsd || return 1
-    [ ! -f "$STAGE_DIR/.changed-config" ] || install_atomic "$INPUT_DIR/nsd.conf" "$LIVE_CONFIG" 0640 _nsd || return 1
+    if [ -f "$STAGE_DIR/.changed-key" ]; then
+        install_atomic "$INPUT_KEY" "$LIVE_KEY" 0640 _nsd || return 1
+        apply=restart
+    fi
+    if [ -f "$STAGE_DIR/.changed-config" ]; then
+        install_atomic "$INPUT_DIR/nsd.conf" "$LIVE_CONFIG" 0640 _nsd || return 1
+        apply=restart
+    fi
     write_state || return 1
-    reload_nsd
+    apply_nsd "$apply"
 }
 
 main() {

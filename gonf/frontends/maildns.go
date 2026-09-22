@@ -67,7 +67,9 @@ func (MailDNS) DescNSD() string {
 
 // NSD installs immutable publisher inputs and invokes the sole publisher on
 // blowfish. The publisher, not this task, owns effective zones, SOA serials,
-// failover state, validation, locking, and reload/rollback. Fishfinger only
+// failover state, validation, locking, and rollback, and it makes the running
+// NSD pick up each commit: a zone reload for zone-only changes, a restart when
+// its nsd.conf or TSIG key changed (the Service below only watches the flags). Fishfinger only
 // receives those effective zones through NSD zone transfer.
 func (MailDNS) NSD() {
 	onFrontends(func() {
