@@ -99,21 +99,24 @@ func (Web) DescRelayd() string { return "Render, validate, and converge frontend
 // raising relayd's descriptor limit does not change relayd.conf but must take
 // effect through a restart. The login fragments belong to the consumers that
 // need them, so a frontends aggregate has one change-gate source per
-// privilege chunk. As in Inetd, LoginClass
-// needs no database rebuild; the former cap_mkdb step rebuilt only
-// /etc/login.conf.db from an unchanged /etc/login.conf.
+// privilege chunk. As in Inetd, LoginClass needs no database rebuild; the
+// former cap_mkdb step rebuilt only /etc/login.conf.db from an unchanged
+// /etc/login.conf.
 func (Web) Relayd() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
 			flags := File("/etc/rc.conf.local", WithLine("relayd_flags="), WithName("rc-conf-relayd-flags"))
 			// TODO(login-class, needs operator decision): etc/login.conf.d/daemon
-			// replaces OpenBSD's whole stock daemon class, and it only sets
-			// openfiles-max/cur=4096 plus tc=default. Unlike the limits
-			// confirmed in frontends/AGENTS.md (edited into /etc/login.conf), it
-			// therefore drops ignorenologin, datasize=4096M and maxproc=infinity
-			// for relayd and every other daemon-class process. The content is
-			// deliberately unchanged here; review it before the next rollout.
+			// replaces the whole daemon class of /etc/login.conf, and it only
+			// sets openfiles-max/cur=4096 plus tc=default. The daemon entry in
+			// /etc/login.conf on both hosts already carries the 4096 limits
+			// documented in frontends/AGENTS.md but is shadowed by this
+			// fragment, so relayd and every other daemon-class process lose
+			// ignorenologin, datasize=4096M, maxproc=infinity and
+			// stacksize-cur=8M. Dropping the fragment would give them that
+			// /etc/login.conf class instead. The content is deliberately
+			// unchanged here; decide before the next rollout.
 			class := LoginClass("daemon", legacyFrontendAsset("etc/login.conf.d/daemon"))
 			NoFile(legacyCandidate("/etc/relayd.conf"))
 			config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),

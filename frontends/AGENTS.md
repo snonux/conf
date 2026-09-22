@@ -345,16 +345,20 @@ daemon:\
         :ignorenologin:\
         :datasize=4096M:\
         :maxproc=infinity:\
-        :openfiles-max=1024:
-        :openfiles-cur=1024:
-        
+        :openfiles-max=1024:\
+        :openfiles-cur=1024:\
+        :stacksize-cur=8M:\
+        :tc=default:
+
 # Change to:
 daemon:\
         :ignorenologin:\
         :datasize=4096M:\
         :maxproc=infinity:\
-        :openfiles-max=4096:
-        :openfiles-cur=4096:
+        :openfiles-max=4096:\
+        :openfiles-cur=4096:\
+        :stacksize-cur=8M:\
+        :tc=default:
 ```
 
 After modifying `/etc/login.conf`, rebuild the login.conf database:
@@ -364,12 +368,17 @@ doas cap_mkdb /etc/login.conf
 doas rcctl restart relayd
 ```
 
-**WARNING (unresolved, needs an operator decision)**: gonf and the old Rex
-task do not apply the edit above. They install `etc/login.conf.d/daemon`,
-which OpenBSD reads *instead of* the `daemon` entry in `/etc/login.conf`. That
-fragment sets only `openfiles-max/cur=4096` and `tc=default`, so it drops
-`ignorenologin`, `datasize=4096M` and `maxproc=infinity` for every
-daemon-class process. Decide on the fragment's content before relying on it.
+**WARNING (unresolved, needs an operator decision)**: the edit above is
+already in `/etc/login.conf` on blowfish and fishfinger (checked 2026-09-22),
+but it has no effect there. gonf, like the old Rex task, also installs
+`etc/login.conf.d/daemon`, and OpenBSD reads that fragment *instead of* the
+`daemon` entry in `/etc/login.conf`. The fragment sets only
+`openfiles-max/cur=4096` and `tc=default`, so relayd and every other
+daemon-class process (the `inetd` fragment inherits it through `tc=daemon`)
+lose `ignorenologin`, `datasize=4096M`, `maxproc=infinity` and
+`stacksize-cur=8M`. Removing the fragment instead would give relayd the stock
+class with the edit above, i.e. all of those plus 4096 descriptors. Decide on
+the fragment's content, or its removal, before relying on it.
 
 **Verification**: Check that relayd has the increased limit:
 ```bash
