@@ -1,7 +1,5 @@
 package frontends
 
-import "strings"
-
 // Certificate kinds of an acmeCertificate. They are rendered into acme.sh,
 // which keys its consumer reload policy off them, so the values are part of
 // the script's contract.
@@ -36,38 +34,32 @@ type acmeCertificate struct {
 // host topology with its standby twin, then the server's own FQDN.
 func acmeData(server Server) acmeTemplateData {
 	var certificates []acmeCertificate
-	for _, site := range acmeSites(TemplateData().AcmeHosts) {
+	for _, site := range acmeSites(Sites()) {
 		certificates = append(certificates, site, acmeCertificate{Name: "standby." + site.Name, Kind: acmeStandby})
 	}
 	certificates = append(certificates, acmeCertificate{Name: server.FQDN, Kind: acmeHost})
 	return acmeTemplateData{Certificates: certificates}
 }
 
-// acmeSites returns the site certificates among hosts. The two frontend
-// FQDNs are host certificates, requested only by their own frontend, and an
-// ipv4./ipv6. name is not a certificate of its own but an alternative name of
-// its parent site's certificate: acme-client has no domain entry for it, so
-// requesting it by name could only fail. Relayd's keypair list (web.go) is
-// derived from the same sites.
-func acmeSites(hosts []string) []acmeCertificate {
-	sites := make([]acmeCertificate, 0, len(hosts))
-	for _, host := range hosts {
-		if host == "blowfish.buetow.org" || host == "fishfinger.buetow.org" || isSingleFamilyName(host) {
+// acmeSites returns the site certificates among sites. The frontend FQDNs
+// are host certificates, requested only by their own frontend, and an
+// ipv4./ipv6. name (Site.Family) is not a certificate of its own but an
+// alternative name of its parent site's certificate: acme-client has no
+// domain entry for it, so requesting it by name could only fail. Relayd's
+// keypair list (web.go) is derived from the same sites.
+func acmeSites(sites []Site) []acmeCertificate {
+	certificates := make([]acmeCertificate, 0, len(sites))
+	for _, site := range sites {
+		if site.FrontendHost || site.Family != 0 {
 			continue
 		}
-		alternativeNames := []string{"www." + host}
-		for _, candidate := range hosts {
-			if candidate == "ipv4."+host || candidate == "ipv6."+host {
-				alternativeNames = append(alternativeNames, candidate)
+		alternativeNames := []string{"www." + site.Name}
+		for _, candidate := range sites {
+			if candidate.Name == "ipv4."+site.Name || candidate.Name == "ipv6."+site.Name {
+				alternativeNames = append(alternativeNames, candidate.Name)
 			}
 		}
-		sites = append(sites, acmeCertificate{Name: host, Kind: acmeSite, AlternativeNames: alternativeNames})
+		certificates = append(certificates, acmeCertificate{Name: site.Name, Kind: acmeSite, AlternativeNames: alternativeNames})
 	}
-	return sites
-}
-
-// isSingleFamilyName reports whether host is an ipv4./ipv6. name that only
-// resolves over one address family.
-func isSingleFamilyName(host string) bool {
-	return strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.")
+	return certificates
 }

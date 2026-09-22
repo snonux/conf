@@ -174,16 +174,47 @@ type gogiosCheck struct {
 	DependsOn       []string `json:"DependsOn,omitempty"`
 }
 
+// gogiosConfig is the typed top level of /etc/gogios.json. Its fields are
+// declared in alphabetical order of their JSON names: encoding/json writes
+// struct fields in declaration order, and the file was written from a map
+// (sorted keys) before, so this order keeps it byte for byte.
+type gogiosConfig struct {
+	CheckConcurrency          int                    `json:"CheckConcurrency"`
+	CheckTimeoutS             int                    `json:"CheckTimeoutS"`
+	Checks                    map[string]gogiosCheck `json:"Checks"`
+	EmailFrom                 string                 `json:"EmailFrom"`
+	EmailTo                   string                 `json:"EmailTo"`
+	HTMLStatusFile            string                 `json:"HTMLStatusFile"`
+	MinNotifyIntervalS        int                    `json:"MinNotifyIntervalS"`
+	PeerPrimaryName           string                 `json:"PeerPrimaryName"`
+	PeerSecondaryName         string                 `json:"PeerSecondaryName"`
+	PeerURL                   string                 `json:"PeerURL"`
+	PrometheusHosts           []string               `json:"PrometheusHosts"`
+	PrometheusOnlyIfNotExists string                 `json:"PrometheusOnlyIfNotExists"`
+	StateDir                  string                 `json:"StateDir"`
+}
+
+// renderGogios renders server's Gogios configuration. Each frontend polls the
+// other one as its peer; the primary/secondary names follow the roles.
 func renderGogios(server Server) string {
 	peer := MustServer(Master)
 	if server.Name == Master {
 		peer = MustServer(Standby)
 	}
-	config := map[string]any{
-		"EmailTo": "paul", "EmailFrom": "gogios@mx.buetow.org", "CheckTimeoutS": 10, "CheckConcurrency": 3, "MinNotifyIntervalS": 3600,
-		"StateDir": "/var/run/gogios", "HTMLStatusFile": "/var/www/htdocs/buetow.org/self/gogios/index.html",
-		"PeerURL": "https://" + peer.FQDN + "/gogios/index.json", "PeerPrimaryName": MustServer(Master).FQDN, "PeerSecondaryName": MustServer(Standby).FQDN,
-		"PrometheusHosts": []string{"r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"}, "PrometheusOnlyIfNotExists": f3sTakenDown, "Checks": gogiosChecks(server),
+	config := gogiosConfig{
+		EmailTo:                   "paul",
+		EmailFrom:                 "gogios@mx.buetow.org",
+		CheckTimeoutS:             10,
+		CheckConcurrency:          3,
+		MinNotifyIntervalS:        3600,
+		StateDir:                  "/var/run/gogios",
+		HTMLStatusFile:            "/var/www/htdocs/buetow.org/self/gogios/index.html",
+		PeerURL:                   "https://" + peer.FQDN + "/gogios/index.json",
+		PeerPrimaryName:           MustServer(Master).FQDN,
+		PeerSecondaryName:         MustServer(Standby).FQDN,
+		PrometheusHosts:           []string{"r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"},
+		PrometheusOnlyIfNotExists: f3sTakenDown,
+		Checks:                    gogiosChecks(server),
 	}
 	encoded, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -264,20 +295,19 @@ func addPiHTTPChecks(checks map[string]gogiosCheck) {
 	}
 }
 
-// addSiteChecks checks every ACME site: certificates, HTTP and HTTPS per
-// prefix, then plain HTTP for the ipv4./ipv6. single-family names.
+// addSiteChecks checks every ACME site (Sites, the policy shared with the
+// certificates, routing and DNS): certificates, HTTP and HTTPS per prefix,
+// then plain HTTP for the ipv4./ipv6. single-family names.
 func addSiteChecks(checks map[string]gogiosCheck) {
-	for _, host := range TemplateData().AcmeHosts {
-		addHostChecks(checks, host)
-		addHTTPSChecks(checks, host)
+	sites := Sites()
+	for _, site := range sites {
+		addHostChecks(checks, site)
+		addHTTPSChecks(checks, site)
 	}
-	for _, host := range TemplateData().AcmeHosts {
-		if strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.") {
-			proto := 4
-			if strings.HasPrefix(host, "ipv6.") {
-				proto = 6
-			}
-			checks[fmt.Sprintf("Check HTTP IPv%d %s", proto, host)] = httpCheck(List(host, fmt.Sprintf("-%d", proto)), []string{fmt.Sprintf("Check Ping%d master.buetow.org", proto)})
+	for _, site := range sites {
+		if site.Family != 0 {
+			checks[fmt.Sprintf("Check HTTP IPv%d %s", site.Family, site.Name)] = httpCheck(
+				List(site.Name, fmt.Sprintf("-%d", site.Family)), []string{fmt.Sprintf("Check Ping%d master.buetow.org", site.Family)})
 		}
 	}
 }
@@ -317,23 +347,21 @@ func addShurikenChecks(checks map[string]gogiosCheck) {
 	}
 }
 
-func addHostChecks(checks map[string]gogiosCheck, host string) {
-	if host == MustServer(Master).FQDN || host == MustServer(Standby).FQDN || strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.") {
+// addHostChecks checks a dual-stack site's certificate and plain HTTP under
+// each name prefix; the standby. name depends on the standby frontend.
+func addHostChecks(checks map[string]gogiosCheck, site Site) {
+	if site.FrontendHost || site.Family != 0 {
 		return
 	}
-	port := ""
-	if host == "code.f3s.buetow.org" {
-		port = "2443"
-	}
 	for _, prefix := range []string{"", "standby.", "www."} {
-		name := prefix + host
+		name := prefix + site.Name
 		depends := "master.buetow.org"
 		if prefix == "standby." {
 			depends = "standby.buetow.org"
 		}
 		args := List("--sni", "-H", name, "-C", "20")
-		if port != "" {
-			args = append(args, "-p", port)
+		if site.HTTPSPort != "" {
+			args = append(args, "-p", site.HTTPSPort)
 		}
 		checks["Check TLS Certificate "+name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_http", Args: args, RandomSpread: 10, RunInterval: 3600, DependsOn: pingDependencies(depends)}
 		for _, proto := range []int{4, 6} {
@@ -342,24 +370,27 @@ func addHostChecks(checks map[string]gogiosCheck, host string) {
 	}
 }
 
-func addHTTPSChecks(checks map[string]gogiosCheck, host string) {
-	if host == MustServer(Master).FQDN || host == MustServer(Standby).FQDN || strings.HasPrefix(host, "ipv4.") || strings.HasPrefix(host, "ipv6.") || host == "ychat.f3s.buetow.org" {
+// addHTTPSChecks checks a dual-stack site over HTTPS on both address
+// families, expecting its Site.HTTPSStatus when it has one. f3s sites pause
+// while the cluster is taken down.
+func addHTTPSChecks(checks map[string]gogiosCheck, site Site) {
+	if site.FrontendHost || site.Family != 0 || !site.HTTPSCheck {
 		return
 	}
-	args := List("--sni", "-S", "-H", host)
-	if host == "code.f3s.buetow.org" {
-		args = append(args, "-p", "2443")
+	args := List("--sni", "-S", "-H", site.Name)
+	if site.HTTPSPort != "" {
+		args = append(args, "-p", site.HTTPSPort)
 	}
-	if expected := httpsExpected(host); expected != "" {
-		args = append(args, "-e", expected)
+	if site.HTTPSStatus != "" {
+		args = append(args, "-e", site.HTTPSStatus)
 	}
 	for _, proto := range []int{4, 6} {
 		check := httpCheck(argsWithProto(args, proto), []string{fmt.Sprintf("Check Ping%d master.buetow.org", proto)})
 		check.RunInterval = 300
-		if isF3SHost(host) {
+		if site.F3S {
 			check.OnlyIfNotExists = f3sTakenDown
 		}
-		checks[fmt.Sprintf("Check HTTPS IPv%d %s", proto, host)] = check
+		checks[fmt.Sprintf("Check HTTPS IPv%d %s", proto, site.Name)] = check
 	}
 }
 
@@ -374,18 +405,4 @@ func checkWithPlugin(plugin string, args []string, deps []string) gogiosCheck {
 }
 func argsWithProto(args []string, proto int) []string {
 	return append(append([]string(nil), args...), fmt.Sprintf("-%d", proto))
-}
-func isF3SHost(host string) bool {
-	for _, candidate := range TemplateData().F3SHosts {
-		if host == candidate {
-			return true
-		}
-	}
-	return false
-}
-func httpsExpected(host string) string {
-	if strings.HasSuffix(host, ".garage.f3s.buetow.org") || host == "garage.f3s.buetow.org" {
-		return "HTTP/1.1 403"
-	}
-	return map[string]string{"player.f3s.buetow.org": "HTTP/1.1 401", "xplayer.f3s.buetow.org": "HTTP/1.1 401", "webdav.f3s.buetow.org": "HTTP/1.1 401", "koreader.f3s.buetow.org": "HTTP/1.1 412", "pihole.f3s.buetow.org": "HTTP/1.1 404", "anki.f3s.buetow.org": "HTTP/1.1 404", "grafana.f3s.buetow.org": "HTTP/1.1 404", "pkgrepo.f3s.buetow.org": "HTTP/1.1 404"}[host]
 }

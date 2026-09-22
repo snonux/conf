@@ -327,10 +327,12 @@ func replaceLegacyF3SZoneLoop(content, records string) string {
 func renderF3SZoneTemplateRecords(hosts []string) string {
 	var builder strings.Builder
 	for _, host := range hosts {
-		if !strings.HasPrefix(host, "ipv6.") {
+		// A single-family name (Site.Family) gets only its own record type.
+		family := SiteFor(host).Family
+		if family != 6 {
 			appendf(&builder, "%s.         300 IN A @MASTER_IPV4@ ; Enable failover\nwww.%s.     300 IN A @MASTER_IPV4@ ; Enable failover\nstandby.%s. 300 IN A @STANDBY_IPV4@ ; Enable failover\n", host, host, host)
 		}
-		if !strings.HasPrefix(host, "ipv4.") {
+		if family != 4 {
 			appendf(&builder, "%s.         300 IN AAAA @MASTER_IPV6@ ; Enable failover\nwww.%s.     300 IN AAAA @MASTER_IPV6@ ; Enable failover\nstandby.%s. 300 IN AAAA @STANDBY_IPV6@ ; Enable failover\n", host, host, host)
 		}
 	}

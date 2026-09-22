@@ -2,7 +2,10 @@
 // by the migrated OpenBSD configuration tasks and their templates.
 package frontends
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	// Domain is the DNS suffix for the two public OpenBSD frontend hosts.
@@ -101,6 +104,37 @@ var f3sHosts = []string{
 
 var garageBuckets = []string{"taskwarrior", "quicklog"}
 
+// Per-site exceptions to the default site policy (see SiteFor). A site
+// without an entry is served over HTTPS on 443 by relayd's generic routing,
+// and its HTTPS check accepts any non-error status.
+var (
+	// siteHTTPSPorts are sites relayd serves on a dedicated TLS port.
+	siteHTTPSPorts = map[string]string{"code.f3s.buetow.org": "2443"}
+	// siteHTTPSStatus is the status line an HTTPS check must see, for sites
+	// that answer an anonymous request with an error by design.
+	siteHTTPSStatus = map[string]string{
+		"player.f3s.buetow.org":   "HTTP/1.1 401",
+		"xplayer.f3s.buetow.org":  "HTTP/1.1 401",
+		"webdav.f3s.buetow.org":   "HTTP/1.1 401",
+		"koreader.f3s.buetow.org": "HTTP/1.1 412",
+		"pihole.f3s.buetow.org":   "HTTP/1.1 404",
+		"anki.f3s.buetow.org":     "HTTP/1.1 404",
+		"grafana.f3s.buetow.org":  "HTTP/1.1 404",
+		"pkgrepo.f3s.buetow.org":  "HTTP/1.1 404",
+	}
+	// sitesWithoutHTTPSCheck are served but not HTTPS-checked (ychat speaks
+	// its own protocol behind the TLS relay).
+	sitesWithoutHTTPSCheck = map[string]bool{"ychat.f3s.buetow.org": true}
+	// siteRelaydUpstreams are f3s sites relayd forwards to a dedicated
+	// table instead of its generic f3s routing.
+	siteRelaydUpstreams = map[string]string{
+		"f3s.buetow.org":          "f3s_static_proxy",
+		"registry.f3s.buetow.org": "f3s_registry",
+		"jellyfin.f3s.buetow.org": "f3s_jellyfin",
+		"anki.f3s.buetow.org":     "f3s_anki",
+	}
+)
+
 var acmeHosts = []string{
 	"buetow.org",
 	"git.buetow.org",
@@ -135,6 +169,77 @@ var wireGuardAddresses = []WireGuardAddress{
 	{Name: "pi1", IPv4: "192.168.2.204", IPv6: "fd42:beef:cafe:2::204"},
 	{Name: "earth", IPv4: "192.168.2.200", IPv6: "fd42:beef:cafe:2::200"},
 	{Name: "pixel7pro", IPv4: "192.168.2.201", IPv6: "fd42:beef:cafe:2::201"},
+}
+
+// Site is one public name of the topology together with the policy every
+// consumer derives from it: certificates (acme.go), relayd routing (web.go),
+// DNS records (maildns.go) and Gogios checks (monitoring.go). Adding a site,
+// f3s service or Garage bucket to the lists above is the only edit needed;
+// the exceptions live in the site* tables.
+type Site struct {
+	Name string
+	// Family is 4 or 6 for an ipv4./ipv6. name that resolves over one
+	// address family only; such a name is an alternative name of its
+	// parent site's certificate, never a certificate or check target of its
+	// own apart from its plain HTTP check. It is 0 for a dual-stack name.
+	Family int
+	// FrontendHost marks a frontend's own FQDN: a host certificate, with no
+	// www./standby. variants and no site checks.
+	FrontendHost bool
+	// F3S marks a site served by the f3s cluster; its checks pause while
+	// the cluster is deliberately taken down.
+	F3S bool
+	// HTTPSPort is the dedicated TLS port, "" for 443.
+	HTTPSPort string
+	// HTTPSStatus is the status line the HTTPS check expects, "" for any.
+	HTTPSStatus string
+	// HTTPSCheck is false for a site that is served but not HTTPS-checked.
+	HTTPSCheck bool
+	// RelaydUpstream is the relayd table a dedicated f3s route forwards to,
+	// "" when the generic routing applies.
+	RelaydUpstream string
+}
+
+// SiteFor returns the policy of name. Names outside the topology lists get
+// the default policy, which callers only rely on for the frontend FQDNs.
+func SiteFor(name string) Site {
+	site := Site{
+		Name:           name,
+		F3S:            contains(TemplateData().F3SHosts, name),
+		HTTPSPort:      siteHTTPSPorts[name],
+		HTTPSStatus:    siteHTTPSStatus[name],
+		HTTPSCheck:     !sitesWithoutHTTPSCheck[name],
+		RelaydUpstream: siteRelaydUpstreams[name],
+	}
+	switch {
+	case strings.HasPrefix(name, "ipv4."):
+		site.Family = 4
+	case strings.HasPrefix(name, "ipv6."):
+		site.Family = 6
+	}
+	for _, server := range servers {
+		if name == server.FQDN {
+			site.FrontendHost = true
+		}
+	}
+	// Garage answers anonymous S3 requests with 403, and every bucket is a
+	// virtual-host site of the one Garage upstream.
+	if name == "garage.f3s.buetow.org" || strings.HasSuffix(name, ".garage.f3s.buetow.org") {
+		site.HTTPSStatus = "HTTP/1.1 403"
+		site.RelaydUpstream = "garage"
+	}
+	return site
+}
+
+// Sites returns the policy of every ACME host, in topology order: the
+// public sites, the frontend FQDNs, then the f3s services and buckets.
+func Sites() []Site {
+	hosts := TemplateData().AcmeHosts
+	sites := make([]Site, 0, len(hosts))
+	for _, host := range hosts {
+		sites = append(sites, SiteFor(host))
+	}
+	return sites
 }
 
 // ServerFor returns one frontend's stable addressing data.

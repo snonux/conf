@@ -307,7 +307,7 @@ func renderRelayd(data webConfigData) string {
 	appendString(&builder, "http protocol \"https\" {\n")
 	// The keypairs are the ACME site certificates and their standby twins
 	// (acmeSites, the list acme.sh requests), then the server's own FQDN.
-	for _, site := range acmeSites(data.AcmeHosts) {
+	for _, site := range acmeSites(Sites()) {
 		appendf(&builder, "     tls keypair %s\n     tls keypair standby.%s\n", site.Name, site.Name)
 	}
 	appendf(&builder, relaydHTTPSStart, data.Server.FQDN)
@@ -333,21 +333,15 @@ func renderRelayd(data webConfigData) string {
 }
 
 func appendRelaydF3SRouting(builder *strings.Builder, data webConfigData) {
+	// Only f3s sites with a dedicated upstream (Site.RelaydUpstream) get a
+	// route here; the others use the generic f3s forwarding.
 	for _, host := range data.F3SHosts {
+		upstream := SiteFor(host).RelaydUpstream
+		if upstream == "" {
+			continue
+		}
 		for _, prefix := range data.Prefixes {
-			name := prefix + host
-			switch {
-			case host == "f3s.buetow.org":
-				appendf(builder, "    match request header \"Host\" value %q forward to <f3s_static_proxy>\n", name)
-			case host == "registry.f3s.buetow.org":
-				appendf(builder, "    match request header \"Host\" value %q forward to <f3s_registry>\n", name)
-			case host == "jellyfin.f3s.buetow.org":
-				appendf(builder, "    match request header \"Host\" value %q forward to <f3s_jellyfin>\n", name)
-			case host == "anki.f3s.buetow.org":
-				appendf(builder, "    match request header \"Host\" value %q forward to <f3s_anki>\n", name)
-			case host == "garage.f3s.buetow.org" || strings.HasSuffix(host, ".garage.f3s.buetow.org"):
-				appendf(builder, "    match request header \"Host\" value %q forward to <garage>\n", name)
-			}
+			appendf(builder, "    match request header \"Host\" value %q forward to <%s>\n", prefix+host, upstream)
 		}
 	}
 	appendString(builder, "    match request header \"Host\" value \"www.snonux.foo\" forward to <localhost>\n")
