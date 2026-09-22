@@ -382,7 +382,8 @@ Script behaviour for the `daily` mode (Rocky script):
 
 1. Read the stamp `/var/lib/unattended-upgrade/last-daily` (a plain
    `date +%F` string, persistent across reboots).
-2. Stamp equals today → **skip silently** (exit 0) — "skip until next day".
+2. Stamp equals today → skip the daily upgrade ("skip until next day"), but
+   still run the reboot check (step 6) before exiting 0.
 3. Partner gate: not all partners pingable → skip **without stamping**
    (an on-demand host must not burn its single daily shot on a gate miss;
    the next hourly tick retries).
