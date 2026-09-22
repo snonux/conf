@@ -21,23 +21,6 @@ const (
 	dnsPublisherZones  = dnsPublisherDir + "/zones"
 )
 
-const legacyDNSFailoverCronPresent = `crontab -l -u root 2>/dev/null | awk '
-  /^# BEGIN GONF Cron\[root\/frontend-nsd-failover\]$/ { managed = 1; next }
-  /^# END GONF Cron\[root\/frontend-nsd-failover\]$/ { managed = 0; next }
-  !managed && $0 !~ /^[[:space:]]*#/ && index($0, "/usr/local/bin/dns-failover.ksh") { found = 1 }
-  END { exit !found }
-'`
-
-const removeLegacyDNSFailoverCron = `tmp=$(mktemp /tmp/gonf-nsd-failover.XXXXXXXX)
-trap 'rm -f "$tmp"' EXIT HUP INT TERM
-{ crontab -l -u root 2>/dev/null || true; } | awk '
-  /^# BEGIN GONF Cron\[root\/frontend-nsd-failover\]$/ { managed = 1; print; next }
-  /^# END GONF Cron\[root\/frontend-nsd-failover\]$/ { managed = 0; print; next }
-  !managed && $0 !~ /^[[:space:]]*#/ && index($0, "/usr/local/bin/dns-failover.ksh") { next }
-  { print }
-' >"$tmp"
-crontab -u root "$tmp"`
-
 // MailDNS contains the frontend SMTP and authoritative-DNS recipes. The
 // services share no mutable configuration state, but sit together because they
 // are the mail/DNS ownership boundary formerly represented by the Rex tasks.
@@ -120,10 +103,8 @@ func (MailDNS) DNSFailover() {
 			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
 		publisher := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
 			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-		cleanup := Command("sh", List("-ceu", removeLegacyDNSFailoverCron),
-			OnlyIf("sh", List("-c", legacyDNSFailoverCronPresent)),
-			WithName("remove-legacy-dns-failover-cron"))
-		Cron("frontend-nsd-failover", WithCommand("-ns "+dnsFailoverCommand), WithMinute("*"), DependsOn(script, publisher, cleanup))
+		Cron("frontend-nsd-failover", WithCommand("-ns "+dnsFailoverCommand),
+			WithLegacyCommand("-ns "+dnsFailoverCommand), WithMinute("*"), DependsOn(script, publisher))
 	})
 }
 

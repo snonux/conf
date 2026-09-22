@@ -144,8 +144,8 @@ func (Maintenance) DescRsync() string {
 	return "Install frontend rsync service configuration and synchronization cron"
 }
 
-// Rsync installs the common daemon configuration and the existing root cron
-// behavior. The command intentionally retains Rex's leading -ns argument.
+// Rsync installs the common daemon configuration and adopts the former Rex
+// root cron entry. The command intentionally retains Rex's leading -ns argument.
 func (Maintenance) Rsync() {
 	onFrontends(func() {
 		rsync := Package("rsync")
@@ -153,7 +153,8 @@ func (Maintenance) Rsync() {
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 		script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		Cron("frontend-rsync", WithCommand("-ns /usr/local/bin/rsync.sh"), WithMinute("*/5"), DependsOn(rsync, script))
+		Cron("frontend-rsync", WithCommand("-ns /usr/local/bin/rsync.sh"),
+			WithLegacyCommand("-ns /usr/local/bin/rsync.sh"), WithMinute("*/5"), DependsOn(rsync, script))
 	})
 }
 

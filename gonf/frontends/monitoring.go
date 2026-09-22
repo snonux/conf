@@ -15,23 +15,6 @@ const (
 	f3sTakenDown          = "/tmp/f3s_taken_down"
 )
 
-const legacyGogiosCronPresent = `crontab -l -u _gogios 2>/dev/null | awk '
-  /^# BEGIN GONF / { managed = 1; next }
-  /^# END GONF / { managed = 0; next }
-  !managed && $0 !~ /^[[:space:]]*#/ && (index($0, "/usr/local/bin/gogios -renotify >/dev/null 2>&1") || index($0, "/usr/local/bin/gogios >/dev/null 2>&1") || index($0, "/usr/local/bin/gogios -force >/dev/null 2>&1")) { found = 1 }
-  END { exit !found }
-'`
-
-const removeLegacyGogiosCron = `tmp=$(mktemp /tmp/gonf-gogios.XXXXXXXX)
-trap 'rm -f "$tmp"' EXIT HUP INT TERM
-{ crontab -l -u _gogios 2>/dev/null || true; } | awk '
-  /^# BEGIN GONF / { managed = 1; print; next }
-  /^# END GONF / { managed = 0; print; next }
-  !managed && $0 !~ /^[[:space:]]*#/ && (index($0, "/usr/local/bin/gogios -renotify >/dev/null 2>&1") || index($0, "/usr/local/bin/gogios >/dev/null 2>&1") || index($0, "/usr/local/bin/gogios -force >/dev/null 2>&1")) { next }
-  { print }
-' >"$tmp"
-crontab -u _gogios "$tmp"`
-
 // Monitoring owns frontend monitoring and custom-package configuration.
 type Monitoring struct{ RequiresRoot }
 
@@ -92,17 +75,16 @@ func (Monitoring) Gogios() {
 			cleanup := cleanupLegacyGogios()
 			gogios := Package("gogios", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
 			account := frontendAccount(serviceAccount{Name: "_gogios", Home: "/var/run/gogios"})
-			legacyCron := Command("sh", List("-ceu", removeLegacyGogiosCron),
-				DependsOn(account),
-				OnlyIf("sh", List("-c", legacyGogiosCronPresent)),
-				WithName("remove-legacy-gogios-cron"))
 			statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
 			runDir := Dir("/var/run/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
 			config := File("/etc/gogios.json", WithContent(renderGogios(server)), WithMode(0o744), WithOwner("root"), WithGroup("wheel"), DependsOn(plugins, gogios, statusDir, runDir))
 			plugin := InstallFile("/usr/local/bin/check_shuriken_age", "/home/paul/git/shuriken.sh/contrib/check_shuriken_age", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-			Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin, legacyCron))
-			Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"), WithMinute("*/5"), WithHour("8-22"), DependsOn(config, plugin, legacyCron))
-			Cron("gogios-force", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"), WithMinute("0"), WithHour("3"), WithWeekday("0"), DependsOn(config, plugin, legacyCron))
+			Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"),
+				WithLegacyCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin))
+			Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"),
+				WithLegacyCommand("/usr/local/bin/gogios >/dev/null 2>&1"), WithMinute("*/5"), WithHour("8-22"), DependsOn(config, plugin))
+			Cron("gogios-force", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"),
+				WithLegacyCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"), WithMinute("0"), WithHour("3"), WithWeekday("0"), DependsOn(config, plugin))
 			EnsureFile("/etc/rc.local")
 			File("/etc/rc.local",
 				WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),

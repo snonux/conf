@@ -261,15 +261,7 @@ task 'rsync',
       group   => 'wheel',
       mode    => '755';
 
-    file '/tmp/rsync.cron',
-      ensure  => 'file',
-      content => "*/5\t*\t*\t*\t*\t-ns /usr/local/bin/rsync.sh",
-      mode    => '600';
-
-    run 'crontab -l -u root 2>/dev/null | grep -vF /usr/local/bin/rsync.sh > /tmp/root.cron.new || true';
-    run 'cat /tmp/rsync.cron >> /tmp/root.cron.new';
-    run 'crontab -u root /tmp/root.cron.new';
-    run 'rm /tmp/rsync.cron /tmp/root.cron.new';
+    # Gonf owns the root rsync cron entry and safely adopts this legacy job.
   };
 
 desc 'Configure the gemtexter sites';
@@ -519,18 +511,7 @@ task 'nsd_failover',
       group  => 'wheel',
       mode   => '500';
 
-    # Strip any existing copies first. `uniq` alone is not enough: non-adjacent
-    # duplicates survive (we had two dns-failover lines and -s is per-line, so
-    # both fired every minute and raced on zone temp files).
-    file '/tmp/dns-failover.cron',
-      ensure  => 'file',
-      content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/dns-failover.ksh",
-      mode    => '600';
-
-    run 'crontab -l -u root 2>/dev/null | grep -vF /usr/local/bin/dns-failover.ksh > /tmp/root.cron.new || true';
-    run 'cat /tmp/dns-failover.cron >> /tmp/root.cron.new';
-    run 'crontab -u root /tmp/root.cron.new';
-    run 'rm /tmp/dns-failover.cron /tmp/root.cron.new';
+    # Gonf owns the root DNS-failover cron entry and safely adopts this legacy job.
   };
 
 # Install or update dtail from the custom package repository.
@@ -674,13 +655,7 @@ task 'gogios',
       group  => '_gogios',
       mode   => '755';
 
-    file '/tmp/gogios.cron',
-      ensure  => 'file',
-      content => template( './etc/gogios.cron.tpl', gogios_path => $gogios_path ),
-      mode    => '600';
-
-    run 'cat /tmp/gogios.cron | crontab -u _gogios -';
-    run 'rm /tmp/gogios.cron';
+    # Gonf owns _gogios's cron entries and safely adopts the legacy jobs.
 
     append_if_no_such_line '/etc/rc.local', 'if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi';
     append_if_no_such_line '/etc/rc.local', 'chown _gogios /var/run/gogios';
@@ -842,18 +817,7 @@ task 'pf',
       group  => 'wheel',
       mode   => '500';
 
-    # pfctl needs root, so this runs from root's crontab rather than as the
-    # _node_exporter user. Every minute matches the scrape interval; the
-    # script is cheap and writes atomically via rename.
-    file '/tmp/pflabels.cron',
-      ensure  => 'file',
-      content => "*\t*\t*\t*\t*\t-ns /usr/local/bin/pf-labels-exporter.sh",
-      mode    => '600';
-
-    run 'crontab -l -u root 2>/dev/null | grep -vF /usr/local/bin/pf-labels-exporter.sh > /tmp/root.cron.new || true';
-    run 'cat /tmp/pflabels.cron >> /tmp/root.cron.new';
-    run 'crontab -u root /tmp/root.cron.new';
-    run 'rm /tmp/pflabels.cron /tmp/root.cron.new';
+    # Gonf owns the root PF-labels exporter cron entry and adopts the legacy job.
 
     # node_exporter only reads a textfile directory if told to; without this
     # flag the .prom file above is written but never exported.
