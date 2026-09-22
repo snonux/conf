@@ -19,9 +19,9 @@ import (
 const nftablesConf = `#!/usr/sbin/nft -f
 # Managed by gonf (conf: gonf/debian/base.go). Do not edit here.
 #
-# No "flush ruleset": Docker's tables must survive a reload. Never
-# "systemctl restart nftables" on this host either: its ExecStop flushes the
-# whole ruleset. "systemctl reload nftables" re-reads this file.
+# No "flush ruleset": Docker's tables must survive a reload or restart.
+# The gonf.conf drop-in of nftables.service likewise replaces the stock
+# ExecStop (nft flush ruleset) with deleting only this table.
 table inet gonf_filter
 delete table inet gonf_filter
 
@@ -31,7 +31,8 @@ table inet gonf_filter {
 		ct state established,related accept
 		ct state invalid drop
 		iifname "lo" accept
-		meta l4proto { icmp, ipv6-icmp } accept
+		# nft keywords (1, 58); "ipv6-icmp" would need /etc/protocols
+		meta l4proto { icmp, icmpv6 } accept
 		# SSH, Pi-hole DNS, Pi-hole admin UI, DTail dserver
 		tcp dport { 22, 53, 80, 2222 } accept
 		udp dport 53 accept
@@ -39,6 +40,19 @@ table inet gonf_filter {
 		ip6 daddr fe80::/64 udp dport 546 accept
 	}
 }
+`
+
+// nftablesDropIn replaces the stock ExecStop of nftables.service, "nft
+// flush ruleset", which would drop Docker's tables too. Stopping or
+// restarting the unit matters even though gonf itself only reloads it:
+// the nftables package's postinst runs "deb-systemd-invoke try-restart
+// nftables.service" on every upgrade, including an unattended point
+// release. The stop now deletes only gonf_filter; "-" tolerates a missing
+// table (never loaded, or already deleted), and ExecStart re-creates it.
+const nftablesDropIn = `# Managed by gonf (conf: gonf/debian/base.go). Do not edit here.
+[Service]
+ExecStop=
+ExecStop=-/usr/sbin/nft delete table inet gonf_filter
 `
 
 // dockerSources is the Docker CE apt source (deb822), pinned to the
@@ -105,9 +119,11 @@ func (Base) DescFirewall() string {
 	return "Install the nftables input filter (22, 53 tcp/udp, 80, 2222) and enable nftables"
 }
 
-// Firewall installs nftables and the ruleset, validated with nft -c before
-// the live file changes, and reloads (never restarts, see nftablesConf) the
-// service when the ruleset changed.
+// Firewall installs nftables, the ruleset (validated with nft -c before the
+// live file changes) and the ExecStop drop-in (nftablesDropIn).
+// SystemdUnits reloads systemd for the drop-in and reloads nftables — which
+// re-reads the ruleset, never flushing anything — when either input
+// changed; the unit is enabled and started otherwise.
 func (Base) Firewall() {
 	onDebian(func() {
 		pkg := aptPackages(List("nftables"))
@@ -116,7 +132,12 @@ func (Base) Firewall() {
 			WithValidation("nft", List("-c", "-f", CandidatePath)),
 			WithMode(0o755), WithOwner("root"), WithGroup("root"),
 			DependsOn(pkg))
-		Service("nftables", WithReload, DependsOn(pkg), OnChange(conf))
+		dir := rootDir("/etc/systemd/system/nftables.service.d")
+		dropin := File("/etc/systemd/system/nftables.service.d/gonf.conf",
+			WithContent(nftablesDropIn),
+			WithMode(0o644), WithOwner("root"), WithGroup("root"),
+			DependsOn(pkg, dir))
+		SystemdUnits(FanIn(conf, dropin), ActivateService("nftables", WithReload))
 	})
 }
 

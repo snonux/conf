@@ -32,9 +32,12 @@ done`
 // aptInstallScript refreshes the package lists and installs its arguments.
 // The refresh runs only when something is missing (the Unless guard), so a
 // source added in the same run (Docker CE) is known before its packages
-// are installed, and a failed earlier install retries cleanly.
+// are installed, and a failed earlier install retries cleanly. confdef /
+// confold answer any conffile prompt (keep a locally changed file, take
+// the default otherwise), so a prompt cannot fail the install.
 const aptInstallScript = `apt-get -q update
-apt-get install -y -q --no-install-recommends "$@"`
+apt-get install -y -q --no-install-recommends \
+  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@"`
 
 // onDebian runs fn on the current cluster's hosts, but only where the
 // destination is Debian (see the package comment).
