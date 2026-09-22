@@ -52,18 +52,15 @@ func (Web) DescHTTPD() string { return "Render, validate, and converge frontend 
 // before every non-dry-run live reconciliation, while OnChange limits a
 // restart to a changed live config or rc flag.
 func (Web) HTTPD() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			flags := rcConfLocalLine("httpd_flags=", "rc-conf-httpd-flags")
-			NoFile(legacyCandidate("/etc/httpd.conf"))
-			config := File("/etc/httpd.conf", WithContent(renderHTTPD(webData(server))),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
-				WithValidation("httpd", List("-n", "-f", CandidatePath)))
-			fallbackIndex := htdocs(server)
-			Service("httpd", WithRestart, DependsOn(fallbackIndex), OnChange(flags, config))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		flags := rcConfLocalLine("httpd_flags=", "rc-conf-httpd-flags")
+		NoFile(legacyCandidate("/etc/httpd.conf"))
+		config := File("/etc/httpd.conf", WithContent(renderHTTPD(webData(server))),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
+			WithValidation("httpd", List("-n", "-f", CandidatePath)))
+		fallbackIndex := htdocs(server)
+		Service("httpd", WithRestart, DependsOn(fallbackIndex), OnChange(flags, config))
+	})
 }
 
 // DescInetd returns the description for the inetd recipe.
@@ -108,20 +105,17 @@ func (Web) DescRelayd() string { return "Render, validate, and converge frontend
 // unchanged and restarts nothing. No database rebuild is needed: the
 // removal does not touch /etc/login.conf or /etc/login.conf.db.
 func (Web) Relayd() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			flags := rcConfLocalLine("relayd_flags=", "rc-conf-relayd-flags")
-			class := NoLoginClass("daemon")
-			NoFile(legacyCandidate("/etc/relayd.conf"))
-			config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),
-				WithMode(0o600), WithOwner("root"), WithGroup("wheel"),
-				WithValidation("relayd", List("-n", "-f", CandidatePath)))
-			Service("relayd", WithRestart, OnChange(flags, class, config))
-			File(dailyLocal, WithLine("/usr/sbin/rcctl start relayd"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		flags := rcConfLocalLine("relayd_flags=", "rc-conf-relayd-flags")
+		class := NoLoginClass("daemon")
+		NoFile(legacyCandidate("/etc/relayd.conf"))
+		config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),
+			WithMode(0o600), WithOwner("root"), WithGroup("wheel"),
+			WithValidation("relayd", List("-n", "-f", CandidatePath)))
+		Service("relayd", WithRestart, OnChange(flags, class, config))
+		File(dailyLocal, WithLine("/usr/sbin/rcctl start relayd"),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+	})
 }
 
 // DescPF returns the description for the frontend PF and exporter recipe.

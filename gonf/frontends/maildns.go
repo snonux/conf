@@ -49,15 +49,12 @@ func (MailDNS) DescSMTPD() string {
 // The obsolete fixed-path candidate directory of the previous recipe is
 // removed.
 func (MailDNS) SMTPD() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			NoDir(legacySMTPDValidationDir, WithPrune)
-			mail := ConfigSet("smtpd", smtpdConfigSet(server)...)
-			newAliases := Command("newaliases", List(), OnChange(mail.Member("aliases")), WithName("rebuild-mail-aliases"))
-			Service("smtpd", WithRestart, DependsOn(newAliases), OnChange(mail.Members(smtpdRestartMembers()...)...))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		NoDir(legacySMTPDValidationDir, WithPrune)
+		mail := ConfigSet("smtpd", smtpdConfigSet(server)...)
+		newAliases := Command("newaliases", List(), OnChange(mail.Member("aliases")), WithName("rebuild-mail-aliases"))
+		Service("smtpd", WithRestart, DependsOn(newAliases), OnChange(mail.Members(smtpdRestartMembers()...)...))
+	})
 }
 
 // DescNSD returns the description for the authoritative DNS recipe.

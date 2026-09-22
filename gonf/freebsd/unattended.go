@@ -98,16 +98,13 @@ func (Unattended) DescCron() string {
 // Cron installs the hourly daily-mode job (stamp-gated in-script).
 // Boot catch-up is the next hourly tick (gonf Cron has no @reboot field).
 func (Unattended) Cron() {
-	for _, host := range ClusterHosts() {
-		minute := MustHostValue[string](host, cluster.ValueUnattendedCronMinute)
-		WhenHostname(host, func() {
-			Cron("unattended-upgrade-freebsd-daily",
-				WithCommand("/usr/local/sbin/unattended-upgrade-freebsd daily"),
-				WithMinute(minute), WithHour("*"),
-				WithCronEnv("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin"),
-			)
-		})
-	}
+	ForHosts(cluster.ValueUnattendedCronMinute, func(_ string, minute string) {
+		Cron("unattended-upgrade-freebsd-daily",
+			WithCommand("/usr/local/sbin/unattended-upgrade-freebsd daily"),
+			WithMinute(minute), WithHour("*"),
+			WithCronEnv("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin"),
+		)
+	})
 }
 
 // DescNewsyslog returns the description for the rotation line.

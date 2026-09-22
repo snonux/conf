@@ -71,10 +71,7 @@ func (Unattended) DescCron() string {
 
 // Cron installs pkgs + reboot cron jobs with per-host windows.
 func (Unattended) Cron() {
-	for _, host := range ClusterHosts() {
-		w := MustHostValue[[2]string](host, cluster.ValueUnattendedCron)
-		WhenHostname(host, func() { unattendedCronJobs(w) })
-	}
+	ForHosts(cluster.ValueUnattendedCron, func(_ string, w [2]string) { unattendedCronJobs(w) })
 }
 
 func unattendedCronJobs(w [2]string) {

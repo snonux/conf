@@ -96,10 +96,7 @@ func (Unattended) DescCron() string {
 // each host with its own window (morning on blowfish, evening on
 // fishfinger): record once, evaluate per destination.
 func (Unattended) Cron() {
-	for _, host := range ClusterHosts() {
-		w := MustHostValue[[3]string](host, cluster.ValueUnattendedCron)
-		WhenHostname(host, func() { unattendedCronJobs(w) })
-	}
+	ForHosts(cluster.ValueUnattendedCron, func(_ string, w [3]string) { unattendedCronJobs(w) })
 }
 
 // unattendedCronJobs registers the four unattended-upgrade root cron jobs

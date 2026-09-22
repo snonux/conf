@@ -54,16 +54,13 @@ func (Deployment) DescConfig() string {
 // and running on every apply.
 func (Deployment) Config() {
 	secret := trimFinalNewline(MustSecret(paths.GarageSecret("rpc_secret")))
-	for _, host := range ClusterHosts() {
-		rpcPublicAddr := MustHostValue[string](host, cluster.ValueGarageRPCPublicAddr)
-		WhenHostname(host, func() {
-			config := InstallFile(configPath, paths.GarageAsset(template),
-				WithMode(0o640), WithOwner("root"), WithGroup("garage"),
-				WithTemplateData(defaultConfig(secret, rpcPublicAddr)),
-			)
-			Service("garage", WithRestart, OnChange(config))
-		})
-	}
+	ForHosts(cluster.ValueGarageRPCPublicAddr, func(_ string, rpcPublicAddr string) {
+		config := InstallFile(configPath, paths.GarageAsset(template),
+			WithMode(0o640), WithOwner("root"), WithGroup("garage"),
+			WithTemplateData(defaultConfig(secret, rpcPublicAddr)),
+		)
+		Service("garage", WithRestart, OnChange(config))
+	})
 }
 
 func defaultConfig(secret, rpcPublicAddr string) tomlData {

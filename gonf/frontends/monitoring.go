@@ -77,30 +77,27 @@ func (Monitoring) DescGogios() string {
 // Gogios renders the old embedded-Perl configuration from the shared Go
 // topology, retaining stable check names because peer state keys use them.
 func (Monitoring) Gogios() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			plugins := Package(List("monitoring-plugins", "nrpe"))
-			cleanup := cleanupLegacyGogios()
-			gogios := Package("gogios", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
-			account := frontendAccount(serviceAccount{Name: "_gogios", Home: "/var/run/gogios"})
-			statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
-			runDir := Dir("/var/run/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
-			config := File("/etc/gogios.json", WithContent(renderGogios(server)), WithMode(0o744), WithOwner("root"), WithGroup("wheel"), DependsOn(plugins, gogios, statusDir, runDir))
-			plugin := InstallFile("/usr/local/bin/check_shuriken_age", shurikenAgePlugin(), WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-			Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"),
-				WithLegacyCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin))
-			Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"),
-				WithLegacyCommand("/usr/local/bin/gogios >/dev/null 2>&1"), WithMinute("*/5"), WithHour("8-22"), DependsOn(config, plugin))
-			Cron("gogios-force", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"),
-				WithLegacyCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"), WithMinute("0"), WithHour("3"), WithWeekday("0"), DependsOn(config, plugin))
-			rcLocal := ensureRCLocal()
-			File("/etc/rc.local",
-				WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
-				WithLine("chown _gogios /var/run/gogios"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(account, rcLocal))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		plugins := Package(List("monitoring-plugins", "nrpe"))
+		cleanup := cleanupLegacyGogios()
+		gogios := Package("gogios", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
+		account := frontendAccount(serviceAccount{Name: "_gogios", Home: "/var/run/gogios"})
+		statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
+		runDir := Dir("/var/run/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
+		config := File("/etc/gogios.json", WithContent(renderGogios(server)), WithMode(0o744), WithOwner("root"), WithGroup("wheel"), DependsOn(plugins, gogios, statusDir, runDir))
+		plugin := InstallFile("/usr/local/bin/check_shuriken_age", shurikenAgePlugin(), WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+		Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"),
+			WithLegacyCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin))
+		Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"),
+			WithLegacyCommand("/usr/local/bin/gogios >/dev/null 2>&1"), WithMinute("*/5"), WithHour("8-22"), DependsOn(config, plugin))
+		Cron("gogios-force", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"),
+			WithLegacyCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"), WithMinute("0"), WithHour("3"), WithWeekday("0"), DependsOn(config, plugin))
+		rcLocal := ensureRCLocal()
+		File("/etc/rc.local",
+			WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
+			WithLine("chown _gogios /var/run/gogios"),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(account, rcLocal))
+	})
 }
 
 func cleanupLegacyGogios() Resource {

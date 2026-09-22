@@ -87,18 +87,15 @@ func (KernelAudit) DescUnits() string {
 // VULNERABLE is reported in the journal at notice/warning priority (new
 // CVEs, status changes) and in the status record. The Pis have no MTA.
 func (KernelAudit) Units() {
-	for _, host := range ClusterHosts() {
-		calendar := MustHostValue[string](host, cluster.ValueKernelAuditOnCalendar)
-		WhenHostname(host, func() {
-			SystemdTimer("rocky-kernel-audit",
-				WithCommand("/usr/local/sbin/rocky-kernel-audit"),
-				WithOnCalendar(calendar),
-				WithPersistent,
-				WithDescription("Daily Raspberry Pi kernel CVE audit"),
-				WithServiceDescription("Raspberry Pi kernel CVE audit (OSV Linux feed)"),
-				WithAfter("network-online.target"),
-				WithWants("network-online.target"),
-			)
-		})
-	}
+	ForHosts(cluster.ValueKernelAuditOnCalendar, func(_ string, calendar string) {
+		SystemdTimer("rocky-kernel-audit",
+			WithCommand("/usr/local/sbin/rocky-kernel-audit"),
+			WithOnCalendar(calendar),
+			WithPersistent,
+			WithDescription("Daily Raspberry Pi kernel CVE audit"),
+			WithServiceDescription("Raspberry Pi kernel CVE audit (OSV Linux feed)"),
+			WithAfter("network-online.target"),
+			WithWants("network-online.target"),
+		)
+	})
 }

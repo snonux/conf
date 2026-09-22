@@ -82,24 +82,21 @@ func (Unattended) DescUnits() string {
 }
 
 // Units installs the oneshot+timer pair via SystemdTimer and
-// enables the timer. Per-host OnCalendar still needs a loop; identical
-// bodies use WhenHostname(ClusterHosts()).
+// enables the timer. ForHosts supplies each host's OnCalendar under its
+// hostname guard; identical bodies use WhenHostname(ClusterHosts()).
 func (Unattended) Units() {
-	for _, host := range ClusterHosts() {
-		calendar := MustHostValue[string](host, cluster.ValueUnattendedOnCalendar)
-		WhenHostname(host, func() {
-			SystemdTimer("unattended-upgrade-rocky",
-				WithCommand("/usr/local/sbin/unattended-upgrade-rocky daily"),
-				WithOnCalendar(calendar),
-				WithOnBootSec("10min"),
-				WithPersistent,
-				WithDescription("Hourly unattended-upgrade check (updates once per day)"),
-				WithServiceDescription("Unattended upgrade (Rocky daily mode)"),
-				WithAfter("network-online.target"),
-				WithWants("network-online.target"),
-			)
-		})
-	}
+	ForHosts(cluster.ValueUnattendedOnCalendar, func(_ string, calendar string) {
+		SystemdTimer("unattended-upgrade-rocky",
+			WithCommand("/usr/local/sbin/unattended-upgrade-rocky daily"),
+			WithOnCalendar(calendar),
+			WithOnBootSec("10min"),
+			WithPersistent,
+			WithDescription("Hourly unattended-upgrade check (updates once per day)"),
+			WithServiceDescription("Unattended upgrade (Rocky daily mode)"),
+			WithAfter("network-online.target"),
+			WithWants("network-online.target"),
+		)
+	})
 }
 
 // DescLogrotate returns the description for logrotate.
