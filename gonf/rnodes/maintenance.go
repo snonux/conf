@@ -67,16 +67,12 @@ func (Maintenance) NFSMountMonitor() {
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-ordering.conf"),
 			WithMode(0o644), WithOwner("root"), WithGroup("root"))
 
-		reload := DaemonReload(OnChange(
-			check, defaults, monitorService, monitorTimer, shutdownMarker,
-			drainScript, drainService, stunnelOrdering, k3sOrdering,
-		))
-		Timer("nfs-mount-monitor", WithRestart, DependsOn(reload), OnChange(
-			check, defaults, monitorService, monitorTimer, shutdownMarker,
-			drainScript, drainService, stunnelOrdering, k3sOrdering,
-		))
-		Service("nfs-shutdown-marker", DependsOn(reload))
-		Service("k3s-nfs-drain", DependsOn(reload))
+		SystemdUnits(
+			FanIn(check, defaults, monitorService, monitorTimer, shutdownMarker,
+				drainScript, drainService, stunnelOrdering, k3sOrdering),
+			ActivateTimer("nfs-mount-monitor", WithRestart),
+			ActivateServices(List("nfs-shutdown-marker", "k3s-nfs-drain")),
+		)
 	})
 }
 
