@@ -99,9 +99,16 @@ DNS/SSH gotchas verified live:
 - **Service restarts**: `needs-restarting -s` after the update → restart the
   listed units (a dtail RPM update alone never triggers a reboot, and the
   running daemon would otherwise keep the old code).
-- **Reboot**: `needs-restarting -r` (exit 1 = reboot required — verified live
-  on pi2, which currently HAS a reboot pending: dbus/glibc/systemd updated
-  since boot) → partner-gated reboot.
+- **Reboot**: `needs-restarting -r` (exit 1 = reboot required), **re-checked
+  against the kernel boot time** → partner-gated reboot. needs-restarting
+  compares install times with systemd's `UnitsLoadStartTimestamp`, which on
+  the RTC-less Pis is taken before chronyd steps the clock (systemd starts
+  at its build epoch, 2026-09-16 00:00:01 for systemd-252-67.el9_8.6), so
+  its list is not trusted as is: the script reboots only when a listed
+  package's newest `%{INSTALLTIME}` is later than `btime` from `/proc/stat`
+  (task p82, see §12). The SIG kernel `raspberrypi2-kernel4` is not in
+  needs-restarting's list at all; the script reboots when the most recently
+  installed one differs from `uname -r`.
 - Pi-hole runs in Docker with a restart policy; OS updates and reboots do not
   require Pi-hole interaction. LAN DNS loss on one Pi is covered by the other
   (both serve `*.f3s.lan.buetow.org`).
@@ -174,7 +181,8 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
    **pi3**. **Heads-up, verified live**: pi2 already has a reboot pending
    (`needs-restarting -r` = 1: dbus/glibc/systemd) — the first tick after
    deployment will partner-gated reboot pi2 within minutes (expect it; it
-   doubles as the first live validation of the Rocky reboot path).
+   doubles as the first live validation of the Rocky reboot path). (That
+   "pending" turned out to be the stale boot time of task p82, §12.)
 3. Observe full cycles (logs, journal, gogios; see the notification decision
    §9.5 — there is no mail channel on the Pis).
 
@@ -187,8 +195,8 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
       asleep; restarts applied from the list.
 - [x] `dnf -y upgrade` logged; f3s-dtail repo probe present; `needs-restarting -s`
       restarts applied; pi2's pending reboot exercised (partner-gated). Also
-      pi3. Reboot capped to once/day (`last-reboot`) because needs-restarting
-      stays dirty after reboot on these hosts.
+      pi3. Reboot capped to once/day (`last-reboot`) as a loop backstop; the
+      "stays dirty after reboot" cause is fixed by the btime re-check (p82).
 - [ ] The NetBSD kernel-reboot path cannot trigger naturally in phase 1 (no
       kernel updates) — validate it once by deliberately installing a
       different kernel build on one Pi, or defer to phase 2.
@@ -225,6 +233,23 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
 
 ## 11. Changelog
 
+- **2026-09-22 (task p82)**: pi2/pi3 rebooted every day at 00:05/00:35.
+  Root cause, verified read-only on both Pis: `needs-restarting -r` listed
+  dbus-broker/glibc/linux-firmware/systemd right after each boot because it
+  takes the boot time from systemd's `UnitsLoadStartTimestamp` =
+  `2026-09-16 00:00:01` (the systemd-252-67.el9_8.6 build epoch the RTC-less
+  Pi clock starts at before chronyd syncs; `KernelTimestamp` is 1970), while
+  `btime` in `/proc/stat` was the real boot (2026-09-22 00:06:11 on pi2).
+  systemd itself was installed 2026-09-17, after that epoch, so every boot
+  "needed" a reboot; the `last-reboot` stamp only capped it at once a day.
+  Fix in `unattended-upgrade-rocky.sh`: the listing is re-checked against
+  `btime` (reboot only if a listed package was installed after it; unknown
+  install time or no parsable list still reboots; clock not NTP-synced or
+  btime unreadable defers), plus a `raspberrypi2-kernel4` vs `uname -r`
+  check because needs-restarting never covered the Pi kernel. Test:
+  `frontends/scripts/tests/unattended-upgrade-rocky.ksh` (14 cases, passes
+  under bash and ksh93 on pi2/pi3). r0/r1/r2 unaffected (clock synced,
+  `needs-restarting -r` = 0).
 - **2026-09-16 (SystemdTimer + r2)**: gonf **0.9.0** adds declarative
   `SystemdTimer` (plan schema v7); Rocky `Units` uses it instead of
   hand-maintained `.service`/`.timer` files under `frontends/systemd/`.
@@ -319,8 +344,10 @@ No `RandomizedDelaySec` and **no script jitter**: the fixed minute offsets are
 the anti-coincidence mechanism. A long update overlapping the next host's
 tick is harmless (independent package databases, read-only repos); reboots
 are partner-gated (a host reboots only while its partner(s) are pingable),
-and a freshly booted host never has a reboot pending, so boot-time catch-up
-ticks cannot create reboot decisions.
+and a freshly booted host has no reboot pending once the listing is
+re-checked against `btime` (step 6), so boot-time catch-up ticks cannot
+create reboot decisions; the `last-reboot` stamp (at most one unattended
+reboot per day) remains as the backstop.
 
 Script behaviour for the `daily` mode (Rocky script):
 
@@ -335,9 +362,28 @@ Script behaviour for the `daily` mode (Rocky script):
 5. **Stamp only when the update attempt completed** — a failed dnf leaves
    no stamp and retries at the next hourly tick (journal-logged; there is
    no cron-mail noise on systemd, §9.5).
-6. The **reboot check runs on every tick** (not daily-gated): if
-   `needs-restarting -r` reports a pending kernel and the gates allow it,
-   the host reboots at the next hourly tick.
+6. The **reboot check runs on every tick** (not daily-gated). With the gates
+   open (not yet rebooted today, partners up, r-node weekday), the host
+   reboots when a reboot is **genuinely** required:
+   - Pi kernel: the most recently installed `raspberrypi2-kernel4` differs
+     from `uname -r` (the Pi bootloader loads the kernel the latest
+     transaction wrote to `/boot`; needs-restarting does not know this
+     package name).
+   - `needs-restarting -r` exits 1 **and** at least one package it lists has
+     a newest `rpm %{INSTALLTIME}` later than `btime` in `/proc/stat`.
+     needs-restarting's own boot time (systemd `UnitsLoadStartTimestamp`)
+     is wrong on the RTC-less Pis — it is the systemd build epoch, not the
+     boot — which made pi2/pi3 reboot daily (task p82). `btime` is derived
+     by the kernel from the current clock minus the uptime, so it is right
+     once the clock is synced.
+   - Conservative cases: a listed package whose install time rpm cannot
+     report, or an exit 1 without a parsable `  * <pkg>` list, still
+     reboots. Deferred (logged, retried next tick): the clock is not
+     NTP-synchronised (`timedatectl show -p NTPSynchronized`) or `btime` is
+     unreadable. A needs-restarting error (rc other than 0/1) never reboots.
+   - A stale listing is noted in the journal only (not in the log file, to
+     avoid a line per hour).
+   Tests: `frontends/scripts/tests/unattended-upgrade-rocky.ksh`.
 
 **Cluster safety for reboots:** r0/r1/r2 are k3s server nodes (3-node etcd:
 one down tolerated, quorum needs 2). Their update/reboot gate requires

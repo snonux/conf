@@ -11,17 +11,32 @@
 # frontends/docs/unattended-upgrades-pi.plan.md §12.
 #
 # Rocky ships AT&T ksh93u+m — use typeset, not local (local is a pdkshism).
+# Note that in ksh93 a typeset inside a POSIX-style name() function is NOT
+# local; helper variables therefore get names that never collide with the
+# globals. The script also runs under bash for the test harness
+# (tests/unattended-upgrade-rocky.ksh); the UNATTENDED_UPGRADE_TEST_*
+# variables exist only for it (fake tool dir, log, lock, stamp dir and
+# /proc/stat).
 
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
+if [ -n "${UNATTENDED_UPGRADE_TEST_PATH:-}" ]; then
+	PATH="${UNATTENDED_UPGRADE_TEST_PATH}:$PATH"
+fi
 export PATH
 
 umask 077
 
-LOG=/var/log/unattended-upgrade.log
-LOCK=/var/run/unattended-upgrade.lock
-STAMP_DIR=/var/lib/unattended-upgrade
+LOG=${UNATTENDED_UPGRADE_TEST_LOG:-/var/log/unattended-upgrade.log}
+LOCK=${UNATTENDED_UPGRADE_TEST_LOCK:-/var/run/unattended-upgrade.lock}
+STAMP_DIR=${UNATTENDED_UPGRADE_TEST_STAMP_DIR:-/var/lib/unattended-upgrade}
 STAMP=$STAMP_DIR/last-daily
 REBOOT_STAMP=$STAMP_DIR/last-reboot
+PROC_STAT=${UNATTENDED_UPGRADE_TEST_PROC_STAT:-/proc/stat}
+
+# The pi2/pi3 SIG AltArch kernel. needs-restarting only knows the stock
+# kernel names (kernel, kernel-rt), so a Pi kernel update is detected by
+# comparing the running release with the most recently installed package.
+readonly PI_KERNEL_PKG=raspberrypi2-kernel4
 
 readonly LOOKUP_TIMEOUT=10
 readonly HEALTH_TRIES=3
@@ -35,6 +50,12 @@ esac
 
 log() {
 	printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
+}
+
+# Journal-only message (stdout of the oneshot unit): for per-tick notes
+# that would otherwise add a line to $LOG every hour.
+note() {
+	printf '%s\n' "$*"
 }
 
 # Partner IPs (pi2/pi3 do not resolve piN.lan.buetow.org). Gate requires
@@ -100,38 +121,152 @@ last=""
 [ -f "$STAMP" ] && last=$(cat "$STAMP")
 
 # Reboot check runs every tick (not daily-gated). Partner gate applies.
-# At most one unattended reboot per calendar day: on these Rocky Pis,
-# needs-restarting -r can still report pending after a fresh reboot
-# (dbus/glibc/linux-firmware/systemd), which would otherwise loop with
-# OnBootSec. Weekday stagger for r0/r1/r2 so two k3s nodes never reboot
-# the same day (date +%u % 3: Mon/Thu/Sun→r0, Tue/Fri→r1, Wed/Sat→r2).
-maybe_reboot() {
+# At most one unattended reboot per calendar day, as a backstop against a
+# reboot loop with OnBootSec should a reboot reason survive the reboot
+# (reboot_needed below removes the known cause, see confirm_core_updates).
+# Weekday stagger for r0/r1/r2 so two k3s nodes never reboot the same day
+# (date +%u % 3: Mon/Thu/Sun→r0, Tue/Fri→r1, Wed/Sat→r2).
+# Returns 0 when this tick may reboot.
+reboot_window_open() {
 	if [ -f "$REBOOT_STAMP" ] && [ "$(cat "$REBOOT_STAMP")" = "$today" ]; then
-		return 0
+		return 1
 	fi
 	if ! partners_up; then
 		log "reboot check deferred: partner(s) not reachable"
-		return 0
+		return 1
 	fi
 	case $(hostname -s) in
-	r0) [ $(($(date +%u) % 3)) -eq 1 ] || return 0 ;;
-	r1) [ $(($(date +%u) % 3)) -eq 2 ] || return 0 ;;
-	r2) [ $(($(date +%u) % 3)) -eq 0 ] || return 0 ;;
+	r0) [ $(($(date +%u) % 3)) -eq 1 ] || return 1 ;;
+	r1) [ $(($(date +%u) % 3)) -eq 2 ] || return 1 ;;
+	r2) [ $(($(date +%u) % 3)) -eq 0 ] || return 1 ;;
 	esac
-	# needs-restarting -r: exit 0 = no reboot needed, exit 1 = reboot required.
-	needs-restarting -r >/dev/null 2>&1
-	rc=$?
-	if [ "$rc" -eq 1 ]; then
-		log "rebooting: needs-restarting -r reports pending updates"
-		mkdir -p "$STAMP_DIR"
-		printf '%s\n' "$today" >"$REBOOT_STAMP.tmp.$$" \
-			&& mv "$REBOOT_STAMP.tmp.$$" "$REBOOT_STAMP"
-		sync
-		sleep 2
-		rmdir "$LOCK" 2>/dev/null
-		trap - EXIT
-		systemctl reboot
+	return 0
+}
+
+# Kernel boot time in epoch seconds (btime in /proc/stat). The kernel
+# derives it from the current wall clock minus the time since boot on every
+# read, so it is right as soon as the clock is.
+kernel_boot_epoch() {
+	awk '$1 == "btime" { print $2; exit }' "$PROC_STAT" 2>/dev/null
+}
+
+# 0 when chronyd/timesyncd reports the wall clock as NTP-synchronised.
+clock_synced() {
+	[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ]
+}
+
+# Newest install time (epoch s) of any installed version of package $1;
+# prints nothing when rpm cannot tell (not installed, rpm error).
+newest_install_epoch() {
+	rpm -q --qf '%{INSTALLTIME}\n' "$1" 2>/dev/null \
+		| grep -E '^[0-9]+$' | sort -n | tail -n 1
+}
+
+# 0 (reason in REBOOT_REASON) when the Pi kernel installed last is not the
+# running one — the Pi bootloader loads the kernel the latest package
+# transaction wrote to /boot. 1 on hosts without $PI_KERNEL_PKG (r0/r1/r2)
+# or when the running kernel is current.
+pi_kernel_pending() {
+	typeset pk_newest pk_running
+	rpm -q --quiet "$PI_KERNEL_PKG" 2>/dev/null || return 1
+	pk_newest=$(rpm -q --qf '%{INSTALLTIME} %{VERSION}-%{RELEASE}\n' \
+		"$PI_KERNEL_PKG" 2>/dev/null | sort -n | tail -n 1)
+	pk_newest=${pk_newest#* }
+	pk_running=$(uname -r)
+	[ -n "$pk_newest" ] && [ "$pk_newest" != "$pk_running" ] || return 1
+	REBOOT_REASON="$PI_KERNEL_PKG $pk_newest installed, running $pk_running"
+	return 0
+}
+
+# Re-check the packages "needs-restarting -r" listed (its output in $1)
+# against the kernel boot time. needs-restarting takes the boot time from
+# systemd's UnitsLoadStartTimestamp, which on the RTC-less pi2/pi3 is taken
+# before chronyd steps the clock: systemd starts the clock at its build
+# epoch (2026-09-16 00:00:01 for systemd-252-67.el9_8.6), so every
+# glibc/systemd/dbus-broker/linux-firmware installed after that date looked
+# newer than every boot and the Pis rebooted daily (task p82).
+# Returns 0 (reason in REBOOT_REASON) when a listed package really was
+# installed after this boot, or when that cannot be ruled out (no parsable
+# package list, unknown install time) — erring towards the reboot keeps
+# genuine core updates effective. 1 when every listing predates the boot.
+# 2 (reason in REBOOT_REASON) when btime cannot be trusted yet: the clock
+# is not NTP-synchronised or btime is unreadable — deferred to a later tick.
+confirm_core_updates() {
+	typeset cc_boot cc_pkgs cc_pkg cc_inst cc_newer="" cc_stale=""
+	if ! clock_synced; then
+		REBOOT_REASON="clock not NTP-synchronised, boot time unknown"
+		return 2
 	fi
+	cc_boot=$(kernel_boot_epoch)
+	case $cc_boot in
+	'' | *[!0-9]*)
+		REBOOT_REASON="cannot read btime from $PROC_STAT"
+		return 2
+		;;
+	esac
+	cc_pkgs=$(printf '%s\n' "$1" | sed -n 's/^ *\* *//p')
+	if [ -z "$cc_pkgs" ]; then
+		REBOOT_REASON="needs-restarting -r reports a reboot (no package list)"
+		return 0
+	fi
+	for cc_pkg in $cc_pkgs; do
+		cc_inst=$(newest_install_epoch "$cc_pkg")
+		if [ -z "$cc_inst" ] || [ "$cc_inst" -gt "$cc_boot" ]; then
+			cc_newer="$cc_newer $cc_pkg"
+		else
+			cc_stale="$cc_stale $cc_pkg"
+		fi
+	done
+	if [ -n "$cc_newer" ]; then
+		REBOOT_REASON="core packages updated since boot:$cc_newer"
+		return 0
+	fi
+	note "no reboot: needs-restarting -r listed$cc_stale, all installed before boot (btime $cc_boot)"
+	return 1
+}
+
+# Decide whether a reboot is genuinely required. 0 = reboot (reason in
+# REBOOT_REASON), 1 = not required, 2 = cannot decide yet (deferred).
+# A needs-restarting error (rc other than 0/1) never reboots, as before.
+reboot_needed() {
+	typeset rn_out rn_rc
+	REBOOT_REASON=
+	pi_kernel_pending && return 0
+	rn_out=$(needs-restarting -r 2>&1)
+	rn_rc=$?
+	case $rn_rc in
+	0) return 1 ;;
+	1) confirm_core_updates "$rn_out"; return $? ;;
+	*)
+		note "no reboot: needs-restarting -r failed (rc=$rn_rc)"
+		return 1
+		;;
+	esac
+}
+
+# Stamp the day, release the lock and reboot.
+do_reboot() {
+	log "rebooting: $REBOOT_REASON"
+	mkdir -p "$STAMP_DIR"
+	printf '%s\n' "$today" >"$REBOOT_STAMP.tmp.$$" \
+		&& mv "$REBOOT_STAMP.tmp.$$" "$REBOOT_STAMP"
+	sync
+	sleep 2
+	rmdir "$LOCK" 2>/dev/null
+	trap - EXIT
+	systemctl reboot
+}
+
+maybe_reboot() {
+	typeset mr_rc
+	reboot_window_open || return 0
+	reboot_needed
+	mr_rc=$?
+	case $mr_rc in
+	0) do_reboot ;;
+	2) log "reboot check deferred: $REBOOT_REASON" ;;
+	esac
+	return 0
 }
 
 write_stamp() {
