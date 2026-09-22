@@ -21,6 +21,9 @@ readonly STAGE_DIR=/var/nsd/zones/gonf-publisher
 readonly LIVE_KEY=/var/nsd/etc/key.conf
 readonly LIVE_CONFIG=/var/nsd/etc/nsd.conf
 readonly GONF=/usr/local/bin/gonf
+# A Gonf-driven (role-less) publication waits this many seconds for a running
+# publisher, then fails so the apply reports that nothing was published.
+readonly LOCK_WAIT_SECONDS=60
 
 usage() {
     print -u2 "usage: dns-publish.ksh [-r master-role]"
@@ -370,6 +373,13 @@ create_journal() {
     snapshot_file "$LIVE_KEY" key "$temporary" || return 1
     snapshot_file "$LIVE_CONFIG" config "$temporary" || return 1
     snapshot_file "$STATE" state "$temporary" || return 1
+    # Whether NSD ran before this commit decides whether the commit and any
+    # rollback must leave it running (see nsd_was_running).
+    if rcctl check nsd >/dev/null 2>&1; then
+        print yes >"$temporary/nsd-running"
+    else
+        print no >"$temporary/nsd-running"
+    fi || return 1
     : >"$temporary/complete"
     mv "$temporary" "$JOURNAL" || return 1
     : >"$JOURNAL/incomplete"
@@ -395,10 +405,29 @@ rollback() {
     restore_file "$JOURNAL/files/key" "$LIVE_KEY" "$JOURNAL/present/key" || return 1
     restore_file "$JOURNAL/files/config" "$LIVE_CONFIG" "$JOURNAL/present/config" || return 1
     restore_file "$JOURNAL/files/state" "$STATE" "$JOURNAL/present/state" || return 1
-    # The interrupted commit may have installed a new key or nsd.conf before it
-    # failed, and the running daemon may already have loaded it, so the restored
-    # set is always applied with a restart rather than a zone reload.
-    apply_nsd restart
+    # The failed commit may have installed a new key or nsd.conf, and a failed
+    # restart may have left NSD stopped. If NSD ran before the commit, it is
+    # (re)started on the restored set and must be running afterwards; if not,
+    # the rollback is incomplete and the journal is kept, so every later run
+    # retries this rollback and refuses to publish until NSD runs again.
+    nsd_was_running || return 0
+    if rcctl check nsd >/dev/null 2>&1; then
+        rcctl restart nsd
+    else
+        rcctl start nsd
+    fi
+    nsd_running || { print -u2 "NSD is not running after the DNS rollback"; return 1; }
+}
+
+# nsd_was_running reports whether NSD ran before the journaled commit. A
+# journal without the marker falls back to the daemon's current state.
+nsd_was_running() {
+    [ -f "$JOURNAL/nsd-running" ] || { nsd_running; return; }
+    [ "$(cat "$JOURNAL/nsd-running")" = yes ]
+}
+
+nsd_running() {
+    rcctl check nsd >/dev/null 2>&1
 }
 
 # apply_nsd makes the running daemon serve the committed files. "reload" is
@@ -406,17 +435,44 @@ rollback() {
 # files but not nsd.conf or the TSIG key include. "restart" is required when
 # the key or nsd.conf changed (added/removed zones, notify/provide-xfr, key
 # rotation, server options), as in the Rex recipe; `nsd-control reconfig`
-# would miss server: options, so it is not used.
+# would miss server: options, so it is not used. A failed reload or restart,
+# or NSD not running afterwards, fails the commit and triggers the rollback.
 apply_nsd() {
     typeset how=$1
-    # First installation has no daemon to reload. Service convergence follows
-    # this transaction and starts NSD after the zones have been committed.
-    rcctl check nsd >/dev/null 2>&1 || return 0
+    # NSD that was not running before the commit (first installation, or
+    # stopped by the operator) is left alone: a Gonf publication is followed
+    # by Service[nsd], which starts it; a failover publication from cron
+    # leaves it stopped.
+    nsd_was_running || return 0
     case $how in
-    reload) nsd-control reload ;;
-    restart) rcctl restart nsd ;;
+    reload) nsd-control reload || return 1 ;;
+    restart) rcctl restart nsd || return 1 ;;
     *) print -u2 "invalid NSD apply mode: $how"; return 1 ;;
     esac
+    nsd_running || { print -u2 "NSD is not running after the DNS $how"; return 1; }
+}
+
+# wait_for_lock acquires the publication lock. A failover run (-r) treats a
+# running publisher as a normal no-op, as before. A Gonf-driven run retries
+# for LOCK_WAIT_SECONDS and then fails with 75 (EX_TEMPFAIL), so the apply
+# does not report success for a publication that never happened.
+wait_for_lock() {
+    typeset waited=0 status
+    while :; do
+        if acquire_lock; then
+            return 0
+        else
+            status=$?
+        fi
+        [ "$status" -eq 1 ] || exit "$status"
+        [ -z "$requested_role" ] || exit 0
+        if [ "$waited" -ge "$LOCK_WAIT_SECONDS" ]; then
+            print -u2 "DNS publication lock still held after ${LOCK_WAIT_SECONDS}s; nothing published"
+            exit 75
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
 }
 
 recover() {
@@ -459,17 +515,11 @@ commit() {
 }
 
 main() {
-    typeset previous changed=0 zone serial status lock_status
+    typeset previous changed=0 zone serial status
     mkdir -p "$STATE_DIR" "$ZONE_DIR" "$STAGE_DIR"
-    if acquire_lock; then
-        :
-    else
-        lock_status=$?
-        # A complete, live owner is a normal no-op. Incomplete or unverifiable
-        # ownership is a hard failure so cron reports the required intervention.
-        [ "$lock_status" -eq 1 ] && exit 0
-        exit "$lock_status"
-    fi
+    # Incomplete or unverifiable lock ownership is a hard failure so cron and
+    # Gonf report the required intervention.
+    wait_for_lock
     validate_inputs || exit 1
     recover || exit 1
     previous=$(committed_role) || { print -u2 "malformed DNS publisher state"; exit 1; }
@@ -501,7 +551,16 @@ main() {
 
     validate_candidate || { print -u2 "DNS candidate validation failed"; exit 1; }
     create_journal || { print -u2 "cannot create DNS publication journal"; exit 1; }
-    commit || { rollback || print -u2 "DNS rollback failed"; exit 1; }
+    if ! commit; then
+        # A complete rollback restored the previous set, which is committed
+        # again, so its journal is dropped; an incomplete one keeps it.
+        if rollback; then
+            rm -rf "$JOURNAL"
+        else
+            print -u2 "DNS rollback failed; keeping the journal"
+        fi
+        exit 1
+    fi
     rm -f "$JOURNAL/incomplete"
     sync
     rm -rf "$JOURNAL"
