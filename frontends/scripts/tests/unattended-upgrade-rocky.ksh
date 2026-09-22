@@ -11,8 +11,10 @@
 # the Pis rebooted daily. The script must reboot only when a listed package
 # was installed after the kernel boot time (btime), or when a newer Pi
 # kernel is installed than the one running. Negative paths: stale listings,
-# unsynchronised clock, unreadable btime, needs-restarting errors, the
-# once-per-day stamp and the partner gate must all prevent the reboot.
+# unsynchronised Pi clock (which also skips dnf), unreadable btime,
+# needs-restarting errors, a kernel mismatch that survived its reboot, the
+# once-per-day stamp, the partner gate and the r-node weekday stagger must
+# all prevent the reboot.
 
 set -eu
 
@@ -40,9 +42,22 @@ cat >"$fake/hostname" <<'EOF'
 printf '%s\n' "${FAKE_HOST:-pi2}"
 EOF
 
+# Records each pinged IP; FAKE_PING=down fails all, FAKE_PING=<ip> that one.
 cat >"$fake/ping" <<'EOF'
 #!/bin/sh
-[ "${FAKE_PING:-up}" = up ]
+for ip; do :; done
+printf '%s\n' "$ip" >>"${FAKE_PING_LOG:?}"
+[ "${FAKE_PING:-up}" != down ] && [ "${FAKE_PING:-up}" != "$ip" ]
+EOF
+
+# date +%u answers $FAKE_WEEKDAY (r-node stagger); everything else is real.
+cat >"$fake/date" <<EOF
+#!/bin/sh
+if [ "\$1" = +%u ] && [ -n "\${FAKE_WEEKDAY:-}" ]; then
+	printf '%s\\n' "\$FAKE_WEEKDAY"
+	exit 0
+fi
+exec $(command -v date) "\$@"
 EOF
 
 cat >"$fake/timeout" <<'EOF'
@@ -76,6 +91,7 @@ EOF
 
 cat >"$fake/dnf" <<'EOF'
 #!/bin/sh
+printf '%s\n' "$*" >>"${FAKE_DNF_LOG:?}"
 printf 'Dependencies resolved.\nNothing to do.\nComplete!\n'
 EOF
 
@@ -92,8 +108,10 @@ EOF
 # rpm -q [--quiet | --qf FMT] NAME against $FAKE_RPM_DB lines
 # "<name> <installtime> <version-release>" (one per installed version).
 # Like real rpm, an unknown package prints a message on stdout, exits 1.
+# Every query is also appended to $FAKE_RPM_LOG.
 cat >"$fake/rpm" <<'EOF'
 #!/bin/sh
+printf '%s\n' "$*" >>"${FAKE_RPM_LOG:?}"
 shift
 mode=$1
 fmt=
@@ -151,11 +169,15 @@ reset_case() {
 	fake_ping=up
 	fake_host=pi2
 	fake_krel=6.1.31-v8.1.el9.altarch
+	fake_weekday=
 	printf 'cpu 1 2 3\nbtime %s\nprocesses 1\n' "$BOOT" >"$work/stat"
 	default_rpm_db >"$work/rpmdb"
 	listing glibc systemd dbus-broker linux-firmware >"$work/nr.out"
 	nr_rc=1
 	: >"$work/systemctl.log"
+	: >"$work/dnf.log"
+	: >"$work/rpm.log"
+	: >"$work/ping.log"
 	: >"$work/stdout"
 }
 
@@ -170,6 +192,8 @@ run_script() {
 		FAKE_NR_OUT="$work/nr.out" FAKE_NR_RC="$nr_rc" \
 		FAKE_NTP="$fake_ntp" FAKE_PING="$fake_ping" \
 		FAKE_HOST="$fake_host" FAKE_KREL="$fake_krel" \
+		FAKE_WEEKDAY="$fake_weekday" FAKE_DNF_LOG="$work/dnf.log" \
+		FAKE_RPM_LOG="$work/rpm.log" FAKE_PING_LOG="$work/ping.log" \
 		"$shell" "$script" daily >"$work/stdout" 2>&1
 }
 
@@ -227,14 +251,18 @@ printf 'Reboot is required.\n' >"$work/nr.out"
 run_script || fail "no package list: script failed"
 expect_reboot "no package list" 'needs-restarting -r reports a reboot (no package list)'
 
-# 6. Clock not NTP-synchronised: btime is untrustworthy, defer.
-reset_case
+# 6. Pi clock not NTP-synchronised: the whole run is skipped, even with a
+# genuine update pending and even the daily dnf (install times would be
+# recorded with the pre-sync clock) — nothing stamped, retried next tick.
+reset_case fresh-day
 sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
 fake_ntp=no
 run_script || fail "unsynced clock: script failed"
 expect_no_reboot "unsynced clock"
-grep -q 'reboot check deferred: clock not NTP-synchronised' "$state/log" \
-	|| fail "unsynced clock: deferral not logged"
+grep -q 'skipped daily: clock not NTP-synchronised yet (not stamped)' \
+	"$state/log" || fail "unsynced clock: skip not logged"
+[ ! -s "$work/dnf.log" ] || fail "unsynced clock: dnf ran"
+[ ! -f "$state/last-daily" ] || fail "unsynced clock: daily stamp written"
 
 # 7. btime missing from /proc/stat: defer.
 reset_case
@@ -269,15 +297,110 @@ printf 'raspberrypi2-kernel4 %s 6.1.40-v8.1.el9.altarch\n' "$AFTER" \
 run_script || fail "new pi kernel: script failed"
 expect_reboot "new pi kernel" \
 	'raspberrypi2-kernel4 6.1.40-v8.1.el9.altarch installed, running 6.1.31-v8.1.el9.altarch'
+[ "$(cat "$state/last-kernel-reboot")" = 6.1.40-v8.1.el9.altarch ] \
+	|| fail "new pi kernel: target kernel not stamped"
 
-# 11. Host without the Pi kernel (r-node): no kernel check, stale listing.
+# 10a. Same install time (one transaction): the version decides, not the
+# lexical order (6.1.9 sorts after 6.1.10 as text). Running the newer one
+# means nothing is pending.
 reset_case
+nr_rc=0
+: >"$work/nr.out"
 grep -v '^raspberrypi2-kernel4 ' "$work/rpmdb" >"$work/rpmdb.new"
 mv "$work/rpmdb.new" "$work/rpmdb"
-fake_host=pi3
-fake_krel=5.14.0-687.49.1.el9_8.x86_64
-run_script || fail "no pi kernel: script failed"
-expect_no_reboot "no pi kernel"
+printf 'raspberrypi2-kernel4 %s 6.1.%s-v8.1.el9.altarch\n' \
+	"$AFTER" 10 "$AFTER" 9 >>"$work/rpmdb"
+fake_krel=6.1.10-v8.1.el9.altarch
+run_script || fail "kernel tie: script failed"
+expect_no_reboot "kernel tie"
+
+# 10b. Already rebooted once for this kernel and it still is not running
+# (config.txt pins another image, or it fell back): warn once a day, no
+# second reboot — and the core-package check still runs.
+reset_case
+nr_rc=0
+: >"$work/nr.out"
+printf 'raspberrypi2-kernel4 %s 6.1.40-v8.1.el9.altarch\n' "$AFTER" \
+	>>"$work/rpmdb"
+printf '6.1.40-v8.1.el9.altarch\n' >"$state/last-kernel-reboot"
+run_script || fail "kernel mismatch persists: script failed"
+expect_no_reboot "kernel mismatch persists"
+grep -q 'WARNING: already rebooted for raspberrypi2-kernel4 6.1.40-v8.1.el9.altarch but 6.1.31-v8.1.el9.altarch is still running' \
+	"$state/log" || fail "kernel mismatch persists: warning missing"
+run_script || fail "kernel mismatch persists (2nd tick): script failed"
+[ "$(grep -c 'WARNING: already rebooted' "$state/log")" -eq 1 ] \
+	|| fail "kernel mismatch persists: warning repeated the same day"
+nr_rc=1
+listing glibc systemd >"$work/nr.out"
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+run_script || fail "kernel mismatch + glibc: script failed"
+expect_reboot "kernel mismatch + glibc" 'core packages updated since boot: glibc$'
+
+# 10c. A different, newer target than the stamped one reboots again.
+reset_case
+nr_rc=0
+: >"$work/nr.out"
+printf 'raspberrypi2-kernel4 %s 6.1.40-v8.1.el9.altarch\n' "$AFTER" \
+	>>"$work/rpmdb"
+printf '6.1.35-v8.1.el9.altarch\n' >"$state/last-kernel-reboot"
+run_script || fail "new kernel target: script failed"
+expect_reboot "new kernel target" \
+	'raspberrypi2-kernel4 6.1.40-v8.1.el9.altarch installed'
+
+# 11. r-nodes: no Pi kernel package. r0 pings both siblings, reboots only
+# on its weekdays (date +%u % 3 == 1), never runs the Pi kernel query, and
+# its RTC-backed clock is not NTP-gated (a stopped chronyd must not defer a
+# genuine reboot forever).
+r_node_case() {
+	reset_case "${1:-}"
+	grep -v '^raspberrypi2-kernel4 ' "$work/rpmdb" >"$work/rpmdb.new"
+	mv "$work/rpmdb.new" "$work/rpmdb"
+	fake_host=r0
+	fake_krel=5.14.0-687.49.1.el9_8.x86_64
+	fake_weekday=4
+}
+expect_no_pi_kernel_query() {
+	if grep -q -- '--qf.*raspberrypi2-kernel4' "$work/rpm.log"; then
+		fail "$1: Pi kernel check ran on an r-node"
+	fi
+}
+
+r_node_case
+run_script || fail "r0 stale: script failed"
+expect_no_reboot "r0 stale"
+expect_no_pi_kernel_query "r0 stale"
+for ip in 192.168.1.121 192.168.1.122; do
+	grep -qx "$ip" "$work/ping.log" || fail "r0 stale: partner $ip not pinged"
+done
+
+r_node_case
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+fake_ntp=no
+run_script || fail "r0 fresh glibc, unsynced: script failed"
+expect_reboot "r0 fresh glibc, unsynced" \
+	'core packages updated since boot: glibc$'
+expect_no_pi_kernel_query "r0 fresh glibc"
+
+r_node_case
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+fake_weekday=2
+run_script || fail "r0 off-day: script failed"
+expect_no_reboot "r0 off-day"
+
+r_node_case
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+fake_ping=192.168.1.122
+run_script || fail "r0 one sibling down: script failed"
+expect_no_reboot "r0 one sibling down"
+grep -q 'reboot check deferred: partner(s) not reachable' "$state/log" \
+	|| fail "r0 one sibling down: deferral not logged"
+
+r_node_case fresh-day
+fake_ntp=no
+run_script || fail "r0 daily, unsynced: script failed"
+[ -s "$work/dnf.log" ] || fail "r0 daily, unsynced: dnf did not run"
+[ "$(cat "$state/last-daily")" = "$(date +%F)" ] \
+	|| fail "r0 daily, unsynced: daily stamp missing"
 
 # 12. Already rebooted today: the once-per-day backstop holds.
 reset_case
@@ -300,6 +423,7 @@ grep -q 'reboot check deferred: partner(s) not reachable' "$state/log" \
 reset_case fresh-day
 run_script || fail "daily path: script failed"
 expect_no_reboot "daily path"
+grep -q '^-y upgrade' "$work/dnf.log" || fail "daily path: dnf did not run"
 [ "$(cat "$state/last-daily")" = "$(date +%F)" ] \
 	|| fail "daily path: daily stamp missing"
 

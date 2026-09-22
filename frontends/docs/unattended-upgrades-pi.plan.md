@@ -108,7 +108,9 @@ DNS/SSH gotchas verified live:
   package's newest `%{INSTALLTIME}` is later than `btime` from `/proc/stat`
   (task p82, see §12). The SIG kernel `raspberrypi2-kernel4` is not in
   needs-restarting's list at all; the script reboots when the most recently
-  installed one differs from `uname -r`.
+  installed one differs from `uname -r` (once per target kernel). Until
+  chronyd has synced the RTC-less clock, the whole run (dnf included) is
+  skipped.
 - Pi-hole runs in Docker with a restart policy; OS updates and reboots do not
   require Pi-hole interaction. LAN DNS loss on one Pi is covered by the other
   (both serve `*.f3s.lan.buetow.org`).
@@ -244,12 +246,25 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
   "needed" a reboot; the `last-reboot` stamp only capped it at once a day.
   Fix in `unattended-upgrade-rocky.sh`: the listing is re-checked against
   `btime` (reboot only if a listed package was installed after it; unknown
-  install time or no parsable list still reboots; clock not NTP-synced or
-  btime unreadable defers), plus a `raspberrypi2-kernel4` vs `uname -r`
-  check because needs-restarting never covered the Pi kernel. Test:
-  `frontends/scripts/tests/unattended-upgrade-rocky.ksh` (14 cases, passes
-  under bash and ksh93 on pi2/pi3). r0/r1/r2 unaffected (clock synced,
-  `needs-restarting -r` = 0).
+  install time or no parsable list still reboots; unreadable btime defers),
+  plus a `raspberrypi2-kernel4` vs `uname -r` check because
+  needs-restarting never covered the Pi kernel. r0/r1/r2 unaffected (clock
+  synced, `needs-restarting -r` = 0).
+  Review round 1: on the Pis only (identified by the installed
+  `raspberrypi2-kernel4`, i.e. RTC-less), the whole run — dnf included — is
+  skipped without stamping until the clock is NTP-synchronised, because a
+  dnf run before the clock steps would record install times before the
+  real boot and the btime re-check would then never reboot for a genuine
+  update; the r-nodes' RTC-backed clocks are not gated, so a stopped chronyd
+  there cannot defer a genuine reboot forever. The timer unit keeps
+  `OnBootSec=10min` without `time-sync.target` ordering (chrony-wait is not
+  enabled on these hosts); the script gate retries hourly instead. The Pi
+  kernel pick sorts ties in install time by version (`sort -k1,1n
+  -k2,2V`), and a kernel reboot stamps its target in `last-kernel-reboot`:
+  a mismatch that survives that reboot is logged as a WARNING once a day
+  instead of rebooting daily. Test: 21 cases incl. real r0 cases (both
+  siblings pinged, weekday stagger, no Pi kernel query), passing under bash
+  and ksh93 on pi2/pi3.
 - **2026-09-16 (SystemdTimer + r2)**: gonf **0.9.0** adds declarative
   `SystemdTimer` (plan schema v7); Rocky `Units` uses it instead of
   hand-maintained `.service`/`.timer` files under `frontends/systemd/`.
@@ -365,10 +380,22 @@ Script behaviour for the `daily` mode (Rocky script):
 6. The **reboot check runs on every tick** (not daily-gated). With the gates
    open (not yet rebooted today, partners up, r-node weekday), the host
    reboots when a reboot is **genuinely** required:
-   - Pi kernel: the most recently installed `raspberrypi2-kernel4` differs
-     from `uname -r` (the Pi bootloader loads the kernel the latest
-     transaction wrote to `/boot`; needs-restarting does not know this
-     package name).
+   - Pi kernel: the most recently installed `raspberrypi2-kernel4` (ties in
+     install time broken by version) differs from `uname -r`;
+     needs-restarting does not know this package name. This **assumes** the
+     Pi firmware boots the image the latest transaction wrote to `/boot`:
+     pi2/pi3 have no `/boot/config.txt`, so the firmware boots the default
+     `/boot/kernel8.img`, which each `raspberrypi2-kernel4` posttrans
+     overwrites with its own image (verified 2026-09-22: `kernel8.img` is
+     byte-identical to `kernel-6.1.31-v8.1.el9.altarch.img`). If a
+     `config.txt` is added that pins another image (e.g. via
+     `config-kernel.inc`'s `kernel` line), or the new kernel fails and the
+     firmware falls back, the
+     mismatch survives the reboot: the reboot's target is stamped in
+     `/var/lib/unattended-upgrade/last-kernel-reboot`, and for the same
+     target the script logs a WARNING (once a day,
+     `last-kernel-warning`) instead of rebooting again. A newer target
+     reboots again.
    - `needs-restarting -r` exits 1 **and** at least one package it lists has
      a newest `rpm %{INSTALLTIME}` later than `btime` in `/proc/stat`.
      needs-restarting's own boot time (systemd `UnitsLoadStartTimestamp`)
@@ -378,9 +405,15 @@ Script behaviour for the `daily` mode (Rocky script):
      once the clock is synced.
    - Conservative cases: a listed package whose install time rpm cannot
      report, or an exit 1 without a parsable `  * <pkg>` list, still
-     reboots. Deferred (logged, retried next tick): the clock is not
-     NTP-synchronised (`timedatectl show -p NTPSynchronized`) or `btime` is
-     unreadable. A needs-restarting error (rc other than 0/1) never reboots.
+     reboots. Deferred (logged, retried next tick): `btime` is unreadable.
+     A needs-restarting error (rc other than 0/1) never reboots.
+   - **Clock gate (Pis only)**: before step 1, a host with
+     `raspberrypi2-kernel4` installed (RTC-less) whose clock is not yet
+     NTP-synchronised (`timedatectl show -p NTPSynchronized`) skips the
+     whole run, dnf included, without stamping. Otherwise dnf could record
+     install times from the pre-sync clock (before the real boot) and the
+     btime re-check would never reboot for that update. r0/r1/r2 have an
+     RTC-backed clock and are not gated.
    - A stale listing is noted in the journal only (not in the log file, to
      avoid a line per hour).
    Tests: `frontends/scripts/tests/unattended-upgrade-rocky.ksh`.
