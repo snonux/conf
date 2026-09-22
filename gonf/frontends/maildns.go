@@ -22,8 +22,10 @@ const (
 	dnsPublishCommand        = "/usr/local/bin/dns-publish.ksh"
 	dnsPublisherDir          = "/var/nsd/etc/gonf-publisher"
 	dnsPublisherZones        = dnsPublisherDir + "/zones"
-	// nsdKeyName is the TSIG key both NSD configurations share; the standby
-	// names it next to the publisher's address in allow-notify/request-xfr.
+	// nsdKeyName is the TSIG key both NSD configurations share: the
+	// publisher names it next to the secondary's address in notify and
+	// provide-xfr, the secondary next to the publisher's address in
+	// allow-notify and request-xfr.
 	nsdKeyName = DNSPublisher + "." + Domain
 )
 
@@ -207,7 +209,16 @@ func renderNSDKey(key string) string {
 	return fmt.Sprintf("key:\n\tname: %s\n\talgorithm: hmac-sha256\n\tsecret: %q\n", nsdKeyName, key)
 }
 
+// renderNSDConfig renders the publisher's (blowfish's) NSD master
+// configuration. Every zone notifies the NSD secondary (the Master service
+// host, fishfinger) and allows it to transfer the zone, both authenticated
+// with the shared TSIG key nsdKeyName: without provide-xfr NSD refuses the
+// secondary's request-xfr, and without notify the secondary only picks up a
+// new serial at the zone's SOA refresh. The secondary's IPv4 mirrors its own
+// allow-notify/request-xfr (renderNSDSlaveConfig), which name the publisher's
+// IPv4, so notifies and transfers both run over IPv4.
 func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
+	secondary := MustServer(Master).IPv4 + " " + nsdKeyName
 	var builder strings.Builder
 	appendf(&builder, "include: %q\n\n", keyPath)
 	appendString(&builder, `server:
@@ -221,7 +232,8 @@ remote-control:
 	control-interface: /var/run/nsd.sock
 `)
 	for _, zone := range zones {
-		appendf(&builder, "\nzone:\n\tname: %q\n\tzonefile: %q\n", zone, filepath.Join(zoneDir, zone+".zone"))
+		appendf(&builder, "\nzone:\n\tname: %q\n\tzonefile: %q\n\tnotify: %s\n\tprovide-xfr: %s\n",
+			zone, filepath.Join(zoneDir, zone+".zone"), secondary, secondary)
 	}
 	return builder.String()
 }
