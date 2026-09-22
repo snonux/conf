@@ -37,7 +37,6 @@ gonf/
   netbsd/unattended.go
   rocky/unattended.go
   freebsd/unattended.go
-  debian/unattended.go  # + debian/base.go (Debian pi2/pi3, task l82)
   paths/             # repo-relative path constants
 ```
 
@@ -59,7 +58,6 @@ RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(clus
 | `NameRockyAll` | `rocky` / `rocky_*` |
 | `NameRockyPis` | `rocky_kernel_audit` / `rocky_kernel_audit_*` |
 | `NameRockyK3s` | `rnodes` / `rnodes_*` |
-| `NameDebianPis` | no aggregate yet / `debian_pis_*` (pi2/pi3 after their Debian 13 migration; bodies guarded on `/etc/debian_version`) |
 | `NameFreeBSD` | `freebsd` / `freebsd_*` |
 | `NameGarage` | `garage` / `garage_*` |
 

@@ -16,13 +16,11 @@ import (
 //	NameNetBSDPis    → pis_netbsd / pis_netbsd_*
 //	NameRockyAll     → rocky / rocky_*
 //	NameRockyPis     → rocky_kernel_audit / rocky_kernel_audit_* (also in rocky)
-//	NameDebianPis    → debian_pis_* (no aggregate yet, see Register)
 //	NameFreeBSD      → freebsd / freebsd_*
 const (
 	NameFrontends = "frontends"
 	NameNetBSDPis = "netbsd-pis"
 	NameRockyPis  = "rocky-pis"
-	NameDebianPis = "debian-pis"
 	NamePis       = "pis"
 	NameRockyK3s  = "rocky-k3s"
 	NameRockyAll  = "rocky-all"
@@ -37,7 +35,7 @@ const (
 // one host.
 const (
 	ValueUnattendedCron        = "unattended.cron"          // frontend [3]string hours; netbsd [2]string hours
-	ValueUnattendedOnCalendar  = "unattended.on_calendar"   // rocky and debian OnCalendar= string
+	ValueUnattendedOnCalendar  = "unattended.on_calendar"   // rocky OnCalendar= string
 	ValueKernelAuditOnCalendar = "kernel_audit.on_calendar" // rocky-pis daily kernel CVE audit OnCalendar= string
 	ValueVulnAuditCron         = "vuln_audit.cron"          // netbsd-pis daily vulnerability audit [2]string{minute, hour}
 	ValueUnattendedCronMinute  = "unattended.cron_minute"   // freebsd hourly minute string
@@ -138,13 +136,6 @@ func Register() {
 	Cluster(NameNetBSDPis, pi0, pi1)
 	Cluster(NameRockyPis, pi2, pi3)
 	Cluster(NamePis, pi0, pi1, pi2, pi3)
-	// debian-pis = pi2/pi3 as Debian 13 hosts (task l82), ahead of their
-	// migration off Rocky (tasks n82/o82): until then they also stay in
-	// rocky-pis/rocky-all, and every debian_pis_* task body is guarded on
-	// /etc/debian_version, so a push to the still-Rocky Pis applies nothing.
-	// The Debian recipes reuse ValueUnattendedOnCalendar (same offsets).
-	// Move pi2/pi3 out of the Rocky clusters as each one is migrated.
-	Cluster(NameDebianPis, pi2, pi3)
 
 	r0 := Host("r0",
 		WithSSHUser("root"),

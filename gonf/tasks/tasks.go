@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"codeberg.org/snonux/conf/gonf/cluster"
-	"codeberg.org/snonux/conf/gonf/debian"
 	"codeberg.org/snonux/conf/gonf/freebsd"
 	"codeberg.org/snonux/conf/gonf/frontends"
 	"codeberg.org/snonux/conf/gonf/garage"
@@ -91,10 +90,6 @@ func Register() {
 	// rocky_kernel_audit_packages installs its own ksh interpreter, so it
 	// also deploys on its own.
 	RegisterMethods(rocky.KernelAudit{}, WithPrefix("rocky_kernel_audit_"), WithCluster(cluster.NameRockyPis))
-	// Debian pi2/pi3 (l82): registered for explicit runs only, no aggregate
-	// until they are migrated (n82/o82); the bodies are Debian-guarded.
-	RegisterMethods(debian.Unattended{}, WithPrefix("debian_pis_"), WithCluster(cluster.NameDebianPis))
-	RegisterMethods(debian.Base{}, WithPrefix("debian_pis_"), WithCluster(cluster.NameDebianPis))
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), WithCluster(cluster.NameRockyK3s))
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), WithCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), WithCluster(cluster.NameGarage))
