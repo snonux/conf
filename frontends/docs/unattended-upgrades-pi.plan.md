@@ -220,6 +220,12 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
    pi2/pi3 — adding pi2/pi3 checks would close most of the gap), (b) an MTA
    relay/aliases on the Pis, (c) DTail log shipping to the dserver. Decide
    before rollout, or accept log-only visibility.
+   Stable markers a future check can key off in
+   `/var/log/unattended-upgrade.log` (Rocky, task p82):
+   `WARNING: unattended-upgrade skipped: clock not NTP-synchronised`
+   (a Pi whose clock has not synced since boot; once per boot and day) and
+   `WARNING: already rebooted for raspberrypi2-kernel4` (a kernel that did
+   not come up after its reboot; once a day).
 
 ## 10. Risks & mitigations
 
@@ -265,6 +271,14 @@ sync may occasionally land inside a pi1 window; a missed sync retries hourly
   instead of rebooting daily. Test: 21 cases incl. real r0 cases (both
   siblings pinged, weekday stagger, no Pi kernel query), passing under bash
   and ksh93 on pi2/pi3.
+  Review round 2: the Pi clock gate now latches "synchronised once this
+  boot" (boot id in `clock-synced-boot`), and an already-stamped day's
+  reboot check runs before the gate, so a later NTP blip blocks neither;
+  only a Pi that has not synced since boot skips dnf (and the reboot
+  check, whose date and btime would be wrong), with a once-per-boot-and-day
+  `WARNING: unattended-upgrade skipped: clock not NTP-synchronised` line.
+  The stuck-kernel WARNING is emitted before the partner/once-a-day gates.
+  All stamps are written via temp + mv. Test: 25 cases.
 - **2026-09-16 (SystemdTimer + r2)**: gonf **0.9.0** adds declarative
   `SystemdTimer` (plan schema v7); Rocky `Units` uses it instead of
   hand-maintained `.service`/`.timer` files under `frontends/systemd/`.
@@ -407,13 +421,22 @@ Script behaviour for the `daily` mode (Rocky script):
      report, or an exit 1 without a parsable `  * <pkg>` list, still
      reboots. Deferred (logged, retried next tick): `btime` is unreadable.
      A needs-restarting error (rc other than 0/1) never reboots.
-   - **Clock gate (Pis only)**: before step 1, a host with
-     `raspberrypi2-kernel4` installed (RTC-less) whose clock is not yet
-     NTP-synchronised (`timedatectl show -p NTPSynchronized`) skips the
-     whole run, dnf included, without stamping. Otherwise dnf could record
-     install times from the pre-sync clock (before the real boot) and the
-     btime re-check would never reboot for that update. r0/r1/r2 have an
-     RTC-backed clock and are not gated.
+   - **Clock gate (Pis only)**: a host with `raspberrypi2-kernel4`
+     installed (RTC-less) trusts its clock once it has been NTP-synchronised
+     (`timedatectl show -p NTPSynchronized`) during the current boot; that
+     is latched per boot id in `/var/lib/unattended-upgrade/clock-synced-boot`,
+     so a later NTP blip changes nothing. Until then the dnf run (step 4) is
+     skipped without stamping — otherwise dnf would record install times
+     from the pre-sync clock (before the real boot) and the btime re-check
+     would never reboot for that update — and so is the reboot check (the
+     date and btime are wrong too). The skip logs
+     `WARNING: unattended-upgrade skipped: clock not NTP-synchronised …`
+     once per boot and day (`last-clock-warning`; later ticks note it in
+     the journal only), a stable marker for a future check (§9.5). An
+     already-stamped day goes to the reboot check (step 2) before this gate.
+     r0/r1/r2 have an RTC-backed clock and are never gated.
+   - The stuck-kernel WARNING is emitted before the reboot gates (partner,
+     once-a-day, weekday), so an outage of the partner cannot hide it.
    - A stale listing is noted in the journal only (not in the log file, to
      avoid a line per hour).
    Tests: `frontends/scripts/tests/unattended-upgrade-rocky.ksh`.

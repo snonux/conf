@@ -2,7 +2,7 @@
 # Exercise the reboot decision of unattended-upgrade-rocky.sh (task p82)
 # without a Rocky host: needs-restarting, rpm, uname, timedatectl,
 # systemctl, hostname, ping, dnf and curl are faked; /proc/stat is a
-# fixture. Runs the script with ksh when installed, else with bash (the
+# fixture, and so is the boot id. Runs the script with ksh when installed, else with bash (the
 # script uses only syntax both accept; set TEST_SHELL to force one).
 #
 # Regression covered: needs-restarting -r takes the boot time from
@@ -11,7 +11,8 @@
 # the Pis rebooted daily. The script must reboot only when a listed package
 # was installed after the kernel boot time (btime), or when a newer Pi
 # kernel is installed than the one running. Negative paths: stale listings,
-# unsynchronised Pi clock (which also skips dnf), unreadable btime,
+# a Pi clock never synchronised this boot (which also skips dnf; a later
+# NTP blip does not block the reboot check), unreadable btime,
 # needs-restarting errors, a kernel mismatch that survived its reboot, the
 # once-per-day stamp, the partner gate and the r-node weekday stagger must
 # all prevent the reboot.
@@ -171,6 +172,7 @@ reset_case() {
 	fake_krel=6.1.31-v8.1.el9.altarch
 	fake_weekday=
 	printf 'cpu 1 2 3\nbtime %s\nprocesses 1\n' "$BOOT" >"$work/stat"
+	printf 'boot-a\n' >"$work/boot_id"
 	default_rpm_db >"$work/rpmdb"
 	listing glibc systemd dbus-broker linux-firmware >"$work/nr.out"
 	nr_rc=1
@@ -187,6 +189,7 @@ run_script() {
 		UNATTENDED_UPGRADE_TEST_LOCK="$work/lock" \
 		UNATTENDED_UPGRADE_TEST_STAMP_DIR="$state" \
 		UNATTENDED_UPGRADE_TEST_PROC_STAT="$work/stat" \
+		UNATTENDED_UPGRADE_TEST_BOOT_ID="$work/boot_id" \
 		FAKE_SYSTEMCTL_LOG="$work/systemctl.log" \
 		FAKE_RPM_DB="$work/rpmdb" \
 		FAKE_NR_OUT="$work/nr.out" FAKE_NR_RC="$nr_rc" \
@@ -251,18 +254,53 @@ printf 'Reboot is required.\n' >"$work/nr.out"
 run_script || fail "no package list: script failed"
 expect_reboot "no package list" 'needs-restarting -r reports a reboot (no package list)'
 
-# 6. Pi clock not NTP-synchronised: the whole run is skipped, even with a
-# genuine update pending and even the daily dnf (install times would be
-# recorded with the pre-sync clock) — nothing stamped, retried next tick.
+# 6. Pi clock never NTP-synchronised this boot: the run is skipped, even
+# with a genuine update pending and even the daily dnf (install times would
+# be recorded with the pre-sync clock) — nothing stamped, retried next
+# tick. The WARNING (stable marker) is logged once per boot and day.
+readonly CLOCK_MARKER='WARNING: unattended-upgrade skipped: clock not NTP-synchronised'
 reset_case fresh-day
 sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
 fake_ntp=no
 run_script || fail "unsynced clock: script failed"
 expect_no_reboot "unsynced clock"
-grep -q 'skipped daily: clock not NTP-synchronised yet (not stamped)' \
-	"$state/log" || fail "unsynced clock: skip not logged"
+grep -q "$CLOCK_MARKER" "$state/log" || fail "unsynced clock: warning not logged"
 [ ! -s "$work/dnf.log" ] || fail "unsynced clock: dnf ran"
 [ ! -f "$state/last-daily" ] || fail "unsynced clock: daily stamp written"
+[ ! -f "$state/clock-synced-boot" ] || fail "unsynced clock: latch written"
+run_script || fail "unsynced clock (2nd tick): script failed"
+[ "$(grep -c "$CLOCK_MARKER" "$state/log")" -eq 1 ] \
+	|| fail "unsynced clock: warning repeated for the same boot and day"
+grep -q 'clock not NTP-synchronised yet' "$work/stdout" \
+	|| fail "unsynced clock: journal note missing on the 2nd tick"
+printf 'boot-b\n' >"$work/boot_id"
+run_script || fail "unsynced clock (new boot): script failed"
+[ "$(grep -c "$CLOCK_MARKER" "$state/log")" -eq 2 ] \
+	|| fail "unsynced clock: no warning for a new boot"
+
+# 6a. The first synchronised tick latches this boot id; the day then runs.
+reset_case fresh-day
+run_script || fail "sync latch: script failed"
+[ "$(cat "$state/clock-synced-boot")" = boot-a ] \
+	|| fail "sync latch: boot id not latched"
+[ -s "$work/dnf.log" ] || fail "sync latch: dnf did not run"
+
+# 6b. Day already stamped, clock synchronised earlier this boot, now an NTP
+# blip: the reboot check still runs and reboots for a genuine update.
+reset_case
+printf 'boot-a\n' >"$state/clock-synced-boot"
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+fake_ntp=no
+run_script || fail "ntp blip: script failed"
+expect_reboot "ntp blip" 'core packages updated since boot: glibc$'
+
+# 6c. The latch belongs to an earlier boot: not trusted, no reboot check.
+reset_case
+printf 'boot-old\n' >"$state/clock-synced-boot"
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+fake_ntp=no
+run_script || fail "stale latch: script failed"
+expect_no_reboot "stale latch"
 
 # 7. btime missing from /proc/stat: defer.
 reset_case
@@ -335,6 +373,19 @@ listing glibc systemd >"$work/nr.out"
 sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
 run_script || fail "kernel mismatch + glibc: script failed"
 expect_reboot "kernel mismatch + glibc" 'core packages updated since boot: glibc$'
+
+# 10b'. The stuck-kernel warning does not depend on the partner gate.
+reset_case
+nr_rc=0
+: >"$work/nr.out"
+printf 'raspberrypi2-kernel4 %s 6.1.40-v8.1.el9.altarch\n' "$AFTER" \
+	>>"$work/rpmdb"
+printf '6.1.40-v8.1.el9.altarch\n' >"$state/last-kernel-reboot"
+fake_ping=down
+run_script || fail "kernel mismatch, partner down: script failed"
+expect_no_reboot "kernel mismatch, partner down"
+grep -q 'WARNING: already rebooted for raspberrypi2-kernel4' "$state/log" \
+	|| fail "kernel mismatch, partner down: warning missing"
 
 # 10c. A different, newer target than the stamped one reboots again.
 reset_case

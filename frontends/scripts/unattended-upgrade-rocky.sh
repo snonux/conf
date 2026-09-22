@@ -35,7 +35,13 @@ REBOOT_STAMP=$STAMP_DIR/last-reboot
 KERNEL_REBOOT_STAMP=$STAMP_DIR/last-kernel-reboot
 # Day of the last "kernel still not running after its reboot" warning.
 KERNEL_WARN_STAMP=$STAMP_DIR/last-kernel-warning
+# Boot id of the boot whose clock has been NTP-synchronised at least once
+# (Pis only, see clock_trusted).
+CLOCK_LATCH=$STAMP_DIR/clock-synced-boot
+# "<boot id> <day>" of the last "clock not NTP-synchronised" warning.
+CLOCK_WARN_STAMP=$STAMP_DIR/last-clock-warning
 PROC_STAT=${UNATTENDED_UPGRADE_TEST_PROC_STAT:-/proc/stat}
+BOOT_ID_FILE=${UNATTENDED_UPGRADE_TEST_BOOT_ID:-/proc/sys/kernel/random/boot_id}
 
 # The pi2/pi3 SIG AltArch kernel. needs-restarting only knows the stock
 # kernel names (kernel, kernel-rt), so a Pi kernel update is detected by
@@ -168,6 +174,49 @@ pi_host() {
 	rpm -q --quiet "$PI_KERNEL_PKG" 2>/dev/null
 }
 
+# Write $2 (one line) to file $1 via temp + mv, so a crash never leaves a
+# half-written stamp. Errors are silent: a missing stamp only repeats work.
+write_atomic() {
+	typeset wa_tmp
+	wa_tmp=$1.tmp.$$
+	mkdir -p "${1%/*}" 2>/dev/null
+	{ printf '%s\n' "$2" >"$wa_tmp" && mv "$wa_tmp" "$1"; } 2>/dev/null
+}
+
+# 0 when the wall clock can be trusted for dates, rpm install times and
+# btime. Always on r0/r1/r2 (RTC-backed; a stopped chronyd there must not
+# defer anything). On the RTC-less Pis: once the clock has been
+# NTP-synchronised during this boot — latched per boot id in $CLOCK_LATCH,
+# so a later NTP blip (server unreachable, NTPSynchronized=no) does not
+# matter: the clock was stepped right and only drifts slowly from there.
+clock_trusted() {
+	typeset ct_boot
+	pi_host || return 0
+	ct_boot=$(cat "$BOOT_ID_FILE" 2>/dev/null)
+	if [ -n "$ct_boot" ] && [ -f "$CLOCK_LATCH" ] \
+		&& [ "$(cat "$CLOCK_LATCH")" = "$ct_boot" ]; then
+		return 0
+	fi
+	clock_synced || return 1
+	[ -z "$ct_boot" ] || write_atomic "$CLOCK_LATCH" "$ct_boot"
+	return 0
+}
+
+# Log the not-yet-synchronised skip once per boot and day. The marker text
+# "WARNING: unattended-upgrade skipped: clock not NTP-synchronised" is
+# stable so a future check can key off it (plan §9.5).
+warn_clock_unsynced() {
+	typeset wc_key
+	wc_key="$(cat "$BOOT_ID_FILE" 2>/dev/null) $today"
+	if [ -f "$CLOCK_WARN_STAMP" ] \
+		&& [ "$(cat "$CLOCK_WARN_STAMP")" = "$wc_key" ]; then
+		note "skipped $mode: clock not NTP-synchronised yet (not stamped)"
+		return 0
+	fi
+	log "WARNING: unattended-upgrade skipped: clock not NTP-synchronised since boot (not stamped, retrying hourly)"
+	write_atomic "$CLOCK_WARN_STAMP" "$wc_key"
+}
+
 # Newest install time (epoch s) of any installed version of package $1;
 # prints nothing when rpm cannot tell (not installed, rpm error).
 newest_install_epoch() {
@@ -175,44 +224,47 @@ newest_install_epoch() {
 		| grep -E '^[0-9]+$' | sort -n | tail -n 1
 }
 
-# 0 (reason in REBOOT_REASON, target in REBOOT_KERNEL) when the Pi kernel
-# installed last is not the running one. Assumption: the Pi firmware boots
-# the kernel image the latest package transaction wrote to /boot — pi2/pi3
-# have no /boot/config.txt, so the firmware boots /boot/kernel8.img, which
-# each kernel package's posttrans overwrites. Ties in install time (one
-# transaction) are broken by version. 1 on hosts without $PI_KERNEL_PKG
-# (r0/r1/r2), when the running kernel is current, or when this host already
-# rebooted once for this same target and still runs another kernel — a
-# config.txt added later pins a different image, or the new one fails to
-# boot and the firmware fell back; rebooting again would only repeat that
-# daily, so a warning is logged (once a day) for a human instead.
-pi_kernel_pending() {
-	typeset pk_newest pk_running
-	pi_host || return 1
-	pk_newest=$(rpm -q --qf '%{INSTALLTIME} %{VERSION}-%{RELEASE}\n' \
+# Classify the Pi kernel into PK_STATE (with PK_NEWEST, PK_RUNNING):
+#   none     no $PI_KERNEL_PKG (r0/r1/r2)
+#   current  the kernel installed last is running
+#   pending  another kernel was installed last: a reboot is due
+#   stuck    this host already rebooted once for PK_NEWEST and still runs
+#            PK_RUNNING — a config.txt added later pins a different image,
+#            or the new one fails to boot and the firmware fell back.
+#            Rebooting again would only repeat that daily, so this only
+#            warns (warn_kernel_mismatch).
+# Assumption: the Pi firmware boots the kernel image the latest package
+# transaction wrote to /boot — pi2/pi3 have no /boot/config.txt, so the
+# firmware boots /boot/kernel8.img, which each kernel package's posttrans
+# overwrites. Ties in install time (one transaction) are broken by version.
+pi_kernel_classify() {
+	PK_STATE=none
+	PK_NEWEST=
+	PK_RUNNING=
+	pi_host || return 0
+	PK_NEWEST=$(rpm -q --qf '%{INSTALLTIME} %{VERSION}-%{RELEASE}\n' \
 		"$PI_KERNEL_PKG" 2>/dev/null | sort -k1,1n -k2,2V | tail -n 1)
-	pk_newest=${pk_newest#* }
-	pk_running=$(uname -r)
-	[ -n "$pk_newest" ] && [ "$pk_newest" != "$pk_running" ] || return 1
-	if [ -f "$KERNEL_REBOOT_STAMP" ] \
-		&& [ "$(cat "$KERNEL_REBOOT_STAMP")" = "$pk_newest" ]; then
-		warn_kernel_mismatch "$pk_newest" "$pk_running"
-		return 1
+	PK_NEWEST=${PK_NEWEST#* }
+	PK_RUNNING=$(uname -r)
+	if [ -z "$PK_NEWEST" ] || [ "$PK_NEWEST" = "$PK_RUNNING" ]; then
+		PK_STATE=current
+	elif [ -f "$KERNEL_REBOOT_STAMP" ] \
+		&& [ "$(cat "$KERNEL_REBOOT_STAMP")" = "$PK_NEWEST" ]; then
+		PK_STATE=stuck
+	else
+		PK_STATE=pending
 	fi
-	REBOOT_REASON="$PI_KERNEL_PKG $pk_newest installed, running $pk_running"
-	REBOOT_KERNEL=$pk_newest
-	return 0
 }
 
-# Log (at most once a day) that the reboot for kernel $1 did not bring it
-# up: $2 is still running.
+# Log (at most once a day) that the reboot for PK_NEWEST did not bring it
+# up. Called before the reboot gates, so a partner outage cannot hide it.
 warn_kernel_mismatch() {
 	if [ -f "$KERNEL_WARN_STAMP" ] \
 		&& [ "$(cat "$KERNEL_WARN_STAMP")" = "$today" ]; then
 		return 0
 	fi
-	log "WARNING: already rebooted for $PI_KERNEL_PKG $1 but $2 is still running — check /boot/config.txt and the boot; not rebooting for it again"
-	{ printf '%s\n' "$today" >"$KERNEL_WARN_STAMP"; } 2>/dev/null
+	log "WARNING: already rebooted for $PI_KERNEL_PKG $PK_NEWEST but $PK_RUNNING is still running — check /boot/config.txt and the boot; not rebooting for it again"
+	write_atomic "$KERNEL_WARN_STAMP" "$today"
 }
 
 # Re-check the packages "needs-restarting -r" listed (its output in $1)
@@ -227,8 +279,8 @@ warn_kernel_mismatch() {
 # package list, unknown install time) — erring towards the reboot keeps
 # genuine core updates effective. 1 when every listing predates the boot.
 # 2 (reason in REBOOT_REASON) when btime is unreadable — deferred to a
-# later tick. An unsynchronised clock on the Pis never gets here: the whole
-# run is skipped before (see the clock gate in the main flow).
+# later tick. A Pi whose clock was never synchronised this boot never gets
+# here (maybe_reboot requires clock_trusted).
 confirm_core_updates() {
 	typeset cc_boot cc_pkgs cc_pkg cc_inst cc_newer="" cc_stale=""
 	cc_boot=$(kernel_boot_epoch)
@@ -259,14 +311,19 @@ confirm_core_updates() {
 	return 1
 }
 
-# Decide whether a reboot is genuinely required. 0 = reboot (reason in
-# REBOOT_REASON), 1 = not required, 2 = cannot decide yet (deferred).
+# Decide whether a reboot is genuinely required (PK_STATE must be set by
+# pi_kernel_classify). 0 = reboot (reason in REBOOT_REASON, a kernel target
+# in REBOOT_KERNEL), 1 = not required, 2 = cannot decide yet (deferred).
 # A needs-restarting error (rc other than 0/1) never reboots, as before.
 reboot_needed() {
 	typeset rn_out rn_rc
 	REBOOT_REASON=
 	REBOOT_KERNEL=
-	pi_kernel_pending && return 0
+	if [ "$PK_STATE" = pending ]; then
+		REBOOT_REASON="$PI_KERNEL_PKG $PK_NEWEST installed, running $PK_RUNNING"
+		REBOOT_KERNEL=$PK_NEWEST
+		return 0
+	fi
 	rn_out=$(needs-restarting -r 2>&1)
 	rn_rc=$?
 	case $rn_rc in
@@ -284,13 +341,9 @@ reboot_needed() {
 # reboot.
 do_reboot() {
 	log "rebooting: $REBOOT_REASON"
-	mkdir -p "$STAMP_DIR"
-	printf '%s\n' "$today" >"$REBOOT_STAMP.tmp.$$" \
-		&& mv "$REBOOT_STAMP.tmp.$$" "$REBOOT_STAMP"
-	if [ -n "$REBOOT_KERNEL" ]; then
-		printf '%s\n' "$REBOOT_KERNEL" >"$KERNEL_REBOOT_STAMP.tmp.$$" \
-			&& mv "$KERNEL_REBOOT_STAMP.tmp.$$" "$KERNEL_REBOOT_STAMP"
-	fi
+	write_atomic "$REBOOT_STAMP" "$today"
+	[ -z "$REBOOT_KERNEL" ] \
+		|| write_atomic "$KERNEL_REBOOT_STAMP" "$REBOOT_KERNEL"
 	sync
 	sleep 2
 	rmdir "$LOCK" 2>/dev/null
@@ -298,8 +351,15 @@ do_reboot() {
 	systemctl reboot
 }
 
+# The reboot check. Needs a trusted clock (before the first NTP sync of a
+# Pi boot, "today" and btime are wrong; the main flow warns about that).
+# The stuck-kernel warning comes before the gates so that it shows even
+# while a partner is down or the host already rebooted today.
 maybe_reboot() {
 	typeset mr_rc
+	clock_trusted || return 0
+	pi_kernel_classify
+	[ "$PK_STATE" != stuck ] || warn_kernel_mismatch
 	reboot_window_open || return 0
 	reboot_needed
 	mr_rc=$?
@@ -311,26 +371,26 @@ maybe_reboot() {
 }
 
 write_stamp() {
-	typeset tmp
-	tmp=$STAMP.tmp.$$
-	printf '%s\n' "$today" >"$tmp" && mv "$tmp" "$STAMP"
+	write_atomic "$STAMP" "$today"
 }
 
-# Clock gate (Pis only, see pi_host): before chronyd has synchronised the
-# RTC-less clock, "today" and every rpm install time would be wrong. A dnf
-# run now would record core updates as installed before the real boot, so
-# after the clock steps the reboot check would call them stale and never
-# reboot for them. Skip the whole run, stamping nothing; the next hourly
-# tick retries. (The timer has OnBootSec=10min and no time-sync.target
-# ordering; chrony-wait is not enabled on these hosts.)
-if pi_host && ! clock_synced; then
-	log "skipped $mode: clock not NTP-synchronised yet (not stamped)"
+# Stamp already today → skip the update attempt, still check reboot (which
+# is not blocked by a later NTP blip: clock_trusted latches per boot).
+if [ "$last" = "$today" ]; then
+	maybe_reboot
 	exit 0
 fi
 
-# Stamp already today → skip the update attempt, still check reboot.
-if [ "$last" = "$today" ]; then
-	maybe_reboot
+# Clock gate for the update (Pis only, see clock_trusted): until the
+# RTC-less clock has been NTP-synchronised once this boot, "today" and
+# every rpm install time would be wrong. A dnf run now would record core
+# updates as installed before the real boot, so after the clock steps the
+# reboot check would call them stale and never reboot for them. Skip the
+# run, stamping nothing; the next hourly tick retries. (The timer has
+# OnBootSec=10min and no time-sync.target ordering; chrony-wait is not
+# enabled on these hosts.)
+if ! clock_trusted; then
+	warn_clock_unsynced
 	exit 0
 fi
 
