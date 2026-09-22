@@ -120,8 +120,7 @@ func (Web) PF() {
 		collector := Dir("/var/node_exporter", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
 			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-		// pfctl needs root, so the exporter runs from root's crontab; every
-		// minute matches the Prometheus scrape interval.
+		// pfctl needs root, so the exporter runs from root's crontab.
 		Cron("frontend-pf-labels-exporter", WithCommand("-ns /usr/local/bin/pf-labels-exporter.sh"),
 			WithLegacyCommand("-ns /usr/local/bin/pf-labels-exporter.sh"), WithMinute("*"), DependsOn(collector, exporter))
 		flags := File("/etc/rc.conf.local", WithLine(nodeExporterFlags), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), WithName("rc-conf-node-exporter-flags"))
