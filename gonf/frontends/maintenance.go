@@ -1,7 +1,6 @@
 package frontends
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -48,9 +47,9 @@ func (Maintenance) DescBase() string {
 }
 
 // Base installs the common operator packages and the small rc files owned by
-// the Rex base task. DTail is merely named in pkg_scripts here; its package,
-// account, and service are deliberately owned by the later custom-package
-// migration task.
+// the Rex base task. DTail, uptimed, ZNC and node_exporter are merely named in
+// pkg_scripts here (see pkgScriptsLine); their packages and services are owned
+// by the tasks that install them.
 func (Maintenance) Base() {
 	ForHosts(ValueServer, func(_ string, server Server) {
 		Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
@@ -268,12 +267,25 @@ func legacyFrontendAsset(name string) string {
 	return filepath.Join(paths.Frontends, name)
 }
 
+// pkgScriptsLine renders the rc.conf.local pkg_scripts line exactly as
+// rcctl(8) writes it: unquoted, with every package daemon a frontend Service
+// enables (dserver, uptimed, znc on fishfinger, and node_exporter from the PF
+// task) in rcctl's append order. `rcctl enable` of a daemon missing from
+// pkg_scripts deletes every pkg_scripts= line and writes one combined,
+// unquoted line, so a literal line lacking such a daemon (or quoted, as Rex
+// wrote it) was missing again on the next apply and was re-appended; OpenBSD's
+// rc takes the last assignment, which could disable node_exporter at boot.
+// With the complete, rcctl-formatted line the Services find their daemons
+// enabled, rcctl never rewrites the line, and a second apply is a no-op.
+// icinga2 (still in the Rex list) is not installed on either frontend and was
+// already dropped from the live line by rcctl, so it is not listed.
 func pkgScriptsLine(name string) string {
-	scripts := []string{"uptimed", "httpd", "dserver", "icinga2"}
-	if name == "fishfinger" {
+	scripts := []string{"uptimed", "httpd", "dserver"}
+	if name == Master {
 		scripts = append(scripts, "znc")
 	}
-	return fmt.Sprintf("pkg_scripts=\"%s\"", strings.Join(scripts, " "))
+	scripts = append(scripts, "node_exporter")
+	return "pkg_scripts=" + strings.Join(scripts, " ")
 }
 
 const rsyncdConfig = `max connections = 5
