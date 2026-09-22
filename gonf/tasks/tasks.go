@@ -13,7 +13,43 @@ import (
 	. "github.com/snonux/gonf/api"
 )
 
-const frontendAggregatePattern = `^frontends_(acme|base|cron|dns_failover|d_tail|foostats|gemtexter|gogios|goprecords|httpd|inetd|myname|newsyslog|nsd|pf|ping|pkg_repo|relayd|rsync|script|service_accounts|services|smtpd|uptimed|wire_guard_hosts)$`
+// frontendSetupTasks returns the explicit membership of the frontends setup
+// aggregate, in recording order (alphabetical, the order the former regex
+// recorded it in, so the aggregate's plan is unchanged). It deliberately
+// leaves out the operational actions frontends_acme_invoke (requesting
+// certificates) and frontends_irc_bouncer (the existing ZNC deployment): both
+// stay explicit, by-name actions. A new frontends_* setup task must be added
+// here to join the aggregate; AggregateTasks fails the record on a name that
+// is not registered, so a typo cannot silently shrink a setup run.
+func frontendSetupTasks() []string {
+	return []string{
+		"frontends_acme",
+		"frontends_base",
+		"frontends_cron",
+		"frontends_d_tail",
+		"frontends_dns_failover",
+		"frontends_foostats",
+		"frontends_gemtexter",
+		"frontends_gogios",
+		"frontends_goprecords",
+		"frontends_httpd",
+		"frontends_inetd",
+		"frontends_myname",
+		"frontends_newsyslog",
+		"frontends_nsd",
+		"frontends_pf",
+		"frontends_ping",
+		"frontends_pkg_repo",
+		"frontends_relayd",
+		"frontends_rsync",
+		"frontends_script",
+		"frontends_service_accounts",
+		"frontends_services",
+		"frontends_smtpd",
+		"frontends_uptimed",
+		"frontends_wire_guard_hosts",
+	}
+}
 
 // Register makes every current recipe group and its deployment aggregate
 // available to the CLI. Future Rex ports join this composition root rather
@@ -35,9 +71,11 @@ func Register() {
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), WithCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), WithCluster(cluster.NameGarage))
 
-	// ACME invocation is deliberately excluded: setup only installs its config
-	// and daily hook, while requesting certificates remains an explicit action.
-	Aggregate("frontends", "Install all frontend configuration except explicit ACME invocation", frontendAggregatePattern)
+	// The frontends aggregate lists its setup members explicitly (see
+	// frontendSetupTasks): ACME invocation is excluded because setup only
+	// installs its config and daily hook, while requesting certificates
+	// remains an explicit action; the IRC bouncer likewise stays by-name.
+	AggregateTasks("frontends", "Install all frontend configuration except explicit ACME invocation", frontendSetupTasks()...)
 	Aggregate("pis_netbsd", "Install all pis_netbsd_* configuration", "^pis_netbsd_")
 	Aggregate("rocky", "Install all rocky_* configuration", "^rocky_")
 	Aggregate("rocky_kernel_audit", "Install the Rocky Pi kernel CVE audit", "^rocky_kernel_audit_")
