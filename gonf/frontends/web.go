@@ -55,7 +55,7 @@ func (Web) HTTPD() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
-			flags := File("/etc/rc.conf.local", WithLine("httpd_flags="), WithName("rc-conf-httpd-flags"))
+			flags := rcConfLocalLine("httpd_flags=", "rc-conf-httpd-flags")
 			NoFile(legacyCandidate("/etc/httpd.conf"))
 			config := File("/etc/httpd.conf", WithContent(renderHTTPD(webData(server))),
 				WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
@@ -86,7 +86,7 @@ func (Web) DescInetd() string { return "Install and converge frontend inetd" }
 // it builds on the full stock daemon class and is kept as is.
 func (Web) Inetd() {
 	onFrontends(func() {
-		flags := File("/etc/rc.conf.local", WithLine("inetd_flags="), WithName("rc-conf-inetd-flags"))
+		flags := rcConfLocalLine("inetd_flags=", "rc-conf-inetd-flags")
 		class := LoginClass("inetd", legacyFrontendAsset("etc/login.conf.d/inetd"))
 		config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
@@ -118,7 +118,7 @@ func (Web) Relayd() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
-			flags := File("/etc/rc.conf.local", WithLine("relayd_flags="), WithName("rc-conf-relayd-flags"))
+			flags := rcConfLocalLine("relayd_flags=", "rc-conf-relayd-flags")
 			class := NoLoginClass("daemon")
 			NoFile(legacyCandidate("/etc/relayd.conf"))
 			config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),
@@ -138,25 +138,44 @@ func (Web) DescPF() string { return "Validate and reload frontend PF plus its no
 // (core WithValidation) before it replaces /etc/pf.conf, so an invalid
 // ruleset never becomes the live file and pf-reload never loads it. The
 // reload, node_exporter restart, and exporter cron entry are all declarative
-// and change-gated.
+// and change-gated. node_exporter's flags carry each host's own WireGuard
+// address, so the task iterates the hosts.
 func (Web) PF() {
-	onFrontends(func() {
-		config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
-		Command("pfctl", List("-f", "/etc/pf.conf"), OnChange(config), WithName("pf-reload"))
-
-		collector := Dir("/var/node_exporter", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
-			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-		// pfctl needs root, so the exporter runs from root's crontab.
-		Cron("frontend-pf-labels-exporter", WithCommand("-ns /usr/local/bin/pf-labels-exporter.sh"),
-			WithLegacyCommand("-ns /usr/local/bin/pf-labels-exporter.sh"), WithMinute("*"), DependsOn(collector, exporter))
-		flags := File("/etc/rc.conf.local", WithLine(nodeExporterFlags), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), WithName("rc-conf-node-exporter-flags"))
-		Service("node_exporter", WithRestart, DependsOn(collector, exporter), OnChange(flags, exporter))
-	})
+	for _, host := range ClusterHosts() {
+		WhenHostname(host, func() { pfAndExporter(host) })
+	}
 }
 
-const nodeExporterFlags = `node_exporter_flags="--web.listen-address=$(ifconfig wg0 | awk '/inet /{print $2}'):9100 --collector.textfile.directory=/var/node_exporter"`
+// pfAndExporter declares host's validated PF ruleset and reload, and the
+// pf-labels exporter feeding node_exporter's textfile collector.
+func pfAndExporter(host string) {
+	config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
+		WithMode(0o600), WithOwner("root"), WithGroup("wheel"), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
+	Command("pfctl", List("-f", "/etc/pf.conf"), OnChange(config), WithName("pf-reload"))
+
+	collector := Dir("/var/node_exporter", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+	exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
+		WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
+	// pfctl needs root, so the exporter runs from root's crontab.
+	Cron("frontend-pf-labels-exporter", WithCommand("-ns /usr/local/bin/pf-labels-exporter.sh"),
+		WithLegacyCommand("-ns /usr/local/bin/pf-labels-exporter.sh"), WithMinute("*"), DependsOn(collector, exporter))
+	flags := rcConfLocalLine(nodeExporterFlags(host), "rc-conf-node-exporter-flags")
+	Service("node_exporter", WithRestart, DependsOn(collector, exporter), OnChange(flags, exporter))
+}
+
+// nodeExporterFlags renders the node_exporter_flags line exactly as
+// `rcctl set node_exporter flags` wrote it on the hosts: unquoted, listening
+// on the host's WireGuard IPv4 from the inventory. The former literal line
+// kept a `$(ifconfig wg0 ...)` substitution, which rc(8) does not expand and
+// which never matched the live line, so it was appended beside it.
+func nodeExporterFlags(host string) string {
+	for _, peer := range WireGuardAddresses() {
+		if peer.Name == host {
+			return "node_exporter_flags=--web.listen-address=" + peer.IPv4 + ":9100 --collector.textfile.directory=/var/node_exporter"
+		}
+	}
+	panic(fmt.Sprintf("no WireGuard address for frontend %q", host))
+}
 
 func webData(server Server) webConfigData {
 	topology := TemplateData()

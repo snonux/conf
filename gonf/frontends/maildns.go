@@ -98,7 +98,7 @@ func (MailDNS) DNSFailover() {
 
 // nsdFlags declares the empty nsd_flags line that enables NSD on the host.
 func nsdFlags() Resource {
-	return File("/etc/rc.conf.local", WithLine("nsd_flags="), WithName("rc-conf-nsd-flags"))
+	return rcConfLocalLine("nsd_flags=", "rc-conf-nsd-flags")
 }
 
 // nsdPublisher declares blowfish's publisher. The publisher, not this task,

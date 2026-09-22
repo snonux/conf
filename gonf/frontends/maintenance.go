@@ -54,8 +54,7 @@ func (Maintenance) Base() {
 	ForHosts(ValueServer, func(_ string, server Server) {
 		Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
 		EnsureFile("/etc/rc.local")
-		File("/etc/rc.conf.local", WithLine(pkgScriptsLine(server.Name)),
-			WithName("rc-conf-pkg-scripts-"+server.Name))
+		rcConfLocalLine(pkgScriptsLine(server.Name), "rc-conf-pkg-scripts-"+server.Name)
 	})
 }
 
@@ -279,6 +278,15 @@ func legacyFrontendAsset(name string) string {
 // enabled, rcctl never rewrites the line, and a second apply is a no-op.
 // icinga2 (still in the Rex list) is not installed on either frontend and was
 // already dropped from the live line by rcctl, so it is not listed.
+// rcConfLocalLine declares one line of /etc/rc.conf.local under name. Every
+// line edit of the file sets the same attributes, 0644 root:wheel as rcctl
+// leaves it (and as it is on both frontends): a line edit without a mode
+// defaults to 0640, so mixing the two chmodded the file back and forth on
+// every apply.
+func rcConfLocalLine(line, name string) Resource {
+	return File("/etc/rc.conf.local", WithLine(line), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), WithName(name))
+}
+
 func pkgScriptsLine(name string) string {
 	scripts := []string{"uptimed", "httpd", "dserver"}
 	if name == Master {
