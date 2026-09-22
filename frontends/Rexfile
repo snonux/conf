@@ -378,15 +378,11 @@ task 'relayd',
   sub {
     append_if_no_such_line '/etc/rc.conf.local', 'relayd_flags=';
 
-    # Increase daemon login class file descriptor limits for relayd with many TLS certs
+    # The daemon class (openfiles 4096) lives in /etc/login.conf (see
+    # AGENTS.md); the former fragment shadowed it and is removed.
     file '/etc/login.conf.d/daemon',
-      source    => './etc/login.conf.d/daemon',
-      owner     => 'root',
-      group     => 'wheel',
-      mode      => '644',
-      on_change => sub {
-        run 'doas rm -f /etc/login.conf.db && doas cap_mkdb /etc/login.conf';
-      };
+      ensure    => 'absent',
+      on_change => sub { service 'relayd' => 'restart' };
 
     file '/etc/relayd.conf',
       content => template(

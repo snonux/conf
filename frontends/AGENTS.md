@@ -368,17 +368,24 @@ doas cap_mkdb /etc/login.conf
 doas rcctl restart relayd
 ```
 
-**WARNING (unresolved, needs an operator decision)**: the edit above is
-already in `/etc/login.conf` on blowfish and fishfinger (checked 2026-09-22),
-but it has no effect there. gonf, like the old Rex task, also installs
-`etc/login.conf.d/daemon`, and OpenBSD reads that fragment *instead of* the
-`daemon` entry in `/etc/login.conf`. The fragment sets only
-`openfiles-max/cur=4096` and `tc=default`, so relayd and every other
-daemon-class process (the `inetd` fragment inherits it through `tc=daemon`)
-lose `ignorenologin`, `datasize=4096M`, `maxproc=infinity` and
-`stacksize-cur=8M`. Removing the fragment instead would give relayd the stock
-class with the edit above, i.e. all of those plus 4096 descriptors. Decide on
-the fragment's content, or its removal, before relying on it.
+**State (owner decision 2026-09-22)**: the edit above is the authoritative
+daemon class. It is in `/etc/login.conf` on blowfish and fishfinger, and the
+compiled `/etc/login.conf.db` is in sync with it (read-only check 2026-09-22:
+`ignorenologin`, `datasize=4096M`, `maxproc=infinity`, `openfiles-max/cur=4096`,
+`stacksize-cur=8M`, `tc=default`). It is a manual edit and is **not managed by
+gonf** (nor by Rex); re-apply it by hand after an OpenBSD upgrade replaces
+`/etc/login.conf`, and rebuild the database as shown.
+
+The former `etc/login.conf.d/daemon` fragment (only `openfiles-max/cur=4096`
+and `tc=default`) replaced that whole class, because OpenBSD reads
+`/etc/login.conf.d/<class>` *instead of* the same-named `login.conf` entry, so
+relayd and every other daemon-class process lost `ignorenologin`,
+`datasize=4096M`, `maxproc=infinity` and `stacksize-cur=8M`. The fragment is
+no longer shipped: `frontends_relayd` now removes `/etc/login.conf.d/daemon`
+and any stale `/etc/login.conf.d/daemon.db` (`NoLoginClass("daemon")`) and
+restarts relayd once when it removed something. The `inetd` fragment is kept:
+its `tc=daemon` resolves against `/etc/login.conf`, not other fragments, so it
+was never affected.
 
 **Verification**: Check that relayd has the increased limit:
 ```bash

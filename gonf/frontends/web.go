@@ -81,6 +81,9 @@ func (Web) DescInetd() string { return "Install and converge frontend inetd" }
 // LoginClass installs the root:wheel 0644 fragment under an OpenBSD-only plan
 // requirement; OpenBSD reads /etc/login.conf.d/<class> directly, so no
 // cap_mkdb step is needed (cap_mkdb /etc/login.conf never reads fragments).
+// The inetd fragment only adds maxproc=10 and inherits the rest through
+// tc=daemon, which resolves against /etc/login.conf (not other fragments), so
+// it builds on the full stock daemon class and is kept as is.
 func (Web) Inetd() {
 	onFrontends(func() {
 		flags := File("/etc/rc.conf.local", WithLine("inetd_flags="), WithName("rc-conf-inetd-flags"))
@@ -95,29 +98,28 @@ func (Web) Inetd() {
 func (Web) DescRelayd() string { return "Render, validate, and converge frontend relayd" }
 
 // Relayd validates a candidate with `relayd -n` (core WithValidation) before
-// changing its live configuration. Its daemon login class is watched too:
-// raising relayd's descriptor limit does not change relayd.conf but must take
-// effect through a restart. The login fragments belong to the consumers that
-// need them, so a frontends aggregate has one change-gate source per
-// privilege chunk. As in Inetd, LoginClass needs no database rebuild; the
-// former cap_mkdb step rebuilt only /etc/login.conf.db from an unchanged
-// /etc/login.conf.
+// changing its live configuration. Its daemon login class is watched too: a
+// change to the descriptor limits relayd runs with does not change
+// relayd.conf but must take effect through a restart.
+//
+// relayd's class is the stock daemon entry of /etc/login.conf, which on both
+// frontends carries the manual openfiles-max/cur=4096 edit documented in
+// frontends/AGENTS.md. That entry is authoritative and deliberately NOT
+// managed by gonf. The former /etc/login.conf.d/daemon fragment (only
+// openfiles 4096 plus tc=default) replaced the whole class and so dropped
+// ignorenologin, datasize=4096M, maxproc=infinity and stacksize-cur=8M; on
+// the owner's decision of 2026-09-22 it is removed instead of installed.
+// NoLoginClass deletes the fragment and any stale daemon.db beside it, and
+// either removal is a class change that restarts relayd once, so the
+// running daemon picks up the login.conf class. Afterwards the handle is
+// unchanged and restarts nothing. No database rebuild is needed: the
+// removal does not touch /etc/login.conf or /etc/login.conf.db.
 func (Web) Relayd() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
 			flags := File("/etc/rc.conf.local", WithLine("relayd_flags="), WithName("rc-conf-relayd-flags"))
-			// TODO(login-class, needs operator decision): etc/login.conf.d/daemon
-			// replaces the whole daemon class of /etc/login.conf, and it only
-			// sets openfiles-max/cur=4096 plus tc=default. The daemon entry in
-			// /etc/login.conf on both hosts already carries the 4096 limits
-			// documented in frontends/AGENTS.md but is shadowed by this
-			// fragment, so relayd and every other daemon-class process lose
-			// ignorenologin, datasize=4096M, maxproc=infinity and
-			// stacksize-cur=8M. Dropping the fragment would give them that
-			// /etc/login.conf class instead. The content is deliberately
-			// unchanged here; decide before the next rollout.
-			class := LoginClass("daemon", legacyFrontendAsset("etc/login.conf.d/daemon"))
+			class := NoLoginClass("daemon")
 			NoFile(legacyCandidate("/etc/relayd.conf"))
 			config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),
 				WithMode(0o600), WithOwner("root"), WithGroup("wheel"),
