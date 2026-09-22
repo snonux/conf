@@ -26,6 +26,10 @@ func Register() {
 	RegisterMethods(frontends.MailDNS{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), WithCluster(cluster.NameNetBSDPis))
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), WithCluster(cluster.NameRockyAll))
+	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
+	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate; the
+	// ksh interpreter it runs under comes from rocky_packages.
+	RegisterMethods(rocky.KernelAudit{}, WithPrefix("rocky_kernel_audit_"), WithCluster(cluster.NameRockyPis))
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), WithCluster(cluster.NameRockyK3s))
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), WithCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), WithCluster(cluster.NameGarage))
@@ -35,6 +39,7 @@ func Register() {
 	Aggregate("frontends", "Install all frontend configuration except explicit ACME invocation", frontendAggregatePattern)
 	Aggregate("pis_netbsd", "Install all pis_netbsd_* configuration", "^pis_netbsd_")
 	Aggregate("rocky", "Install all rocky_* configuration", "^rocky_")
+	Aggregate("rocky_kernel_audit", "Install the Rocky Pi kernel CVE audit", "^rocky_kernel_audit_")
 	Aggregate("rnodes", "Install all rnodes_* configuration", "^rnodes_")
 	Aggregate("freebsd", "Install all freebsd_* configuration", "^freebsd_")
 	Aggregate("garage", "Install all Garage configuration", "^garage_")

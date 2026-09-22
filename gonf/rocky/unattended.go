@@ -1,6 +1,7 @@
 // Package rocky declares Rocky Linux host tasks for the conf repository —
 // unattended upgrades for pi2/pi3 and k3s nodes r0–r2 per
-// frontends/docs/unattended-upgrades-pi.plan.md.
+// frontends/docs/unattended-upgrades-pi.plan.md, plus the pi2/pi3
+// Raspberry Pi kernel CVE audit (kernelaudit.go, plan §13).
 package rocky
 
 import (

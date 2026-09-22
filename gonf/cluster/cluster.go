@@ -15,6 +15,7 @@ import (
 //	NameFrontends    → frontends / frontends_*
 //	NameNetBSDPis    → pis_netbsd / pis_netbsd_*
 //	NameRockyAll     → rocky / rocky_*
+//	NameRockyPis     → rocky_kernel_audit / rocky_kernel_audit_* (also in rocky)
 //	NameFreeBSD      → freebsd / freebsd_*
 const (
 	NameFrontends = "frontends"
@@ -30,12 +31,13 @@ const (
 // Per-host recipe value keys (WithValue). Every cluster member that a recipe
 // reads must have the key set — MustHostValue Fatals otherwise.
 const (
-	ValueUnattendedCron        = "unattended.cron"         // frontend [3]string hours; netbsd [2]string hours
-	ValueUnattendedOnCalendar  = "unattended.on_calendar"  // rocky OnCalendar= string
-	ValueUnattendedCronMinute  = "unattended.cron_minute"  // freebsd hourly minute string
-	ValueUnattendedAllowReboot = "unattended.allow_reboot" // freebsd bool; false on f3
-	ValueFrontendServer        = frontends.ValueServer     // frontends.Server address and role data
-	ValueGarageRPCPublicAddr   = "garage.rpc_public_addr"  // Garage node RPC address, including port
+	ValueUnattendedCron        = "unattended.cron"          // frontend [3]string hours; netbsd [2]string hours
+	ValueUnattendedOnCalendar  = "unattended.on_calendar"   // rocky OnCalendar= string
+	ValueKernelAuditOnCalendar = "kernel_audit.on_calendar" // rocky-pis daily kernel CVE audit OnCalendar= string
+	ValueUnattendedCronMinute  = "unattended.cron_minute"   // freebsd hourly minute string
+	ValueUnattendedAllowReboot = "unattended.allow_reboot"  // freebsd bool; false on f3
+	ValueFrontendServer        = frontends.ValueServer      // frontends.Server address and role data
+	ValueGarageRPCPublicAddr   = "garage.rpc_public_addr"   // Garage node RPC address, including port
 )
 
 // Register registers the OpenBSD frontend hosts, the four Raspberry Pis, the
@@ -106,6 +108,7 @@ func Register() {
 		WithGOOS("linux"),
 		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:05:00"),
+		WithValue(ValueKernelAuditOnCalendar, "*-*-* 06:15:00"),
 	)
 	pi3 := Host("pi3",
 		WithSSHUser("paul"),
@@ -115,6 +118,7 @@ func Register() {
 		WithGOOS("linux"),
 		WithGOARCH("arm64"),
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:35:00"),
+		WithValue(ValueKernelAuditOnCalendar, "*-*-* 06:45:00"),
 	)
 	// OS-pair clusters are the default deploy targets for OS-specific work
 	// (scripts, timers, package managers). The umbrella "pis" cluster mixes

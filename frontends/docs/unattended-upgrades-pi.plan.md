@@ -349,3 +349,81 @@ two cluster nodes never reboot on the same day.
 `DaemonReload` + enabling the timer; the Rocky script ships the `daily`
 mode. The gonf binary on r0/r1/r2 is bootstrapped once (the same single
 manual step as everywhere else).
+## 13. Rocky pi2/pi3: Raspberry Pi kernel CVE audit (task 752)
+
+**Why:** pi2/pi3 boot `raspberrypi2-kernel4` from the SIG AltArch
+`altarch-rockyrpi` repo (running `6.1.31-v8.1.el9.altarch`, built 2023-06-10;
+verified 2026-09-22 that it is also the newest build in the repo). The Rocky
+`kernel` package is not installed, and Rocky publishes no updateinfo for the
+AltArch kernel, so an empty `dnf updateinfo --security` proves nothing about
+it. The ordinary dnf path of §3/§12 stays as it is and still covers every
+other package.
+
+**Advisory source:** the OSV.dev `Linux` ecosystem export,
+`https://osv-vulnerabilities.storage.googleapis.com/Linux/all.zip` (≈59 MB,
+re-exported several times a day). Its CVE records come from the Linux kernel
+CNA (cvelistV5) and carry per-stable-branch `ECOSYSTEM` ranges
+(`introduced`/`fixed`/`last_affected` upstream versions). That is the
+authoritative upstream source, and it can be evaluated offline. The OSV query
+API is not usable for this: a `version` query for `Linux/Kernel` returns no
+matches (verified 2026-09-22), so the script evaluates the export itself.
+
+**Mapping:** the upstream base version of the running kernel (`uname -r` up
+to the first `-`, i.e. `6.1.31`) is checked against every CVE record. The
+running kernel must belong to the `raspberrypi2-kernel4` package
+(`rpm -q raspberrypi2-kernel4-$(uname -r)`), otherwise the result is UNKNOWN.
+Coverage caveats: downstream Raspberry Pi patches are not modelled, and CVEs
+from other CNAs (mostly pre-2024, for example CVE-2024-1086) are not in the
+feed. So VULNERABLE is definitive, while OK only means "no known kernel-CNA
+CVE".
+
+**Implementation:** `frontends/scripts/rocky-kernel-audit.sh` is installed as
+`/usr/local/sbin/rocky-kernel-audit` and runs as a gonf `SystemdTimer`
+`rocky-kernel-audit` once a day (pi2 `06:15`, pi3 `06:45`, `Persistent=true`,
+per-host `cluster.ValueKernelAuditOnCalendar`). The gonf tasks are
+`rocky_kernel_audit_*` (packages `unzip`/`jq`/`curl`, script, state dir, units;
+cluster `rocky-pis`) and belong to the `rocky` aggregate. Each run:
+
+1. makes a conditional download (`curl -z`, 304 → reuse) into
+   `/var/lib/rocky-kernel-audit/osv-linux-all.zip`. A download that fails or
+   is corrupt (`unzip -t`) keeps the previous copy.
+2. streams the records through jq (`unzip -p | jq`, about 90 s on a Pi 3)
+   and counts affected / not affected / unassessable CVE records. Withdrawn
+   and legacy `GSD-*` records are ignored.
+3. writes `/var/lib/rocky-kernel-audit/status` (key=value: `checked_at`,
+   `status`, `reason`, running/installed/repo-newest kernel, `fetch`,
+   `feed_newest_record`, counts) and `affected-cves`.
+
+| Status | Exit | When |
+|---|---|---|
+| OK | 0 | every CVE record assessable, none affects the running version |
+| VULNERABLE | 2 | at least one range covers the running version |
+| UNKNOWN | 3 | kernel not a `raspberrypi2-kernel4` build / unparsable version; feed never fetched; corrupt archive or jq failure; < 5000 CVE records (truncated); newest record older than 72 h (stale feed or stale cache after download failures); unassessable records with no affected match |
+
+**Alerting:** there is no MTA on the Pis (§9.5). A non-zero exit leaves
+`rocky-kernel-audit.service` failed (`systemctl --failed`), the summary goes
+to the journal at err priority (`journalctl -p err -u rocky-kernel-audit`),
+and it is also appended to `/var/log/unattended-upgrade.log` with a
+`kernel-audit:` tag. Nothing ever reports clean without a fresh, complete,
+fully assessed feed. Gogios does not see pi2/pi3 unit state yet (§9.5 option
+(a) is still open).
+
+**First result (2026-09-22, run as paul under ksh93 on pi2 against the live
+feed):** `VULNERABLE: 8479 of 15793 kernel CVEs affect upstream 6.1.31`, with
+repo newest = installed = running `6.1.31-v8.1.el9.altarch`, so no fixed
+AltArch kernel is available. Remediation (a newer SIG AltArch or Raspberry Pi
+kernel, or another OS image) is a separate decision. This audit only makes
+the exposure visible and auditable.
+
+**Tests:** `frontends/scripts/tests/rocky-kernel-audit.ksh` uses synthetic
+feeds with fake `uname`/`rpm`/`dnf`/`curl`. It covers OK, VULNERABLE, the
+`last_affected` boundary, a stale feed, an unreachable source (no cache,
+fresh cache, stale cache), 304, a corrupt download, a truncated feed,
+unassessable records, an unknown kernel and a held lock.
+
+**Deployment:** not yet deployed. It needs explicit approval (task 752
+acceptance). When approved, run it from a tree that builds against the
+committed gonf module version: `./gonf.sh cluster rocky-pis rocky_kernel_audit`.
+Then verify on each Pi with `sudo systemctl start rocky-kernel-audit.service;
+sudo cat /var/lib/rocky-kernel-audit/status`. The expected result is
+VULNERABLE, so the unit ends up failed.
