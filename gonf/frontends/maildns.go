@@ -22,6 +22,9 @@ const (
 	dnsPublishCommand        = "/usr/local/bin/dns-publish.ksh"
 	dnsPublisherDir          = "/var/nsd/etc/gonf-publisher"
 	dnsPublisherZones        = dnsPublisherDir + "/zones"
+	// nsdKeyName is the TSIG key both NSD configurations share; the standby
+	// names it next to the publisher's address in allow-notify/request-xfr.
+	nsdKeyName = DNSPublisher + "." + Domain
 )
 
 // MailDNS contains the frontend SMTP and authoritative-DNS recipes. The
@@ -201,7 +204,7 @@ match from local for any action outbound
 }
 
 func renderNSDKey(key string) string {
-	return fmt.Sprintf("key:\n\tname: blowfish.buetow.org\n\talgorithm: hmac-sha256\n\tsecret: %q\n", key)
+	return fmt.Sprintf("key:\n\tname: %s\n\talgorithm: hmac-sha256\n\tsecret: %q\n", nsdKeyName, key)
 }
 
 func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
@@ -226,7 +229,14 @@ remote-control:
 // renderNSDSlaveConfig renders the standby configuration. keyPath is a
 // ConfigSet member placeholder, which contains NUL bytes: it is concatenated
 // rather than %q-formatted, because quoting would escape the placeholder.
+//
+// NSD's allow-notify and request-xfr take an address followed by a TSIG key
+// name (or NOKEY); a bare hostname does not parse. The address is the DNS
+// publisher's IPv4 from the frontend inventory and the key is nsdKeyName,
+// matching the Rex nsd.conf.slave.tpl ("23.88.35.144 blowfish.buetow.org").
+// The explicit AXFR transfer type is kept from the earlier gonf port.
 func renderNSDSlaveConfig(keyPath string, zones []string) string {
+	master := MustServer(DNSPublisher).IPv4 + " " + nsdKeyName
 	var builder strings.Builder
 	appendString(&builder, "include: \""+keyPath+"\"\n\n")
 	appendString(&builder, `server:
@@ -240,8 +250,8 @@ remote-control:
 	control-interface: /var/run/nsd.sock
 `)
 	for _, zone := range zones {
-		appendf(&builder, "\nzone:\n\tname: %q\n\tzonefile: %q\n\tallow-notify: %q\n\trequest-xfr: AXFR %q\n",
-			zone, filepath.Join("slave", zone+".zone"), DNSPublisher+"."+Domain, DNSPublisher+"."+Domain)
+		appendf(&builder, "\nzone:\n\tname: %q\n\tzonefile: %q\n\tallow-notify: %s\n\trequest-xfr: AXFR %s\n",
+			zone, filepath.Join("slave", zone+".zone"), master, master)
 	}
 	return builder.String()
 }
