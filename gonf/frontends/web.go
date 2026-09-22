@@ -60,14 +60,7 @@ func (Web) HTTPD() {
 			config := File("/etc/httpd.conf", WithContent(renderHTTPD(webData(server))),
 				WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
 				WithValidation("httpd", List("-n", "-f", CandidatePath)))
-			Dir("/var/www/htdocs/buetow.org", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-			self := Dir("/var/www/htdocs/buetow.org/self", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-			fallback := Dir("/var/www/htdocs/f3s_fallback", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-			fallbackIndex := InstallFile("/var/www/htdocs/f3s_fallback/index.html",
-				legacyFrontendAsset("var/www/htdocs/f3s_fallback/index.html"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(fallback))
-			File("/var/www/htdocs/buetow.org/self/index.txt", WithContent("Welcome to "+server.FQDN+"!\n"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(self))
+			fallbackIndex := htdocs(server)
 			Service("httpd", WithRestart, DependsOn(fallbackIndex), OnChange(flags, config))
 		})
 	}
@@ -175,6 +168,26 @@ func nodeExporterFlags(host string) string {
 		}
 	}
 	panic(fmt.Sprintf("no WireGuard address for frontend %q", host))
+}
+
+// htdocs declares the httpd document roots and their static files, and
+// returns the fallback index the httpd service waits for. Ownership matches
+// both frontends as they are (Rex never set any): buetow.org is admin:daemon
+// (admin owns its tmp/ subdirectory), self and f3s_fallback are root:daemon,
+// and self/index.txt is rex:wheel. httpd (www) only reads, which the
+// world-readable modes allow regardless of owner; Gogios writes solely into
+// its own self/gogios (_gogios, declared by the Gogios task) and Foostats
+// runs as root. Re-owning them to root:wheel would only churn the hosts.
+func htdocs(server Server) Resource {
+	Dir("/var/www/htdocs/buetow.org", WithMode(0o755), WithOwner("admin"), WithGroup("daemon"))
+	self := Dir("/var/www/htdocs/buetow.org/self", WithMode(0o755), WithOwner("root"), WithGroup("daemon"))
+	fallback := Dir("/var/www/htdocs/f3s_fallback", WithMode(0o755), WithOwner("root"), WithGroup("daemon"))
+	fallbackIndex := InstallFile("/var/www/htdocs/f3s_fallback/index.html",
+		legacyFrontendAsset("var/www/htdocs/f3s_fallback/index.html"),
+		WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(fallback))
+	File("/var/www/htdocs/buetow.org/self/index.txt", WithContent("Welcome to "+server.FQDN+"!\n"),
+		WithMode(0o644), WithOwner("rex"), WithGroup("wheel"), DependsOn(self))
+	return fallbackIndex
 }
 
 func webData(server Server) webConfigData {
