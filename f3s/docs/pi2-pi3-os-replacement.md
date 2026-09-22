@@ -117,6 +117,7 @@ stage 1.
 | Pi-hole | `~/pihole` compose, bind mounts, `.env` | Unchanged; copy the directory over |
 | Networking | NetworkManager static IP | Static IP via systemd-networkd or ifupdown (whichever the image uses); same IPs 192.168.1.127 / .128 |
 | Privilege | `sudo` (inventory `PrivilegeSudo`) | `sudo`, unchanged |
+| SD-card writes | No wear-specific settings in this repo | Keep write volume low: journald `Storage=volatile` (or a small `SystemMaxUse`), Docker `json-file` log limits (`max-size`/`max-file`), Pi-hole query-log retention kept short, `noatime` on the root mount; apply the same settings through gonf |
 
 ## 6. Interim risk until the migration
 
@@ -163,6 +164,9 @@ hostname).
    - SSH on 22 and dserver on 2222 work
    - a reboot comes back with Pi-hole healthy and uptimed started after chrony sync
    - a manual partner-gated unattended run succeeds
+   - the SD-card write settings are active (`journalctl --header` shows
+     volatile or capped storage, `findmnt /` shows `noatime`, and
+     `docker inspect` shows the log limits)
 6. Soak for at least 7 days, watching DNS answers, memory (`free -m`) and
    the unattended logs.
 
