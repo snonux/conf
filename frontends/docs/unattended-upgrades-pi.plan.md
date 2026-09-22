@@ -416,20 +416,39 @@ aggregate and also belong to the `rocky` aggregate. Each run:
    and legacy `GSD-*` records are ignored.
 3. compares the affected list with the **baseline** `affected-cves`, i.e. the
    list from the last OK/VULNERABLE run, and writes the difference to
-   `new-cves`.
+   `new-cves`. A baseline that is unsorted or holds anything other than CVE
+   ids is treated as empty, with a warning. Otherwise it could never recover,
+   because UNKNOWN runs never replace it.
 4. writes `/var/lib/rocky-kernel-audit/status` via a temp file. The record is
    key=value: `checked_at`, `status`, `previous_status`, `reason`,
    running/installed/repo-newest kernel, `fetch`, `feed_newest_record`,
-   `cve_records`, `affected`, `new_cves`, `unassessable`. The baseline is
-   replaced only after that write succeeds, and UNKNOWN runs never replace
-   it. So CVEs that appear during an outage, or during a run that could not
-   record its result, are still reported as new later.
+   `cve_records`, `affected`, `new_cves`, `unassessable`,
+   `baseline_cve_records`.
+5. commits the baseline, only after the status write succeeded and never
+   after an UNKNOWN result: `affected-cves`, its record count
+   `baseline-cve-records`, and the dated batch appended to
+   `new-cves.history`. If this commit fails, the status record is rewritten
+   as UNKNOWN with the reason, so the record matches the failed unit. CVEs
+   that appear during an outage, or during a run that could not record its
+   result, are therefore still reported as new later.
+
+**Retention:** `new-cves` holds only the latest run's batch and is emptied
+by the next quiet run. `new-cves.history` keeps `<YYYY-MM-DD> <CVE>` lines
+for 90 days (pruned on every successful run; the first run adds the whole
+initial list), so a batch stays visible after it has left `new-cves` and the
+journal.
+
+**Truncation guards:** the feed must hold at least 10000 CVE records, an
+absolute floor for a broken first download (about 15.8k in 2026-09). After
+that, a drop of more than 20% against `baseline-cve-records` also counts as
+truncated. The count only grows in normal operation, because the kernel CNA
+rejects few records.
 
 | Status | Exit | When |
 |---|---|---|
 | OK | 0 | every CVE record assessable, none affects the running version |
 | VULNERABLE | 0 | at least one range covers the running version (upper bound, see above) |
-| UNKNOWN | 3 | kernel not a `raspberrypi2-kernel4` build / unparsable version; feed never fetched; corrupt archive or jq failure; < 5000 CVE records (truncated); newest record older than 72 h (stale feed or stale cache after download failures); unassessable records with no affected match; state directory, new-CVE list, status record or baseline cannot be written |
+| UNKNOWN | 3 | kernel not a `raspberrypi2-kernel4` build / unparsable version; feed never fetched; corrupt archive or jq failure; < 10000 CVE records, or > 20% fewer than the last assessment (truncated); newest record older than 72 h (stale feed or stale cache after download failures); unassessable records with no affected match; state directory, new-CVE list, status record or baseline cannot be written (a failed baseline commit rewrites the record as UNKNOWN) |
 
 **Alerting:** there is no MTA on the Pis (§9.5), so the journal, the unit
 state and `/var/log/unattended-upgrade.log` (lines tagged `kernel-audit:`)
@@ -440,14 +459,23 @@ exists, so it must not look like broken coverage:
 | Signal | Meaning | Where |
 |---|---|---|
 | unit **failed**, err (`<3>`) | UNKNOWN: coverage is broken and needs fixing | `systemctl --failed`, `journalctl -p err -u rocky-kernel-audit` |
-| warning (`<4>`) `NEW: n CVE(s) newly affect the kernel: …` | CVEs not in the baseline (the first run reports the whole list) | `journalctl -p warning -u rocky-kernel-audit`, `new-cves`, `new_cves=` |
+| warning (`<4>`) `NEW: n CVE(s) newly affect the kernel: …` | CVEs not in the baseline (the first run reports the whole list) | `journalctl -p warning -u rocky-kernel-audit`, `new-cves`, `new-cves.history`, `new_cves=` |
 | warning (`<4>`) `status changed: A -> B` | any status transition (e.g. UNKNOWN → VULNERABLE, VULNERABLE → OK after a kernel fix) | same |
 | warning (`<4>`) `WARNING: feed download failed` / `not a valid zip` | fetch problem; still assessed from a fresh cache | same |
+| warning (`<4>`) `WARNING: baseline … unsorted or malformed` | baseline reset: every affected CVE is reported as new once | same |
 | notice (`<5>`) / info (`<6>`) | unchanged VULNERABLE / OK summary | `journalctl -u rocky-kernel-audit` |
 
-Nothing reports OK without a fresh, complete, fully assessed feed. Gogios
-does not see pi2/pi3 unit state or journal priorities yet (§9.5 option (a) is
-still open).
+Nothing reports OK without a fresh, complete, fully assessed feed.
+
+**Known gap: no off-host alerting.** Every signal above stays on the Pi.
+Nothing forwards it: there is no MTA and no gogios check of pi2/pi3 unit
+state or journal priorities. DTail can read the log on demand, but it alerts
+on nothing. A timer that stops firing (unit disabled or masked, timer lost,
+host clock broken) goes undetected as well, because `checked_at` in the
+status record has no consumer yet. Closing this means taking the §9.5
+notification decision, e.g. option (a): a gogios check that reads
+`status`/`checked_at` from both Pis and alerts on UNKNOWN, on new CVEs, or on
+a `checked_at` older than about 36 h.
 
 **First result (2026-09-22, run as paul under ksh93 on pi2 against the live
 feed):** `VULNERABLE: 8479 of 15793 kernel CVEs affect upstream 6.1.31`, with
@@ -472,10 +500,14 @@ Python `zip`/`unzip` shims via `TEST_EXTRA_PATH`. It covers:
   warning; a new CVE is reported alone; a stale UNKNOWN run leaves the
   baseline untouched and coverage restored reports nothing new; status-change
   warnings; err priority for UNKNOWN; the conditional GET (`-z` only with a
-  cached copy).
+  cached copy); the dated history (no duplicates, 90-day pruning, survives
+  a quiet run that empties `new-cves`); an unsorted and a malformed
+  baseline (warning, treated as empty, then recovered); a failed baseline
+  commit (consistent UNKNOWN record; the next run reports the CVEs again).
 - coverage failures: unassessable records; a stale feed; an unreachable
   source with no cache, a fresh cache and a stale cache; 304; a corrupt
-  download that keeps the cache; a truncated feed; an unknown kernel
+  download that keeps the cache; a truncated feed (floor); a > 20% record
+  drop against the baseline count, and recovery after it; an unknown kernel
   (`fetch=skipped`); a held lock; a failed status write that keeps the old
   record and does not consume new CVEs; an uncreatable state directory.
 

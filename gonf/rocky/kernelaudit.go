@@ -61,8 +61,9 @@ func (KernelAudit) DescStateDir() string {
 	return "Ensure /var/lib/rocky-kernel-audit (feed cache + status)"
 }
 
-// StateDir creates the directory holding the cached feed, the status record
-// and the affected-CVE list.
+// StateDir creates the directory holding the run lock, the cached feed, the
+// status record, the affected-CVE baseline (with its record count) and the
+// new-CVE list plus its dated 90-day history.
 func (KernelAudit) StateDir() {
 	WhenHostname(ClusterHosts(), func() {
 		EnsureDir("/var/lib/rocky-kernel-audit",
@@ -76,8 +77,10 @@ func (KernelAudit) DescUnits() string {
 }
 
 // Units installs the daily oneshot+timer pair. Persistent catches a run
-// missed while the Pi was down; a non-OK audit exits non-zero, so the
-// service's failed state is the alert (the Pis have no MTA).
+// missed while the Pi was down. Only UNKNOWN (broken coverage) exits
+// non-zero, so a failed service means the audit itself needs attention;
+// VULNERABLE is reported in the journal at notice/warning priority (new
+// CVEs, status changes) and in the status record. The Pis have no MTA.
 func (KernelAudit) Units() {
 	for _, host := range ClusterHosts() {
 		calendar := MustHostValue[string](host, cluster.ValueKernelAuditOnCalendar)

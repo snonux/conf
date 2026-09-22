@@ -15,9 +15,10 @@
 #               the running upstream version
 #   VULNERABLE  at least one CVE range covers the running version
 #   UNKNOWN     coverage unavailable: unknown/non-AltArch kernel, feed never
-#               fetched, feed stale, corrupt or truncated, a CVE record that
-#               cannot be assessed while none is known to affect, or the
-#               state cannot be written
+#               fetched, feed stale, corrupt or truncated (below the floor or
+#               >20% fewer records than the last assessment), a CVE record
+#               that cannot be assessed while none is known to affect, or the
+#               state (status, new-CVE list, baseline) cannot be written
 #
 # Alerting (the Pis have no MTA, plan §9.5/§13): only UNKNOWN — broken
 # coverage — exits non-zero (3) and so fails the systemd oneshot unit, with an
@@ -25,8 +26,8 @@
 # AltArch kernel exists, so it exits 0 and is reported against a baseline
 # (the affected list of the previous successful assessment): CVEs newly
 # affecting the kernel, and any status change, are logged at warning
-# priority and listed in $NEW_FILE; an unchanged VULNERABLE result is a
-# notice. Journal priorities use the sd-daemon "<N>" stdout prefix; every
+# priority and listed in $NEW_FILE (plus the dated $HISTORY_FILE); an
+# unchanged VULNERABLE result is a notice. Journal priorities use the sd-daemon "<N>" stdout prefix; every
 # line is also appended to the shared /var/log/unattended-upgrade.log.
 #
 # Coverage caveats — the affected count is an UPPER bound for kernel-CNA CVEs
@@ -65,8 +66,15 @@ readonly FETCH_TIMEOUT=900
 # continuously; no record modified within this window means the feed (or our
 # cached copy of it) stopped moving.
 readonly MAX_FEED_AGE_HOURS=${ROCKY_KERNEL_AUDIT_TEST_MAX_AGE_HOURS:-72}
-# ~15.8k CVE records in 2026-09; far fewer means a truncated export.
-readonly MIN_CVE_RECORDS=${ROCKY_KERNEL_AUDIT_TEST_MIN_RECORDS:-5000}
+# Truncation guards. The absolute floor catches a broken first download
+# (~15.8k CVE records in 2026-09); after that, a drop of more than
+# MAX_RECORD_DROP_PCT against the record count of the last successful
+# assessment ($BASELINE_RECORDS) counts as a truncated export too. The kernel
+# CNA rejects few records, so the count only grows in normal operation.
+readonly MIN_CVE_RECORDS=${ROCKY_KERNEL_AUDIT_TEST_MIN_RECORDS:-10000}
+readonly MAX_RECORD_DROP_PCT=20
+# Days of dated new-CVE batches kept in $HISTORY_FILE.
+readonly HISTORY_DAYS=90
 # How many new CVE ids the warning line names before pointing at $NEW_FILE.
 readonly NEW_IDS_IN_LOG=10
 
@@ -78,7 +86,12 @@ STATUS_FILE=$STATE_DIR/status
 # Baseline: affected CVEs of the last successful (OK/VULNERABLE) assessment.
 AFFECTED_FILE=$STATE_DIR/affected-cves
 AFFECTED_NEXT=$STATE_DIR/affected-cves.next
+BASELINE_RECORDS=$STATE_DIR/baseline-cve-records
+# new-cves: the latest run's batch (empty when nothing is new).
+# new-cves.history: "<YYYY-MM-DD> <CVE>" lines for HISTORY_DAYS, so a batch
+# stays visible after the next (quiet) run overwrites new-cves.
 NEW_FILE=$STATE_DIR/new-cves
+HISTORY_FILE=$STATE_DIR/new-cves.history
 RESULTS=$STATE_DIR/results.tmp
 
 # jq filter over the concatenated OSV records. Per record it prints
@@ -138,7 +151,7 @@ installed_newest=unknown
 repo_newest=unknown
 fetch=skipped
 feed_newest=none
-typeset -i cves=0 affected=0 unassessable=0 new_count=0
+typeset -i cves=0 affected=0 unassessable=0 new_count=0 baseline_cves=0
 
 # log <priority> <message>: shared log file plus stdout with the sd-daemon
 # priority prefix (3 err, 4 warning, 5 notice, 6 info) the journal parses.
@@ -258,6 +271,12 @@ decide_status() {
 		reason="feed holds $cves CVE records (< $MIN_CVE_RECORDS): truncated"
 		return 0
 	fi
+	if [ $((cves * 100)) -lt $((baseline_cves * (100 - MAX_RECORD_DROP_PCT))) ]
+	then
+		reason="feed shrank from $baseline_cves to $cves CVE records"
+		reason="$reason (> ${MAX_RECORD_DROP_PCT}% drop): truncated"
+		return 0
+	fi
 	age=$(feed_age_hours) || {
 		reason="cannot parse newest record time '$feed_newest'"
 		return 0
@@ -277,24 +296,68 @@ decide_status() {
 	fi
 }
 
+# A usable baseline is C-sorted (what comm needs) and holds only CVE ids.
+baseline_valid() {
+	LC_ALL=C sort -c "$1" 2>/dev/null \
+		&& ! grep -qvE '^CVE-[0-9]+-[0-9]+$' "$1"
+}
+
 # After a successful assessment: $NEW_FILE = CVEs not in the previous
-# baseline (all of them on the first run). The baseline itself is replaced
-# only by commit_baseline, after the status record is written, so a run that
-# fails to record its result reports the same CVEs as new next time. UNKNOWN
-# runs never touch the baseline either: CVEs that appear during an outage are
-# still reported as new once coverage returns.
+# baseline (all of them on the first run). An invalid baseline (hand-edited,
+# corrupt) is treated as missing with a warning rather than failing every
+# run: UNKNOWN runs never replace it, so it would never recover. The
+# baseline itself is replaced only by commit_baseline, after the status
+# record is written, so a run that fails to record its result reports the
+# same CVEs as new next time; UNKNOWN runs never touch it either, so CVEs
+# that appear during an outage are still reported once coverage returns.
 compute_new() {
 	typeset base
 	base=$AFFECTED_FILE
-	[ -f "$base" ] || base=/dev/null
+	if [ ! -f "$base" ]; then
+		base=/dev/null
+	elif ! baseline_valid "$base"; then
+		log 4 "WARNING: baseline $AFFECTED_FILE is unsorted or malformed, treating it as empty"
+		base=/dev/null
+	fi
 	LC_ALL=C comm -13 "$base" "$AFFECTED_NEXT" >"$NEW_FILE.tmp" \
 		&& mv "$NEW_FILE.tmp" "$NEW_FILE" || return 1
 	new_count=$(wc -l <"$NEW_FILE")
 }
 
+# Appends this run's new CVEs, dated, to $HISTORY_FILE and drops entries
+# older than HISTORY_DAYS.
+update_history() {
+	typeset today cutoff
+	today=$(date -u +%F)
+	cutoff=$(date -u -d "-$HISTORY_DAYS days" +%F) || return 1
+	touch "$HISTORY_FILE" || return 1
+	awk -v d="$today" '{ print d, $0 }' "$NEW_FILE" >>"$HISTORY_FILE" \
+		&& awk -v c="$cutoff" '$1 >= c' "$HISTORY_FILE" >"$HISTORY_FILE.tmp" \
+		&& mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
+}
+
+# Adopts this run's affected list and record count as the new baseline
+# (OK/VULNERABLE only) and records the new CVEs in the history.
 commit_baseline() {
 	case $status in
-	OK | VULNERABLE) mv "$AFFECTED_NEXT" "$AFFECTED_FILE" ;;
+	OK | VULNERABLE) ;;
+	*) return 0 ;;
+	esac
+	mv "$AFFECTED_NEXT" "$AFFECTED_FILE" || return 1
+	printf '%d\n' "$cves" >"$BASELINE_RECORDS.tmp" \
+		&& mv "$BASELINE_RECORDS.tmp" "$BASELINE_RECORDS" || return 1
+	update_history
+}
+
+# Reads the record count of the last successful assessment (0 = none, or
+# not a number: the drop guard is then off and only the floor applies).
+read_baseline_records() {
+	typeset n
+	[ -f "$BASELINE_RECORDS" ] || return 0
+	n=$(cat "$BASELINE_RECORDS" 2>/dev/null)
+	case $n in
+	'' | *[!0-9]*) log 4 "WARNING: ignoring malformed $BASELINE_RECORDS" ;;
+	*) baseline_cves=$n ;;
 	esac
 }
 
@@ -340,6 +403,8 @@ new_cves=$new_count
 unassessable=$unassessable
 affected_list=$AFFECTED_FILE
 new_list=$NEW_FILE
+new_history=$HISTORY_FILE
+baseline_cve_records=$baseline_cves
 EOF
 }
 
@@ -377,15 +442,20 @@ main() {
 		previous_status=$(sed -n 's/^status=//p' "$STATUS_FILE")
 	fi
 	[ -n "$previous_status" ] || previous_status=none
+	read_baseline_records
 	run_audit
 	if ! write_status; then
 		rm -f "$STATUS_FILE.tmp"
 		log 3 "UNKNOWN: cannot write $STATUS_FILE (result was $status: $reason)"
 		exit 3
 	fi
+	# The status is written before the baseline so a failed status write
+	# does not consume the new CVEs; a failed baseline commit then rewrites
+	# the record as UNKNOWN so it matches the failed unit.
 	if ! commit_baseline; then
-		log 3 "UNKNOWN: cannot update the baseline $AFFECTED_FILE (result was $status: $reason)"
-		exit 3
+		reason="cannot update the baseline in $STATE_DIR (assessed $status: $reason)"
+		status=UNKNOWN
+		write_status || rm -f "$STATUS_FILE.tmp"
 	fi
 	report
 }

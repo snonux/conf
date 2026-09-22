@@ -73,7 +73,20 @@ unchanged) exit 0 ;;
 *) cp "$FAKE_CURL" "$out" ;;
 esac
 EOF
-chmod +x "$fake/uname" "$fake/rpm" "$fake/dnf" "$fake/curl"
+# FAKE_MV_FAIL=<basename>: mv onto that name fails (simulates a baseline
+# commit that cannot be written); every other mv is the real one.
+real_mv=$(command -v mv)
+cat >"$fake/mv" <<EOF
+#!/bin/sh
+if [ -n "\${FAKE_MV_FAIL:-}" ]; then
+	for last in "\$@"; do :; done
+	case \$last in
+	*/"\$FAKE_MV_FAIL") exit 1 ;;
+	esac
+fi
+exec $real_mv "\$@"
+EOF
+chmod +x "$fake/uname" "$fake/rpm" "$fake/dnf" "$fake/curl" "$fake/mv"
 
 fresh=$(date -u -d '-1 hour' '+%Y-%m-%dT%H:%M:%S.123456Z')
 stale=$(date -u -d '-100 hours' '+%Y-%m-%dT%H:%M:%SZ')
@@ -150,6 +163,7 @@ feed() {
 feed vuln "$fresh" affected newer older withdrawn gsd
 feed vulnmore "$fresh" affected affected2 newer older
 feed clean "$fresh" newer older gsd
+feed cleanbig "$fresh" newer older fixedat listmiss
 feed last "$fresh" last newer
 feed fixedat "$fresh" fixedat newer
 feed laterange "$fresh" laterange newer
@@ -158,7 +172,7 @@ feed badevent "$fresh" badevent newer
 feed lists "$fresh" listhit listmiss
 feed multifix "$fresh" multifix
 feed unassessable "$fresh" newer gitonly
-feed stale "$stale" affected newer
+feed stale "$stale" affected affected2 newer older
 printf 'not a zip\n' >"$work/corrupt.zip"
 
 state="$work/state"
@@ -285,9 +299,60 @@ field 'previous_status=UNKNOWN' 'previous status'
 has "$work/out" '^<4>status changed: UNKNOWN -> VULNERABLE' \
 	'status change after UNKNOWN'
 
-run_audit "$work/clean.zip"
+today=$(date -u +%F)
+has "$state/new-cves.history" "^$today CVE-2024-0001\$" 'history: first batch'
+has "$state/new-cves.history" "^$today CVE-2024-0007\$" 'history: later batch'
+[ "$(grep -c 'CVE-2024-0001' "$state/new-cves.history")" -eq 1 ] \
+	|| fail 'history duplicates an unchanged CVE'
+[ ! -s "$state/new-cves" ] || fail 'new-cves not reset by a quiet run'
+
+printf '2000-01-01 CVE-1999-0001\n' >>"$state/new-cves.history"
+run_audit "$work/cleanbig.zip"
 expect 0 OK 'fixed kernel'
 has "$work/out" '^<4>status changed: VULNERABLE -> OK' 'status change to OK'
+hasnt "$state/new-cves.history" 'CVE-1999-0001' 'history not pruned'
+has "$state/new-cves.history" 'CVE-2024-0007' 'history lost a recent batch'
+
+# An invalid baseline is treated as empty (with a warning) and rewritten,
+# instead of failing every future run.
+fresh_state
+run_audit "$work/vulnmore.zip"
+printf 'CVE-2024-0007\nCVE-2024-0001\n' >"$state/affected-cves"
+run_audit "$work/vulnmore.zip"
+expect 0 VULNERABLE 'unsorted baseline'
+has "$work/out" '^<4>WARNING: baseline .* unsorted or malformed' \
+	'invalid baseline warning'
+field 'new_cves=2' 'invalid baseline counts as empty'
+run_audit "$work/vulnmore.zip"
+field 'new_cves=0' 'baseline recovered'
+printf 'garbage\n' >"$state/affected-cves"
+run_audit "$work/vulnmore.zip"
+expect 0 VULNERABLE 'malformed baseline'
+field 'new_cves=2' 'malformed baseline counts as empty'
+
+# A baseline commit that fails leaves a consistent UNKNOWN record, and the
+# new CVEs are reported again by the next run.
+fresh_state
+run_audit "$work/vuln.zip" FAKE_MV_FAIL=affected-cves
+expect 3 UNKNOWN 'baseline commit failure'
+has "$state/status" '^reason=cannot update the baseline' \
+	'baseline commit reason'
+has "$work/out" '^<3>UNKNOWN: cannot update the baseline' \
+	'baseline commit error'
+run_audit "$work/vuln.zip"
+expect 0 VULNERABLE 'after a failed baseline commit'
+field 'new_cves=1' 'failed commit must not consume the new CVEs'
+
+# A record count that drops by more than 20% against the last assessment
+# is a truncated export; the baseline count survives the UNKNOWN run.
+fresh_state
+run_audit "$work/cleanbig.zip"
+field 'baseline_cve_records=0' 'no baseline count on the first run'
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'record count drop'
+has "$state/status" '^reason=feed shrank from 4 to 2' 'drop reason'
+run_audit "$work/cleanbig.zip"
+expect 0 OK 'record count restored'
 
 # --- coverage failures -------------------------------------------------
 
