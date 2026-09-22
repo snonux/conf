@@ -47,7 +47,6 @@ func frontendSetupTasks() []string {
 		"frontends_newsyslog",
 		"frontends_nsd",
 		"frontends_pf",
-		"frontends_ping",
 		"frontends_pkg_repo",
 		"frontends_relayd",
 		"frontends_rsync",
@@ -62,13 +61,16 @@ func frontendSetupTasks() []string {
 
 // frontendExcludedTasks returns the frontends_* tasks that deliberately stay
 // out of the frontends aggregate: frontends_acme_invoke (requesting
-// certificates) and frontends_irc_bouncer (the existing ZNC deployment). Both
+// certificates), frontends_irc_bouncer (the existing ZNC deployment) and
+// frontends_ping (the push-pipeline diagnostic, excluded on the owner's
+// decision of 2026-09-22 so diagnostics stay separate from setup). All three
 // are marked Operational (see their OptsX companions) and stay explicit,
 // by-name actions.
 func frontendExcludedTasks() []string {
 	return []string{
 		"frontends_acme_invoke",
 		"frontends_irc_bouncer",
+		"frontends_ping",
 	}
 }
 
@@ -95,7 +97,8 @@ func Register() {
 	// The frontends aggregate lists its setup members explicitly (see
 	// frontendSetupTasks): ACME invocation is excluded because setup only
 	// installs its config and daily hook, while requesting certificates
-	// remains an explicit action; the IRC bouncer likewise stays by-name.
+	// remains an explicit action; the IRC bouncer and the ping diagnostic
+	// likewise stay by-name.
 	// checkFrontendMembership then refuses any frontends_* task that is
 	// neither a member nor explicitly excluded.
 	AggregateTasks("frontends", "Install all frontend configuration except explicit ACME invocation", frontendSetupTasks()...)

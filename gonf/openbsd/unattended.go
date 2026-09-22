@@ -43,9 +43,11 @@ type Unattended struct {
 	RequiresRoot
 }
 
-// OptsSmoke opts Ping out of the struct-level Privileged default: the
-// pipeline smoke test must stay unprivileged.
-func (Unattended) OptsPing() TaskOptions { return TaskOptions{} }
+// OptsPing opts Ping out of the struct-level Privileged default (the
+// pipeline smoke test must stay unprivileged) and marks it Operational: it is
+// a diagnostic, run by name, never part of the frontends setup aggregate
+// (see frontendExcludedTasks in gonf/tasks/tasks.go).
+func (Unattended) OptsPing() TaskOptions { return TaskOptions{Operational()} }
 
 // DescPing returns the description shown for the frontends_ping task.
 func (Unattended) DescPing() string {

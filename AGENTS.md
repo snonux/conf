@@ -63,9 +63,10 @@ RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(clus
 
 All aggregates are registered in `gonf/tasks/tasks.go`. Most are pattern
 `Aggregate`s; `frontends` is an `AggregateTasks` with an explicit member list
-(`frontendSetupTasks`). The operational `frontends_acme_invoke` and
-`frontends_irc_bouncer` are marked `Operational()` and listed in
-`frontendExcludedTasks` instead. `checkFrontendMembership` panics at
+(`frontendSetupTasks`). The operational `frontends_acme_invoke`,
+`frontends_irc_bouncer` and `frontends_ping` (the unprivileged push-pipeline
+diagnostic, excluded since 2026-09-22) are marked `Operational()` and listed
+in `frontendExcludedTasks` instead. `checkFrontendMembership` panics at
 registration (so every invocation, `-list` included, fails) when a
 `frontends_*` task is in neither list, or a listed name is not registered:
 a new frontend task must be added to one of the two lists.
