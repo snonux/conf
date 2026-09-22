@@ -607,8 +607,6 @@ task 'gogios',
     pkg 'monitoring-plugins', ensure => present;
     pkg 'nrpe',               ensure => present;
 
-    my $gogios_path = '/usr/local/bin/gogios';
-
     # Ensure gogios is installed from the package repo.
     # Must pass on => connection->server so Rex runs the sub-task on the
     # remote host instead of falling back to localhost (Linux).

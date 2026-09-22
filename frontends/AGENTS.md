@@ -77,9 +77,13 @@ or lookup tables, and NSD restarts for its key, config, zones, or flags.
 The NSD TSIG source is controller-local and ignored at
 `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` (0600). Use the Gonf secret
 helper; never put its value in a resource name, description, command argument,
-log line, or standard-output plan. The DNS-failover cron migration removes
-only legacy unmarked command lines before creating its named Gonf block, so do
-not reintroduce raw crontab surgery in Rex or a shell helper.
+log line, or standard-output plan. The NSD DNS-failover, rsync, PF
+labels-exporter and Gogios cron jobs are adopted by exact-command
+`WithLegacyCommand`: an unmarked crontab line whose command equals it exactly
+is replaced by the named Gonf block. A legacy line that differs in any way is
+not adopted and would run next to the Gonf job, so check `crontab -l` before
+changing a command, and do not reintroduce raw crontab surgery in Rex or a
+shell helper.
 
 ## Template Processing
 
