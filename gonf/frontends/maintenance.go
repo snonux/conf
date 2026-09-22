@@ -53,7 +53,7 @@ func (Maintenance) DescBase() string {
 func (Maintenance) Base() {
 	ForHosts(ValueServer, func(_ string, server Server) {
 		Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
-		EnsureFile("/etc/rc.local")
+		ensureRCLocal()
 		rcConfLocalLine(pkgScriptsLine(server.Name), "rc-conf-pkg-scripts-"+server.Name)
 	})
 }
@@ -78,9 +78,16 @@ func (Maintenance) DescWireGuardHosts() string {
 }
 
 // WireGuardHosts appends the source-controlled mesh rows without replacing
-// administrator-owned /etc/hosts content.
+// administrator-owned /etc/hosts content. The mode and ownership are explicit
+// (0644 root:wheel, as on both frontends): a line edit without WithMode
+// applies gonf's 0640 default even when every line is already present, and
+// an unreadable /etc/hosts breaks wg0 name resolution for every non-root
+// daemon (Gogios checks run as _gogios).
 func (Maintenance) WireGuardHosts() {
-	onFrontends(func() { File("/etc/hosts", WithLines(WireGuardHostLines()...)) })
+	onFrontends(func() {
+		File("/etc/hosts", WithLines(WireGuardHostLines()...),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+	})
 }
 
 // DescUptimed returns the description shown for the uptime recorder task.
@@ -264,6 +271,14 @@ func onFrontends(fn func()) {
 
 func legacyFrontendAsset(name string) string {
 	return filepath.Join(paths.Frontends, name)
+}
+
+// ensureRCLocal declares /etc/rc.local with the attributes it has on both
+// frontends, 0644 root:wheel. Base and Gogios both declare it, and every
+// declaration and line edit of the file must agree: a line edit without a
+// mode would chmod it to gonf's 0640 default on every apply.
+func ensureRCLocal() Resource {
+	return EnsureFile("/etc/rc.local", WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 }
 
 // rcConfLocalLine declares one line of /etc/rc.conf.local under name. Every

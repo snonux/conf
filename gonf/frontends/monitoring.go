@@ -26,9 +26,13 @@ func (Monitoring) DescPkgRepo() string {
 
 // PkgRepo preserves Rex's root-shell convenience setting. Custom package
 // resources below also set PKG_PATH directly, so non-login applies are safe.
+// The mode and ownership are explicit (0644 root:wheel, as on both
+// frontends) because a line edit without WithMode applies gonf's 0640
+// default even when the line is already present.
 func (Monitoring) PkgRepo() {
 	onFrontends(func() {
-		File("/root/.profile", WithLine("export PKG_PATH="+customOpenBSDPackages))
+		File("/root/.profile", WithLine("export PKG_PATH="+customOpenBSDPackages),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 	})
 }
 
@@ -87,11 +91,11 @@ func (Monitoring) Gogios() {
 				WithLegacyCommand("/usr/local/bin/gogios >/dev/null 2>&1"), WithMinute("*/5"), WithHour("8-22"), DependsOn(config, plugin))
 			Cron("gogios-force", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"),
 				WithLegacyCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"), WithMinute("0"), WithHour("3"), WithWeekday("0"), DependsOn(config, plugin))
-			EnsureFile("/etc/rc.local")
+			rcLocal := ensureRCLocal()
 			File("/etc/rc.local",
 				WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
 				WithLine("chown _gogios /var/run/gogios"),
-				DependsOn(account))
+				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(account, rcLocal))
 		})
 	}
 }
