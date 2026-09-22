@@ -641,6 +641,33 @@ age_contact releases 40
 run
 expect 3 UNKNOWN 'releases page not refreshed past 36 h'
 
+# The real cdn.NetBSD.org index (captured 2026-09-22 on pi0, entries
+# trimmed) uses CRLF line ends and a trailing empty CRLF line; the real
+# releases page ends "</div></body>\n</html>\n". Both must count as
+# complete.
+fresh
+{
+	printf '<html><head><title>Index of pub/NetBSD/security/advisories/</title></head>\r\n'
+	printf '<body><table cols=3>\r\n'
+	for a in $old_advisories NetBSD-SA2024-001 NetBSD-SA2024-002; do
+		printf '<tr><td><a href="%s.txt.asc">%s.txt.asc</a><td>02-Jul-2024 19:31<td align=right>7kB\r\n' "$a" "$a"
+	done
+	printf '<tr><td><a href="NetBSD-SN20061214-1.txt.asc">NetBSD-SN20061214-1.txt.asc</a><td>14-Dec-2006 20:24<td align=right>3kB\r\n'
+	printf '</table>\r\n</body></html>\r\n\r\n'
+} >"$web/index.html"
+{
+	sed '$d' "$web/releases.html"
+	printf '<div class="footer"><span>(C) 1994-2026 The NetBSD\n\tFoundation, Inc.</span>\n</div></div>\n</div></body>\n</html>\n'
+} >"$work/rel" && cp "$work/rel" "$web/releases.html"
+run
+expect 0 OK 'real page tails (CRLF index, releases footer)'
+field 'fetch_advisory_index=updated' 'CRLF index rejected'
+field 'fetch_releases=updated' 'releases footer rejected'
+# The same index cut off before </html> (a truncated transfer) is not.
+head -c 300 "$web/index.html" >"$work/idx" && cp "$work/idx" "$web/index.html"
+run
+field 'fetch_advisory_index=corrupt' 'truncated CRLF index accepted'
+
 # </html> must end the page, not merely appear in it.
 fresh
 releases 11:11.0

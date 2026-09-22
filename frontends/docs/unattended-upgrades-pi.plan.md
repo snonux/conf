@@ -693,8 +693,8 @@ security signal at all.
 | Component | Source | Integrity / freshness |
 |---|---|---|
 | pkgs | `https://cdn.NetBSD.org/pub/NetBSD/packages/vulns/pkg-vulnerabilities.gz`, the pkgsrc-security list (≈30k lines, revision 1.794 of 2026-09-16) | `pkg_admin check-pkg-vulnerabilities` checks the format and the embedded SHA512 hash, which also catches truncation. The list's own `$NetBSD` date must be at most 30 days old. A server copy with a lower revision is never installed. |
-| base | "Supported Releases" section of `https://www.netbsd.org/releases/` | must contain the section, and its last non-empty line must hold `</html>` |
-| base | advisory index `https://cdn.NetBSD.org/pub/NetBSD/security/advisories/` plus each in-scope `NetBSD-SA*.txt.asc` | index: last non-empty line holds `</html>`, at least 250 advisories (289 in 2026-09), every cached in-scope advisory still listed |
+| base | "Supported Releases" section of `https://www.netbsd.org/releases/` | must contain the section and end with `</html>` (only whitespace, CR included, after it) |
+| base | advisory index `https://cdn.NetBSD.org/pub/NetBSD/security/advisories/` plus each in-scope `NetBSD-SA*.txt.asc` | index: ends with `</html>` (only whitespace after it; the real index has CRLF lines and a trailing empty CRLF line), at least 250 advisories (289 in 2026-09), every cached in-scope advisory still listed |
 
 The embedded OpenPGP signature of `pkg-vulnerabilities` is not verified. That
 needs the pkgsrc-security key in a netpgp keyring (`GPG_KEYRING_PKGVULN`),

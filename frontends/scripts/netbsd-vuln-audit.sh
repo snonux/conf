@@ -567,10 +567,19 @@ detect_release() {
 	return 1
 }
 
+# page_complete <file>: the last line with anything but blanks, tabs or
+# carriage returns ends in </html> (trailing blanks/CR allowed).
+page_complete() {
+	awk '{ sub(/[ \t\r]+$/, "") } /[^ \t]/ { l = $0 }
+		END { exit l !~ /<\/html>$/ }' "$1"
+}
+
 # refresh_page <url> <cache> <marker>: refreshes a page whose download
-# counts only when it contains <marker> and its last non-empty line holds
-# </html> (a truncated page never replaces the cache). Leaves the result in $fetched (corrupt
-# for a failed check); <source> contact is recorded by the caller.
+# counts only when it contains <marker> and ends with </html> followed by
+# nothing but whitespace (a truncated page never replaces the cache). The
+# cdn.NetBSD.org index ends in CRLF lines plus an empty "\r\n" line, so
+# carriage returns count as whitespace. Leaves the result in $fetched
+# (corrupt for a failed check); <source> contact is recorded by the caller.
 refresh_page() {
 	typeset page_url="$1" page_cache="$2" page_marker="$3"
 	typeset page_part="$TMP/page"
@@ -579,8 +588,7 @@ refresh_page() {
 	failed) log warning "WARNING: download failed ($page_url)" ;;
 	updated)
 		if grep -q "$page_marker" "$page_part" \
-			&& awk 'NF { l = $0 } END { exit l !~ /<\/html>/ }' \
-				"$page_part"; then
+			&& page_complete "$page_part"; then
 			mv "$page_part" "$page_cache" || fetched=failed
 		else
 			fetched=corrupt
