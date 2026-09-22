@@ -52,15 +52,12 @@ func (Maintenance) DescBase() string {
 // account, and service are deliberately owned by the later custom-package
 // migration task.
 func (Maintenance) Base() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
-			EnsureFile("/etc/rc.local")
-			File("/etc/rc.conf.local", WithLine(pkgScriptsLine(server.Name)),
-				WithName("rc-conf-pkg-scripts-"+server.Name))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
+		EnsureFile("/etc/rc.local")
+		File("/etc/rc.conf.local", WithLine(pkgScriptsLine(server.Name)),
+			WithName("rc-conf-pkg-scripts-"+server.Name))
+	})
 }
 
 // DescMyname returns the description shown for the frontend hostname task.
@@ -71,13 +68,10 @@ func (Maintenance) DescMyname() string {
 // Myname writes the stable FQDN from inventory rather than rendering the Rex
 // closure-based template on the destination.
 func (Maintenance) Myname() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			File("/etc/myname", WithContent(server.FQDN+"\n"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		File("/etc/myname", WithContent(server.FQDN+"\n"),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+	})
 }
 
 // DescWireGuardHosts returns the description shown for the hosts task.
@@ -112,31 +106,31 @@ func (Maintenance) DescGoprecords() string {
 // Goprecords installs the uploader on every frontend. A host lacking its
 // controller-side token receives no token, hook, or schedule, matching Rex's
 // safe skip behavior while keeping a missing token out of plans and logs.
+//
+// The token is read inside the ForHosts body, so a push to one frontend only
+// resolves that frontend's token; other hosts' tokens are never read.
 func (Maintenance) Goprecords() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
+	ForHosts(ValueServer, func(_ string, server Server) {
 		token, ok := OptionalSecret(paths.FrontendSecret("etc/goprecords/" + server.Name + ".token"))
-		WhenHostname(host, func() {
-			Package("curl")
-			if !ok {
-				return
-			}
-			token = strings.TrimRight(token, "\r\n")
-			if token == "" {
-				return
-			}
-			File("/etc/goprecords-upload.token", WithContent(token+"\n"),
-				WithMode(0o600), WithOwner("root"), WithGroup("wheel"))
-			uploader := InstallFile("/usr/local/bin/goprecords-upload-client.sh",
-				legacyFrontendAsset("scripts/goprecords-upload-client.sh"),
-				WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-			NoFile("/usr/local/bin/goprecords-upload.sh")
-			File(dailyLocal,
-				WithoutLine("/usr/local/bin/goprecords-upload.sh"),
-				WithLine("GOPRECORDS_HOST="+server.Name+" /usr/local/bin/goprecords-upload-client.sh"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(uploader))
-		})
-	}
+		Package("curl")
+		if !ok {
+			return
+		}
+		token = strings.TrimRight(token, "\r\n")
+		if token == "" {
+			return
+		}
+		File("/etc/goprecords-upload.token", WithContent(token+"\n"),
+			WithMode(0o600), WithOwner("root"), WithGroup("wheel"))
+		uploader := InstallFile("/usr/local/bin/goprecords-upload-client.sh",
+			legacyFrontendAsset("scripts/goprecords-upload-client.sh"),
+			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+		NoFile("/usr/local/bin/goprecords-upload.sh")
+		File(dailyLocal,
+			WithoutLine("/usr/local/bin/goprecords-upload.sh"),
+			WithLine("GOPRECORDS_HOST="+server.Name+" /usr/local/bin/goprecords-upload-client.sh"),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(uploader))
+	})
 }
 
 // DescRsync returns the description shown for the frontend rsync task.
@@ -183,18 +177,15 @@ func (Maintenance) DescACME() string {
 // actual invocation remains a separate network-service task so a setup plan
 // cannot request certificates or restart daemons.
 func (Maintenance) ACME() {
-	for _, host := range ClusterHosts() {
-		server := MustHostValue[Server](host, ValueServer)
-		WhenHostname(host, func() {
-			data := acmeData(server)
-			config := InstallFile("/etc/acme-client.conf", frontendAsset("acme-client.conf.tmpl"),
-				WithTemplateData(data), WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-			script := InstallFile("/usr/local/bin/acme.sh", frontendAsset("acme.sh.tmpl"),
-				WithTemplateData(data), WithMode(0o744), WithOwner("root"), WithGroup("wheel"))
-			File(dailyLocal, WithLine("/usr/local/bin/acme.sh"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(config, script))
-		})
-	}
+	ForHosts(ValueServer, func(_ string, server Server) {
+		data := acmeData(server)
+		config := InstallFile("/etc/acme-client.conf", frontendAsset("acme-client.conf.tmpl"),
+			WithTemplateData(data), WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+		script := InstallFile("/usr/local/bin/acme.sh", frontendAsset("acme.sh.tmpl"),
+			WithTemplateData(data), WithMode(0o744), WithOwner("root"), WithGroup("wheel"))
+		File(dailyLocal, WithLine("/usr/local/bin/acme.sh"),
+			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(config, script))
+	})
 }
 
 // DescIRCBouncer returns the description shown for the fishfinger-only ZNC

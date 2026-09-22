@@ -8,8 +8,8 @@ import (
 )
 
 // Cluster names — the source of truth for which hosts a task package targets.
-// RegisterMethods(..., WithCluster(Name…)) so recipes use ClusterHosts() /
-// MustHostValue without naming the cluster again.
+// RegisterMethods(..., WithCluster(Name…)) so recipes use ForHosts (or
+// ClusterHosts() / MustHostValue) without naming the cluster again.
 //
 //	cluster          → Aggregate / deploy
 //	NameFrontends    → frontends / frontends_*
@@ -29,7 +29,10 @@ const (
 )
 
 // Per-host recipe value keys (WithValue). Every cluster member that a recipe
-// reads must have the key set — MustHostValue Fatals otherwise.
+// reads must have the key set with the recipe's type — otherwise ForHosts
+// fails the record with an error (MustHostValue exits), before any SSH
+// connection. ForHosts checks every member, even when a push targets only
+// one host.
 const (
 	ValueUnattendedCron        = "unattended.cron"          // frontend [3]string hours; netbsd [2]string hours
 	ValueUnattendedOnCalendar  = "unattended.on_calendar"   // rocky OnCalendar= string
