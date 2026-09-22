@@ -13,8 +13,9 @@
 # that must never report clean: stale feed, unreachable source (with and
 # without a cached copy), corrupt download, truncated feed, unassessable
 # records, record-count drops (one-off, persistent and accepted after 3
-# runs, operator override), unknown kernel, uncreatable state dir, failed
-# status, history and baseline writes.
+# distinct fresh runs, a cached or byte-identical rerun that must not
+# confirm it, operator override), unknown kernel, uncreatable state dir,
+# failed status, history and baseline writes.
 
 set -eu
 
@@ -91,6 +92,12 @@ EOF
 chmod +x "$fake/uname" "$fake/rpm" "$fake/dnf" "$fake/curl" "$fake/mv"
 
 fresh=$(date -u -d '-1 hour' '+%Y-%m-%dT%H:%M:%S.123456Z')
+# Distinct-but-still-fresh timestamps for the drop-streak tests: each one
+# gives a feed a feed_newest different from the others, simulating genuinely
+# separate confirming fetches (as opposed to reruns over the same cached
+# bytes, which must share one identity).
+fresh2=$(date -u -d '-50 minutes' '+%Y-%m-%dT%H:%M:%S.123456Z')
+fresh3=$(date -u -d '-40 minutes' '+%Y-%m-%dT%H:%M:%S.123456Z')
 stale=$(date -u -d '-100 hours' '+%Y-%m-%dT%H:%M:%SZ')
 
 # record <dir> <id> <modified> <affected-json> [extra-json-fields]
@@ -166,6 +173,11 @@ feed vuln "$fresh" affected newer older withdrawn gsd
 feed vulnmore "$fresh" affected affected2 newer older
 feed vulnfixed "$fresh" affected newer older fixedat
 feed clean "$fresh" newer older gsd
+# Same content and record count as "clean" but with a distinct feed_newest,
+# standing in for a genuinely separate day's fetch of the still-truncated
+# feed (used by the drop-streak-confirmation tests below).
+feed clean2 "$fresh2" newer older gsd
+feed clean3 "$fresh3" newer older gsd
 feed cleanbig "$fresh" newer older fixedat listmiss
 feed last "$fresh" last newer
 feed fixedat "$fresh" fixedat newer
@@ -399,18 +411,18 @@ run_audit "$work/clean.zip"
 expect 3 UNKNOWN 'second one-off drop'
 field 'drop_streak=1' 'one-off drop streak reset'
 
-# A persistent drop is accepted on the 3rd consecutive run and becomes the
-# new baseline count.
+# A persistent drop is accepted on the 3rd consecutive run of genuinely
+# fresh, distinct feed content and becomes the new baseline count.
 fresh_state
 run_audit "$work/cleanbig.zip"
 run_audit "$work/clean.zip"
 expect 3 UNKNOWN 'persistent drop, run 1'
 field 'drop_streak=1' 'streak 1'
-run_audit "$work/clean.zip"
+run_audit "$work/clean2.zip"
 expect 3 UNKNOWN 'persistent drop, run 2'
 field 'drop_streak=2' 'streak 2'
 has "$state/status" 'run 2 of 3 before it is accepted' 'streak in reason'
-run_audit "$work/clean.zip"
+run_audit "$work/clean3.zip"
 expect 0 OK 'persistent drop, run 3 accepted'
 has "$work/out" '^<4>WARNING: accepting 2 CVE records (was 4)' \
 	'acceptance warning'
@@ -431,8 +443,8 @@ expect 3 UNKNOWN 'stale run during a drop streak'
 field 'drop_streak=1' 'stale run must report the frozen streak'
 run_audit "$work/clean.zip" FAKE_RPM=no
 field 'drop_streak=1' 'unknown-kernel run must report the frozen streak'
-run_audit "$work/clean.zip"
-field 'drop_streak=2' 'streak continues after the frozen runs'
+run_audit "$work/clean2.zip"
+field 'drop_streak=2' 'streak continues after a genuinely new fetch'
 
 # A malformed drop-candidate is discarded with a warning; the streak
 # restarts, and the file is rewritten via a temp file.
@@ -442,8 +454,34 @@ expect 3 UNKNOWN 'malformed drop-candidate'
 has "$work/out" '^<4>WARNING: discarding malformed .*drop-candidate' \
 	'malformed drop-candidate warning'
 field 'drop_streak=1' 'malformed drop-candidate restarts the streak'
-[ "$(cat "$state/drop-candidate")" = '2 1' ] || fail 'drop-candidate content'
+[ "$(cat "$state/drop-candidate")" = "2 1 $fresh" ] \
+	|| fail 'drop-candidate content'
 [ ! -e "$state/drop-candidate.tmp" ] || fail 'drop-candidate temp left over'
+
+# A rerun that does not observe genuinely new feed content must not confirm
+# the drop streak by itself: neither a cached 304 nor a redundant
+# re-download that happens to return the same bytes (same feed_newest)
+# counts as a fresh confirmation. Without this guard, an operator rerunning
+# the unit three times while investigating a single truncated feed would
+# accept it as the new baseline (task gb2).
+fresh_state
+run_audit "$work/cleanbig.zip"
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'same-feed drop, run 1'
+field 'drop_streak=1' 'same-feed streak starts at 1'
+run_audit unchanged
+expect 3 UNKNOWN 'same-feed drop, cached rerun (304)'
+field 'drop_streak=1' 'a 304 rerun must not confirm the drop'
+run_audit unchanged
+expect 3 UNKNOWN 'same-feed drop, second cached rerun (304)'
+field 'drop_streak=1' 'a second 304 rerun must still not confirm the drop'
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'same-feed drop, re-download of identical content'
+field 'drop_streak=1' \
+	're-downloading the same bytes must not confirm the drop either'
+run_audit "$work/clean2.zip"
+expect 3 UNKNOWN 'same-feed drop, then a genuinely new fetch'
+field 'drop_streak=2' 'a fetch with different content finally confirms it'
 
 # Operator override: deleting baseline-cve-records accepts a drop at once.
 fresh_state

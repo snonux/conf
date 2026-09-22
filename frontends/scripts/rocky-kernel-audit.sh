@@ -84,9 +84,16 @@ readonly MAX_FEED_AGE_HOURS=${ROCKY_KERNEL_AUDIT_TEST_MAX_AGE_HOURS:-72}
 # CNA rejects few records, so the count only grows in normal operation. A
 # legitimate shrink recovers by itself: once the lower count has been seen
 # on DROP_ACCEPT_RUNS consecutive fresh runs (each within DROP_HOLD_PCT of
-# the previous one, tracked in $DROP_FILE) it is accepted, logged at warning
-# priority, and becomes the new baseline count. A one-off drop followed by
-# a normal run resets the streak.
+# the previous one, tracked in $DROP_FILE together with the feed identity
+# that produced it) it is accepted, logged at warning priority, and becomes
+# the new baseline count. A run only confirms the streak when it actually
+# fetched different feed content (fetch=updated with a feed_newest that
+# differs from the one already on file); a rerun that reuses the cached
+# feed unchanged (a 304, a failed download, or a redundant re-download of
+# the same bytes) reports the same frozen streak instead of advancing it, so
+# repeatedly invoking the unit while investigating an UNKNOWN cannot accept
+# a truncated feed by itself. A one-off drop followed by a normal run resets
+# the streak.
 readonly MIN_CVE_RECORDS=${ROCKY_KERNEL_AUDIT_TEST_MIN_RECORDS:-10000}
 readonly MAX_RECORD_DROP_PCT=20
 readonly DROP_ACCEPT_RUNS=3
@@ -105,7 +112,10 @@ STATUS_FILE=$STATE_DIR/status
 AFFECTED_FILE=$STATE_DIR/affected-cves
 AFFECTED_NEXT=$STATE_DIR/affected-cves.next
 BASELINE_RECORDS=$STATE_DIR/baseline-cve-records
-# "<count> <streak>" of a record-count drop still awaiting acceptance.
+# "<count> <streak> <feed-identity>" of a record-count drop still awaiting
+# acceptance; the identity (feed_newest of the run that set or last
+# confirmed the streak) stops a rerun on the same cached feed from
+# advancing the streak by itself.
 DROP_FILE=$STATE_DIR/drop-candidate
 # new-cves: the latest run's batch (empty when nothing is new).
 # new-cves.history: "<YYYY-MM-DD> <CVE>" lines for HISTORY_DAYS, one per
@@ -177,8 +187,13 @@ feed_newest=none
 typeset -i cves=0 affected=0 unassessable=0 new_count=0 baseline_cves=0
 typeset -i removed_count=0
 # drop_streak: -1 until check_record_drop runs; write_status then reports
-# the frozen on-disk streak (drop_prev_streak) instead.
+# the frozen on-disk streak (drop_prev_streak) instead. drop_prev_identity
+# is the feed_newest recorded alongside drop_prev_streak, read by
+# read_drop_candidate and compared against this run's feed_newest so a
+# rerun on the same feed content cannot advance the streak by itself (see
+# check_record_drop).
 typeset -i drop_streak=-1 drop_prev_count=0 drop_prev_streak=0
+drop_prev_identity=""
 # Set by commit_baseline when it fails: which state file could not be written.
 commit_error=""
 
@@ -295,7 +310,16 @@ feed_age_hours() {
 # Drop guard (see MAX_RECORD_DROP_PCT). Fails with reason while a >20% drop
 # against the baseline count is unconfirmed; succeeds when there is no drop
 # or the lower count has held for DROP_ACCEPT_RUNS consecutive runs. Only
-# fresh, above-floor feeds reach it, so stale runs do not count.
+# fresh, above-floor feeds reach it, so stale runs do not count. A run only
+# advances an existing streak when it actually observed new feed content
+# (fetch=updated and a feed_newest that differs from the one already on
+# file in $DROP_FILE): a rerun on the same cached feed -- fetch=unchanged
+# (304), fetch=failed, or a redundant re-download that happens to return
+# the same bytes -- reports the frozen streak instead, so rerunning the
+# unit while investigating an UNKNOWN cannot accept a truncated feed by
+# itself. The very first observation of a drop (no streak on file yet)
+# always counts, whatever fetch says, since there is nothing to compare it
+# against.
 check_record_drop() {
 	drop_streak=1
 	if [ $((cves * 100)) -ge $((baseline_cves * (100 - MAX_RECORD_DROP_PCT))) ]
@@ -306,12 +330,17 @@ check_record_drop() {
 	fi
 	if [ "$drop_prev_streak" -gt 0 ] \
 		&& [ $((cves * 100)) -ge $((drop_prev_count * DROP_HOLD_PCT)) ]; then
-		drop_streak=$((drop_prev_streak + 1))
+		if [ "$fetch" = updated ] \
+			&& [ "$feed_newest" != "$drop_prev_identity" ]; then
+			drop_streak=$((drop_prev_streak + 1))
+		else
+			drop_streak=$drop_prev_streak
+		fi
 	fi
 	# Recorded even when accepting: commit_baseline removes it, so an
 	# accepted run that ends UNKNOWN for another reason still counts.
-	if ! { printf '%d %d\n' "$cves" "$drop_streak" >"$DROP_FILE.tmp" \
-		&& mv "$DROP_FILE.tmp" "$DROP_FILE"; }; then
+	if ! { printf '%d %d %s\n' "$cves" "$drop_streak" "$feed_newest" \
+		>"$DROP_FILE.tmp" && mv "$DROP_FILE.tmp" "$DROP_FILE"; }; then
 		rm -f "$DROP_FILE.tmp"
 		log 4 "WARNING: cannot record the drop streak in $DROP_FILE"
 	fi
@@ -325,22 +354,25 @@ check_record_drop() {
 	return 1
 }
 
-# Loads a pending drop streak from $DROP_FILE into drop_prev_count/streak;
-# a malformed file is discarded with a warning (the streak restarts).
+# Loads a pending drop streak and the feed identity that produced it from
+# $DROP_FILE into drop_prev_count/streak/identity; a malformed file --
+# including the old two-field "<count> <streak>" format from before the
+# identity column existed -- is discarded with a warning (the streak
+# restarts).
 read_drop_candidate() {
 	typeset line
 	[ -f "$DROP_FILE" ] || return 0
 	line=$(cat "$DROP_FILE" 2>/dev/null)
 	case $line in
-	[0-9]*' '[0-9]*)
-		read -r drop_prev_count drop_prev_streak <<<"$line"
+	[0-9]*' '[0-9]*' '*)
+		read -r drop_prev_count drop_prev_streak drop_prev_identity <<<"$line"
 		case $drop_prev_count:$drop_prev_streak in
 		*[!0-9:]*) ;;
 		*) return 0 ;;
 		esac
 		;;
 	esac
-	drop_prev_count=0 drop_prev_streak=0
+	drop_prev_count=0 drop_prev_streak=0 drop_prev_identity=""
 	log 4 "WARNING: discarding malformed $DROP_FILE ('$line'), the drop streak restarts"
 	rm -f "$DROP_FILE"
 }
