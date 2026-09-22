@@ -364,6 +364,13 @@ doas cap_mkdb /etc/login.conf
 doas rcctl restart relayd
 ```
 
+**WARNING (unresolved, needs an operator decision)**: gonf and the old Rex
+task do not apply the edit above. They install `etc/login.conf.d/daemon`,
+which OpenBSD reads *instead of* the `daemon` entry in `/etc/login.conf`. That
+fragment sets only `openfiles-max/cur=4096` and `tc=default`, so it drops
+`ignorenologin`, `datasize=4096M` and `maxproc=infinity` for every
+daemon-class process. Decide on the fragment's content before relying on it.
+
 **Verification**: Check that relayd has the increased limit:
 ```bash
 doas relayd -dvv 2>&1 | grep "socket_rlimit" | head -1

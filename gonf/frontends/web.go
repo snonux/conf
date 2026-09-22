@@ -69,15 +69,16 @@ func (Web) DescInetd() string { return "Install and converge frontend inetd" }
 
 // Inetd renders no host-specific content, but still treats its login class as
 // a change input because the daemon must re-exec to receive revised limits.
+// LoginClass installs the root:wheel 0644 fragment under an OpenBSD-only plan
+// requirement; OpenBSD reads /etc/login.conf.d/<class> directly, so no
+// cap_mkdb step is needed (cap_mkdb /etc/login.conf never reads fragments).
 func (Web) Inetd() {
 	onFrontends(func() {
 		flags := File("/etc/rc.conf.local", WithLine("inetd_flags="), WithName("rc-conf-inetd-flags"))
-		class := InstallFile("/etc/login.conf.d/inetd", legacyFrontendAsset("etc/login.conf.d/inetd"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+		class := LoginClass("inetd", legacyFrontendAsset("etc/login.conf.d/inetd"))
 		config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-		loginDB := Command("cap_mkdb", List("/etc/login.conf"), OnChange(class), WithName("rebuild-login-conf-db-inetd"))
-		Service("inetd", WithRestart, DependsOn(loginDB), OnChange(flags, class, config))
+		Service("inetd", WithRestart, OnChange(flags, class, config))
 	})
 }
 
@@ -88,17 +89,24 @@ func (Web) DescRelayd() string { return "Render, validate, and converge frontend
 // daemon login class is watched too: raising relayd's descriptor limit does
 // not change relayd.conf but must take effect through a restart. The login
 // fragments belong to the consumers that need them, so a frontends aggregate
-// has one change-gate source per privilege chunk.
+// has one change-gate source per privilege chunk. As in Inetd, LoginClass
+// needs no database rebuild; the former cap_mkdb step rebuilt only
+// /etc/login.conf.db from an unchanged /etc/login.conf.
 func (Web) Relayd() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
 			flags := File("/etc/rc.conf.local", WithLine("relayd_flags="), WithName("rc-conf-relayd-flags"))
-			class := InstallFile("/etc/login.conf.d/daemon", legacyFrontendAsset("etc/login.conf.d/daemon"),
-				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+			// TODO(login-class, needs operator decision): etc/login.conf.d/daemon
+			// replaces OpenBSD's whole stock daemon class, and it only sets
+			// openfiles-max/cur=4096 plus tc=default. Unlike the limits
+			// confirmed in frontends/AGENTS.md (edited into /etc/login.conf), it
+			// therefore drops ignorenologin, datasize=4096M and maxproc=infinity
+			// for relayd and every other daemon-class process. The content is
+			// deliberately unchanged here; review it before the next rollout.
+			class := LoginClass("daemon", legacyFrontendAsset("etc/login.conf.d/daemon"))
 			config := validatedConfig("/etc/relayd.conf", "relayd", List("-n", "-f"), renderRelayd(webData(server)), 0o600)
-			loginDB := Command("cap_mkdb", List("/etc/login.conf"), OnChange(class), WithName("rebuild-login-conf-db-relayd"))
-			Service("relayd", WithRestart, DependsOn(loginDB), OnChange(flags, class, config))
+			Service("relayd", WithRestart, OnChange(flags, class, config))
 			File(dailyLocal, WithLine("/usr/sbin/rcctl start relayd"),
 				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 		})
