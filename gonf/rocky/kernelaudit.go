@@ -78,7 +78,7 @@ func (KernelAudit) StateDir() {
 
 // DescUnits returns the description for the audit timer.
 func (KernelAudit) DescUnits() string {
-	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar; needs rocky_kernel_audit_script, _state_dir)"
+	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar; needs rocky_kernel_audit_script, rocky_kernel_audit_state_dir)"
 }
 
 // Units installs the daily oneshot+timer pair. Persistent catches a run
