@@ -119,13 +119,16 @@ func (Monitoring) Foostats() {
 	})
 }
 
+// frontendAccount declares a frontend service account. WithManageHome keeps
+// Rex's existing-account `usermod -d` behavior: gonf rewrites only the passwd
+// home field when it differs, without moving, creating, or chowning the
+// directory (callers that need the directory declare it with Dir).
 func frontendAccount(spec serviceAccount) Resource {
-	opts := []LocalUserOption{WithPrimaryGroup(spec.Name), WithHome(spec.Home)}
+	opts := []LocalUserOption{WithPrimaryGroup(spec.Name), WithHome(spec.Home), WithManageHome}
 	if spec.LoginClass != "" {
 		opts = append(opts, WithLoginClass(spec.LoginClass))
 	}
-	account := User(spec.Name, opts...)
-	return Command("usermod", List("-d", spec.Home, spec.Name), DependsOn(account), Unless("sh", List("-c", accountHomeGuard(spec))), WithName("usermod-home-"+spec.Name))
+	return User(spec.Name, opts...)
 }
 
 type gogiosCheck struct {

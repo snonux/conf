@@ -249,10 +249,6 @@ func frontendAsset(name string) string {
 	return filepath.Join(paths.Conf, frontendAssetDir, name)
 }
 
-func accountHomeGuard(spec serviceAccount) string {
-	return fmt.Sprintf("awk -F: '$1 == %q && $6 == %q { found = 1 } END { exit !found }' /etc/passwd", spec.Name, spec.Home)
-}
-
 func onFrontends(fn func()) {
 	WhenHostname(ClusterHosts(), fn)
 }
