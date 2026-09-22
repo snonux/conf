@@ -63,7 +63,20 @@ const (
 // wraps elevated chunks as sudo -n so gonf push works with RequiresRoot tasks.
 //
 // f-hosts are paul@fN.lan.buetow.org with doas (never root SSH).
+//
+// Register itself only sequences the host/cluster groups below, each built
+// by one helper in the same order as the original single function, so the
+// recorded plan (host and cluster registration order) is unchanged.
 func Register() {
+	registerFrontends()
+	pi2, pi3 := registerPis()
+	registerRockyK3s(pi2, pi3)
+	registerFreeBSD()
+}
+
+// registerFrontends registers the two OpenBSD frontend hosts and the
+// frontends cluster. Reached on port 2 per Register's doc comment above.
+func registerFrontends() {
 	blowfish := Host("blowfish",
 		WithSSHUser("rex"),
 		WithSSHHost("blowfish.buetow.org"),
@@ -85,8 +98,27 @@ func Register() {
 		WithValue(ValueFrontendServer, frontends.MustServer("fishfinger")),
 	)
 	Cluster(NameFrontends, blowfish, fishfinger).Parallel(5)
+}
 
-	pi0 := Host("pi0",
+// registerPis registers the four Raspberry Pi hosts and their OS-pair and
+// umbrella clusters. It returns pi2 and pi3 so registerRockyK3s can fold
+// them into rocky-all (pi0/pi1 stay local — nothing downstream needs them).
+func registerPis() (pi2, pi3 HostRef) {
+	pi0, pi1 := registerNetBSDPiHosts()
+	pi2, pi3 = registerRockyPiHosts()
+	// OS-pair clusters are the default deploy targets for OS-specific work
+	// (scripts, timers, package managers). The umbrella "pis" cluster mixes
+	// NetBSD/doas and Rocky/sudo — only use it for truly shared, OS-gated
+	// tasks (e.g. a ping smoke test with WhenHostname / WhenLinux).
+	Cluster(NameNetBSDPis, pi0, pi1)
+	Cluster(NameRockyPis, pi2, pi3)
+	Cluster(NamePis, pi0, pi1, pi2, pi3)
+	return pi2, pi3
+}
+
+// registerNetBSDPiHosts registers pi0 and pi1, the NetBSD/doas Pis.
+func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
+	pi0 = Host("pi0",
 		WithSSHUser("paul"),
 		WithSSHHost("pi0.lan.buetow.org"),
 		WithSSHPort(22),
@@ -98,7 +130,7 @@ func Register() {
 		// 20 min jitter), before /etc/daily at 04:15.
 		WithValue(ValueVulnAuditCron, [2]string{"40", "3"}),
 	)
-	pi1 := Host("pi1",
+	pi1 = Host("pi1",
 		WithSSHUser("paul"),
 		WithSSHHost("pi1.lan.buetow.org"),
 		WithSSHPort(22),
@@ -109,7 +141,12 @@ func Register() {
 		// After the 22:10 pkgs / 22:50 reboot window.
 		WithValue(ValueVulnAuditCron, [2]string{"40", "23"}),
 	)
-	pi2 := Host("pi2",
+	return pi0, pi1
+}
+
+// registerRockyPiHosts registers pi2 and pi3, the Rocky/sudo Pis.
+func registerRockyPiHosts() (pi2, pi3 HostRef) {
+	pi2 = Host("pi2",
 		WithSSHUser("paul"),
 		WithSSHHost("pi2.lan.buetow.org"),
 		WithSSHPort(22),
@@ -119,7 +156,7 @@ func Register() {
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:05:00"),
 		WithValue(ValueKernelAuditOnCalendar, "*-*-* 06:15:00"),
 	)
-	pi3 := Host("pi3",
+	pi3 = Host("pi3",
 		WithSSHUser("paul"),
 		WithSSHHost("pi3.lan.buetow.org"),
 		WithSSHPort(22),
@@ -129,14 +166,13 @@ func Register() {
 		WithValue(ValueUnattendedOnCalendar, "*-*-* *:35:00"),
 		WithValue(ValueKernelAuditOnCalendar, "*-*-* 06:45:00"),
 	)
-	// OS-pair clusters are the default deploy targets for OS-specific work
-	// (scripts, timers, package managers). The umbrella "pis" cluster mixes
-	// NetBSD/doas and Rocky/sudo — only use it for truly shared, OS-gated
-	// tasks (e.g. a ping smoke test with WhenHostname / WhenLinux).
-	Cluster(NameNetBSDPis, pi0, pi1)
-	Cluster(NameRockyPis, pi2, pi3)
-	Cluster(NamePis, pi0, pi1, pi2, pi3)
+	return pi2, pi3
+}
 
+// registerRockyK3s registers the Rocky k3s hosts (r0–r2) and the rocky-k3s /
+// rocky-all clusters. pi2 and pi3 (from registerPis) fold into rocky-all,
+// which is every Rocky unattended host (Pis + k3s).
+func registerRockyK3s(pi2, pi3 HostRef) {
 	r0 := Host("r0",
 		WithSSHUser("root"),
 		WithSSHHost("r0.lan.buetow.org"),
@@ -168,8 +204,24 @@ func Register() {
 	// (Pis + k3s). Prefer OS-pair / role clusters for deploys.
 	Cluster(NameRockyK3s, r0, r1, r2).Parallel(3)
 	Cluster(NameRockyAll, pi2, pi3, r0, r1, r2)
+}
 
-	f0 := Host("f0",
+// registerFreeBSD registers the FreeBSD hypervisor hosts (f0–f3) and their
+// freebsd-hosts / garage clusters.
+func registerFreeBSD() {
+	f0, f1, f2 := registerGarageFreeBSDHosts()
+	f3 := registerNonGarageFreeBSDHost()
+	// freebsd-hosts = all FreeBSD hypervisors. f3 never auto-reboots
+	// (allow_reboot=false); script also hardcodes that for defense in depth.
+	Cluster(NameFreeBSD, f0, f1, f2, f3)
+	Cluster(NameGarage, f0, f1, f2).Parallel(1)
+}
+
+// registerGarageFreeBSDHosts registers f0–f2, the FreeBSD hosts that are
+// also Garage cluster members (each carries a garage.rpc_public_addr value
+// the Garage recipe reads).
+func registerGarageFreeBSDHosts() (f0, f1, f2 HostRef) {
+	f0 = Host("f0",
 		WithSSHUser("paul"),
 		WithSSHHost("f0.lan.buetow.org"),
 		WithSSHPort(22),
@@ -180,7 +232,7 @@ func Register() {
 		WithValue(ValueUnattendedAllowReboot, true),
 		WithValue(ValueGarageRPCPublicAddr, "192.168.1.130:3901"),
 	)
-	f1 := Host("f1",
+	f1 = Host("f1",
 		WithSSHUser("paul"),
 		WithSSHHost("f1.lan.buetow.org"),
 		WithSSHPort(22),
@@ -191,7 +243,7 @@ func Register() {
 		WithValue(ValueUnattendedAllowReboot, true),
 		WithValue(ValueGarageRPCPublicAddr, "192.168.1.131:3901"),
 	)
-	f2 := Host("f2",
+	f2 = Host("f2",
 		WithSSHUser("paul"),
 		WithSSHHost("f2.lan.buetow.org"),
 		WithSSHPort(22),
@@ -202,7 +254,13 @@ func Register() {
 		WithValue(ValueUnattendedAllowReboot, true),
 		WithValue(ValueGarageRPCPublicAddr, "192.168.1.132:3901"),
 	)
-	f3 := Host("f3",
+	return f0, f1, f2
+}
+
+// registerNonGarageFreeBSDHost registers f3, the one FreeBSD hypervisor that
+// stays out of the Garage cluster and never auto-reboots.
+func registerNonGarageFreeBSDHost() HostRef {
+	return Host("f3",
 		WithSSHUser("paul"),
 		WithSSHHost("f3.lan.buetow.org"),
 		WithSSHPort(22),
@@ -212,8 +270,4 @@ func Register() {
 		WithValue(ValueUnattendedCronMinute, "15"),
 		WithValue(ValueUnattendedAllowReboot, false),
 	)
-	// freebsd-hosts = all FreeBSD hypervisors. f3 never auto-reboots
-	// (allow_reboot=false); script also hardcodes that for defense in depth.
-	Cluster(NameFreeBSD, f0, f1, f2, f3)
-	Cluster(NameGarage, f0, f1, f2).Parallel(1)
 }
