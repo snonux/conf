@@ -5,7 +5,8 @@
 # checkers, install(1) and gonf's dns-zone-* subcommands are faked. The fake
 # rcctl keeps NSD's running state in a file and refuses to start NSD while
 # the live nsd.conf contains BROKEN (or while FAIL_START is set). Requires
-# ksh (the script uses print and typeset).
+# a ksh, OpenBSD's or ksh93 (both scripts use print; bash cannot run them);
+# the harness itself avoids ksh93-only syntax.
 #
 # Covers: first publication and a key or nsd.conf change restart NSD; a
 # zone-only change reloads it; an unchanged run does nothing; a failed
@@ -127,7 +128,7 @@ status=0
 
 # check name command...: record a failure unless the command succeeds.
 check() {
-    typeset name=$1
+    name=$1
     shift
     if "$@"; then
         print "ok   $name"
@@ -137,22 +138,23 @@ check() {
     fi
 }
 
-# run_case name expected-status expected-actions [args-and-env...]: run the
-# publisher (env assignments first, then publisher arguments after --) and
-# compare its exit status and the NSD actions it logged (one per line, ""
-# for none).
+# run_case name expected-status expected-actions [VAR=value...] [-- args...]:
+# run the publisher with the VAR=value assignments exported and args passed
+# to it, and compare its exit status and the NSD actions it logged (one per
+# line, "" for none). Positional parameters only, so this also parses under
+# OpenBSD's ksh (no ksh93 arrays).
 run_case() {
-    typeset name=$1 want_status=$2 expected=$3 actual
+    name=$1 want_status=$2 expected=$3
     shift 3
-    # Reset explicitly: typeset in a POSIX-style function is global in ksh93.
-    typeset -a envs args
-    envs=()
-    while [ $# -gt 0 ] && [ "$1" != -- ]; do envs+=("$1"); shift; done
-    [ $# -eq 0 ] || shift
-    args=("$@")
     : >"$log"
-    if env PATH="$fake:$PATH" "${envs[@]}" ksh "$work/dns-publish.ksh" "${args[@]}" \
-        >>"$work/output" 2>&1; then
+    if (
+        while [ $# -gt 0 ] && [ "$1" != -- ]; do
+            export "${1?}"
+            shift
+        done
+        [ $# -eq 0 ] || shift
+        PATH="$fake:$PATH" exec ksh "$work/dns-publish.ksh" "$@"
+    ) >>"$work/output" 2>&1; then
         status=0
     else
         status=$?

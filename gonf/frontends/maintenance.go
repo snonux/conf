@@ -266,6 +266,15 @@ func legacyFrontendAsset(name string) string {
 	return filepath.Join(paths.Frontends, name)
 }
 
+// rcConfLocalLine declares one line of /etc/rc.conf.local under name. Every
+// line edit of the file sets the same attributes, 0644 root:wheel as rcctl
+// leaves it (and as it is on both frontends): a line edit without a mode
+// defaults to 0640, so mixing the two chmodded the file back and forth on
+// every apply.
+func rcConfLocalLine(line, name string) Resource {
+	return File("/etc/rc.conf.local", WithLine(line), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), WithName(name))
+}
+
 // pkgScriptsLine renders the rc.conf.local pkg_scripts line exactly as
 // rcctl(8) writes it: unquoted, with every package daemon a frontend Service
 // enables (dserver, uptimed, znc on fishfinger, and node_exporter from the PF
@@ -278,15 +287,6 @@ func legacyFrontendAsset(name string) string {
 // enabled, rcctl never rewrites the line, and a second apply is a no-op.
 // icinga2 (still in the Rex list) is not installed on either frontend and was
 // already dropped from the live line by rcctl, so it is not listed.
-// rcConfLocalLine declares one line of /etc/rc.conf.local under name. Every
-// line edit of the file sets the same attributes, 0644 root:wheel as rcctl
-// leaves it (and as it is on both frontends): a line edit without a mode
-// defaults to 0640, so mixing the two chmodded the file back and forth on
-// every apply.
-func rcConfLocalLine(line, name string) Resource {
-	return File("/etc/rc.conf.local", WithLine(line), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), WithName(name))
-}
-
 func pkgScriptsLine(name string) string {
 	scripts := []string{"uptimed", "httpd", "dserver"}
 	if name == Master {
