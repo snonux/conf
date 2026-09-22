@@ -470,31 +470,53 @@ aggregate and also belong to the `rocky` aggregate. Each run:
    running/installed/repo-newest kernel, `fetch`, `feed_newest_record`,
    `cve_records`, `affected`, `new_cves`, `unassessable`,
    `baseline_cve_records`.
-5. commits the baseline, only after the status write succeeded and never
-   after an UNKNOWN result: `affected-cves`, its record count
-   `baseline-cve-records`, and the dated batch appended to
-   `new-cves.history`. If this commit fails, the status record is rewritten
-   as UNKNOWN with the reason, so the record matches the failed unit. CVEs
-   that appear during an outage, or during a run that could not record its
-   result, are therefore still reported as new later.
+5. commits, only after the status write succeeded and never after an
+   UNKNOWN result. The dated batch goes into `new-cves.history` first. Only
+   then are the baseline `affected-cves` and its record count
+   `baseline-cve-records` replaced, and a pending `drop-candidate` is
+   cleared. If any step fails, the status record is rewritten as UNKNOWN
+   with a reason naming the file, so it matches the failed unit:
+   "cannot update the new-CVE history …, baseline left unchanged", "cannot
+   update the baseline …" or "cannot update the baseline count …". A history
+   failure leaves the baseline untouched. CVEs that appear during an outage,
+   or during a run that could not record its result, are therefore still
+   reported as new later.
 
 **Retention:** `new-cves` holds only the latest run's batch and is emptied
 by the next quiet run. `new-cves.history` keeps `<YYYY-MM-DD> <CVE>` lines
-for 90 days (pruned on every successful run; the first run adds the whole
-initial list), so a batch stays visible after it has left `new-cves` and the
-journal.
+for 90 days, rebuilt atomically on every successful run (pruned, same-day
+repeats collapsed; the first run adds the whole initial list). A batch
+therefore stays visible after it has left `new-cves` and the journal.
 
 **Truncation guards:** the feed must hold at least 10000 CVE records, an
 absolute floor for a broken first download (about 15.8k in 2026-09). After
 that, a drop of more than 20% against `baseline-cve-records` also counts as
 truncated. The count only grows in normal operation, because the kernel CNA
-rejects few records.
+rejects few records. The drop check runs only on fresh, above-floor feeds.
+A legitimate shrink recovers by itself:
+
+- Each drop run records `<count> <streak>` in `drop-candidate`, and the
+  status record carries `drop_streak=`.
+- The streak continues while the count stays within 95% of the previous
+  drop run.
+- On the 3rd consecutive drop run (about 3 days) the lower count is
+  accepted, with a warning `accepting N CVE records (was M) after 3
+  consecutive runs`, and becomes the new baseline count. Until then the run
+  reports UNKNOWN.
+- A normal run in between clears the streak.
+
+**Operator overrides** (as root in `/var/lib/rocky-kernel-audit`):
+
+- Delete `baseline-cve-records` to accept a lower count at once. The drop
+  guard is off until the next successful run records a new count.
+- Delete `affected-cves` to re-baseline. The next run reports every
+  affected CVE as new once.
 
 | Status | Exit | When |
 |---|---|---|
 | OK | 0 | every CVE record assessable, none affects the running version |
 | VULNERABLE | 0 | at least one range covers the running version (upper bound, see above) |
-| UNKNOWN | 3 | kernel not a `raspberrypi2-kernel4` build / unparsable version; feed never fetched; corrupt archive or jq failure; < 10000 CVE records, or > 20% fewer than the last assessment (truncated); newest record older than 72 h (stale feed or stale cache after download failures); unassessable records with no affected match; state directory, new-CVE list, status record or baseline cannot be written (a failed baseline commit rewrites the record as UNKNOWN) |
+| UNKNOWN | 3 | kernel not a `raspberrypi2-kernel4` build / unparsable version; feed never fetched; corrupt archive or jq failure; < 10000 CVE records, or > 20% fewer than the last assessment until the lower count held for 3 consecutive runs (truncated); newest record older than 72 h (stale feed or stale cache after download failures); unassessable records with no affected match; state directory, new-CVE list, status record, history or baseline cannot be written (a failed commit rewrites the record as UNKNOWN, naming the file) |
 
 **Alerting:** there is no MTA on the Pis (§9.5), so the journal, the unit
 state and `/var/log/unattended-upgrade.log` (lines tagged `kernel-audit:`)
@@ -549,11 +571,15 @@ Python `zip`/`unzip` shims via `TEST_EXTRA_PATH`. It covers:
   cached copy); the dated history (no duplicates, 90-day pruning, survives
   a quiet run that empties `new-cves`); an unsorted and a malformed
   baseline (warning, treated as empty, then recovered); a failed baseline
-  commit (consistent UNKNOWN record; the next run reports the CVEs again).
+  commit (consistent UNKNOWN record; the next run reports the CVEs again);
+  a failed history write (its own reason, baseline untouched, the CVEs
+  re-reported and recorded once).
 - coverage failures: unassessable records; a stale feed; an unreachable
   source with no cache, a fresh cache and a stale cache; 304; a corrupt
   download that keeps the cache; a truncated feed (floor); a > 20% record
-  drop against the baseline count, and recovery after it; an unknown kernel
+  drop against the baseline count: a one-off drop (the streak restarts at 1
+  after a normal run), a persistent drop accepted on the 3rd run (and the
+  new count adopted), and the operator override; an unknown kernel
   (`fetch=skipped`); a held lock; a failed status write that keeps the old
   record and does not consume new CVEs; an uncreatable state directory.
 

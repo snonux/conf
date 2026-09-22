@@ -12,7 +12,9 @@
 # changes, UNKNOWN runs leaving the baseline alone) and the negative paths
 # that must never report clean: stale feed, unreachable source (with and
 # without a cached copy), corrupt download, truncated feed, unassessable
-# records, unknown kernel, uncreatable state dir, failed status write.
+# records, record-count drops (one-off, persistent and accepted after 3
+# runs, operator override), unknown kernel, uncreatable state dir, failed
+# status, history and baseline writes.
 
 set -eu
 
@@ -353,6 +355,55 @@ expect 3 UNKNOWN 'record count drop'
 has "$state/status" '^reason=feed shrank from 4 to 2' 'drop reason'
 run_audit "$work/cleanbig.zip"
 expect 0 OK 'record count restored'
+[ ! -f "$state/drop-candidate" ] || fail 'normal run kept the drop streak'
+
+# A one-off drop does not carry over: the streak restarts at 1.
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'second one-off drop'
+field 'drop_streak=1' 'one-off drop streak reset'
+
+# A persistent drop is accepted on the 3rd consecutive run and becomes the
+# new baseline count.
+fresh_state
+run_audit "$work/cleanbig.zip"
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'persistent drop, run 1'
+field 'drop_streak=1' 'streak 1'
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'persistent drop, run 2'
+field 'drop_streak=2' 'streak 2'
+has "$state/status" 'run 2 of 3 before it is accepted' 'streak in reason'
+run_audit "$work/clean.zip"
+expect 0 OK 'persistent drop, run 3 accepted'
+has "$work/out" '^<4>WARNING: accepting 2 CVE records (was 4)' \
+	'acceptance warning'
+[ "$(cat "$state/baseline-cve-records")" = 2 ] || fail 'count not adopted'
+[ ! -f "$state/drop-candidate" ] || fail 'accepted streak not cleared'
+run_audit "$work/clean.zip"
+expect 0 OK 'after acceptance'
+field 'drop_streak=0' 'no drop after acceptance'
+
+# Operator override: deleting baseline-cve-records accepts a drop at once.
+fresh_state
+run_audit "$work/cleanbig.zip"
+rm "$state/baseline-cve-records"
+run_audit "$work/clean.zip"
+expect 0 OK 'operator override'
+
+# A history write failure is reported as such, leaves the baseline alone,
+# and the next run reports the CVEs (and records them) again.
+fresh_state
+run_audit "$work/vuln.zip" FAKE_MV_FAIL=new-cves.history
+expect 3 UNKNOWN 'history write failure'
+has "$state/status" '^reason=cannot update the new-CVE history' \
+	'history failure reason'
+hasnt "$state/status" 'cannot update the baseline ' 'history blamed on baseline'
+[ ! -f "$state/affected-cves" ] || fail 'baseline committed despite history failure'
+run_audit "$work/vuln.zip"
+expect 0 VULNERABLE 'after a history failure'
+field 'new_cves=1' 'history failure must not absorb the new CVE'
+[ "$(grep -c 'CVE-2024-0001' "$state/new-cves.history")" -eq 1 ] \
+	|| fail 'history entry missing or duplicated'
 
 # --- coverage failures -------------------------------------------------
 

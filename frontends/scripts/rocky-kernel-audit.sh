@@ -16,9 +16,11 @@
 #   VULNERABLE  at least one CVE range covers the running version
 #   UNKNOWN     coverage unavailable: unknown/non-AltArch kernel, feed never
 #               fetched, feed stale, corrupt or truncated (below the floor or
-#               >20% fewer records than the last assessment), a CVE record
-#               that cannot be assessed while none is known to affect, or the
-#               state (status, new-CVE list, baseline) cannot be written
+#               >20% fewer records than the last assessment, until the lower
+#               count has held for DROP_ACCEPT_RUNS consecutive runs), a CVE
+#               record that cannot be assessed while none is known to affect,
+#               or the state (status, new-CVE list/history, baseline) cannot
+#               be written
 #
 # Alerting (the Pis have no MTA, plan §9.5/§13): only UNKNOWN — broken
 # coverage — exits non-zero (3) and so fails the systemd oneshot unit, with an
@@ -27,8 +29,14 @@
 # (the affected list of the previous successful assessment): CVEs newly
 # affecting the kernel, and any status change, are logged at warning
 # priority and listed in $NEW_FILE (plus the dated $HISTORY_FILE); an
-# unchanged VULNERABLE result is a notice. Journal priorities use the sd-daemon "<N>" stdout prefix; every
-# line is also appended to the shared /var/log/unattended-upgrade.log.
+# unchanged VULNERABLE result is a notice. Journal priorities use the
+# sd-daemon "<N>" stdout prefix; every line is also appended to the shared
+# /var/log/unattended-upgrade.log.
+#
+# Operator overrides (as root, in $STATE_DIR): delete baseline-cve-records
+# to accept a lower feed record count at once (the drop guard is off until
+# the next successful run records a new count); delete affected-cves to
+# re-baseline (the next run reports every affected CVE as new once).
 #
 # Coverage caveats — the affected count is an UPPER bound for kernel-CNA CVEs
 # and misses CVEs from other CNAs:
@@ -70,9 +78,16 @@ readonly MAX_FEED_AGE_HOURS=${ROCKY_KERNEL_AUDIT_TEST_MAX_AGE_HOURS:-72}
 # (~15.8k CVE records in 2026-09); after that, a drop of more than
 # MAX_RECORD_DROP_PCT against the record count of the last successful
 # assessment ($BASELINE_RECORDS) counts as a truncated export too. The kernel
-# CNA rejects few records, so the count only grows in normal operation.
+# CNA rejects few records, so the count only grows in normal operation. A
+# legitimate shrink recovers by itself: once the lower count has been seen
+# on DROP_ACCEPT_RUNS consecutive fresh runs (each within DROP_HOLD_PCT of
+# the previous one, tracked in $DROP_FILE) it is accepted, logged at warning
+# priority, and becomes the new baseline count. A one-off drop followed by
+# a normal run resets the streak.
 readonly MIN_CVE_RECORDS=${ROCKY_KERNEL_AUDIT_TEST_MIN_RECORDS:-10000}
 readonly MAX_RECORD_DROP_PCT=20
+readonly DROP_ACCEPT_RUNS=3
+readonly DROP_HOLD_PCT=95
 # Days of dated new-CVE batches kept in $HISTORY_FILE.
 readonly HISTORY_DAYS=90
 # How many new CVE ids the warning line names before pointing at $NEW_FILE.
@@ -87,6 +102,8 @@ STATUS_FILE=$STATE_DIR/status
 AFFECTED_FILE=$STATE_DIR/affected-cves
 AFFECTED_NEXT=$STATE_DIR/affected-cves.next
 BASELINE_RECORDS=$STATE_DIR/baseline-cve-records
+# "<count> <streak>" of a record-count drop still awaiting acceptance.
+DROP_FILE=$STATE_DIR/drop-candidate
 # new-cves: the latest run's batch (empty when nothing is new).
 # new-cves.history: "<YYYY-MM-DD> <CVE>" lines for HISTORY_DAYS, so a batch
 # stays visible after the next (quiet) run overwrites new-cves.
@@ -152,6 +169,9 @@ repo_newest=unknown
 fetch=skipped
 feed_newest=none
 typeset -i cves=0 affected=0 unassessable=0 new_count=0 baseline_cves=0
+typeset -i drop_streak=0
+# Set by commit_baseline when it fails: which state file could not be written.
+commit_error=""
 
 # log <priority> <message>: shared log file plus stdout with the sd-daemon
 # priority prefix (3 err, 4 warning, 5 notice, 6 info) the journal parses.
@@ -263,18 +283,46 @@ feed_age_hours() {
 	printf '%d\n' $((($(date -u +%s) - epoch) / 3600))
 }
 
+# Drop guard (see MAX_RECORD_DROP_PCT). Fails with reason while a >20% drop
+# against the baseline count is unconfirmed; succeeds when there is no drop
+# or the lower count has held for DROP_ACCEPT_RUNS consecutive runs. Only
+# fresh, above-floor feeds reach it, so stale runs do not count.
+check_record_drop() {
+	typeset prev_count prev_streak
+	drop_streak=1
+	if [ $((cves * 100)) -ge $((baseline_cves * (100 - MAX_RECORD_DROP_PCT))) ]
+	then
+		drop_streak=0
+		rm -f "$DROP_FILE"
+		return 0
+	fi
+	if [ -f "$DROP_FILE" ] && read -r prev_count prev_streak <"$DROP_FILE"; then
+		case $prev_count:$prev_streak in
+		*[!0-9:]* | :* | *:) ;;
+		*) [ $((cves * 100)) -ge $((prev_count * DROP_HOLD_PCT)) ] \
+			&& drop_streak=$((prev_streak + 1)) ;;
+		esac
+	fi
+	# Recorded even when accepting: commit_baseline removes it, so an
+	# accepted run that ends UNKNOWN for another reason still counts.
+	printf '%d %d\n' "$cves" "$drop_streak" >"$DROP_FILE" \
+		|| log 4 "WARNING: cannot record the drop streak in $DROP_FILE"
+	if [ "$drop_streak" -ge "$DROP_ACCEPT_RUNS" ]; then
+		log 4 "WARNING: accepting $cves CVE records (was $baseline_cves) after $drop_streak consecutive runs"
+		return 0
+	fi
+	reason="feed shrank from $baseline_cves to $cves CVE records"
+	reason="$reason (> ${MAX_RECORD_DROP_PCT}% drop, run $drop_streak of"
+	reason="$reason $DROP_ACCEPT_RUNS before it is accepted): truncated"
+	return 1
+}
+
 # Sets status/reason from the counts. Staleness and truncation make the
 # result UNKNOWN even when CVEs match: a stale feed must not look audited.
 decide_status() {
 	typeset -i age
 	if [ "$cves" -lt "$MIN_CVE_RECORDS" ]; then
 		reason="feed holds $cves CVE records (< $MIN_CVE_RECORDS): truncated"
-		return 0
-	fi
-	if [ $((cves * 100)) -lt $((baseline_cves * (100 - MAX_RECORD_DROP_PCT))) ]
-	then
-		reason="feed shrank from $baseline_cves to $cves CVE records"
-		reason="$reason (> ${MAX_RECORD_DROP_PCT}% drop): truncated"
 		return 0
 	fi
 	age=$(feed_age_hours) || {
@@ -285,6 +333,7 @@ decide_status() {
 		reason="feed stale: newest record ${age}h old (> ${MAX_FEED_AGE_HOURS}h)"
 		return 0
 	fi
+	check_record_drop || return 0
 	if [ "$affected" -gt 0 ]; then
 		status=VULNERABLE
 		reason="$affected of $cves kernel CVEs affect upstream $kver (upper bound)"
@@ -307,9 +356,10 @@ baseline_valid() {
 # corrupt) is treated as missing with a warning rather than failing every
 # run: UNKNOWN runs never replace it, so it would never recover. The
 # baseline itself is replaced only by commit_baseline, after the status
-# record is written, so a run that fails to record its result reports the
-# same CVEs as new next time; UNKNOWN runs never touch it either, so CVEs
-# that appear during an outage are still reported once coverage returns.
+# record and the history are written, so a run that fails to record either
+# reports the same CVEs as new next time; UNKNOWN runs never touch it
+# either, so CVEs that appear during an outage are still reported once
+# coverage returns.
 compute_new() {
 	typeset base
 	base=$AFFECTED_FILE
@@ -324,29 +374,46 @@ compute_new() {
 	new_count=$(wc -l <"$NEW_FILE")
 }
 
-# Appends this run's new CVEs, dated, to $HISTORY_FILE and drops entries
-# older than HISTORY_DAYS.
+# Rebuilds $HISTORY_FILE atomically: the entries of the last HISTORY_DAYS
+# plus this run's new CVEs dated today (same-day repeats collapse). On
+# failure the previous history stays as it was.
 update_history() {
 	typeset today cutoff
 	today=$(date -u +%F)
 	cutoff=$(date -u -d "-$HISTORY_DAYS days" +%F) || return 1
-	touch "$HISTORY_FILE" || return 1
-	awk -v d="$today" '{ print d, $0 }' "$NEW_FILE" >>"$HISTORY_FILE" \
-		&& awk -v c="$cutoff" '$1 >= c' "$HISTORY_FILE" >"$HISTORY_FILE.tmp" \
+	{
+		[ -f "$HISTORY_FILE" ] && awk -v c="$cutoff" '$1 >= c' "$HISTORY_FILE"
+		awk -v d="$today" '{ print d, $0 }' "$NEW_FILE"
+	} | awk '!seen[$0]++' >"$HISTORY_FILE.tmp" \
 		&& mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
 }
 
-# Adopts this run's affected list and record count as the new baseline
-# (OK/VULNERABLE only) and records the new CVEs in the history.
+# After an OK/VULNERABLE result: records the new CVEs in the history FIRST,
+# then adopts this run's affected list and record count as the baseline and
+# clears a pending drop streak. A history failure therefore leaves the
+# baseline untouched (the CVEs are reported again next run); commit_error
+# names the file that failed.
 commit_baseline() {
 	case $status in
 	OK | VULNERABLE) ;;
 	*) return 0 ;;
 	esac
-	mv "$AFFECTED_NEXT" "$AFFECTED_FILE" || return 1
-	printf '%d\n' "$cves" >"$BASELINE_RECORDS.tmp" \
-		&& mv "$BASELINE_RECORDS.tmp" "$BASELINE_RECORDS" || return 1
-	update_history
+	if ! update_history; then
+		rm -f "$HISTORY_FILE.tmp"
+		commit_error="cannot update the new-CVE history $HISTORY_FILE"
+		commit_error="$commit_error, baseline left unchanged"
+		return 1
+	fi
+	if ! mv "$AFFECTED_NEXT" "$AFFECTED_FILE"; then
+		commit_error="cannot update the baseline $AFFECTED_FILE"
+		return 1
+	fi
+	if ! { printf '%d\n' "$cves" >"$BASELINE_RECORDS.tmp" \
+		&& mv "$BASELINE_RECORDS.tmp" "$BASELINE_RECORDS"; }; then
+		commit_error="cannot update the baseline count $BASELINE_RECORDS"
+		return 1
+	fi
+	rm -f "$DROP_FILE"
 }
 
 # Reads the record count of the last successful assessment (0 = none, or
@@ -405,6 +472,7 @@ affected_list=$AFFECTED_FILE
 new_list=$NEW_FILE
 new_history=$HISTORY_FILE
 baseline_cve_records=$baseline_cves
+drop_streak=$drop_streak
 EOF
 }
 
@@ -450,10 +518,11 @@ main() {
 		exit 3
 	fi
 	# The status is written before the baseline so a failed status write
-	# does not consume the new CVEs; a failed baseline commit then rewrites
-	# the record as UNKNOWN so it matches the failed unit.
+	# does not consume the new CVEs; a failed commit (history or baseline)
+	# then rewrites the record as UNKNOWN, naming the file, so it matches
+	# the failed unit.
 	if ! commit_baseline; then
-		reason="cannot update the baseline in $STATE_DIR (assessed $status: $reason)"
+		reason="$commit_error (assessed $status: $reason)"
 		status=UNKNOWN
 		write_status || rm -f "$STATUS_FILE.tmp"
 	fi
