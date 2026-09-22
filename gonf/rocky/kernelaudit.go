@@ -22,13 +22,17 @@ type KernelAudit struct {
 
 // DescPackages returns the description for the audit's tool dependencies.
 func (KernelAudit) DescPackages() string {
-	return "Install unzip, jq and curl for rocky-kernel-audit"
+	return "Install ksh, unzip, jq and curl for rocky-kernel-audit"
 }
 
-// Packages installs the feed tooling: curl downloads the OSV export, unzip
-// streams its records, jq evaluates the version ranges.
+// Packages installs the script's interpreter and feed tooling: ksh runs it
+// (a fresh host without rocky_packages would otherwise fail 203/EXEC), curl
+// downloads the OSV export, unzip streams its records, jq evaluates the
+// version ranges. ksh is also declared by Unattended.Packages; the duplicate
+// declaration is idempotent.
 func (KernelAudit) Packages() {
 	WhenHostname(ClusterHosts(), func() {
+		Package("ksh")
 		Package("unzip")
 		Package("jq")
 		Package("curl")

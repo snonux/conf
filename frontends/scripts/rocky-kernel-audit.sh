@@ -12,27 +12,41 @@
 # introduced/fixed version ranges — and records a status:
 #
 #   OK          every kernel-CNA CVE in the feed was assessed; none affects
-#               the running upstream version (exit 0)
-#   VULNERABLE  at least one CVE range covers the running version (exit 2)
+#               the running upstream version
+#   VULNERABLE  at least one CVE range covers the running version
 #   UNKNOWN     coverage unavailable: unknown/non-AltArch kernel, feed never
-#               fetched, feed stale, corrupt or truncated, or a CVE record
-#               that cannot be assessed while none is known to affect (exit 3)
+#               fetched, feed stale, corrupt or truncated, a CVE record that
+#               cannot be assessed while none is known to affect, or the
+#               state cannot be written
 #
-# A non-zero exit fails the systemd oneshot unit (visible in
-# `systemctl --failed`), and the summary goes to the journal at err priority
-# (sd-daemon "<3>" prefix) and to the shared /var/log/unattended-upgrade.log —
-# the Pis have no MTA, so journal/log/unit state is the alert surface (plan
-# §9.5, frontends/docs/unattended-upgrades-pi.plan.md §13).
+# Alerting (the Pis have no MTA, plan §9.5/§13): only UNKNOWN — broken
+# coverage — exits non-zero (3) and so fails the systemd oneshot unit, with an
+# err-priority journal line. VULNERABLE is the steady state while no fixed
+# AltArch kernel exists, so it exits 0 and is reported against a baseline
+# (the affected list of the previous successful assessment): CVEs newly
+# affecting the kernel, and any status change, are logged at warning
+# priority and listed in $NEW_FILE; an unchanged VULNERABLE result is a
+# notice. Journal priorities use the sd-daemon "<N>" stdout prefix; every
+# line is also appended to the shared /var/log/unattended-upgrade.log.
 #
-# Coverage caveat: the mapping is by upstream base version (6.1.31 for
-# 6.1.31-v8.1.el9.altarch); downstream Raspberry Pi patches are not modelled,
-# and CVEs assigned by other CNAs (mostly pre-2024) are not in the feed. So
-# VULNERABLE is definitive, while OK means "no known kernel-CNA CVE".
+# Coverage caveats — the affected count is an UPPER bound for kernel-CNA CVEs
+# and misses CVEs from other CNAs:
+#   - OSV's ECOSYSTEM ranges start at the stable branch base (X.Y.0 or 0),
+#     not the commit that introduced the bug, so CVEs introduced after 6.1.31
+#     on the 6.1 branch still count as affecting it;
+#   - kernel config and architecture (drivers not built for the Pi) are not
+#     modelled, nor are downstream Raspberry Pi patches;
+#   - CVEs assigned by other CNAs (mostly pre-2024) are not in the feed.
+# OK therefore means "no known kernel-CNA CVE", and VULNERABLE means "at
+# least one kernel-CNA CVE whose fix is not in this upstream version".
 #
 # The regular Rocky package audit/update path (unattended-upgrade-rocky) is
 # untouched; this is a separate unit so a feed outage cannot block dnf.
 #
-# Rocky ships AT&T ksh93u+m — use typeset, not local. The script also runs
+# Rocky ships AT&T ksh93u+m — use typeset, not local. Note that in ksh93 a
+# typeset inside a POSIX-style name() function is NOT local (only
+# `function name {}` scopes it); helper variables here are therefore given
+# names that never collide with the result globals. The script also runs
 # under bash for the test harness (tests/rocky-kernel-audit.ksh).
 
 PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
@@ -53,72 +67,87 @@ readonly FETCH_TIMEOUT=900
 readonly MAX_FEED_AGE_HOURS=${ROCKY_KERNEL_AUDIT_TEST_MAX_AGE_HOURS:-72}
 # ~15.8k CVE records in 2026-09; far fewer means a truncated export.
 readonly MIN_CVE_RECORDS=${ROCKY_KERNEL_AUDIT_TEST_MIN_RECORDS:-5000}
+# How many new CVE ids the warning line names before pointing at $NEW_FILE.
+readonly NEW_IDS_IN_LOG=10
 
 LOG=${ROCKY_KERNEL_AUDIT_TEST_LOG:-/var/log/unattended-upgrade.log}
 STATE_DIR=${ROCKY_KERNEL_AUDIT_TEST_STATE_DIR:-/var/lib/rocky-kernel-audit}
 LOCK=$STATE_DIR/lock
 FEED=$STATE_DIR/osv-linux-all.zip
 STATUS_FILE=$STATE_DIR/status
+# Baseline: affected CVEs of the last successful (OK/VULNERABLE) assessment.
 AFFECTED_FILE=$STATE_DIR/affected-cves
+AFFECTED_NEXT=$STATE_DIR/affected-cves.next
+NEW_FILE=$STATE_DIR/new-cves
 RESULTS=$STATE_DIR/results.tmp
 
 # jq filter over the concatenated OSV records. Per record it prints
 # "<A|N|U> <id> <modified>": A = a Linux/Kernel ECOSYSTEM range (or explicit
 # version list) covers $kver, N = assessed and not affected, U = no
-# assessable range. Events are evaluated per range in version order, the OSV
-# algorithm: introduced turns affected on, fixed/after last_affected off.
+# assessable range (none present, or an event version that does not parse).
 # Versions compare as 4-component numeric arrays ("6.2-rc1" → 6.2.0.0).
+#
+# Events are evaluated per range in version order (the OSV algorithm:
+# introduced turns affected on, fixed/after last_affected off), with one
+# branch-aware correction: a range can list several stable-branch fixes, e.g.
+# [introduced 5.16.0, fixed 6.1.75, fixed 6.6.14]. Plain OSV evaluation would
+# call 6.2–6.6.13 fixed by 6.1.75; here a fixed event only closes the range
+# for its own major.minor branch, except the range's last fixed event, which
+# also covers every later branch (they inherit that fix).
 # shellcheck disable=SC2016 # jq variables, not shell expansions
 readonly JQ_FILTER='
 def vparse:
-  (tostring | capture("^(?<v>[0-9]+(\\.[0-9]+)*)").v? // null)
-  | if . == null then null
-    else (split(".") | map(tonumber) + [0, 0, 0, 0])[:4] end;
+	(tostring | capture("^(?<v>[0-9]+(\\.[0-9]+)*)").v? // null)
+	| if . == null then null
+	  else (split(".") | map(tonumber) + [0, 0, 0, 0])[:4] end;
 def range_hits($v):
-  [.events[]? | to_entries[0] | {k: .key, v: (.value | vparse)}]
-  | if any(.[]; .v == null) then null
-    else sort_by(.v)
-    | reduce .[] as $e (false;
-        if $e.k == "introduced" and $v >= $e.v then true
-        elif $e.k == "fixed" and $v >= $e.v then false
-        elif $e.k == "last_affected" and $v > $e.v then false
-        else . end)
-    end;
+	[.events[]? | to_entries[0] | {k: .key, v: (.value | vparse)}]
+	| if length == 0 or any(.[]; .v == null) then null
+	  else sort_by(.v) | to_entries
+	  | ([.[] | select(.value.k == "fixed") | .key] | max) as $last
+	  | reduce .[] as $x (false;
+		$x.value as $e
+		| if $e.k == "introduced" and $v >= $e.v then true
+		  elif $e.k == "fixed" and $v >= $e.v
+		    and ($x.key == $last or ($e.v[:2]) == ($v[:2])) then false
+		  elif $e.k == "last_affected" and $v > $e.v then false
+		  else . end)
+	  end;
 ($kver | vparse) as $v
 | select(has("withdrawn") | not)
 | [.affected[]? | select(.package.ecosystem == "Linux"
-                         and .package.name == "Kernel")] as $aff
+	and .package.name == "Kernel")] as $aff
 | [$aff[] | ((.versions // []) | index([$kver]) != null)] as $listed
 | [$aff[] | .ranges[]? | select(.type == "ECOSYSTEM") | range_hits($v)]
-  as $hits
+	as $hits
+| ([$aff[] | (.versions // []) | length] | add // 0) as $nlisted
 | (if any($listed[]; .) or any($hits[]; . == true) then "A"
-   elif ($hits | length) == 0 or any($hits[]; . == null) then "U"
+   elif any($hits[]; . == null)
+	or (($hits | length) == 0 and $nlisted == 0) then "U"
    else "N" end) as $s
 | "\($s) \(.id) \(.modified)"
 '
 
 # Result fields, filled in by the steps below and written by write_status.
 status=UNKNOWN
+previous_status=none
 reason=""
 krel=""
 kver=""
 installed_newest=unknown
 repo_newest=unknown
-fetch=failed
+fetch=skipped
 feed_newest=none
-typeset -i cves=0 affected=0 unassessable=0
+typeset -i cves=0 affected=0 unassessable=0 new_count=0
 
+# log <priority> <message>: shared log file plus stdout with the sd-daemon
+# priority prefix (3 err, 4 warning, 5 notice, 6 info) the journal parses.
 log() {
+	typeset prio=$1
+	shift
 	printf '[%s] kernel-audit: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" \
 		>>"$LOG"
-	printf '%s\n' "$*"
-}
-
-# Journal at err priority (systemd parses the "<3>" prefix on stdout).
-log_err() {
-	printf '[%s] kernel-audit: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" \
-		>>"$LOG"
-	printf '<3>%s\n' "$*"
+	printf '<%s>%s\n' "$prio" "$*"
 }
 
 # Whole-run lock; steal one older than 2 h (a killed run). $STATE_DIR must
@@ -154,29 +183,34 @@ detect_kernel() {
 
 # Refreshes $FEED with a conditional GET (If-Modified-Since the cached copy,
 # -R keeps the server's mtime). fetch = updated | unchanged | failed |
-# corrupt. A failed or corrupt download keeps the previous copy; its
-# freshness is then judged by decide_status like any other copy.
+# corrupt (skipped when no fetch ran). A failed or corrupt download keeps the
+# previous copy; its freshness is then judged by decide_status.
 fetch_feed() {
-	typeset tmp
-	tmp=$FEED.part
-	rm -f "$tmp"
+	typeset part
+	part=$FEED.part
+	rm -f "$part"
 	if [ -f "$FEED" ]; then
 		curl -fsS -R --max-time "$FETCH_TIMEOUT" -z "$FEED" \
-			-o "$tmp" "$FEED_URL" 2>/dev/null
+			-o "$part" "$FEED_URL" 2>/dev/null
 	else
-		curl -fsS -R --max-time "$FETCH_TIMEOUT" -o "$tmp" "$FEED_URL" \
+		curl -fsS -R --max-time "$FETCH_TIMEOUT" -o "$part" "$FEED_URL" \
 			2>/dev/null
-	fi || { rm -f "$tmp"; fetch=failed; return 0; }
-	if [ ! -s "$tmp" ]; then
-		rm -f "$tmp"
+	fi || {
+		rm -f "$part"
+		fetch=failed
+		log 4 "WARNING: feed download failed ($FEED_URL)"
+		return 0
+	}
+	if [ ! -s "$part" ]; then
+		rm -f "$part"
 		fetch=unchanged
-	elif unzip -tqq "$tmp" >/dev/null 2>&1; then
-		mv "$tmp" "$FEED"
+	elif unzip -tqq "$part" >/dev/null 2>&1; then
+		mv "$part" "$FEED"
 		fetch=updated
 	else
-		rm -f "$tmp"
+		rm -f "$part"
 		fetch=corrupt
-		log_err "WARNING: downloaded feed is not a valid zip, kept previous copy"
+		log 4 "WARNING: downloaded feed is not a valid zip, kept previous copy"
 	fi
 	return 0
 }
@@ -188,11 +222,12 @@ evaluate_feed() {
 		| jq -r --arg kver "$kver" "$JQ_FILTER" >"$RESULTS" 2>/dev/null
 }
 
-# Counts CVE records (other ids, e.g. the legacy GSD-*, are ignored), writes
-# the affected CVE list and finds the newest record modification time.
+# Counts CVE records (other ids, e.g. the legacy GSD-*, are ignored), finds
+# the newest record modification time and writes the candidate affected list
+# (C-sorted for comm) to $AFFECTED_NEXT; commit_baseline adopts it.
 summarize_results() {
-	typeset line
-	line=$(awk '
+	typeset counts
+	counts=$(awk '
 		$2 ~ /^CVE-/ {
 			n++
 			if ($1 == "A") a++
@@ -201,9 +236,9 @@ summarize_results() {
 		}
 		END { printf "%d %d %d %s\n", n, a, u, (newest == "" ? "none" : newest) }
 	' "$RESULTS") || return 1
-	read -r cves affected unassessable feed_newest <<<"$line"
-	awk '$1 == "A" && $2 ~ /^CVE-/ { print $2 }' "$RESULTS" | sort -V \
-		>"$AFFECTED_FILE.tmp" && mv "$AFFECTED_FILE.tmp" "$AFFECTED_FILE"
+	read -r cves affected unassessable feed_newest <<<"$counts"
+	awk '$1 == "A" && $2 ~ /^CVE-/ { print $2 }' "$RESULTS" \
+		| LC_ALL=C sort >"$AFFECTED_NEXT"
 }
 
 # Age of the newest record in hours; fails when it cannot be parsed.
@@ -233,7 +268,7 @@ decide_status() {
 	fi
 	if [ "$affected" -gt 0 ]; then
 		status=VULNERABLE
-		reason="$affected of $cves kernel CVEs affect upstream $kver"
+		reason="$affected of $cves kernel CVEs affect upstream $kver (upper bound)"
 	elif [ "$unassessable" -gt 0 ]; then
 		reason="$unassessable of $cves CVE records have no assessable range"
 	else
@@ -242,11 +277,31 @@ decide_status() {
 	fi
 }
 
+# After a successful assessment: $NEW_FILE = CVEs not in the previous
+# baseline (all of them on the first run). The baseline itself is replaced
+# only by commit_baseline, after the status record is written, so a run that
+# fails to record its result reports the same CVEs as new next time. UNKNOWN
+# runs never touch the baseline either: CVEs that appear during an outage are
+# still reported as new once coverage returns.
+compute_new() {
+	typeset base
+	base=$AFFECTED_FILE
+	[ -f "$base" ] || base=/dev/null
+	LC_ALL=C comm -13 "$base" "$AFFECTED_NEXT" >"$NEW_FILE.tmp" \
+		&& mv "$NEW_FILE.tmp" "$NEW_FILE" || return 1
+	new_count=$(wc -l <"$NEW_FILE")
+}
+
+commit_baseline() {
+	case $status in
+	OK | VULNERABLE) mv "$AFFECTED_NEXT" "$AFFECTED_FILE" ;;
+	esac
+}
+
 # Runs the pipeline; any failure leaves status UNKNOWN with a reason.
 run_audit() {
 	detect_kernel || return 0
 	fetch_feed
-	[ "$fetch" = failed ] && log_err "WARNING: feed download failed ($FEED_URL)"
 	if [ ! -f "$FEED" ]; then
 		reason="no feed copy available (never fetched)"
 		return 0
@@ -257,13 +312,20 @@ run_audit() {
 	fi
 	summarize_results || { reason="cannot summarize results"; return 0; }
 	decide_status
+	[ "$status" = UNKNOWN ] && return 0
+	compute_new || {
+		status=UNKNOWN
+		reason="cannot write the new-CVE list in $STATE_DIR"
+	}
 }
 
-# key=value status record for operators and later monitoring checks.
+# key=value status record for operators and later monitoring checks. Written
+# to a temp file first: a failed write (full SD card) keeps the old record.
 write_status() {
-	cat >"$STATUS_FILE.tmp" <<EOF
+	cat >"$STATUS_FILE.tmp" <<EOF && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
 checked_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 status=$status
+previous_status=$previous_status
 reason=$reason
 kernel_running=$krel
 upstream_version=$kver
@@ -274,32 +336,58 @@ fetch=$fetch
 feed_newest_record=$feed_newest
 cve_records=$cves
 affected=$affected
+new_cves=$new_count
 unassessable=$unassessable
 affected_list=$AFFECTED_FILE
+new_list=$NEW_FILE
 EOF
-	mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+}
+
+# Logs the result at the priority described in the header and exits.
+report() {
+	typeset summary ids
+	summary="$status: $reason (kernel ${krel:-?}, installed newest"
+	summary="$summary $installed_newest, repo newest $repo_newest, fetch $fetch)"
+	[ "$status" = UNKNOWN ] && { log 3 "$summary"; exit 3; }
+	if [ "$status" != "$previous_status" ]; then
+		log 4 "status changed: $previous_status -> $status"
+	fi
+	if [ "$new_count" -gt 0 ]; then
+		ids=$(head -n "$NEW_IDS_IN_LOG" "$NEW_FILE" | tr '\n' ' ')
+		log 4 "NEW: $new_count CVE(s) newly affect the kernel: ${ids}(list: $NEW_FILE)"
+	fi
+	case $status in
+	OK) log 6 "$summary" ;;
+	*) log 5 "$summary; list: $AFFECTED_FILE" ;;
+	esac
+	exit 0
 }
 
 main() {
-	typeset summary
 	if ! mkdir -p "$STATE_DIR"; then
-		log_err "UNKNOWN: cannot create state directory $STATE_DIR"
+		log 3 "UNKNOWN: cannot create state directory $STATE_DIR"
 		exit 3
 	fi
 	if ! acquire_lock; then
-		log "skipped, another run holds $LOCK"
+		log 6 "skipped, another run holds $LOCK"
 		exit 0
 	fi
-	trap 'rm -f "$RESULTS"; rmdir "$LOCK" 2>/dev/null' EXIT
+	trap 'rm -f "$RESULTS" "$AFFECTED_NEXT"; rmdir "$LOCK" 2>/dev/null' EXIT
+	if [ -f "$STATUS_FILE" ]; then
+		previous_status=$(sed -n 's/^status=//p' "$STATUS_FILE")
+	fi
+	[ -n "$previous_status" ] || previous_status=none
 	run_audit
-	write_status
-	summary="$status: $reason (kernel ${krel:-?}, installed newest"
-	summary="$summary $installed_newest, repo newest $repo_newest, fetch $fetch)"
-	case $status in
-	OK) log "$summary"; exit 0 ;;
-	VULNERABLE) log_err "$summary; list: $AFFECTED_FILE"; exit 2 ;;
-	*) log_err "$summary"; exit 3 ;;
-	esac
+	if ! write_status; then
+		rm -f "$STATUS_FILE.tmp"
+		log 3 "UNKNOWN: cannot write $STATUS_FILE (result was $status: $reason)"
+		exit 3
+	fi
+	if ! commit_baseline; then
+		log 3 "UNKNOWN: cannot update the baseline $AFFECTED_FILE (result was $status: $reason)"
+		exit 3
+	fi
+	report
 }
 
 main "$@"
