@@ -693,8 +693,8 @@ security signal at all.
 | Component | Source | Integrity / freshness |
 |---|---|---|
 | pkgs | `https://cdn.NetBSD.org/pub/NetBSD/packages/vulns/pkg-vulnerabilities.gz`, the pkgsrc-security list (≈30k lines, revision 1.794 of 2026-09-16) | `pkg_admin check-pkg-vulnerabilities` checks the format and the embedded SHA512 hash, which also catches truncation. The list's own `$NetBSD` date must be at most 30 days old. A server copy with a lower revision is never installed. |
-| base | "Supported Releases" section of `https://www.netbsd.org/releases/` | must contain the section and `</html>` |
-| base | advisory index `https://cdn.NetBSD.org/pub/NetBSD/security/advisories/` plus each in-scope `NetBSD-SA*.txt.asc` | index must end in `</html>`, list at least 250 advisories (289 in 2026-09), and still list every cached in-scope advisory |
+| base | "Supported Releases" section of `https://www.netbsd.org/releases/` | must contain the section, and its last non-empty line must hold `</html>` |
+| base | advisory index `https://cdn.NetBSD.org/pub/NetBSD/security/advisories/` plus each in-scope `NetBSD-SA*.txt.asc` | index: last non-empty line holds `</html>`, at least 250 advisories (289 in 2026-09), every cached in-scope advisory still listed |
 
 The embedded OpenPGP signature of `pkg-vulnerabilities` is not verified. That
 needs the pkgsrc-security key in a netpgp keyring (`GPG_KEYRING_PKGVULN`),
@@ -708,9 +708,13 @@ interactive `pkg_admin audit` and the `/etc/security` check in `/etc/daily`
 work again as well. `pkg_admin audit` covers every installed package,
 including the custom fleet packages (`dtail`, `f3sctl`), which simply have no
 entries. Each output line `Package <name>-<version> has a <type>
-vulnerability, see <url>` becomes the finding `pkg <pkgbase> <url>`. The key
-has no version, so an update that is still vulnerable does not re-alert, and
-a fixed advisory is reported as resolved.
+vulnerability, see <url>` becomes the finding `pkg <pkgbase> <url>`. With
+`CHECK_END_OF_LIFE=yes` (the NetBSD 11 default, checked on pi0) pkg_admin
+also prints `Package <name>-<version> has reached end-of-life (eol), see
+<url>/eol-packages`, which becomes `pkg <pkgbase> eol`: an end-of-life
+package gets no more fixes. The key has no version, so an update that is
+still vulnerable does not re-alert, and a fixed advisory is reported as
+resolved. Any other output line makes pkgs UNKNOWN.
 
 **Base mapping:** the installed formal release (`uname -r` = `11.0`) and the
 kernel build date (`uname -v`, 2026-07-30) are the inputs. A kernel that is
@@ -750,6 +754,14 @@ from root cron once a day, after the host's pkgs/reboot window and before
 are `VulnAudit*` methods on `netbsd.Unattended`, in `gonf/netbsd/vulnaudit.go`,
 so they are part of the `pis_netbsd` aggregate. Each run:
 
+0. waits up to 5 minutes for ntpd to report a synchronised clock (`ntpq -c
+   rv`: a `sync_<source>` other than `sync_unspec`, no `leap_alarm`). The
+   Pis have no RTC, so after a power-off the clock starts behind until ntpd
+   syncs, and every age check below depends on it. Without sync both
+   components are UNKNOWN, nothing is fetched and no contact is recorded
+   (`clock_synced=no`). Independently, a contact stamp in the future, or a
+   list dated more than 1 h in the future, is UNKNOWN ("clock behind"), so
+   a negative age never passes as fresh.
 1. refreshes the three sources with conditional GETs. A failed, corrupt or
    older download keeps the previous copy with a warning. Only a verified
    answer (or HTTP 304) is recorded as contact, in `contact.<source>`.
@@ -759,13 +771,21 @@ so they are part of the `pis_netbsd` aggregate. Each run:
 2. assesses each component on its own (`pkg_status`, `base_status`). pkgs is
    also UNKNOWN when `pkg_info` lists no packages, when `pkg_admin audit`
    writes to stderr or prints a line the parser does not know, or when it
-   exits non-zero without findings.
+   exits non-zero without findings. `pkg_info` and `pkg_admin audit` run
+   under `unattended-upgrade-netbsd`'s lock `/var/run/unattended-upgrade.lock`
+   (held for seconds only, not during downloads), so the audit never reads
+   a pkgdb that pkgin is changing. If the upgrade job holds it for more than
+   30 minutes, the run is skipped with a warning, exit 0, and the status
+   record is left as it is; the next daily run retries. A lock older than
+   2 h is stolen, as the upgrade job itself does.
 3. compares each assessed component's findings with its lines in the
    baseline `findings`: new ones go to `new-findings`, gone ones to
    `resolved-findings`. An UNKNOWN component keeps its baseline lines and
    reports nothing, so findings that appear during an outage are reported
    once coverage returns. An unsorted or malformed baseline is treated as
-   empty, with a warning.
+   empty, with a warning. When neither component is assessed, both batch
+   files are emptied (`new_findings=0`), so they never show an older run's
+   batch.
 4. writes `status` via a temp file, then commits: first the dated
    `new-findings.history` (90 days, one line per finding carrying its first
    alerting date), then the baseline. A failed status write keeps the old
@@ -775,8 +795,8 @@ so they are part of the `pis_netbsd` aggregate. Each run:
 | Status | Exit | When |
 |---|---|---|
 | OK | 0 | both components assessed from fresh, verified data; no finding |
-| VULNERABLE | 0 | at least one finding (package advisory, base advisory, newer release, unsupported series) |
-| UNKNOWN | 3 | either component unassessed: a source never fetched or without contact for > 36 h, `pkg-vulnerabilities` missing, invalid or older than 30 days, pkg_admin errors or unparsable output, no packages, releases page or index unparsable, truncated, below the floor or missing a cached advisory, an advisory not downloadable or not assessable, a non-release kernel, state that cannot be written |
+| VULNERABLE | 0 | at least one finding (package advisory, end-of-life package, base advisory, newer release, unsupported series) |
+| UNKNOWN | 3 | either component unassessed: clock not NTP-synchronised, or a contact stamp or list date in the future; a source never fetched or without contact for > 36 h, `pkg-vulnerabilities` missing, invalid or older than 30 days, pkg_admin errors or unparsable output, no packages, releases page or index unparsable, truncated, below the floor or missing a cached advisory, an advisory not downloadable or not assessable, a non-release kernel, state that cannot be written |
 
 **Alerting:** there is no MTA on the Pis (§9.5). Every line goes to
 `/var/log/unattended-upgrade.log` (tag `vuln-audit:`) and to syslog (tag
@@ -791,6 +811,7 @@ a quiet run mails nothing.
 | `warning`: `NEW: n finding(s): …` | findings not in the baseline (the first run reports all of them) |
 | `warning`: `status changed: A -> B` | any status transition |
 | `warning`: `WARNING: download failed` / `incomplete page` / `fails verification` / `older than the installed one` / `cannot refresh advisories` / `restored` / `baseline … malformed` | a refresh problem that still leaves usable coverage |
+| `warning`: `WARNING: skipped, unattended-upgrade holds …` | the upgrade job kept its lock for > 30 min; this run was skipped, the status record is the previous one |
 | `notice`: `RESOLVED: …`, unchanged VULNERABLE summary; `info`: OK summary | quiet runs |
 
 **Known gap:** as on pi2/pi3 (§13), nothing forwards these signals off the
@@ -825,16 +846,23 @@ pending updates, so the libxml2 advisories are open upstream in pkgsrc.
 `pkg_admin`, `pkg_info`, `curl` and `logger`, and uses the real
 gzip/awk/sort/comm/date. It passed under bash and ksh93 on the workstation
 and under NetBSD's `/bin/ksh` on pi0 (in `/tmp`). It covers clean and
-vulnerable runs, the conditional GET and 304, deltas across package updates,
+vulnerable runs, end-of-life packages alone and mixed with advisories, the
+conditional GET and 304, deltas across package updates,
 history pruning and deduplication, every advisory rule plus the
 unassessable cases, a newer release, an unsupported series, and the
-per-component baseline in both directions. The negative cases: never
+per-component baseline in both directions, and the upgrade lock (released
+after a run, a held one skips without touching the status, a lock freed
+while waiting, a stale one stolen). The negative cases: no ntpd sync or
+ntpd not answering (nothing fetched, batch files emptied, baseline kept),
+a contact stamp and a list dated in the future, never
 fetched, one tolerated refresh failure, then UNKNOWN past 36 h, truncated
 and non-gzip downloads, an older revision, a stale list, a restored list,
 pkg_admin stderr, unparsable output or a non-zero exit, no packages,
-incomplete and truncated pages, a section without series, an index below the
+incomplete and truncated pages, `</html>` present but not at the end, a
+section without series, an index below the
 floor or missing a cached advisory (and the operator override), an advisory
-that cannot be downloaded (with and without a cache), a non-release kernel
+that cannot be downloaded (with and without a cache) or moved into the
+cache, a non-release kernel
 and an unparsable build date, invalid baselines, failed history, baseline,
 resolved-list and status writes, a held lock, and an uncreatable state
 directory.

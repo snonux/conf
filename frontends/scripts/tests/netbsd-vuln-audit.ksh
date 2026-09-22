@@ -7,8 +7,10 @@
 # line and the closing PGP signature line, which stands in for the real
 # SHA512 check (a truncated download loses that line).
 #
-# Covers the package audit (clean, findings, baseline deltas, the 304 and
-# conditional GET, restoring a deleted list), the base audit (newer release,
+# Covers the package audit (clean, findings, end-of-life packages, baseline
+# deltas, the 304 and conditional GET, restoring a deleted list, the
+# upgrade-job lock), the clock gate (ntpd sync, times in the future), the
+# base audit (newer release,
 # end-of-life series, advisory verdicts: release line, branch fix date,
 # series line, unassessable), the per-component baseline, and the negative
 # paths that must never report clean: never fetched, refresh failures past
@@ -77,6 +79,16 @@ while [ "$i" -lt "${FAKE_PKGS:-3}" ]; do
 done
 EOF
 
+# FAKE_NTP: synced (default) | unsynced | down (ntpd not answering).
+cat >"$fake/ntpq" <<'EOF'
+#!/bin/sh
+case ${FAKE_NTP:-synced} in
+synced) echo 'associd=0 status=0615 leap_none, sync_ntp, 1 event, clock_sync,' ;;
+unsynced) echo 'associd=0 status=c016 leap_alarm, sync_unspec, 1 event, restart,' ;;
+*) echo 'ntpq: read: Connection refused' >&2; exit 1 ;;
+esac
+EOF
+
 cat >"$fake/logger" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"${FAKE_SYSLOG:?}"
@@ -130,7 +142,9 @@ chmod +x "$fake"/*
 
 # --- fixtures ------------------------------------------------------------
 
-today_slash=$(date -u +%Y/%m/%d)
+# Yesterday: a list dated later today (15:02:56) would lie in the future.
+today_slash=$(date -u -d '-1 day' +%Y/%m/%d)
+future_slash=$(date -u -d '+2 days' +%Y/%m/%d)
 old_slash=$(date -u -d '-40 days' +%Y/%m/%d)
 
 # vulns <revision> <YYYY/MM/DD> [truncated]: publishes a list in $web.
@@ -210,6 +224,7 @@ log="$work/audit.log"
 syslog="$work/syslog"
 curl_log="$work/curl.log"
 audit_out="$work/audit.findings"
+upgrade_lock="$work/upgrade.lock"
 
 # run [VAR=value...]: runs the script, sets rc, keeps the state dir.
 run() {
@@ -220,6 +235,9 @@ run() {
 		NETBSD_VULN_AUDIT_TEST_LOG="$log" \
 		NETBSD_VULN_AUDIT_TEST_STATE_DIR="$state" \
 		NETBSD_VULN_AUDIT_TEST_MIN_ADVISORIES=3 \
+		NETBSD_VULN_AUDIT_TEST_CLOCK_WAIT_SECS=0 \
+		NETBSD_VULN_AUDIT_TEST_UPGRADE_LOCK="$upgrade_lock" \
+		NETBSD_VULN_AUDIT_TEST_UPGRADE_LOCK_WAIT_SECS=0 \
 		FAKE_PKGVULNDIR="$vulndir" FAKE_WEB="$web" \
 		FAKE_CURL_LOG="$curl_log" FAKE_SYSLOG="$syslog" \
 		FAKE_AUDIT="$audit_out" ${1+"$@"} \
@@ -261,6 +279,10 @@ age_contact() {
 finding() {
 	printf 'Package %s has a %s vulnerability, see %s\n' "$1" "$2" "$3" \
 		>>"$audit_out"
+}
+eol() {
+	printf 'Package %s has reached end-of-life (eol), see %s/eol-packages\n' \
+		"$1" https://www.NetBSD.org/pkgsrc >>"$audit_out"
 }
 
 # --- package audit -------------------------------------------------------
@@ -324,6 +346,23 @@ hasnt "$state/new-findings.history" 'pkg old ' 'history not pruned'
 [ "$(grep -c 'pkg libxml2' "$state/new-findings.history")" -eq 1 ] \
 	|| fail 'history lost or duplicated a batch'
 
+# End-of-life packages (pkg_admin's CHECK_END_OF_LIFE=yes) are findings,
+# alone and mixed with advisories.
+fresh
+eol python39-3.9.20
+run
+expect 0 VULNERABLE 'eol-only package'
+has "$state/findings" '^pkg python39 eol$' 'eol finding key'
+field 'pkg_findings=1' 'eol finding count'
+finding perl-5.42.3 symlink-attack https://nvd/CVE-2011-4116
+eol php81-8.1.30
+run
+expect 0 VULNERABLE 'eol and advisory mix'
+field 'pkg_findings=3' 'mixed finding count'
+field 'new_findings=2' 'mix: only the added findings are new'
+has "$state/findings" '^pkg php81 eol$' 'second eol finding'
+has "$state/findings" '^pkg perl https://nvd/CVE-2011-4116$' 'advisory in mix'
+
 # --- package coverage failures -------------------------------------------
 
 fresh
@@ -384,6 +423,75 @@ vulns 794 "$old_slash"
 run
 expect 3 UNKNOWN 'stale list'
 has "$state/status" 'days old (> 30): source stale' 'stale list reason'
+
+# A clock behind (RTC-less Pi before ntpd syncs, or a clock stepped back)
+# must not make old data look fresh: a contact stamp or a list date in the
+# future is UNKNOWN.
+fresh
+run
+printf '%d\n' $(($(date -u +%s) + 7200)) >"$state/contact.vulns"
+run FAKE_DOWN=vulns
+expect 3 UNKNOWN 'contact stamp in the future'
+has "$state/status" 'last contact lies in the future: clock behind' \
+	'future contact reason'
+fresh
+vulns 794 "$future_slash"
+run
+expect 3 UNKNOWN 'list dated in the future'
+has "$state/status" 'in the future: clock behind' 'future list reason'
+
+# Without ntpd sync nothing is fetched or judged; the batch files are
+# emptied, and the baseline stays.
+fresh
+finding bash-5.0 remote-code-execution https://nvd/CVE-1
+run
+[ -s "$state/new-findings" ] || fail 'first run left no new findings'
+cp "$state/findings" "$work/baseline"
+rm -f "$state"/contact.*
+run FAKE_NTP=unsynced
+expect 3 UNKNOWN 'clock not synchronised'
+field 'clock_synced=no' 'clock field'
+field 'pkg_status=UNKNOWN' 'pkg judged without a clock'
+field 'base_status=UNKNOWN' 'base judged without a clock'
+has "$state/status" 'clock not NTP-synchronised' 'clock reason'
+field 'new_findings=0' 'nothing new without assessment'
+[ ! -s "$state/new-findings" ] || fail 'stale new-findings kept'
+[ ! -s "$state/resolved-findings" ] || fail 'stale resolved-findings kept'
+[ ! -f "$state/contact.vulns" ] || fail 'contact recorded without a clock'
+cmp -s "$state/findings" "$work/baseline" || fail 'baseline changed'
+run FAKE_NTP=down
+expect 3 UNKNOWN 'ntpd not answering'
+run
+expect 0 VULNERABLE 'clock back'
+field 'clock_synced=yes' 'clock field after sync'
+field 'new_findings=0' 'finding re-reported after the clock gate'
+
+# The upgrade job's lock: released after a run, a held one skips the run
+# without touching the status record, a released one is waited for, a
+# stale one (> 2 h) is stolen.
+fresh
+run
+[ ! -d "$upgrade_lock" ] || fail 'upgrade lock not released'
+cp "$state/status" "$work/status.before"
+mkdir "$upgrade_lock"
+finding bash-5.0 remote-code-execution https://nvd/CVE-1
+run
+[ "$rc" -eq 0 ] || fail "held upgrade lock rc=$rc, want 0"
+has "$work/out" 'skipped, unattended-upgrade holds' 'upgrade lock warning'
+cmp -s "$state/status" "$work/status.before" \
+	|| fail 'skipped run changed the status record'
+[ -d "$upgrade_lock" ] || fail 'skipped run removed the foreign lock'
+(sleep 1; rmdir "$upgrade_lock") &
+run NETBSD_VULN_AUDIT_TEST_UPGRADE_LOCK_WAIT_SECS=10
+wait
+expect 0 VULNERABLE 'lock released while waiting'
+field 'new_findings=1' 'waited run did not audit'
+[ ! -d "$upgrade_lock" ] || fail 'upgrade lock not released after waiting'
+mkdir "$upgrade_lock"
+touch -t "$(date -d '-3 hours' +%Y%m%d%H%M)" "$upgrade_lock"
+run
+expect 0 VULNERABLE 'stale upgrade lock stolen'
+[ ! -d "$upgrade_lock" ] || fail 'stolen upgrade lock not released'
 
 # A list that passes the format check but lacks the revision header must
 # not get a date from nowhere.
@@ -532,6 +640,22 @@ field 'fetch_releases=corrupt' 'truncated page recorded'
 age_contact releases 40
 run
 expect 3 UNKNOWN 'releases page not refreshed past 36 h'
+
+# </html> must end the page, not merely appear in it.
+fresh
+releases 11:11.0
+run
+printf '<html>Supported Releases</html>\n<div>cut off\n' >"$web/releases.html"
+run
+field 'fetch_releases=corrupt' '</html> not at the end accepted'
+
+# An advisory that cannot be moved into the cache (never cached before)
+# cannot be assessed.
+fresh
+run FAKE_MV_FAIL=NetBSD-SA2024-002.txt.asc
+expect 3 UNKNOWN 'advisory cache write failure'
+has "$work/out" 'cannot refresh advisories: NetBSD-SA2024-002' \
+	'advisory move warning'
 
 fresh
 printf '<html><body>\nSupported Releases\nnothing\n</body></html>\n' \
@@ -684,6 +808,7 @@ printf 'file\n' >"$work/not-a-dir"
 rc=0
 env NETBSD_VULN_AUDIT_TEST_PATH="$fake" NETBSD_VULN_AUDIT_TEST_LOG="$log" \
 	NETBSD_VULN_AUDIT_TEST_STATE_DIR="$work/not-a-dir/state" \
+	NETBSD_VULN_AUDIT_TEST_UPGRADE_LOCK="$upgrade_lock" \
 	FAKE_SYSLOG="$syslog" "$shell" "$script" >"$work/out" 2>&1 || rc=$?
 [ "$rc" -eq 3 ] || fail "uncreatable state dir rc=$rc, want 3"
 

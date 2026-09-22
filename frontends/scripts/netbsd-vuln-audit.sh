@@ -17,9 +17,10 @@
 # Result, per component and overall (the worse of the two):
 #
 #   OK          fresh, complete data; nothing found
-#   VULNERABLE  at least one finding (a package advisory, a base advisory
-#               naming the installed release, an unsupported series, or a
-#               newer release of the installed series)
+#   VULNERABLE  at least one finding (a package advisory, an end-of-life
+#               package, a base advisory naming the installed release, an
+#               unsupported series, or a newer release of the installed
+#               series)
 #   UNKNOWN     coverage unavailable: a source never fetched or not refreshed
 #               within MAX_CONTACT_AGE_HOURS, an invalid/truncated download
 #               with no valid copy, a pkg-vulnerabilities list older than
@@ -27,8 +28,9 @@
 #               script cannot parse, no installed packages visible, a
 #               releases page or advisory index that cannot be parsed (or
 #               lost an advisory seen before), an advisory that cannot be
-#               assessed, a non-release kernel, or state that cannot be
-#               written
+#               assessed, a non-release kernel, a clock that is not
+#               NTP-synchronised or lies behind a recorded time, or state
+#               that cannot be written
 #
 # Alerting (the Pis have no MTA, plan §9.5/§14): only UNKNOWN — broken
 # coverage — exits non-zero (3). VULNERABLE is expected to be the steady
@@ -87,6 +89,20 @@ readonly MIN_ADVISORIES=${NETBSD_VULN_AUDIT_TEST_MIN_ADVISORIES:-250}
 # installed release or its branch (a branch is cut at most ~15 months
 # before its .0 release), so they are not fetched.
 readonly ADVISORY_LOOKBACK_YEARS=2
+# The Pis have no RTC: after a power-off the clock starts behind until ntpd
+# syncs. Every age check depends on it, so the run waits up to
+# CLOCK_WAIT_SECS for ntpd's sync (ntpq -c rv); without it both components
+# are UNKNOWN and no contact is recorded.
+readonly CLOCK_WAIT_SECS=${NETBSD_VULN_AUDIT_TEST_CLOCK_WAIT_SECS:-300}
+# unattended-upgrade-netbsd's whole-job lock (a directory). It is taken
+# around pkg_info + pkg_admin audit only (seconds), so the audit never
+# reads a pkgdb that pkgin is changing and the upgrade job, which skips a
+# held lock, is not kept out by the network fetches. A lock held longer
+# than UPGRADE_LOCK_WAIT_SECS skips the whole run (warning, exit 0, status
+# record untouched); the next daily run retries. Like the upgrade job, a
+# lock older than 2 h is stolen (a crashed run).
+readonly UPGRADE_LOCK=${NETBSD_VULN_AUDIT_TEST_UPGRADE_LOCK:-/var/run/unattended-upgrade.lock}
+readonly UPGRADE_LOCK_WAIT_SECS=${NETBSD_VULN_AUDIT_TEST_UPGRADE_LOCK_WAIT_SECS:-1800}
 # Days of dated new-finding batches kept in $HISTORY_FILE.
 readonly HISTORY_DAYS=90
 # How many findings a NEW/RESOLVED line names before pointing at the list.
@@ -134,6 +150,9 @@ series_newest=unknown
 typeset -i installed_pkgs=0 pkg_findings=0 base_findings=0
 typeset -i advisories_listed=0 advisories_in_scope=0
 typeset -i new_count=0 resolved_count=0
+clock_synced=unknown
+# yes while this run holds $UPGRADE_LOCK (released by the EXIT trap too).
+upgrade_lock_held=no
 # Set by fetch_url: updated | unchanged | failed.
 fetched=""
 # Set by commit_baseline when it fails: which state file could not be written.
@@ -188,7 +207,9 @@ fetch_url() {
 
 # record_contact <source>: the source answered with valid (or unchanged)
 # data now. contact_age_hours <source> prints the hours since; fails when
-# the source never answered.
+# the source never answered, and prints -1 when the stamp lies in the
+# future (the clock went backwards): a negative age must never pass as
+# fresh.
 record_contact() {
 	date -u +%s >"$STATE_DIR/contact.$1.tmp" \
 		&& mv "$STATE_DIR/contact.$1.tmp" "$STATE_DIR/contact.$1"
@@ -199,7 +220,13 @@ contact_age_hours() {
 	case $since in
 	'' | *[!0-9]*) return 1 ;;
 	esac
-	printf '%d\n' $((($(date -u +%s) - since) / 3600))
+	typeset -i now_secs
+	now_secs=$(date -u +%s)
+	if [ "$now_secs" -lt "$since" ]; then
+		printf '%d\n' -1
+		return 0
+	fi
+	printf '%d\n' $(((now_secs - since) / 3600))
 }
 
 # fresh_contact <source> <label>: fails with a reason in $fresh_reason
@@ -210,6 +237,10 @@ fresh_contact() {
 		fresh_reason="$2 never fetched successfully"
 		return 1
 	}
+	if [ "$contact_age" -lt 0 ]; then
+		fresh_reason="$2 last contact lies in the future: clock behind"
+		return 1
+	fi
 	if [ "$contact_age" -gt "$MAX_CONTACT_AGE_HOURS" ]; then
 		fresh_reason="$2 not refreshed for ${contact_age}h (> ${MAX_CONTACT_AGE_HOURS}h)"
 		return 1
@@ -319,6 +350,12 @@ check_vulns_list() {
 		pkg_reason="cannot parse the \$NetBSD header of $vulns_file"
 		return 1
 	}
+	# The list is dated when pkgsrc-security commits it, so it can only be
+	# newer than now if the clock is behind (1 h slack for server skew).
+	if [ "$(date -u +%s)" -lt $((epoch - 3600)) ]; then
+		pkg_reason="pkg-vulnerabilities $vulns_revision is dated $vulns_date, in the future: clock behind"
+		return 1
+	fi
 	age=$((($(date -u +%s) - epoch) / 86400))
 	if [ "$age" -gt "$MAX_VULNS_AGE_DAYS" ]; then
 		pkg_reason="pkg-vulnerabilities $vulns_revision is ${age} days old (> $MAX_VULNS_AGE_DAYS): source stale"
@@ -329,10 +366,13 @@ check_vulns_list() {
 	return 1
 }
 
-# run_pkg_audit: runs pkg_admin audit and turns every "Package <name> has
-# a <type> vulnerability, see <url>" line into "pkg <pkgbase> <url>" in
-# $PKG_NEXT. Anything else on stdout or stderr is an error: a silent
-# failure must not look like a clean audit.
+# run_pkg_audit: runs pkg_admin audit (under $UPGRADE_LOCK) and turns
+# every "Package <name> has a <type> vulnerability, see <url>" line into
+# "pkg <pkgbase> <url>" and every "Package <name> has reached end-of-life
+# (eol), see <url>/eol-packages" line (CHECK_END_OF_LIFE=yes, the NetBSD
+# 11 default) into "pkg <pkgbase> eol" in $PKG_NEXT. Anything else on
+# stdout or stderr is an error: a silent failure must not look like a
+# clean audit.
 run_pkg_audit() {
 	typeset -i audit_rc=0
 	typeset audit_err
@@ -345,6 +385,9 @@ run_pkg_audit() {
 	if ! awk '
 		/^Package [^ ]+ has an? .+ vulnerability, see [^ ]+$/ {
 			n = $2; sub(/-[^-]*$/, "", n); print "pkg", n, $NF; next
+		}
+		/^Package [^ ]+ has reached end-of-life \(eol\), see [^ ]+$/ {
+			n = $2; sub(/-[^-]*$/, "", n); print "pkg", n, "eol"; next
 		}
 		{ bad = 1 }
 		END { exit bad }
@@ -360,6 +403,37 @@ run_pkg_audit() {
 	fi
 }
 
+# take_upgrade_lock: takes $UPGRADE_LOCK, polling for up to
+# UPGRADE_LOCK_WAIT_SECS; when the upgrade job keeps it longer, the run is
+# skipped (exit 0, status untouched) rather than reported UNKNOWN.
+take_upgrade_lock() {
+	typeset -i lock_waited=0 lock_poll=60
+	[ "$UPGRADE_LOCK_WAIT_SECS" -lt "$lock_poll" ] \
+		&& lock_poll=$UPGRADE_LOCK_WAIT_SECS
+	[ "$lock_poll" -gt 0 ] || lock_poll=1
+	while :; do
+		if mkdir "$UPGRADE_LOCK" 2>/dev/null \
+			|| { [ -n "$(find "$UPGRADE_LOCK" -mmin +120 2>/dev/null)" ] \
+				&& rmdir "$UPGRADE_LOCK" 2>/dev/null \
+				&& mkdir "$UPGRADE_LOCK" 2>/dev/null; }; then
+			upgrade_lock_held=yes
+			return 0
+		fi
+		if [ "$lock_waited" -ge "$UPGRADE_LOCK_WAIT_SECS" ]; then
+			log warning "WARNING: skipped, unattended-upgrade holds $UPGRADE_LOCK (waited ${lock_waited}s); the next run retries"
+			exit 0
+		fi
+		sleep "$lock_poll"
+		lock_waited=$((lock_waited + lock_poll))
+	done
+}
+
+release_upgrade_lock() {
+	[ "$upgrade_lock_held" = yes ] || return 0
+	rmdir "$UPGRADE_LOCK" 2>/dev/null
+	upgrade_lock_held=no
+}
+
 # assess_pkgs: sets pkg_status/pkg_reason and, when assessed, $PKG_NEXT.
 assess_pkgs() {
 	typeset dir
@@ -371,13 +445,19 @@ assess_pkgs() {
 	vulns_file=$dir/pkg-vulnerabilities
 	refresh_vulns
 	check_vulns_list || return 0
+	take_upgrade_lock
 	pkg_info >"$TMP/pkgs" 2>/dev/null
 	installed_pkgs=$(wc -l <"$TMP/pkgs")
 	if [ "$installed_pkgs" -eq 0 ]; then
+		release_upgrade_lock
 		pkg_reason="pkg_info lists no installed packages"
 		return 0
 	fi
-	run_pkg_audit || return 0
+	if ! run_pkg_audit; then
+		release_upgrade_lock
+		return 0
+	fi
+	release_upgrade_lock
 	pkg_status=OK
 	pkg_reason="no advisory for $installed_pkgs packages (list $vulns_revision of $vulns_date)"
 	if [ "$pkg_findings" -gt 0 ]; then
@@ -488,8 +568,8 @@ detect_release() {
 }
 
 # refresh_page <url> <cache> <marker>: refreshes a page whose download
-# counts only when it contains <marker> and ends in </html> (a truncated
-# page never replaces the cache). Leaves the result in $fetched (corrupt
+# counts only when it contains <marker> and its last non-empty line holds
+# </html> (a truncated page never replaces the cache). Leaves the result in $fetched (corrupt
 # for a failed check); <source> contact is recorded by the caller.
 refresh_page() {
 	typeset page_url="$1" page_cache="$2" page_marker="$3"
@@ -499,7 +579,8 @@ refresh_page() {
 	failed) log warning "WARNING: download failed ($page_url)" ;;
 	updated)
 		if grep -q "$page_marker" "$page_part" \
-			&& grep -q '</html>' "$page_part"; then
+			&& awk 'NF { l = $0 } END { exit l !~ /<\/html>/ }' \
+				"$page_part"; then
 			mv "$page_part" "$page_cache" || fetched=failed
 		else
 			fetched=corrupt
@@ -557,7 +638,7 @@ assess_releases() {
 	return 0
 }
 
-# advisories_listed_in_index: advisory file names in the index, sorted.
+# advisories_in_index: advisory file names in the index, sorted.
 advisories_in_index() {
 	matches 'NetBSD-SA[0-9][0-9][0-9][0-9]-[0-9]+[.]txt[.]asc' "$ADV_INDEX" \
 		| LC_ALL=C sort -u
@@ -588,8 +669,9 @@ scope_advisories() {
 }
 
 # fetch_advisories: refreshes every in-scope advisory (conditional GET).
-# A failed refresh of a cached advisory is a warning; one never fetched is
-# left missing and later counts as unassessable.
+# A failed refresh (download, content check or move into the cache) of a
+# cached advisory is a warning; one never fetched is left missing and
+# later counts as unassessable.
 fetch_advisories() {
 	typeset adv_name adv_failed=""
 	while IFS= read -r adv_name; do
@@ -597,7 +679,10 @@ fetch_advisories() {
 		case $fetched in
 		updated)
 			if grep -q 'NetBSD Security Advisory' "$TMP/adv"; then
-				mv "$TMP/adv" "$ADV_DIR/$adv_name"
+				# A failed move keeps the previous copy, if any; one
+				# never cached then counts as unassessable.
+				mv "$TMP/adv" "$ADV_DIR/$adv_name" \
+					|| adv_failed="$adv_failed $adv_name"
 			else
 				adv_failed="$adv_failed $adv_name"
 			fi
@@ -676,15 +761,23 @@ baseline_valid() {
 		&& ! grep -qvE '^(pkg|base) [^ ]+ [^ ]+$' "$1"
 }
 
-# compute_new: for the assessed components only, $NEW_FILE = findings not
-# in the baseline, $RESOLVED_FILE = baseline findings gone, and
+# compute_new: for the assessed components only (both lists are emptied
+# when nothing was assessed), $NEW_FILE = findings not in the baseline,
+# $RESOLVED_FILE = baseline findings gone, and
 # $FINDINGS_NEXT = the next baseline (unassessed components keep their old
 # lines). Returns 1 when the new list cannot be written, 2 when only the
 # resolved list or the next baseline cannot (the new findings still alert).
 compute_new() {
 	typeset re base="$FINDINGS"
 	re=$(assessed_components)
-	[ -n "$re" ] || return 0
+	if [ -z "$re" ]; then
+		# Nothing assessed: this run found nothing new or resolved, so the
+		# batch files must not keep an older run's lists (new_findings=0).
+		: >"$NEW_FILE.tmp" && mv "$NEW_FILE.tmp" "$NEW_FILE" || return 1
+		: >"$RESOLVED_FILE.tmp" && mv "$RESOLVED_FILE.tmp" "$RESOLVED_FILE" \
+			|| return 2
+		return 0
+	fi
 	if [ ! -f "$base" ]; then
 		base=/dev/null
 	elif ! baseline_valid "$base"; then
@@ -755,6 +848,7 @@ combine_status() {
 write_status() {
 	cat >"$STATUS_FILE.tmp" <<EOF && mv "$STATUS_FILE.tmp" "$STATUS_FILE"
 checked_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+clock_synced=$clock_synced
 status=$status
 previous_status=$previous_status
 reason=$reason
@@ -813,12 +907,45 @@ report() {
 	exit 0
 }
 
-# run_audit: both components, the combined status and the deltas.
+# clock_in_sync: ntpd reports a synchronised clock (the first `ntpq -c rv`
+# line carries sync_<source> other than sync_unspec, and no leap_alarm).
+clock_in_sync() {
+	typeset ntp_rv
+	ntp_rv=$(ntpq -c rv 2>/dev/null | head -n 1)
+	case $ntp_rv in
+	*leap_alarm* | *sync_unspec*) return 1 ;;
+	*sync_*) return 0 ;;
+	esac
+	return 1
+}
+
+# wait_for_clock: polls clock_in_sync every 30 s for CLOCK_WAIT_SECS.
+wait_for_clock() {
+	typeset -i clock_waited=0
+	while ! clock_in_sync; do
+		if [ "$clock_waited" -ge "$CLOCK_WAIT_SECS" ]; then
+			clock_synced=no
+			return 1
+		fi
+		sleep 30
+		clock_waited=$((clock_waited + 30))
+	done
+	clock_synced=yes
+}
+
+# run_audit: both components (only with a synchronised clock), the
+# combined status and the deltas.
 run_audit() {
 	typeset -i delta_rc=0
 	: >"$PKG_NEXT"
-	assess_pkgs
-	assess_base
+	: >"$BASE_NEXT"
+	if wait_for_clock; then
+		assess_pkgs
+		assess_base
+	else
+		pkg_reason="clock not NTP-synchronised (waited ${CLOCK_WAIT_SECS}s): ages cannot be judged"
+		base_reason=$pkg_reason
+	fi
 	combine_status
 	compute_new || delta_rc=$?
 	case $delta_rc in
@@ -839,7 +966,7 @@ main() {
 		log info "skipped, another run holds $LOCK"
 		exit 0
 	fi
-	trap 'rm -rf "$TMP" "$FINDINGS_NEXT" "$PKG_NEXT" "$BASE_NEXT"; rmdir "$LOCK" 2>/dev/null' EXIT
+	trap 'release_upgrade_lock; rm -rf "$TMP" "$FINDINGS_NEXT" "$PKG_NEXT" "$BASE_NEXT"; rmdir "$LOCK" 2>/dev/null' EXIT
 	rm -rf "$TMP"
 	if ! mkdir "$TMP"; then
 		log err "UNKNOWN: cannot create $TMP"

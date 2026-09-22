@@ -30,7 +30,8 @@ func (Unattended) DescVulnAuditPackages() string {
 }
 
 // VulnAuditPackages installs curl (pkgsrc), which the audit uses for its
-// conditional HTTPS downloads. gzip, awk and pkg_admin are in base.
+// conditional HTTPS downloads. gzip, awk, pkg_admin and ntpq (the
+// clock gate) are in base.
 func (Unattended) VulnAuditPackages() {
 	WhenHostname(ClusterHosts(), func() {
 		Package("curl")
@@ -81,7 +82,9 @@ func (Unattended) DescVulnAuditCron() string {
 // VulnAuditCron runs the audit once a day at the host's
 // cluster.ValueVulnAuditCron {minute, hour}, after the host's unattended
 // pkgs/reboot window (so it audits the updated packages) and before
-// /etc/daily at 04:15. Only UNKNOWN (broken coverage) exits non-zero; the
+// /etc/daily at 04:15. The script also takes unattended-upgrade-netbsd's
+// lock around pkg_admin audit, in case a window overruns. Only UNKNOWN
+// (broken coverage, including an unsynchronised clock) exits non-zero; the
 // script prints only err/warning lines, so cron's mail carries alerts only.
 func (Unattended) VulnAuditCron() {
 	ForHosts(cluster.ValueVulnAuditCron, func(_ string, at [2]string) {
