@@ -2,7 +2,6 @@ package frontends
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -42,15 +41,19 @@ func (Web) ACMEInvoke() {
 // DescHTTPD returns the description for the OpenBSD httpd recipe.
 func (Web) DescHTTPD() string { return "Render, validate, and converge frontend httpd" }
 
-// HTTPD renders each host's configuration on the controller. Candidate
-// validation precedes its live configuration update, while OnChange limits a
+// HTTPD renders each host's configuration on the controller. The core File
+// validation (WithValidation) checks a private candidate with `httpd -n`
+// before every non-dry-run live reconciliation, while OnChange limits a
 // restart to a changed live config or rc flag.
 func (Web) HTTPD() {
 	for _, host := range ClusterHosts() {
 		server := MustHostValue[Server](host, ValueServer)
 		WhenHostname(host, func() {
 			flags := File("/etc/rc.conf.local", WithLine("httpd_flags="), WithName("rc-conf-httpd-flags"))
-			config := validatedConfig("/etc/httpd.conf", "httpd", List("-n", "-f"), renderHTTPD(webData(server)), 0o644)
+			NoFile(legacyCandidate("/etc/httpd.conf"))
+			config := File("/etc/httpd.conf", WithContent(renderHTTPD(webData(server))),
+				WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
+				WithValidation("httpd", List("-n", "-f", CandidatePath)))
 			Dir("/var/www/htdocs/buetow.org", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 			self := Dir("/var/www/htdocs/buetow.org/self", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 			fallback := Dir("/var/www/htdocs/f3s_fallback", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
@@ -85,11 +88,12 @@ func (Web) Inetd() {
 // DescRelayd returns the description for the TLS relay recipe.
 func (Web) DescRelayd() string { return "Render, validate, and converge frontend relayd" }
 
-// Relayd validates a candidate before changing its live configuration. Its
-// daemon login class is watched too: raising relayd's descriptor limit does
-// not change relayd.conf but must take effect through a restart. The login
-// fragments belong to the consumers that need them, so a frontends aggregate
-// has one change-gate source per privilege chunk. As in Inetd, LoginClass
+// Relayd validates a candidate with `relayd -n` (core WithValidation) before
+// changing its live configuration. Its daemon login class is watched too:
+// raising relayd's descriptor limit does not change relayd.conf but must take
+// effect through a restart. The login fragments belong to the consumers that
+// need them, so a frontends aggregate has one change-gate source per
+// privilege chunk. As in Inetd, LoginClass
 // needs no database rebuild; the former cap_mkdb step rebuilt only
 // /etc/login.conf.db from an unchanged /etc/login.conf.
 func (Web) Relayd() {
@@ -105,7 +109,10 @@ func (Web) Relayd() {
 			// for relayd and every other daemon-class process. The content is
 			// deliberately unchanged here; review it before the next rollout.
 			class := LoginClass("daemon", legacyFrontendAsset("etc/login.conf.d/daemon"))
-			config := validatedConfig("/etc/relayd.conf", "relayd", List("-n", "-f"), renderRelayd(webData(server)), 0o600)
+			NoFile(legacyCandidate("/etc/relayd.conf"))
+			config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),
+				WithMode(0o600), WithOwner("root"), WithGroup("wheel"),
+				WithValidation("relayd", List("-n", "-f", CandidatePath)))
 			Service("relayd", WithRestart, OnChange(flags, class, config))
 			File(dailyLocal, WithLine("/usr/sbin/rcctl start relayd"),
 				WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
@@ -116,14 +123,16 @@ func (Web) Relayd() {
 // DescPF returns the description for the frontend PF and exporter recipe.
 func (Web) DescPF() string { return "Validate and reload frontend PF plus its node_exporter metrics" }
 
-// PF validates a new ruleset before loading it. The reload, node_exporter
-// restart, and exporter cron entry are all declarative and change-gated.
+// PF validates a new ruleset with `pfctl -n` against a private candidate
+// (core WithValidation) before it replaces /etc/pf.conf, so an invalid
+// ruleset never becomes the live file and pf-reload never loads it. The
+// reload, node_exporter restart, and exporter cron entry are all declarative
+// and change-gated.
 func (Web) PF() {
 	onFrontends(func() {
 		config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"))
-		check := Command("pfctl", List("-n", "-f", "/etc/pf.conf"), OnChange(config), WithName("pf-config-check"))
-		Command("pfctl", List("-f", "/etc/pf.conf"), DependsOn(check), OnChange(config), WithName("pf-reload"))
+			WithMode(0o600), WithOwner("root"), WithGroup("wheel"), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
+		Command("pfctl", List("-f", "/etc/pf.conf"), OnChange(config), WithName("pf-reload"))
 
 		collector := Dir("/var/node_exporter", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
@@ -148,18 +157,13 @@ func webData(server Server) webConfigData {
 	}
 }
 
-// validatedConfig stages a complete candidate outside the live configuration
-// path, validates it on every apply, and only then permits the managed file to
-// be updated. Keeping the candidate means a manually altered live file is
-// still validated before Gonf repairs it on a later run. The candidate is
-// root-readable only because these configuration formats may later gain
-// sensitive material.
-func validatedConfig(path, validator string, validatorArgs []string, content string, mode os.FileMode) Resource {
-	candidate := filepath.Join("/var/tmp", "gonf-"+filepath.Base(path))
-	staged := File(candidate, WithContent(content), WithMode(mode), WithOwner("root"), WithGroup("wheel"))
-	args := append(append([]string{}, validatorArgs...), candidate)
-	check := Command(validator, args, DependsOn(staged), WithName("validate-"+filepath.Base(path)))
-	return File(path, WithContent(content), WithMode(mode), WithOwner("root"), WithGroup("wheel"), DependsOn(check))
+// legacyCandidate returns the fixed /var/tmp candidate path the former
+// consumer-side validation staged for live file path. Core WithValidation
+// candidates are private, per apply and removed afterwards, so HTTPD and Relayd
+// delete these leftovers (a no-op once gone). Drop the cleanup when no host
+// has them any more.
+func legacyCandidate(path string) string {
+	return filepath.Join("/var/tmp", "gonf-"+filepath.Base(path))
 }
 
 func appendf(builder *strings.Builder, format string, args ...any) {
