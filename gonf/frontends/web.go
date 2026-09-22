@@ -31,6 +31,12 @@ type Web struct {
 // task. Certificate requests intentionally remain separate from setup.
 func (Web) DescACMEInvoke() string { return "Request and renew frontend ACME certificates" }
 
+// OptsACMEInvoke marks the certificate request as an Operational action, so
+// no pattern aggregate can ever pick it up by name. The per-method companion
+// replaces the struct default, hence Privileged() is repeated here to keep
+// the RequiresRoot execution contract.
+func (Web) OptsACMEInvoke() TaskOptions { return TaskOptions{Privileged(), Operational()} }
+
 // ACMEInvoke runs the already-installed renewal script on explicit request,
 // matching Rex's separate acme_invoke task. It is not part of the aggregate
 // setup path, so adding configuration never unexpectedly contacts an ACME CA.

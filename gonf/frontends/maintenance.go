@@ -107,8 +107,14 @@ func (Maintenance) DescGoprecords() string {
 // controller-side token receives no token, hook, or schedule, matching Rex's
 // safe skip behavior while keeping a missing token out of plans and logs.
 //
-// The token is read inside the ForHosts body, so a push to one frontend only
-// resolves that frontend's token; other hosts' tokens are never read.
+// The token is read inside the ForHosts body, so only runs that ForHosts
+// narrows to a host selection skip other hosts' tokens: a single-host push
+// or preview whose destination maps exactly to one inventory host resolves
+// only that frontend's token (plus any alias sharing its SSH host), and a
+// local Run only the names its own hostname contains. Every run that records
+// all cluster members still reads every host's token: a cluster push,
+// `gonf plan`, a raw `gonf push -- <ssh args>`, or a destination that is
+// unknown to the inventory or contradicts its user or port.
 func (Maintenance) Goprecords() {
 	ForHosts(ValueServer, func(_ string, server Server) {
 		token, ok := OptionalSecret(paths.FrontendSecret("etc/goprecords/" + server.Name + ".token"))
@@ -193,6 +199,11 @@ func (Maintenance) ACME() {
 func (Maintenance) DescIRCBouncer() string {
 	return "Install and enable the fishfinger IRC bouncer"
 }
+
+// OptsIRCBouncer marks the ZNC deployment as an Operational, by-name action,
+// so no pattern aggregate can pick it up. Privileged() is repeated because the
+// per-method companion replaces the RequiresRoot struct default.
+func (Maintenance) OptsIRCBouncer() TaskOptions { return TaskOptions{Privileged(), Operational()} }
 
 // IRCBouncer keeps Rex's separate service group and applies only to the host
 // with the existing runtime configuration; it does not enter the all-frontend

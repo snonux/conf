@@ -29,8 +29,10 @@ inventory). The configuration-management **library** lives separately at
 
 ```
 gonf/
-  cmd/gonf/          # main: RegisterMethods + Aggregates + CLI
+  cmd/gonf/          # main: cluster.Register + tasks.Register + CLI only
+  tasks/tasks.go     # composition root: RegisterMethods + aggregates
   cluster/           # Host / Cluster inventory (SSH + per-host WithValue)
+  frontends/         # OpenBSD frontend recipes (Maintenance, Web, ...)
   openbsd/unattended.go
   netbsd/unattended.go
   rocky/unattended.go
@@ -51,18 +53,37 @@ RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(clus
 
 | Cluster constant | Tasks / Aggregate |
 |-------------------|-------------------
-| `NameFrontends` | `frontends` / `frontends_*` |
+| `NameFrontends` | `frontends` / explicit `frontends_*` list (see below) |
 | `NameNetBSDPis` | `pis_netbsd` / `pis_netbsd_*` |
 | `NameRockyAll` | `rocky` / `rocky_*` |
+| `NameRockyPis` | `rocky_kernel_audit` / `rocky_kernel_audit_*` |
+| `NameRockyK3s` | `rnodes` / `rnodes_*` |
 | `NameFreeBSD` | `freebsd` / `freebsd_*` |
+| `NameGarage` | `garage` / `garage_*` |
 
-- Iterate with `ClusterHosts()` (the cluster from `WithCluster` on the current task).
+All aggregates are registered in `gonf/tasks/tasks.go`. Most are pattern
+`Aggregate`s; `frontends` is an `AggregateTasks` with an explicit member list
+(`frontendSetupTasks`). The operational `frontends_acme_invoke` and
+`frontends_irc_bouncer` are marked `Operational()` and listed in
+`frontendExcludedTasks` instead. `checkFrontendMembership` panics at
+registration (so every invocation, `-list` included, fails) when a
+`frontends_*` task is in neither list, or a listed name is not registered:
+a new frontend task must be added to one of the two lists.
+
+- Iterate hosts with a per-host value via `ForHosts(key, func(host string, v T) {…})`
+  (the cluster from `WithCluster` on the current task). It type-checks every
+  host's value before recording, wraps each body in a destination-side
+  `hostname_contains` guard, and on runs with a known target (single-host
+  push, local run) skips other hosts, so read host-specific inputs such as
+  secrets inside the body. Cluster pushes and `gonf plan` still visit all hosts.
+- `ClusterHosts()` plus `WhenHostname` remains for loops that need no typed
+  value (it never narrows to the push target).
 - Store schedules on the host: `WithValue(cluster.ValueUnattendedCron, …)` /
   `ValueUnattendedOnCalendar` / `ValueUnattendedCronMinute` /
   `ValueUnattendedAllowReboot` in `cluster.Register()`.
-- Read with `MustHostValue[T](host, key)` — missing key or wrong type fails
-  fast (`logger.Fatal`, exit 1). Do **not** keep parallel hostname→value maps
-  in the recipe packages.
+- Outside `ForHosts`, read with `MustHostValue[T](host, key)` — missing key or
+  wrong type fails fast (`logger.Fatal`, exit 1). Do **not** keep parallel
+  hostname→value maps in the recipe packages.
 
 ### DSL: use `List`, not `[]string{…}`
 
