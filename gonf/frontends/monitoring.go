@@ -3,6 +3,8 @@ package frontends
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	. "github.com/snonux/gonf/api"
@@ -78,7 +80,7 @@ func (Monitoring) Gogios() {
 			statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
 			runDir := Dir("/var/run/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
 			config := File("/etc/gogios.json", WithContent(renderGogios(server)), WithMode(0o744), WithOwner("root"), WithGroup("wheel"), DependsOn(plugins, gogios, statusDir, runDir))
-			plugin := InstallFile("/usr/local/bin/check_shuriken_age", "/home/paul/git/shuriken.sh/contrib/check_shuriken_age", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+			plugin := InstallFile("/usr/local/bin/check_shuriken_age", shurikenAgePlugin(), WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 			Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"),
 				WithLegacyCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin))
 			Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"),
@@ -110,13 +112,36 @@ func (Monitoring) DescFoostats() string {
 func (Monitoring) Foostats() {
 	onFrontends(func() {
 		deps := Package(List("p5-Digest-SHA3", "p5-PerlIO-gzip", "p5-JSON", "p5-String-Util", "p5-LWP-Protocol-https"))
-		script := InstallFile("/usr/local/bin/foostats.pl", "/home/paul/git/foostats/foostats.pl", WithMode(0o500), WithOwner("root"), WithGroup("wheel"), DependsOn(deps))
-		data := InstallFile("/var/www/htdocs/buetow.org/self/foostats/fooodds.txt", "/home/paul/git/foostats/fooodds.txt", WithMode(0o440), WithOwner("root"), WithGroup("wheel"))
+		script := InstallFile("/usr/local/bin/foostats.pl", foostatsSource("foostats.pl"), WithMode(0o500), WithOwner("root"), WithGroup("wheel"), DependsOn(deps))
+		data := InstallFile("/var/www/htdocs/buetow.org/self/foostats/fooodds.txt", foostatsSource("fooodds.txt"), WithMode(0o440), WithOwner("root"), WithGroup("wheel"))
 		Dir("/var/www/htdocs/gemtexter/stats.foo.zone", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		Dir("/var/gemini/stats.foo.zone", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		File(dailyLocal, WithLine("perl /usr/local/bin/foostats.pl --parse-logs --replicate --report"), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(script, data))
 		InstallFile("/etc/newsyslog.conf", legacyFrontendAsset("etc/newsyslog.conf"), WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 	})
+}
+
+// shurikenAgePlugin is the Gogios album-age plugin in the controller's
+// shuriken.sh checkout (~/git/shuriken.sh), its one source of truth as in
+// Rex; there is no in-repo copy to fall back to.
+func shurikenAgePlugin() string {
+	return Home("git", "shuriken.sh", "contrib", "check_shuriken_age")
+}
+
+// foostatsSource returns the controller-local source of a Foostats file: the
+// controller's foostats checkout (~/git/foostats) when it has the file,
+// otherwise the copy kept under frontends/scripts, as Rex fell back to it.
+// Unlike Rex, the in-repo copy is not refreshed from the checkout.
+func foostatsSource(name string) string {
+	if checkout := Home("git", "foostats", name); isRegularFile(checkout) {
+		return checkout
+	}
+	return legacyFrontendAsset(filepath.Join("scripts", name))
+}
+
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // frontendAccount declares a frontend service account. WithManageHome keeps
@@ -160,22 +185,42 @@ func renderGogios(server Server) string {
 	return string(encoded) + "\n"
 }
 
+// gogiosChecks builds every Gogios check for server. The builders run in the
+// order the checks were originally declared, so a later builder may replace
+// an earlier check of the same name exactly as before the split.
 func gogiosChecks(server Server) map[string]gogiosCheck {
 	checks := make(map[string]gogiosCheck)
-	addPing := func(host string, proto int, address string, retries int, f3s bool) {
-		args := List("-H", address, fmt.Sprintf("-%d", proto), "-w", "100,10%", "-c", "200,15%")
-		if strings.Contains(host, ".wg0.") {
-			args = List("-H", address, fmt.Sprintf("-%d", proto), "-w", "100,20%", "-c", "200,30%")
-		}
-		check := gogiosCheck{Plugin: gogiosPluginDir + "/check_ping", Args: args, RandomSpread: 10, Retries: retries, RetryInterval: 3}
-		if f3s {
-			check.OnlyIfNotExists = f3sTakenDown
-		}
-		checks[fmt.Sprintf("Check Ping%d %s", proto, host)] = check
+	addPingChecks(checks)
+	addFrontendHostChecks(checks)
+	addPiHTTPChecks(checks)
+	addSiteChecks(checks)
+	addFrontendServiceChecks(checks)
+	addSystemChecks(checks, server)
+	addShurikenChecks(checks)
+	return checks
+}
+
+// addPingCheck adds "Check Ping<proto> <host>" pinging address. WireGuard
+// hosts get wider loss thresholds; f3s hosts are skipped while the cluster is
+// deliberately taken down.
+func addPingCheck(checks map[string]gogiosCheck, host string, proto int, address string, retries int, f3s bool) {
+	args := List("-H", address, fmt.Sprintf("-%d", proto), "-w", "100,10%", "-c", "200,15%")
+	if strings.Contains(host, ".wg0.") {
+		args = List("-H", address, fmt.Sprintf("-%d", proto), "-w", "100,20%", "-c", "200,30%")
 	}
+	check := gogiosCheck{Plugin: gogiosPluginDir + "/check_ping", Args: args, RandomSpread: 10, Retries: retries, RetryInterval: 3}
+	if f3s {
+		check.OnlyIfNotExists = f3sTakenDown
+	}
+	checks[fmt.Sprintf("Check Ping%d %s", proto, host)] = check
+}
+
+// addPingChecks pings the master/standby service names and every WireGuard
+// mesh peer except the roaming clients and the rocky VM.
+func addPingChecks(checks map[string]gogiosCheck) {
 	for _, role := range []string{"master", "standby"} {
 		for _, proto := range []int{4, 6} {
-			addPing(role+".buetow.org", proto, role+".buetow.org", 3, false)
+			addPingCheck(checks, role+".buetow.org", proto, role+".buetow.org", 3, false)
 		}
 	}
 	for _, peer := range WireGuardAddresses() {
@@ -187,20 +232,34 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 			if proto == 6 {
 				address = peer.IPv6
 			}
-			addPing(peer.Name+".wg0.wan.buetow.org", proto, address, 5, peer.Name != Master && peer.Name != Standby)
+			addPingCheck(checks, peer.Name+".wg0.wan.buetow.org", proto, address, 5, peer.Name != Master && peer.Name != Standby)
 		}
 	}
+}
+
+// addFrontendHostChecks checks each frontend's DTail server, public pings
+// and host certificate.
+func addFrontendHostChecks(checks map[string]gogiosCheck) {
 	for _, host := range []string{Master, Standby} {
 		fqdn := host + ".buetow.org"
 		checks["Check DTail "+fqdn] = gogiosCheck{Plugin: "/usr/local/bin/dtailhealth", Args: List("--server", fqdn+":2222"), RandomSpread: 10, RunInterval: 3600, DependsOn: pingDependencies(fqdn)}
 		for _, proto := range []int{4, 6} {
-			addPing(fqdn, proto, fqdn, 3, false)
+			addPingCheck(checks, fqdn, proto, fqdn, 3, false)
 		}
 		checks["Check TLS Certificate "+fqdn] = gogiosCheck{Plugin: gogiosPluginDir + "/check_http", Args: List("--sni", "-H", fqdn, "-C", "20"), RandomSpread: 10, RunInterval: 3600, DependsOn: pingDependencies(fqdn)}
 	}
+}
+
+// addPiHTTPChecks checks the pi0/pi1 static-site backends over WireGuard.
+func addPiHTTPChecks(checks map[string]gogiosCheck) {
 	for _, host := range []string{"pi0", "pi1"} {
 		checks["Check HTTP "+host+".wg0.wan.buetow.org"] = gogiosCheck{Plugin: gogiosPluginDir + "/check_http", Args: List(host+".wg0.wan.buetow.org", "-4"), RandomSpread: 10, OnlyIfNotExists: f3sTakenDown}
 	}
+}
+
+// addSiteChecks checks every ACME site: certificates, HTTP and HTTPS per
+// prefix, then plain HTTP for the ipv4./ipv6. single-family names.
+func addSiteChecks(checks map[string]gogiosCheck) {
 	for _, host := range TemplateData().AcmeHosts {
 		addHostChecks(checks, host)
 		addHTTPSChecks(checks, host)
@@ -214,6 +273,11 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 			checks[fmt.Sprintf("Check HTTP IPv%d %s", proto, host)] = httpCheck(List(host, fmt.Sprintf("-%d", proto)), []string{fmt.Sprintf("Check Ping%d master.buetow.org", proto)})
 		}
 	}
+}
+
+// addFrontendServiceChecks checks DNS, SMTP and Gemini on each frontend over
+// both address families.
+func addFrontendServiceChecks(checks map[string]gogiosCheck) {
 	for _, host := range []string{Master, Standby} {
 		for _, proto := range []int{4, 6} {
 			fqdn := host + ".buetow.org"
@@ -223,6 +287,11 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 			checks[fmt.Sprintf("Check Gemini TCP %s IPv%d", fqdn, proto)] = checkWithPlugin(gogiosPluginDir+"/check_tcp", List("-H", fqdn, "-p", "1965", fmt.Sprintf("-%d", proto)), deps)
 		}
 	}
+}
+
+// addSystemChecks checks the local host's users, swap, processes, disk and
+// load. The Master frontend has little swap, hence its own thresholds.
+func addSystemChecks(checks map[string]gogiosCheck, server Server) {
 	checks["Check Users "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_users", Args: List("-w", "2", "-c", "3"), RandomSpread: 10, RunInterval: 600}
 	swap := List("-w", "95%", "-c", "90%")
 	if server.Name == Master {
@@ -232,10 +301,13 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 	for name, args := range map[string][]string{"Procs": List("-w", "100", "-c", "150"), "Disk": List("-w", "30%", "-c", "10%"), "Load": List("-w", "2,1,1", "-c", "4,3,3")} {
 		checks["Check "+name+" "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_" + strings.ToLower(name), Args: args, RandomSpread: 10, RunInterval: 300}
 	}
+}
+
+// addShurikenChecks checks the age of the irregular.ninja photo albums.
+func addShurikenChecks(checks map[string]gogiosCheck) {
 	for _, host := range []string{"irregular.ninja", "alt.irregular.ninja"} {
 		checks["Check Shuriken Age "+host] = gogiosCheck{Plugin: "/usr/local/bin/check_shuriken_age", Args: List("-f", "/var/www/htdocs/"+host+"/status.json", "-w", "1814400", "-c", "3024000"), RandomSpread: 10, RunInterval: 1800, DependsOn: []string{"Check HTTP IPv4 " + host, "Check HTTP IPv6 " + host}}
 	}
-	return checks
 }
 
 func addHostChecks(checks map[string]gogiosCheck, host string) {

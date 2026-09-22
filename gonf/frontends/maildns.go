@@ -66,41 +66,15 @@ func (MailDNS) DescNSD() string {
 }
 
 // NSD installs immutable publisher inputs and invokes the sole publisher on
-// blowfish. The publisher, not this task, owns effective zones, SOA serials,
-// failover state, validation, locking, and rollback, and it makes the running
-// NSD pick up each commit: a zone reload for zone-only changes, a restart when
-// its nsd.conf or TSIG key changed (the Service below only watches the flags). Fishfinger only
-// receives those effective zones through NSD zone transfer.
+// blowfish (DNSPublisher), and configures fishfinger (the Master service host)
+// as the NSD secondary that receives the effective zones by zone transfer.
+// Each host block declares its own nsd_flags line, so the task records one
+// scope per host and no enclosing all-frontends scope.
 func (MailDNS) NSD() {
-	onFrontends(func() {
-		flags := File("/etc/rc.conf.local", WithLine("nsd_flags="), WithName("rc-conf-nsd-flags"))
-		key := strings.TrimSpace(MustSecret(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")))
-		data := TemplateData()
-
-		WhenHostname(DNSPublisher, func() {
-			publisherScript := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
-				WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-			inputs := dnsPublisherInputs(data, key)
-			deps := append([]resource.Dependency{flags, publisherScript}, inputs...)
-			publisher := Command(dnsPublishCommand, List(), DependsOn(deps...), WithName("publish-nsd-zones"))
-			Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
-		})
-
-		WhenHostname(Master, func() {
-			// The standby has no source templates and no zone-writing command.
-			// Its master-file path is solely NSD's transfer destination. The
-			// key include and the configuration are validated together with
-			// nsd-checkconf, staged inside NSD's chroot, before either is live.
-			config := ConfigSet("nsd",
-				ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
-					WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
-				ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(renderNSDSlaveConfig(MemberPath("key.conf"), data.DNSZones)),
-					WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
-				WithChroot("/var/nsd"),
-				WithSetValidation("nsd-checkconf", List(MemberPath("nsd.conf"))))
-			Service("nsd", WithRestart, OnChange(flags, config))
-		})
-	})
+	key := strings.TrimSpace(MustSecret(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")))
+	data := TemplateData()
+	WhenHostname(DNSPublisher, func() { nsdPublisher(data, key) })
+	WhenHostname(Master, func() { nsdSecondary(data, key) })
 }
 
 // DescDNSFailover returns the description for the DNS high-availability job.
@@ -120,6 +94,43 @@ func (MailDNS) DNSFailover() {
 		Cron("frontend-nsd-failover", WithCommand("-ns "+dnsFailoverCommand),
 			WithLegacyCommand("-ns "+dnsFailoverCommand), WithMinute("*"), DependsOn(script, publisher))
 	})
+}
+
+// nsdFlags declares the empty nsd_flags line that enables NSD on the host.
+func nsdFlags() Resource {
+	return File("/etc/rc.conf.local", WithLine("nsd_flags="), WithName("rc-conf-nsd-flags"))
+}
+
+// nsdPublisher declares blowfish's publisher. The publisher, not this task,
+// owns effective zones, SOA serials, failover state, validation, locking, and
+// rollback, and it makes the running NSD pick up each commit: a zone reload
+// for zone-only changes, a restart when its nsd.conf or TSIG key changed (the
+// Service below only watches the flags).
+func nsdPublisher(data Data, key string) {
+	flags := nsdFlags()
+	publisherScript := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
+		WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
+	inputs := dnsPublisherInputs(data, key)
+	deps := append([]resource.Dependency{flags, publisherScript}, inputs...)
+	publisher := Command(dnsPublishCommand, List(), DependsOn(deps...), WithName("publish-nsd-zones"))
+	Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
+}
+
+// nsdSecondary declares fishfinger's NSD secondary. It has no source
+// templates and no zone-writing command: its slave zone files are solely NSD's
+// transfer destination. The key include and the configuration are validated
+// together with nsd-checkconf, staged inside NSD's chroot, before either is
+// live, and a published change restarts NSD.
+func nsdSecondary(data Data, key string) {
+	flags := nsdFlags()
+	config := ConfigSet("nsd",
+		ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
+			WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
+		ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(renderNSDSlaveConfig(MemberPath("key.conf"), data.DNSZones)),
+			WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
+		WithChroot("/var/nsd"),
+		WithSetValidation("nsd-checkconf", List(MemberPath("nsd.conf"))))
+	Service("nsd", WithRestart, OnChange(flags, config))
 }
 
 func dnsPublisherInputs(data Data, key string) []resource.Dependency {
@@ -240,9 +251,10 @@ remote-control:
 	return builder.String()
 }
 
-// renderNSDSlaveConfig renders the standby configuration. keyPath is a
-// ConfigSet member placeholder, which contains NUL bytes: it is concatenated
-// rather than %q-formatted, because quoting would escape the placeholder.
+// renderNSDSlaveConfig renders the NSD secondary's (fishfinger's)
+// configuration. keyPath is a ConfigSet member placeholder, which contains
+// NUL bytes: it is concatenated rather than %q-formatted, because quoting
+// would escape the placeholder.
 //
 // NSD's allow-notify and request-xfr take an address followed by a TSIG key
 // name (or NOKEY); a bare hostname does not parse. The address is the DNS
