@@ -26,12 +26,15 @@ func (Monitoring) DescPkgRepo() string {
 
 // PkgRepo preserves Rex's root-shell convenience setting. Custom package
 // resources below also set PKG_PATH directly, so non-login applies are safe.
+// The line is double-quoted exactly as Rex wrote it (and as it is on both
+// frontends): WithLine matches whole lines byte for byte, so an unquoted
+// variant would be appended as a second assignment beside the live one.
 // The mode and ownership are explicit (0644 root:wheel, as on both
 // frontends) because a line edit without WithMode applies gonf's 0640
 // default even when the line is already present.
 func (Monitoring) PkgRepo() {
 	onFrontends(func() {
-		File("/root/.profile", WithLine("export PKG_PATH="+customOpenBSDPackages),
+		File("/root/.profile", WithLine(`export PKG_PATH="`+customOpenBSDPackages+`"`),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 	})
 }
