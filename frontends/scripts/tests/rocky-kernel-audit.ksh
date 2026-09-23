@@ -488,26 +488,61 @@ field 'drop_streak=2' 'a fetch with different content finally confirms it'
 # the identity column ("<count> <streak>", two fields) must keep its streak
 # rather than being discarded as malformed -- a script already mid-streak on
 # the day this fix deploys must not lose that history. Reading it must not
-# log the "discarding malformed" warning. The next run still needs a
-# genuinely new fetch to confirm it (an unknown identity is not a free
-# pass), and upgrades the file to the current three-field format.
+# log the "discarding malformed" warning. Its identity is unknown, though,
+# not merely absent, so (task sc2) the very first post-upgrade run must not
+# confirm the streak even against genuinely new content: it only records
+# this run's identity and upgrades the file to the three-field format: the
+# NEXT run is the first one that can advance the streak, needing a
+# genuinely new fetch exactly as a same-format file always has.
 fresh_state
 run_audit "$work/cleanbig.zip"
 printf '2 1\n' >"$state/drop-candidate"
 run_audit "$work/clean.zip"
-expect 3 UNKNOWN 'legacy drop-candidate, genuine confirming fetch'
+expect 3 UNKNOWN 'legacy drop-candidate, first post-upgrade run'
 hasnt "$work/out" 'discarding malformed' \
 	'a legacy two-field drop-candidate must not be treated as malformed'
-field 'drop_streak=2' 'legacy streak of 1 continues to 2, not reset to 1'
-[ "$(cat "$state/drop-candidate")" = "2 2 $fresh" ] \
+field 'drop_streak=1' \
+	"a legacy file's first post-upgrade run must not confirm, even with new content"
+[ "$(cat "$state/drop-candidate")" = "2 1 $fresh" ] \
 	|| fail 'legacy drop-candidate not upgraded to the three-field format'
 run_audit unchanged
 expect 3 UNKNOWN 'legacy drop-candidate, cached rerun after the upgrade'
-field 'drop_streak=2' 'a 304 rerun must not advance the upgraded streak'
+field 'drop_streak=1' 'a 304 rerun must not advance the upgraded streak either'
 run_audit "$work/clean2.zip"
+expect 3 UNKNOWN 'legacy drop-candidate, first genuine confirmation'
+field 'drop_streak=2' 'a genuinely new fetch now confirms it from the upgraded file'
+run_audit "$work/clean3.zip"
 expect 0 OK 'legacy drop-candidate, accepted on the 3rd genuine confirmation'
 [ "$(cat "$state/baseline-cve-records")" = 2 ] \
 	|| fail 'legacy-streak drop not adopted as the new baseline'
+
+# task sc2: a legacy file's identity is unknown, not "different from
+# whatever comes next" -- its very first post-upgrade run must not confirm
+# on a re-download of content that never actually changed (fetch=updated,
+# same feed_newest), the same shape gb2 closed for a same-format file. An
+# operator who had already reached streak=1 investigating an UNKNOWN before
+# this fix deployed, then hits a redundant re-download right after
+# deploying it, must not have that accepted as the second confirmation.
+fresh_state
+run_audit "$work/cleanbig.zip"
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'legacy sc2 setup: genuine drop observed'
+field 'drop_streak=1' 'sc2 setup: streak starts at 1'
+# Simulate a real pre-gb2 legacy file: the same count/streak this run just
+# wrote, with the identity column stripped off, exactly what an operator's
+# on-disk state looked like the moment before deploying gb2.
+printf '2 1\n' >"$state/drop-candidate"
+run_audit "$work/clean.zip"
+expect 3 UNKNOWN 'legacy drop-candidate, re-download of identical content'
+hasnt "$work/out" 'discarding malformed' \
+	'a legacy two-field drop-candidate must not be treated as malformed'
+field 'drop_streak=1' \
+	're-downloading the same bytes right after the legacy upgrade must not confirm the drop'
+[ "$(cat "$state/drop-candidate")" = "2 1 $fresh" ] \
+	|| fail 'legacy drop-candidate not upgraded to the three-field format on the frozen run'
+run_audit "$work/clean2.zip"
+expect 3 UNKNOWN 'legacy drop-candidate, genuine fetch after the frozen run'
+field 'drop_streak=2' 'a genuinely new fetch confirms it from the upgraded file'
 
 # Operator override: deleting baseline-cve-records accepts a drop at once.
 fresh_state

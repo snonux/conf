@@ -193,9 +193,15 @@ typeset -i removed_count=0
 # is the feed_newest recorded alongside drop_prev_streak, read by
 # read_drop_candidate and compared against this run's feed_newest so a
 # rerun on the same feed content cannot advance the streak by itself (see
-# check_record_drop).
+# check_record_drop). drop_prev_legacy is set when the on-disk streak came
+# from the pre-gb2 two-field format, which carries no identity: an empty
+# drop_prev_identity is otherwise indistinguishable from "the feed changed"
+# (it differs from every feed_newest), so without this flag a legacy file's
+# very first post-upgrade run could confirm a drop on a re-download of
+# unchanged content alone (task sc2).
 typeset -i drop_streak=-1 drop_prev_count=0 drop_prev_streak=0
 drop_prev_identity=""
+drop_prev_legacy=""
 # Set by commit_baseline when it fails: which state file could not be written.
 commit_error=""
 
@@ -332,7 +338,7 @@ check_record_drop() {
 	fi
 	if [ "$drop_prev_streak" -gt 0 ] \
 		&& [ $((cves * 100)) -ge $((drop_prev_count * DROP_HOLD_PCT)) ]; then
-		if [ "$fetch" = updated ] \
+		if [ -z "$drop_prev_legacy" ] && [ "$fetch" = updated ] \
 			&& [ "$feed_newest" != "$drop_prev_identity" ]; then
 			drop_streak=$((drop_prev_streak + 1))
 		else
@@ -362,13 +368,17 @@ check_record_drop() {
 # compatibility, the old two-field "<count> <streak>" format written before
 # gb2 added the identity column: a script already mid-streak on the day this
 # fix deploys must not lose that history, so a legacy file keeps its count
-# and streak with drop_prev_identity left empty ("unknown"). check_record_drop
-# treats an empty identity as different from any feed_newest, so the streak
-# is neither force-reset nor blindly advanced by that alone: the very next
-# run still needs fetch=updated to confirm it, exactly as a same-format file
-# would, and this run's identity is then recorded, upgrading the file to the
-# three-field format. Any other malformed content is discarded with a
-# warning (the streak restarts).
+# and streak, with drop_prev_identity left empty ("unknown") AND
+# drop_prev_legacy set. check_record_drop's advance condition requires
+# drop_prev_legacy unset: an empty identity alone differs from every
+# feed_newest, so without that extra gate a legacy file's very first
+# post-upgrade run could confirm a drop on nothing more than a re-download of
+# unchanged content, exactly the shape gb2 exists to prevent (task sc2). The
+# upgrade run therefore keeps the streak frozen but still records this run's
+# real identity, upgrading the file to the three-field format; confirmation
+# resumes from the NEXT run, which needs genuine new content like a
+# same-format file always has. Any other malformed content is discarded with
+# a warning (the streak restarts).
 read_drop_candidate() {
 	typeset line
 	[ -f "$DROP_FILE" ] || return 0
@@ -385,11 +395,11 @@ read_drop_candidate() {
 		read -r drop_prev_count drop_prev_streak <<<"$line"
 		case $drop_prev_count:$drop_prev_streak in
 		*[!0-9:]*) ;;
-		*) return 0 ;;
+		*) drop_prev_legacy=1; return 0 ;;
 		esac
 		;;
 	esac
-	drop_prev_count=0 drop_prev_streak=0 drop_prev_identity=""
+	drop_prev_count=0 drop_prev_streak=0 drop_prev_identity="" drop_prev_legacy=""
 	log 4 "WARNING: discarding malformed $DROP_FILE ('$line'), the drop streak restarts"
 	rm -f "$DROP_FILE"
 }
