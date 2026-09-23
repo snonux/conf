@@ -92,7 +92,7 @@ func (Unattended) StampDir() {
 
 // DescCron returns the description for the hourly cron.
 func (Unattended) DescCron() string {
-	return "Root cron: unattended-upgrade-freebsd daily, per-host hourly minute (needs freebsd_script, freebsd_stamp_dir)"
+	return "Root cron: unattended-upgrade-freebsd daily, per-host hourly minute (needs freebsd_script, freebsd_services, freebsd_stamp_dir)"
 }
 
 // Cron installs the hourly daily-mode job (stamp-gated in-script).

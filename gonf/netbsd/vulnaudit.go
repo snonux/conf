@@ -40,7 +40,7 @@ func (Unattended) VulnAuditPackages() {
 
 // DescVulnAuditScript returns the description for the script deployment.
 func (Unattended) DescVulnAuditScript() string {
-	return "Install " + vulnAuditScript + " (0755 root:wheel)"
+	return "Install " + vulnAuditScript + " (0755 root:wheel; needs pis_netbsd_vuln_audit_packages)"
 }
 
 // VulnAuditScript installs the ksh audit script.
@@ -76,7 +76,7 @@ func (Unattended) VulnAuditStateDir() {
 
 // DescVulnAuditCron returns the description for the daily cron job.
 func (Unattended) DescVulnAuditCron() string {
-	return "Root cron: netbsd-vuln-audit daily, per-host time"
+	return "Root cron: netbsd-vuln-audit daily, per-host time (needs pis_netbsd_vuln_audit_script, pis_netbsd_vuln_audit_state_dir)"
 }
 
 // VulnAuditCron runs the audit once a day at the host's

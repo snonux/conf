@@ -85,7 +85,9 @@ func (Web) Inetd() {
 }
 
 // DescRelayd returns the description for the TLS relay recipe.
-func (Web) DescRelayd() string { return "Render, validate, and converge frontend relayd" }
+func (Web) DescRelayd() string {
+	return "Render, validate, and converge frontend relayd (needs /etc/ssl certificates from frontends_acme + a frontends_acme_invoke run)"
+}
 
 // Relayd validates a candidate with `relayd -n` (core WithValidation) before
 // changing its live configuration. Its daemon login class is watched too: a

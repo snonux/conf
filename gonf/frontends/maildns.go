@@ -38,7 +38,7 @@ type MailDNS struct {
 
 // DescSMTPD returns the description for the OpenSMTPD recipe.
 func (MailDNS) DescSMTPD() string {
-	return "Render, validate, and converge frontend OpenSMTPD"
+	return "Render, validate, and converge frontend OpenSMTPD (needs /etc/ssl certificates from frontends_acme + a frontends_acme_invoke run)"
 }
 
 // SMTPD publishes every lookup table plus the host-specific configuration as
