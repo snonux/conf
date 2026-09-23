@@ -3,7 +3,6 @@ package frontends
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
@@ -451,18 +450,4 @@ func contains(values []string, wanted string) bool {
 		}
 	}
 	return false
-}
-
-// appendf and appendString are the remaining strings.Builder helpers of the
-// pre-u52 render style. HTTPD and Relayd no longer use them (see
-// renderHTTPD/renderRelayd above), but maildns.go's SMTPD/NSD renderers
-// still do; v52 (F1/F2; P4) owns extracting those into native templates the
-// same way. Keep these here, unchanged, until that task removes the last
-// caller.
-func appendf(builder *strings.Builder, format string, args ...any) {
-	_, _ = fmt.Fprintf(builder, format, args...)
-}
-
-func appendString(builder *strings.Builder, value string) {
-	_, _ = builder.WriteString(value)
 }
