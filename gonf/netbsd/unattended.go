@@ -3,6 +3,8 @@
 package netbsd
 
 import (
+	"path/filepath"
+
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -10,17 +12,13 @@ import (
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
-// unattendedServicesContent is the rc.d restart list for pi0/pi1. Service name
-// is wireguard (not wireguard-go) — matches /etc/rc.d/wireguard on the hosts.
-const unattendedServicesContent = `# Daemons to restart after unattended package updates (one per line).
-# Names must match /etc/rc.d/<name> on NetBSD pi0/pi1.
-bozohttpd
-wireguard
-npf
-uptimed
-dserver
-sshd
-`
+// unattendedServicesAsset is the operator-edited rc.d restart list for
+// pi0/pi1: a plain, native file (assets/unattended-upgrade-services), not a
+// template. Service name is wireguard (not wireguard-go) — matches
+// /etc/rc.d/wireguard on the hosts.
+func unattendedServicesAsset() string {
+	return filepath.Join(paths.Conf, "gonf", "netbsd", "assets", "unattended-upgrade-services")
+}
 
 // unattendedNewsyslogLine rotates /var/log/unattended-upgrade.log (NetBSD
 // newsyslog.conf format — same columns as the stock authlog/cron lines).
@@ -58,8 +56,7 @@ func (Unattended) DescServices() string {
 // Services installs the rc.d restart list.
 func (Unattended) Services() {
 	WhenHostname(ClusterHosts(), func() {
-		File("/etc/unattended-upgrade-services",
-			WithContent(unattendedServicesContent),
+		InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 	})
 }

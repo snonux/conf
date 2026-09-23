@@ -1,0 +1,164 @@
+log connection
+
+table <f3s> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+table <f3s_static> {
+  192.168.2.203
+  192.168.2.204
+}
+table <f3s_static_proxy> {
+  127.0.0.1
+  ::1
+}
+table <f3s_registry> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+table <f3s_jellyfin> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+table <f3s_anki> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+table <garage> {
+  192.168.2.130
+  192.168.2.131
+  192.168.2.132
+}
+table <forgejo_ssh> {
+  192.168.2.120
+  192.168.2.121
+  192.168.2.122
+}
+table <localhost> {
+  127.0.0.1
+  ::1
+}
+http protocol "https" {
+{{range .KeypairNames}}     tls keypair {{.}}
+     tls keypair standby.{{.}}
+{{end}}     tls keypair {{.ServerFQDN}}
+
+     http websockets
+
+    match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
+    match request header set "X-Forwarded-Proto" value "https"
+    pass header "Connection"
+    pass header "Upgrade"
+    pass header "Sec-WebSocket-Key"
+    pass header "Sec-WebSocket-Version"
+    pass header "Sec-WebSocket-Extensions"
+    pass header "Sec-WebSocket-Protocol"
+{{range .CodeBlocks}}    block request header "Host" value "{{.}}"
+{{end -}}
+{{range .LocalhostHosts}}    match request header "Host" value "{{.}}" forward to <localhost>
+{{end -}}
+{{range .F3SRoutes}}    match request header "Host" value "{{.Host}}" forward to <{{.Upstream}}>
+{{end}}    match request header "Host" value "www.snonux.foo" forward to <localhost>
+    match request header "Host" value "snonux.foo" forward to <f3s_static_proxy>
+    match request header "Host" value "standby.snonux.foo" forward to <f3s_static_proxy>
+    match response header "Server" value "OpenBSD httpd" tag "HTTPD_FALLBACK"
+    match response tagged "HTTPD_FALLBACK" header set "Cache-Control" value "no-cache, no-store, must-revalidate"
+    match response tagged "HTTPD_FALLBACK" header set "Pragma" value "no-cache"
+    match response tagged "HTTPD_FALLBACK" header set "Expires" value "0"
+}
+
+relay "https4" {
+    listen on {{.ServerIPv4}} port 443 tls
+    protocol "https"
+    session timeout 300
+    forward to <f3s> port 80 check tcp
+    forward to <localhost> port 8080 check http "/" code 200
+    forward to <f3s_static_proxy> port 18080 check tcp
+    forward to <f3s_registry> port 30001 check tcp
+    forward to <f3s_jellyfin> port 30096 check tcp
+    forward to <f3s_anki> port 30800 check tcp
+    forward to <garage> port 3900 check tcp
+}
+
+relay "https6" {
+    listen on {{.ServerIPv6}} port 443 tls
+    protocol "https"
+    session timeout 300
+    forward to <f3s> port 80 check tcp
+    forward to <localhost> port 8080 check http "/" code 200
+    forward to <f3s_static_proxy> port 18080 check tcp
+    forward to <f3s_registry> port 30001 check tcp
+    forward to <f3s_jellyfin> port 30096 check tcp
+    forward to <f3s_anki> port 30800 check tcp
+    forward to <garage> port 3900 check tcp
+}
+
+tcp protocol "gemini" {
+    tls keypair foo.zone
+    tls keypair stats.foo.zone
+    tls keypair snonux.foo
+    tls keypair paul.buetow.org
+    tls keypair standby.foo.zone
+    tls keypair standby.stats.foo.zone
+    tls keypair standby.snonux.foo
+    tls keypair standby.paul.buetow.org
+}
+
+relay "gemini4" {
+    listen on {{.ServerIPv4}} port 1965 tls
+    protocol "gemini"
+    forward to 127.0.0.1 port 11965
+}
+relay "gemini6" {
+    listen on {{.ServerIPv6}} port 1965 tls
+    protocol "gemini"
+    forward to 127.0.0.1 port 11965
+}
+
+http protocol "forgejo-alt" {
+    tls keypair code.f3s.buetow.org
+    http websockets
+    match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
+    match request header set "X-Forwarded-Proto" value "https"
+    pass header "Connection"
+    pass header "Upgrade"
+    pass header "Sec-WebSocket-Key"
+    pass header "Sec-WebSocket-Version"
+    pass header "Sec-WebSocket-Extensions"
+    pass header "Sec-WebSocket-Protocol"
+    match request header "Host" value "code.f3s.buetow.org" forward to <f3s>
+}
+relay "forgejo_alt4" {
+    listen on {{.ServerIPv4}} port 2443 tls
+    protocol "forgejo-alt"
+    forward to <f3s> port 80 check tcp
+}
+relay "forgejo_alt6" {
+    listen on {{.ServerIPv6}} port 2443 tls
+    protocol "forgejo-alt"
+    forward to <f3s> port 80 check tcp
+}
+
+relay "forgejo_ssh4" {
+    listen on {{.ServerIPv4}} port 2022
+    forward to <forgejo_ssh> port 30222 check tcp
+}
+relay "forgejo_ssh6" {
+    listen on {{.ServerIPv6}} port 2022
+    forward to <forgejo_ssh> port 30222 check tcp
+}
+
+relay "f3s_static_proxy4" {
+    listen on 127.0.0.1 port 18080
+    forward to <f3s_static> port 80 check tcp
+    forward to <localhost> port 8080 check http "/" code 200
+}
+relay "f3s_static_proxy6" {
+    listen on ::1 port 18080
+    forward to <f3s_static> port 80 check tcp
+    forward to <localhost> port 8080 check http "/" code 200
+}

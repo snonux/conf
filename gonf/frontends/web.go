@@ -205,145 +205,243 @@ func legacyCandidate(path string) string {
 	return filepath.Join("/var/tmp", "gonf-"+filepath.Base(path))
 }
 
-func appendf(builder *strings.Builder, format string, args ...any) {
-	_, _ = fmt.Fprintf(builder, format, args...)
-}
-
-func appendString(builder *strings.Builder, value string) {
-	_, _ = builder.WriteString(value)
-}
-
+// renderHTTPD renders /etc/httpd.conf on the controller from the native
+// httpd.conf.tmpl asset (frontendAsset, package assets/) with the typed,
+// already-prefixed httpdTemplateData built from data. Rendering happens
+// here, at recipe-declaration time, not on the destination: the resulting
+// text is handed to WithContent like any other literal string, preserving
+// the pre-P4 controller-render semantics (see api.RenderTemplate's doc
+// comment for why that differs from a destination-rendered
+// WithTemplateData file). A render/parse failure can only be a checked-in
+// template or data-builder bug, never recipe input, so it panics the way
+// nodeExporterFlags below reports its own controller-only invariant.
 func renderHTTPD(data webConfigData) string {
-	var builder strings.Builder
-	appendString(&builder, "# Plain HTTP for ACME and HTTPS redirect\n")
+	rendered, err := RenderTemplate(frontendAsset("httpd.conf.tmpl"), httpdTemplateDataFor(data))
+	if err != nil {
+		panic(fmt.Sprintf("render httpd.conf.tmpl: %v", err))
+	}
+	return rendered
+}
+
+// httpdTemplateData is httpd.conf.tmpl's typed root. Every field is either
+// a plain value or an already-expanded, already-prefixed slice (or slice of
+// small structs), so the template itself only ranges and branches over
+// explicit data — it never encodes the site catalogue, the fixed root-path
+// table, or any prefix concatenation itself.
+type httpdTemplateData struct {
+	Port80Hosts []string
+	ServerFQDN  string
+	Gemtexter   []httpdGemtexterEntry
+	Redirects   []httpdRedirectEntry
+	DtailHosts  []string
+	RootHosts   []httpdRootEntry
+	F3SBlocks   []string
+}
+
+// httpdGemtexterEntry is one gemtexter server block: Name is the already
+// prefixed label, Host the bare site name used in its non-www document
+// root, and IsWWW selects the www. variant's plain redirect instead.
+type httpdGemtexterEntry struct {
+	Name  string
+	Host  string
+	IsWWW bool
+}
+
+// httpdRedirectEntry is one prefix's row of the four fixed redirect/landing
+// blocks (buetow.org, blog.buetow.org, snonux.foo, paul.buetow.org).
+// IsWWW selects the snonux.foo block's plain redirect instead of its
+// default f3s-fallback rewrite.
+type httpdRedirectEntry struct {
+	BuetowOrg     string
+	BlogBuetowOrg string
+	SnonuxFoo     string
+	IsWWW         bool
+	PaulBuetowOrg string
+}
+
+// httpdRootEntry pairs a server label with the document root it serves:
+// used both for the fixed, non-topology host table below (bare Name) and
+// for its per-prefix expansion (prefixed Name).
+type httpdRootEntry struct {
+	Name string
+	Root string
+}
+
+func httpdTemplateDataFor(data webConfigData) httpdTemplateData {
+	return httpdTemplateData{
+		Port80Hosts: httpdPort80Hosts(data),
+		ServerFQDN:  data.Server.FQDN,
+		Gemtexter:   httpdGemtexterEntries(data.Prefixes),
+		Redirects:   httpdRedirectEntries(data.Prefixes),
+		DtailHosts:  prefixed(data.Prefixes, "dtail.dev"),
+		RootHosts:   httpdRootEntries(data.Prefixes),
+		F3SBlocks:   httpdF3SBlocks(data),
+	}
+}
+
+// prefixed returns host prefixed by every one of prefixes, in order —
+// the shared "prefix + host" expansion every httpd/relayd data list uses.
+func prefixed(prefixes []string, host string) []string {
+	out := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		out = append(out, prefix+host)
+	}
+	return out
+}
+
+// httpdPort80Hosts lists every ACME host except the current server's own
+// FQDN (which gets its own fixed block, not the loop's), each expanded
+// across every configured prefix.
+func httpdPort80Hosts(data webConfigData) []string {
+	var hosts []string
 	for _, host := range data.AcmeHosts {
 		if host == data.Server.FQDN {
 			continue
 		}
-		for _, prefix := range data.Prefixes {
-			appendHTTPDPort80(&builder, prefix+host)
-		}
+		hosts = append(hosts, prefixed(data.Prefixes, host)...)
 	}
-	appendf(&builder, httpdServerBlocks, data.Server.FQDN, data.Server.FQDN, data.Server.FQDN)
-	appendHTTPDGemtexter(&builder, data.Prefixes)
-	appendHTTPDSpecialHosts(&builder, data.Prefixes)
-	for _, host := range data.F3SHosts {
-		for _, prefix := range data.Prefixes {
-			appendHTTPDF3S(&builder, prefix+host)
-		}
-	}
-	appendString(&builder, httpdDefaults)
-	return builder.String()
+	return hosts
 }
 
-func appendHTTPDPort80(builder *strings.Builder, host string) {
-	appendf(builder, `server %q {
-  listen on * port 80
-  log style forwarded
-  location "/.well-known/acme-challenge/*" {
-    root "/acme"
-    request strip 2
-  }
-  location * {
-    block return 302 "https://$HTTP_HOST$REQUEST_URI"
-  }
-}
-`, host)
-}
-
-func appendHTTPDGemtexter(builder *strings.Builder, prefixes []string) {
+func httpdGemtexterEntries(prefixes []string) []httpdGemtexterEntry {
+	var entries []httpdGemtexterEntry
 	for _, host := range []string{"foo.zone", "stats.foo.zone"} {
 		for _, prefix := range prefixes {
-			name := prefix + host
-			appendf(builder, "server %q {\n  listen on * port 8080\n  log style forwarded\n  location \"/.git*\" {\n    block return 302 \"https://%s\"\n  }\n  location * {\n", name, name)
-			if prefix == "www." {
-				appendf(builder, "    block return 302 \"https://%s$REQUEST_URI\"\n", host)
-			} else {
-				appendf(builder, "    root \"/htdocs/gemtexter/%s\"\n    directory auto index\n", host)
-			}
-			appendString(builder, "  }\n}\n")
+			entries = append(entries, httpdGemtexterEntry{Name: prefix + host, Host: host, IsWWW: prefix == "www."})
 		}
 	}
+	return entries
 }
 
-func appendHTTPDSpecialHosts(builder *strings.Builder, prefixes []string) {
+func httpdRedirectEntries(prefixes []string) []httpdRedirectEntry {
+	var entries []httpdRedirectEntry
 	for _, prefix := range prefixes {
-		snonux := "    request rewrite \"/index.html\"\n    root \"/htdocs/f3s_fallback\"\n"
-		if prefix == "www." {
-			snonux = "    block return 302 \"https://snonux.foo$REQUEST_URI\"\n"
-		}
-		appendf(builder, httpdRedirectBlocks,
-			prefix+"buetow.org", prefix+"blog.buetow.org", prefix+"snonux.foo", snonux, prefix+"paul.buetow.org")
+		entries = append(entries, httpdRedirectEntry{
+			BuetowOrg:     prefix + "buetow.org",
+			BlogBuetowOrg: prefix + "blog.buetow.org",
+			SnonuxFoo:     prefix + "snonux.foo",
+			IsWWW:         prefix == "www.",
+			PaulBuetowOrg: prefix + "paul.buetow.org",
+		})
 	}
-	for _, prefix := range prefixes {
-		appendf(builder, httpdDtailBlock, prefix+"dtail.dev")
-	}
-	for _, host := range []string{"irregular.ninja", "alt.irregular.ninja", "joern.buetow.org", "dory.buetow.org", "ecat.buetow.org", "gogios.buetow.org"} {
-		root := map[string]string{
-			"irregular.ninja":     "/htdocs/irregular.ninja",
-			"alt.irregular.ninja": "/htdocs/alt.irregular.ninja",
-			"joern.buetow.org":    "/htdocs/joern/",
-			"dory.buetow.org":     "/htdocs/joern/dory.buetow.org",
-			"ecat.buetow.org":     "/htdocs/joern/ecat.buetow.org",
-			"gogios.buetow.org":   "/htdocs/buetow.org/self/gogios",
-		}[host]
+	return entries
+}
+
+// httpdRootHosts are the fixed, non-topology single-purpose hosts and their
+// document roots (formerly appendHTTPDSpecialHosts's inline root map).
+var httpdRootHosts = []httpdRootEntry{
+	{Name: "irregular.ninja", Root: "/htdocs/irregular.ninja"},
+	{Name: "alt.irregular.ninja", Root: "/htdocs/alt.irregular.ninja"},
+	{Name: "joern.buetow.org", Root: "/htdocs/joern/"},
+	{Name: "dory.buetow.org", Root: "/htdocs/joern/dory.buetow.org"},
+	{Name: "ecat.buetow.org", Root: "/htdocs/joern/ecat.buetow.org"},
+	{Name: "gogios.buetow.org", Root: "/htdocs/buetow.org/self/gogios"},
+}
+
+// httpdRootEntries expands httpdRootHosts across every prefix, host outer
+// and prefix inner, matching the original grouped-by-host block order.
+func httpdRootEntries(prefixes []string) []httpdRootEntry {
+	var entries []httpdRootEntry
+	for _, host := range httpdRootHosts {
 		for _, prefix := range prefixes {
-			appendf(builder, httpdRootBlock, prefix+host, root)
+			entries = append(entries, httpdRootEntry{Name: prefix + host.Name, Root: host.Root})
 		}
 	}
+	return entries
 }
 
-func appendHTTPDF3S(builder *strings.Builder, host string) {
-	appendf(builder, httpdF3SBlocks, host, host)
+func httpdF3SBlocks(data webConfigData) []string {
+	var hosts []string
+	for _, host := range data.F3SHosts {
+		hosts = append(hosts, prefixed(data.Prefixes, host)...)
+	}
+	return hosts
 }
 
+// renderRelayd renders /etc/relayd.conf on the controller from the native
+// relayd.conf.tmpl asset with the typed relaydTemplateData built from data.
+// See renderHTTPD above for why this stays a controller render (WithContent,
+// not a destination-rendered WithTemplateData file) and why a render
+// failure panics.
 func renderRelayd(data webConfigData) string {
-	var builder strings.Builder
-	appendString(&builder, relaydPreamble)
-	appendString(&builder, "http protocol \"https\" {\n")
-	// The keypairs are the ACME site certificates and their standby twins
-	// (acmeSites, the list acme.sh requests), then the server's own FQDN.
+	rendered, err := RenderTemplate(frontendAsset("relayd.conf.tmpl"), relaydTemplateDataFor(data))
+	if err != nil {
+		panic(fmt.Sprintf("render relayd.conf.tmpl: %v", err))
+	}
+	return rendered
+}
+
+// relaydTemplateData is relayd.conf.tmpl's typed root; see httpdTemplateData
+// above for the same "already expanded, already prefixed" convention.
+type relaydTemplateData struct {
+	KeypairNames   []string
+	ServerFQDN     string
+	CodeBlocks     []string
+	LocalhostHosts []string
+	F3SRoutes      []relaydF3SRoute
+	ServerIPv4     string
+	ServerIPv6     string
+}
+
+// relaydF3SRoute is one prefixed host routed to a dedicated f3s upstream
+// table (Site.RelaydUpstream), rather than the generic f3s forwarding.
+type relaydF3SRoute struct {
+	Host     string
+	Upstream string
+}
+
+func relaydTemplateDataFor(data webConfigData) relaydTemplateData {
+	return relaydTemplateData{
+		KeypairNames:   relaydKeypairNames(),
+		ServerFQDN:     data.Server.FQDN,
+		CodeBlocks:     prefixed(data.Prefixes, "code.f3s.buetow.org"),
+		LocalhostHosts: relaydLocalhostHosts(data),
+		F3SRoutes:      relaydF3SRoutes(data),
+		ServerIPv4:     data.Server.IPv4,
+		ServerIPv6:     data.Server.IPv6,
+	}
+}
+
+// relaydKeypairNames are the ACME site certificates and their standby
+// twins (acmeSites, the list acme.sh requests); the server's own FQDN
+// keypair is a fixed line the template adds itself.
+func relaydKeypairNames() []string {
+	var names []string
 	for _, site := range acmeSites(Sites()) {
-		appendf(&builder, "     tls keypair %s\n     tls keypair standby.%s\n", site.Name, site.Name)
+		names = append(names, site.Name)
 	}
-	appendf(&builder, relaydHTTPSStart, data.Server.FQDN)
-	for _, prefix := range data.Prefixes {
-		appendf(&builder, "    block request header \"Host\" value %q\n", prefix+"code.f3s.buetow.org")
-	}
+	return names
+}
+
+// relaydLocalhostHosts are every ACME host routed to the generic <localhost>
+// upstream: neither an f3s-cluster host (which gets its own routing, see
+// relaydF3SRoutes) nor snonux.foo (which the template routes explicitly).
+func relaydLocalhostHosts(data webConfigData) []string {
+	var hosts []string
 	for _, host := range data.AcmeHosts {
 		if contains(data.F3SHosts, host) || host == "snonux.foo" {
 			continue
 		}
-		for _, prefix := range data.Prefixes {
-			appendf(&builder, "    match request header \"Host\" value %q forward to <localhost>\n", prefix+host)
-		}
+		hosts = append(hosts, prefixed(data.Prefixes, host)...)
 	}
-	appendRelaydF3SRouting(&builder, data)
-	appendString(&builder, relaydHTTPSFinish)
-	appendf(&builder, relaydRelayBlocks,
-		data.Server.IPv4, data.Server.IPv6,
-		data.Server.IPv4, data.Server.IPv6,
-		data.Server.IPv4, data.Server.IPv6,
-		data.Server.IPv4, data.Server.IPv6)
-	return builder.String()
+	return hosts
 }
 
-func appendRelaydF3SRouting(builder *strings.Builder, data webConfigData) {
-	// Only f3s sites with a dedicated upstream (Site.RelaydUpstream) get a
-	// route here; the others use the generic f3s forwarding.
+// relaydF3SRoutes lists only the f3s sites with a dedicated upstream
+// (Site.RelaydUpstream); the rest use the generic f3s forwarding the
+// relay blocks already provide.
+func relaydF3SRoutes(data webConfigData) []relaydF3SRoute {
+	var routes []relaydF3SRoute
 	for _, host := range data.F3SHosts {
 		upstream := SiteFor(host).RelaydUpstream
 		if upstream == "" {
 			continue
 		}
 		for _, prefix := range data.Prefixes {
-			appendf(builder, "    match request header \"Host\" value %q forward to <%s>\n", prefix+host, upstream)
+			routes = append(routes, relaydF3SRoute{Host: prefix + host, Upstream: upstream})
 		}
 	}
-	appendString(builder, "    match request header \"Host\" value \"www.snonux.foo\" forward to <localhost>\n")
-	for _, prefix := range []string{"", "standby."} {
-		appendf(builder, "    match request header \"Host\" value %q forward to <f3s_static_proxy>\n", prefix+"snonux.foo")
-	}
+	return routes
 }
 
 func contains(values []string, wanted string) bool {
@@ -355,295 +453,16 @@ func contains(values []string, wanted string) bool {
 	return false
 }
 
-const httpdServerBlocks = `
-# Current server's FQDN (e.g. for mail server ACME cert requests)
-server %q {
-  listen on * port 80
-  log style forwarded
-  location "/.well-known/acme-challenge/*" {
-    root "/acme"
-    request strip 2
-  }
-  location * {
-    block return 302 "https://%s"
-  }
+// appendf and appendString are the remaining strings.Builder helpers of the
+// pre-u52 render style. HTTPD and Relayd no longer use them (see
+// renderHTTPD/renderRelayd above), but maildns.go's SMTPD/NSD renderers
+// still do; v52 (F1/F2; P4) owns extracting those into native templates the
+// same way. Keep these here, unchanged, until that task removes the last
+// caller.
+func appendf(builder *strings.Builder, format string, args ...any) {
+	_, _ = fmt.Fprintf(builder, format, args...)
 }
 
-server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    root "/htdocs/buetow.org/self"
-    directory auto index
-  }
+func appendString(builder *strings.Builder, value string) {
+	_, _ = builder.WriteString(value)
 }
-
-# f3s cluster fallback page on port 8080 when cluster is down
-server "f3s.buetow.org" {
-  listen on * port 8080
-  no log
-  location * {
-    request rewrite "/index.html"
-    root "/htdocs/f3s_fallback"
-  }
-}
-
-server "*.f3s.buetow.org" {
-  listen on * port 8080
-  no log
-  location * {
-    request rewrite "/index.html"
-    root "/htdocs/f3s_fallback"
-  }
-}
-
-# Gemtexter hosts
-`
-
-const httpdRedirectBlocks = `server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    block return 302 "https://paul.buetow.org$REQUEST_URI"
-  }
-}
-
-server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    block return 302 "https://foo.zone$REQUEST_URI"
-  }
-}
-
-server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-%s  }
-}
-
-server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    block return 302 "https://foo.zone/about$REQUEST_URI"
-  }
-}
-`
-
-const httpdDtailBlock = `server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    block return 302 "https://github.com/snonux/dtail"
-  }
-}
-`
-
-const httpdRootBlock = `server %q {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    root %q
-    directory auto index
-  }
-}
-`
-
-const httpdF3SBlocks = `server "%s-port80" {
-  listen on * port 80
-  log style forwarded
-  location "/.well-known/acme-challenge/*" {
-    root "/acme"
-    request strip 2
-  }
-  location * {
-    block return 302 "https://$HTTP_HOST$REQUEST_URI"
-  }
-}
-
-server "%s-port8080" {
-  listen on * port 8080
-  log style forwarded
-  location * {
-    request rewrite "/index.html"
-    root "/htdocs/f3s_fallback"
-  }
-}
-`
-
-const httpdDefaults = `# Defaults
-server "default" {
-  listen on * port 80
-  log style forwarded
-  block return 302 "https://foo.zone$REQUEST_URI"
-}
-
-server "default" {
-  listen on * port 8080
-  log style forwarded
-  block return 302 "https://foo.zone$REQUEST_URI"
-}
-`
-
-const relaydPreamble = `log connection
-
-table <f3s> {
-  192.168.2.120
-  192.168.2.121
-  192.168.2.122
-}
-table <f3s_static> {
-  192.168.2.203
-  192.168.2.204
-}
-table <f3s_static_proxy> {
-  127.0.0.1
-  ::1
-}
-table <f3s_registry> {
-  192.168.2.120
-  192.168.2.121
-  192.168.2.122
-}
-table <f3s_jellyfin> {
-  192.168.2.120
-  192.168.2.121
-  192.168.2.122
-}
-table <f3s_anki> {
-  192.168.2.120
-  192.168.2.121
-  192.168.2.122
-}
-table <garage> {
-  192.168.2.130
-  192.168.2.131
-  192.168.2.132
-}
-table <forgejo_ssh> {
-  192.168.2.120
-  192.168.2.121
-  192.168.2.122
-}
-table <localhost> {
-  127.0.0.1
-  ::1
-}
-`
-
-const relaydHTTPSStart = `     tls keypair %s
-
-     http websockets
-
-    match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
-    match request header set "X-Forwarded-Proto" value "https"
-    pass header "Connection"
-    pass header "Upgrade"
-    pass header "Sec-WebSocket-Key"
-    pass header "Sec-WebSocket-Version"
-    pass header "Sec-WebSocket-Extensions"
-    pass header "Sec-WebSocket-Protocol"
-`
-
-const relaydHTTPSFinish = `    match response header "Server" value "OpenBSD httpd" tag "HTTPD_FALLBACK"
-    match response tagged "HTTPD_FALLBACK" header set "Cache-Control" value "no-cache, no-store, must-revalidate"
-    match response tagged "HTTPD_FALLBACK" header set "Pragma" value "no-cache"
-    match response tagged "HTTPD_FALLBACK" header set "Expires" value "0"
-}
-`
-
-const relaydRelayBlocks = `
-relay "https4" {
-    listen on %s port 443 tls
-    protocol "https"
-    session timeout 300
-    forward to <f3s> port 80 check tcp
-    forward to <localhost> port 8080 check http "/" code 200
-    forward to <f3s_static_proxy> port 18080 check tcp
-    forward to <f3s_registry> port 30001 check tcp
-    forward to <f3s_jellyfin> port 30096 check tcp
-    forward to <f3s_anki> port 30800 check tcp
-    forward to <garage> port 3900 check tcp
-}
-
-relay "https6" {
-    listen on %s port 443 tls
-    protocol "https"
-    session timeout 300
-    forward to <f3s> port 80 check tcp
-    forward to <localhost> port 8080 check http "/" code 200
-    forward to <f3s_static_proxy> port 18080 check tcp
-    forward to <f3s_registry> port 30001 check tcp
-    forward to <f3s_jellyfin> port 30096 check tcp
-    forward to <f3s_anki> port 30800 check tcp
-    forward to <garage> port 3900 check tcp
-}
-
-tcp protocol "gemini" {
-    tls keypair foo.zone
-    tls keypair stats.foo.zone
-    tls keypair snonux.foo
-    tls keypair paul.buetow.org
-    tls keypair standby.foo.zone
-    tls keypair standby.stats.foo.zone
-    tls keypair standby.snonux.foo
-    tls keypair standby.paul.buetow.org
-}
-
-relay "gemini4" {
-    listen on %s port 1965 tls
-    protocol "gemini"
-    forward to 127.0.0.1 port 11965
-}
-relay "gemini6" {
-    listen on %s port 1965 tls
-    protocol "gemini"
-    forward to 127.0.0.1 port 11965
-}
-
-http protocol "forgejo-alt" {
-    tls keypair code.f3s.buetow.org
-    http websockets
-    match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
-    match request header set "X-Forwarded-Proto" value "https"
-    pass header "Connection"
-    pass header "Upgrade"
-    pass header "Sec-WebSocket-Key"
-    pass header "Sec-WebSocket-Version"
-    pass header "Sec-WebSocket-Extensions"
-    pass header "Sec-WebSocket-Protocol"
-    match request header "Host" value "code.f3s.buetow.org" forward to <f3s>
-}
-relay "forgejo_alt4" {
-    listen on %s port 2443 tls
-    protocol "forgejo-alt"
-    forward to <f3s> port 80 check tcp
-}
-relay "forgejo_alt6" {
-    listen on %s port 2443 tls
-    protocol "forgejo-alt"
-    forward to <f3s> port 80 check tcp
-}
-
-relay "forgejo_ssh4" {
-    listen on %s port 2022
-    forward to <forgejo_ssh> port 30222 check tcp
-}
-relay "forgejo_ssh6" {
-    listen on %s port 2022
-    forward to <forgejo_ssh> port 30222 check tcp
-}
-
-relay "f3s_static_proxy4" {
-    listen on 127.0.0.1 port 18080
-    forward to <f3s_static> port 80 check tcp
-    forward to <localhost> port 8080 check http "/" code 200
-}
-relay "f3s_static_proxy6" {
-    listen on ::1 port 18080
-    forward to <f3s_static> port 80 check tcp
-    forward to <localhost> port 8080 check http "/" code 200
-}
-`

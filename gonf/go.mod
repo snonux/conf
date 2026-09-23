@@ -2,7 +2,7 @@ module codeberg.org/snonux/conf/gonf
 
 go 1.26.4
 
-require github.com/snonux/gonf v0.16.0
+require github.com/snonux/gonf v0.16.5
 
 require (
 	github.com/miekg/dns v1.1.68 // indirect

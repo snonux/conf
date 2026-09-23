@@ -154,7 +154,7 @@ func (Maintenance) DescRsync() string {
 func (Maintenance) Rsync() {
 	onFrontends(func() {
 		rsync := Package("rsync")
-		File("/etc/rsyncd.conf", WithContent(rsyncdConfig),
+		InstallFile("/etc/rsyncd.conf", frontendAsset("rsyncd.conf"),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 		script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
@@ -270,34 +270,3 @@ func pkgScriptsLine(name string) string {
 	scripts = append(scripts, "node_exporter")
 	return "pkg_scripts=" + strings.Join(scripts, " ")
 }
-
-const rsyncdConfig = `max connections = 5
-timeout = 300
-
-[joernshtdocs]
-comment = Joerns htdocs
-path = /var/www/htdocs/joern
-read only = yes
-list = yes
-uid = www
-gid = www
-hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
-
-[irregular-ninja]
-comment = Irregular Ninja photo album (push from k3s over wg0)
-path = /var/www/htdocs/irregular.ninja
-read only = no
-list = yes
-uid = www
-gid = www
-hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
-
-[alt-irregular-ninja]
-comment = Alternative Irregular Ninja photo album (push from k3s over wg0)
-path = /var/www/htdocs/alt.irregular.ninja
-read only = no
-list = yes
-uid = www
-gid = www
-hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
-`

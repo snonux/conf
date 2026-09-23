@@ -4,6 +4,8 @@
 package freebsd
 
 import (
+	"path/filepath"
+
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -11,18 +13,14 @@ import (
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
-// unattendedServicesContent is the rc.d restart list for f0–f3 after pkg
-// upgrades. Never list vm / networking here — guest stop belongs to the
-// reboot path (vm stopall then reboot).
-const unattendedServicesContent = `# Daemons to restart after unattended package updates (one per line).
-# Names must match /etc/rc.d/<name> or /usr/local/etc/rc.d/<name>.
-# Do NOT list vm, vm_network, netif, routing, or devd.
-sshd
-node_exporter
-dserver
-wireguard
-uptimed
-`
+// unattendedServicesAsset is the operator-edited rc.d restart list for
+// f0–f3 after pkg upgrades: a plain, native file
+// (assets/unattended-upgrade-services), not a template. Never list vm /
+// networking there — guest stop belongs to the reboot path (vm stopall
+// then reboot).
+func unattendedServicesAsset() string {
+	return filepath.Join(paths.Conf, "gonf", "freebsd", "assets", "unattended-upgrade-services")
+}
 
 // unattendedNewsyslogLine rotates /var/log/unattended-upgrade.log.
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t600  5     1024  *     Z"
@@ -71,8 +69,7 @@ func (Unattended) DescServices() string {
 // Services installs the rc.d restart list.
 func (Unattended) Services() {
 	WhenHostname(ClusterHosts(), func() {
-		File("/etc/unattended-upgrade-services",
-			WithContent(unattendedServicesContent),
+		InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 	})
 }

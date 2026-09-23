@@ -4,6 +4,8 @@
 package openbsd
 
 import (
+	"path/filepath"
+
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -11,22 +13,13 @@ import (
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
-// unattendedServicesContent is the daemon restart list deployed to
-// /etc/unattended-upgrade-services (implementation doc section 4).
-const unattendedServicesContent = `# Daemons to restart after unattended security updates (one per line).
-# gogios is cron-driven (no daemon); rsync is inetd-spawned, so the
-# inetd listener itself is listed. Restarting sshd never drops sessions.
-relayd
-httpd
-nsd
-smtpd
-sshd
-inetd
-uptimed
-node_exporter
-dserver
-#gorum
-`
+// unattendedServicesAsset is the operator-edited daemon restart list
+// deployed to /etc/unattended-upgrade-services (implementation doc section
+// 4): a plain, native file (assets/unattended-upgrade-services), not a
+// template — its content never varies with recipe input.
+func unattendedServicesAsset() string {
+	return filepath.Join(paths.Conf, "gonf", "openbsd", "assets", "unattended-upgrade-services")
+}
 
 // unattendedNewsyslogLine is appended to /etc/newsyslog.conf so
 // /var/log/unattended-upgrade.log rotates (implementation doc section 6).
@@ -82,8 +75,7 @@ func (Unattended) DescServices() string {
 
 // Services installs the daemon restart list.
 func (Unattended) Services() {
-	File("/etc/unattended-upgrade-services",
-		WithContent(unattendedServicesContent),
+	InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
 		WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
 }
 

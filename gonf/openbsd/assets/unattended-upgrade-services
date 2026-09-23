@@ -1,0 +1,13 @@
+# Daemons to restart after unattended security updates (one per line).
+# gogios is cron-driven (no daemon); rsync is inetd-spawned, so the
+# inetd listener itself is listed. Restarting sshd never drops sessions.
+relayd
+httpd
+nsd
+smtpd
+sshd
+inetd
+uptimed
+node_exporter
+dserver
+#gorum
