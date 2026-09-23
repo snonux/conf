@@ -1,7 +1,7 @@
 $ORIGIN buetow.org.
 $TTL 4h
 @        IN  SOA  fishfinger.buetow.org. hostmaster.buetow.org. (
-                  <%= time() %>   ; serial
+                  @SERIAL@   ; serial
                   1h              ; refresh
                   30m             ; retry
                   7d              ; expire
@@ -9,14 +9,14 @@ $TTL 4h
          IN NS    fishfinger.buetow.org.
          IN NS    blowfish.buetow.org.
 
-	     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
-master   300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-master   300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
+	     300 IN A @MASTER_IPV4@ ; Enable failover
+         300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www      300 IN A @MASTER_IPV4@ ; Enable failover
+www      300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby  300 IN A @STANDBY_IPV4@ ; Enable failover
+standby  300 IN AAAA @STANDBY_IPV6@ ; Enable failover
+master   300 IN A @MASTER_IPV4@ ; Enable failover
+master   300 IN AAAA @MASTER_IPV6@ ; Enable failover
 
          IN MX 10 fishfinger.buetow.org.
          IN MX 20 blowfish.buetow.org.
@@ -26,75 +26,65 @@ cool     IN NS ns-707.awsdns-24.net.
 cool     IN NS ns-1081.awsdns-07.org.
 cool     IN NS ns-1818.awsdns-35.co.uk.
 
-paul         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-paul         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.paul     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.paul     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.paul  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.paul  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+paul         300 IN A @MASTER_IPV4@ ; Enable failover
+paul         300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.paul     300 IN A @MASTER_IPV4@ ; Enable failover
+www.paul     300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.paul  300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.paul  300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
-blog         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-blog         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.blog     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.blog     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.blog  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.blog  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+blog         300 IN A @MASTER_IPV4@ ; Enable failover
+blog         300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.blog     300 IN A @MASTER_IPV4@ ; Enable failover
+www.blog     300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.blog  300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.blog  300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
-gogios         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-gogios         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.gogios     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.gogios     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.gogios  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.gogios  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+gogios         300 IN A @MASTER_IPV4@ ; Enable failover
+gogios         300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.gogios     300 IN A @MASTER_IPV4@ ; Enable failover
+www.gogios     300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.gogios  300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.gogios  300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
-tmp          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-tmp          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.tmp      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.tmp      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.tmp   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.tmp   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+tmp          300 IN A @MASTER_IPV4@ ; Enable failover
+tmp          300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.tmp      300 IN A @MASTER_IPV4@ ; Enable failover
+www.tmp      300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.tmp   300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.tmp   300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
-<% for my $host (@$f3s_hosts) {
-     my $is_ipv6_only = $host =~ /^ipv6\./;
-     my $is_ipv4_only = $host =~ /^ipv4\./;
--%>
-<% unless ($is_ipv6_only) { -%>
-<%= $host %>.         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.<%= $host %>.     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-standby.<%= $host %>. 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-<% } -%>
-<% unless ($is_ipv4_only) { -%>
-<%= $host %>.         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.<%= $host %>.     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.<%= $host %>. 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
-<% } -%>
-<% } -%>
-
-; So joern can directly preview the content before rsync happens from blowfish to fishfinger
+{{range .F3SHosts}}{{if .HasA}}{{.Name}}.         300 IN A @MASTER_IPV4@ ; Enable failover
+www.{{.Name}}.     300 IN A @MASTER_IPV4@ ; Enable failover
+standby.{{.Name}}. 300 IN A @STANDBY_IPV4@ ; Enable failover
+{{end}}{{if .HasAAAA}}{{.Name}}.         300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.{{.Name}}.     300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.{{.Name}}. 300 IN AAAA @STANDBY_IPV6@ ; Enable failover
+{{end}}{{end}}; So joern can directly preview the content before rsync happens from blowfish to fishfinger
 joern IN CNAME blowfish
 www.joern IN CNAME blowfish
 standby.joern IN CNAME fishfinger
 
-dory         300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-dory         300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.dory     300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.dory     300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.dory  300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.dory  300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+dory         300 IN A @MASTER_IPV4@ ; Enable failover
+dory         300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.dory     300 IN A @MASTER_IPV4@ ; Enable failover
+www.dory     300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.dory  300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.dory  300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
-ecat        300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-ecat        300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.ecat    300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.ecat    300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.ecat 300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.ecat 300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+ecat        300 IN A @MASTER_IPV4@ ; Enable failover
+ecat        300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.ecat    300 IN A @MASTER_IPV4@ ; Enable failover
+www.ecat    300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.ecat 300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.ecat 300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
-git          300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-git          300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-www.git      300 IN A <%= $ips->{current_master}{ipv4} %> ; Enable failover
-www.git      300 IN AAAA <%= $ips->{current_master}{ipv6} %> ; Enable failover
-standby.git   300 IN A <%= $ips->{current_standby}{ipv4} %> ; Enable failover
-standby.git   300 IN AAAA <%= $ips->{current_standby}{ipv6} %> ; Enable failover
+git          300 IN A @MASTER_IPV4@ ; Enable failover
+git          300 IN AAAA @MASTER_IPV6@ ; Enable failover
+www.git      300 IN A @MASTER_IPV4@ ; Enable failover
+www.git      300 IN AAAA @MASTER_IPV6@ ; Enable failover
+standby.git   300 IN A @STANDBY_IPV4@ ; Enable failover
+standby.git   300 IN AAAA @STANDBY_IPV6@ ; Enable failover
 
 blowfish   14400 IN A 23.88.35.144
 blowfish   14400 IN AAAA 2a01:4f8:c17:20f1::42

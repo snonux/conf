@@ -1,0 +1,24 @@
+# This file is managed by Gonf; validate before applying.
+pki "buetow_org_tls" cert "/etc/ssl/{{.FQDN}}.fullchain.pem"
+pki "buetow_org_tls" key "/etc/ssl/private/{{.FQDN}}.key"
+
+table aliases file:{{.Aliases}}
+table virtualdomains file:{{.VirtualDomains}}
+table virtualusers file:{{.VirtualUsers}}
+table reject-senders file:{{.RejectSenders}}
+table reject-domains file:{{.RejectDomains}}
+table reject-recipients file:{{.RejectRecipients}}
+
+listen on socket
+listen on all tls pki "buetow_org_tls" hostname "{{.FQDN}}"
+
+action localmail mbox alias <aliases>
+action receive mbox virtual <virtualusers>
+action outbound relay
+
+match from any mail-from <reject-senders> reject
+match from any mail-from <reject-domains> reject
+match from any for rcpt-to <reject-recipients> reject
+match from any for domain <virtualdomains> action receive
+match from local for local action localmail
+match from local for any action outbound
