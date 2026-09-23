@@ -76,11 +76,15 @@ Soak order: **f3 → f1 (CARP backup) → f2 → f0 last** (storage MASTER).
 - [x] Failed pkg leaves no stamp; next hour retries
       (f3/f2 2026-09-19: 12 unstamped rc=3 failures each, hourly retry,
       stamped only after the repo came back)
-- [ ] Custom repo down → WARNING + official-only upgrade still stamps
+- [x] Custom repo down → WARNING + official-only upgrade still stamps
       (broken 2026-09-16..19: `-r FreeBSD` matched no 15.x repo → rc=3 on
       every window; f3 went ~21 h uncovered on 2026-09-18. Fixed 2026-09-19
       to `-r FreeBSD-ports -r FreeBSD-ports-kmods` (dry-run verified on
-      f0–f3); re-check on the next k3s-off window)
+      f0–f3; verified 2026-09-23 on f2 by briefly scaling pkgrepo to zero:
+      host probe returned HTTP 503, fallback logged the WARNING and exited 0
+      without a `pkg upgrade FAILED` or `pkg upgrade:` block (no updates
+      pending), and `last-daily` was rewritten with the current date.
+      Pkgrepo was restored to 1/1, HTTP 200, Argo CD Healthy/Synced.)
 - [ ] f3 with kernel pending → log only, no reboot
 - [ ] f0–f2 reboot only with partners up + weekday slot + clean `vm stopall`
 - [x] newsyslog line present for `/var/log/unattended-upgrade.log`
