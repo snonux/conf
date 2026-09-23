@@ -211,7 +211,7 @@ endpoints (3.6.0) are reachable from Fedora packaging today, on any release.
 Even ignoring the missing `endpoint_url` key, our Garage deployment is
 path-style only:
 
-* `f3s/garage/etc/garage.f0.toml` sets `[s3_api] s3_region = "garage"` and
+* The former per-node Garage TOML set `[s3_api] s3_region = "garage"` and
   **no `root_domain`**. Without `root_domain`, Garage cannot resolve
   virtual-hosted-style requests (`<bucket>.garage.f3s.buetow.org`) to a bucket.
 * The edge only routes the bare host: `frontends/etc/relayd.conf.tpl` matches
@@ -274,8 +274,9 @@ bucket was resolved from the Host header.
 
 So `sync.aws.force_path_style`, and the custom build that supplies it, is needed
 only if Garage cannot be reconfigured. Enabling vhost-style on the real cluster
-costs: `root_domain` in `f3s/garage/etc/garage.f0.toml` (+ f1/f2) and a
-`rex garage_deploy`; a DNS record for `taskwarrior.garage.f3s.buetow.org`; TLS
+costs: `root_domain` in `f3s/garage/etc/garage.toml.tmpl` and a
+`./gonf.sh cluster garage garage_config`; a DNS record for
+`taskwarrior.garage.f3s.buetow.org`; TLS
 cert coverage for that name (the `*.f3s.buetow.org` wildcard does **not** cover
 it — DNS wildcards are single-label, so prefer `*.garage.f3s.buetow.org`); and a
 relayd match rule, since `frontends/etc/relayd.conf.tpl` matches only the bare

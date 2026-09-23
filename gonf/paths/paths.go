@@ -24,7 +24,7 @@ func FrontendAsset(relativePath string) string {
 }
 
 // GarageAsset returns the controller-local path of a source-controlled Garage
-// asset such as etc/garage.f0.toml.
+// asset such as etc/garage.toml.tmpl.
 func GarageAsset(relativePath string) string {
 	return filepath.Join(Garage, relativePath)
 }
