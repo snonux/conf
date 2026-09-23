@@ -69,6 +69,17 @@ func (MailDNS) DescNSD() string {
 // as the NSD secondary that receives the effective zones by zone transfer.
 // Each host block declares its own nsd_flags line, so the task records one
 // scope per host and no enclosing all-frontends scope.
+//
+// The logical reference paths.FrontendSecret("var/nsd/etc/nsd_key.txt")
+// resolves through whatever provider is configured (api.SetSecretProvider);
+// today that is unchanged from before task 262 — gonf's default
+// secret.FileProvider, reading gonf/secrets/frontends/var/nsd/etc/nsd_key.txt
+// below this checkout. A later, separately authorized cutover to a real
+// external store (see secrets/README.md, "Typed provider references and
+// cutover policy") can move this one reference without touching this call
+// site or the byte-for-byte key.conf output below it: gonf's
+// secret.NewFallback composes the new store with secret.FileProvider so an
+// unmigrated reference keeps reading this checkout exactly as it does now.
 func (MailDNS) NSD() {
 	key := strings.TrimSpace(MustSecret(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")))
 	data := TemplateData()

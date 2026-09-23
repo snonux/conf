@@ -120,11 +120,43 @@ func (Maintenance) DescGoprecords() string {
 // all cluster members still reads every host's token: a cluster push,
 // `gonf plan`, a raw `gonf push -- <ssh args>`, or a destination that is
 // unknown to the inventory or contradicts its user or port.
+//
+// Optional-token policy (task 262, explicit now — it used to be an
+// unlabelled side effect of the early return below). OptionalSecret
+// distinguishes "no such secret" (secret.ErrNotFound) from every other
+// failure: a locked, unreachable or misconfigured secret store still fails
+// the whole plan record loudly (see gonf's docs/secrets.md), it is never
+// read as "this host has no token". Given a genuine not-found, three
+// policies were considered for a host's already-deployed
+// /etc/goprecords-upload.token and its daily.local hook:
+//   - keep (chosen): declare nothing further for this host and leave
+//     whatever is already on the destination exactly as it is. Matches P9's
+//     "no automatic deletion of legacy copies" and this task's
+//     declaration/mechanism-layer scope: actively disabling or removing a
+//     live token is a destination-state change of its own, which needs its
+//     own controlled rotation/recovery exercise (see
+//     docs/consumer-dsl-simplification-plan.md, P9) and explicit
+//     authorization, not a side effect of a secret-provider change.
+//   - disable: also strip the daily.local hook line (WithoutLine) so a
+//     stale token stops being submitted even though the token file itself
+//     is left in place. Rejected for now: it still leaves secret material
+//     on disk while silently changing the host's schedule, which reads as
+//     more surprising than either doing nothing or doing both.
+//   - remove: also delete the token file (NoFile) and the hook line, fully
+//     converging to "no token configured". Rejected for now: an explicit
+//     NoFile deletion of what may be the operator's only remaining copy of
+//     a secret needs the controlled recovery exercise P9 calls for, not an
+//     automatic decision made here.
+//
+// Revisit once P9's controlled rotation/recovery exercise authorizes a
+// change; until then this function's behavior is unchanged from before this
+// comment, only its policy is now named and documented instead of implicit.
 func (Maintenance) Goprecords() {
 	ForHosts(ValueServer, func(_ string, server Server) {
 		token, ok := OptionalSecret(paths.FrontendSecret("etc/goprecords/" + server.Name + ".token"))
 		Package("curl")
 		if !ok {
+			// keep: see the optional-token policy above.
 			return
 		}
 		token = strings.TrimRight(token, "\r\n")
