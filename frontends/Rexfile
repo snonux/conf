@@ -113,8 +113,6 @@ our @garage_buckets = qw/taskwarrior quicklog/;
 our @garage_hosts   = map { "$_.garage.f3s.buetow.org" } @garage_buckets;
 push @f3s_hosts, @garage_hosts;
 
-our @dns_zones        = qw/buetow.org dtail.dev foo.zone irregular.ninja snonux.foo/;
-our @dns_zones_remove = qw//;
 our @acme_hosts =
   qw/buetow.org git.buetow.org paul.buetow.org dory.buetow.org ecat.buetow.org znc.buetow.org dtail.dev foo.zone stats.foo.zone irregular.ninja alt.irregular.ninja snonux.foo gogios.buetow.org blowfish.buetow.org fishfinger.buetow.org/;
 
@@ -454,52 +452,6 @@ task 'smtpd',
     service 'smtpd', ensure => 'started';
   };
 
-desc 'Setup DNS server(s)';
-task 'nsd',
-  group => 'frontends',
-  sub {
-    my $restart = FALSE;
-    append_if_no_such_line '/etc/rc.conf.local', 'nsd_flags=';
-
-    Rex::Logger::info('Dealing with master DNS key');
-    file '/var/nsd/etc/key.conf',
-      content   => template( './var/nsd/etc/key.conf.tpl', nsd_key => $secrets->('/var/nsd/etc/nsd_key.txt') ),
-      owner     => 'root',
-      group     => '_nsd',
-      mode      => '640',
-      on_change => sub { $restart = TRUE };
-
-    Rex::Logger::info('Dealing with master DNS config');
-    file '/var/nsd/etc/nsd.conf',
-      content   => template( './var/nsd/etc/nsd.conf.master.tpl', dns_zones => \@dns_zones, ),
-      owner     => 'root',
-      group     => '_nsd',
-      mode      => '640',
-      on_change => sub { $restart = TRUE };
-
-    for my $zone (@dns_zones) {
-        Rex::Logger::info("Dealing with DNS zone $zone");
-        file "/var/nsd/zones/master/$zone.zone",
-          content => template(
-            "./var/nsd/zones/master/$zone.zone.tpl",
-            ips       => \%ips,
-            f3s_hosts => \@f3s_hosts
-          ),
-          owner     => 'root',
-          group     => 'wheel',
-          mode      => '644',
-          on_change => sub { $restart = TRUE };
-    }
-
-    for my $zone (@dns_zones_remove) {
-        Rex::Logger::info("Dealing with DNS zone removal $zone");
-        file "/var/nsd/zones/master/$zone.zone", ensure => 'absent';
-    }
-
-    service 'nsd' => 'restart' if $restart;
-    service 'nsd', ensure => 'started';
-  };
-
 desc 'Setup DNS failover script(s)';
 task 'nsd_failover',
   group => 'frontends',
@@ -833,7 +785,6 @@ task 'commons',
     run_task 'base';
     run_task 'hosts_wg';
     run_task 'pf';
-    run_task 'nsd';
     run_task 'nsd_failover';
     run_task 'uptimed';
     run_task 'goprecords_upload';
