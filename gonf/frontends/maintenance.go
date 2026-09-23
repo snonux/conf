@@ -10,10 +10,7 @@ import (
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
-const (
-	dailyLocal       = "/etc/daily.local"
-	frontendAssetDir = "gonf/frontends/assets"
-)
+const dailyLocal = "/etc/daily.local"
 
 // Maintenance carries the root-only, non-network frontend maintenance tasks.
 // Its package, content, and schedule policy comes directly from the matching
@@ -253,8 +250,12 @@ func (Maintenance) IRCBouncer() {
 	})
 }
 
+// frontendAsset is a thin wrapper around the shared paths.GonfAsset helper,
+// so this package's assets go through the one path-join implementation
+// shared with openbsd, freebsd, and netbsd instead of spelling out
+// gonf/frontends/assets itself.
 func frontendAsset(name string) string {
-	return filepath.Join(paths.Conf, frontendAssetDir, name)
+	return paths.GonfAsset("frontends", name)
 }
 
 func onFrontends(fn func()) {

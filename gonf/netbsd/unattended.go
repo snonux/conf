@@ -3,8 +3,6 @@
 package netbsd
 
 import (
-	"path/filepath"
-
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -17,7 +15,7 @@ import (
 // template. Service name is wireguard (not wireguard-go) — matches
 // /etc/rc.d/wireguard on the hosts.
 func unattendedServicesAsset() string {
-	return filepath.Join(paths.Conf, "gonf", "netbsd", "assets", "unattended-upgrade-services")
+	return paths.GonfAsset("netbsd", "unattended-upgrade-services")
 }
 
 // unattendedNewsyslogLine rotates /var/log/unattended-upgrade.log (NetBSD

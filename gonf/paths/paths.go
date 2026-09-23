@@ -23,6 +23,16 @@ func FrontendAsset(relativePath string) string {
 	return filepath.Join(Frontends, relativePath)
 }
 
+// GonfAsset returns the controller-local path of a source-controlled asset
+// under a gonf/<pkg> package's own assets directory, such as
+// gonf/openbsd/assets/unattended-upgrade-services. It is the one shared
+// implementation of that path-join for every gonf/<pkg>/assets consumer
+// (frontends, openbsd, freebsd, netbsd), so a rename of the per-package
+// assets directory only needs to change here.
+func GonfAsset(pkg, name string) string {
+	return filepath.Join(Conf, "gonf", pkg, "assets", name)
+}
+
 // GarageAsset returns the controller-local path of a source-controlled Garage
 // asset such as etc/garage.toml.tmpl.
 func GarageAsset(relativePath string) string {

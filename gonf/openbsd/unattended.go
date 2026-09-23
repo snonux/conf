@@ -4,8 +4,6 @@
 package openbsd
 
 import (
-	"path/filepath"
-
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -18,7 +16,7 @@ import (
 // 4): a plain, native file (assets/unattended-upgrade-services), not a
 // template — its content never varies with recipe input.
 func unattendedServicesAsset() string {
-	return filepath.Join(paths.Conf, "gonf", "openbsd", "assets", "unattended-upgrade-services")
+	return paths.GonfAsset("openbsd", "unattended-upgrade-services")
 }
 
 // unattendedNewsyslogLine is appended to /etc/newsyslog.conf so

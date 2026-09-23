@@ -4,8 +4,6 @@
 package freebsd
 
 import (
-	"path/filepath"
-
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
@@ -19,7 +17,7 @@ import (
 // networking there — guest stop belongs to the reboot path (vm stopall
 // then reboot).
 func unattendedServicesAsset() string {
-	return filepath.Join(paths.Conf, "gonf", "freebsd", "assets", "unattended-upgrade-services")
+	return paths.GonfAsset("freebsd", "unattended-upgrade-services")
 }
 
 // unattendedNewsyslogLine rotates /var/log/unattended-upgrade.log.
