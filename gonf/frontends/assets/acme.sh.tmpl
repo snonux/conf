@@ -5,16 +5,21 @@
 #
 # Every certificate acme-client.conf declares is handled once, from the same
 # list (see the CERTIFICATES here-document at the end). Each ends as one of:
-#   skipped    another frontend serves it (or DNS/httpd do not know it), so
-#              it is not requested here;
+#   skipped    another frontend serves it, DNS/httpd do not know it, or the
+#              name genuinely does not resolve (NXDOMAIN), so it is not
+#              requested here;
 #   unchanged  acme-client ran and the certificate bytes are the same;
 #   changed    the certificate bytes differ afterwards (a renewal, or a
 #              placeholder copied in so relayd can load the keypair);
-#   failed     acme-client exited with an error.
+#   failed     acme-client exited with an error, or the DNS lookup itself
+#              failed (timeout, SERVFAIL or any other non-NXDOMAIN failure)
+#              rather than genuinely resolving to nothing, so a broken
+#              resolver does not silently skip renewal every day.
 # Only changed certificates reload their consumers: relayd serves every
-# certificate, smtpd only the host certificate. A failure still lets the
-# other certificates and reloads proceed, then makes the script exit 1 so the
-# daily mail and Gonf report it.
+# certificate, smtpd only the host certificate. A failure -- acme-client, a
+# non-NXDOMAIN lookup, or a reload/restart itself -- still lets the other
+# certificates and reloads proceed, then makes the script exit 1 so the daily
+# mail and Gonf report it.
 
 MY_IP=$(ifconfig vio0 | awk '$1 == "inet" { print $2 }')
 
@@ -57,11 +62,27 @@ prepare_standby_cert() {
 # requested into changed or unchanged); progress messages go to stderr.
 handle_cert() {
 	host=$1
-	host_ip=$(timeout 10 host "$host" | awk '/has address/ { print $(NF) }')
+	host_out=$(timeout 10 host "$host" 2>&1)
+	host_status=$?
+	host_ip=$(echo "$host_out" | awk '/has address/ { print $(NF) }')
 	if [ -z "$host_ip" ]; then
-		echo "Lookup of $host failed or timed out, skipping..." >&2
-		echo skipped
-		return
+		if [ $host_status -eq 124 ]; then
+			echo "Lookup of $host timed out" >&2
+			echo failed
+			return
+		fi
+		case $host_out in
+		*"3(NXDOMAIN)"*)
+			echo "Lookup of $host: no such domain, skipping..." >&2
+			echo skipped
+			return
+			;;
+		*)
+			echo "Lookup of $host failed: $host_out" >&2
+			echo failed
+			return
+			;;
+		esac
 	fi
 
 	if ! grep -q "^server \"$host\"" /etc/httpd.conf; then
@@ -135,10 +156,11 @@ done <<'CERTIFICATES'
 CERTIFICATES
 
 if [ "$reload_relayd" = yes ]; then
-	/usr/sbin/rcctl check relayd && /usr/sbin/rcctl reload relayd || /usr/sbin/rcctl restart relayd
+	{ /usr/sbin/rcctl check relayd && /usr/sbin/rcctl reload relayd; } ||
+		/usr/sbin/rcctl restart relayd || failed=yes
 fi
 if [ "$restart_smtpd" = yes ]; then
-	/usr/sbin/rcctl restart smtpd
+	/usr/sbin/rcctl restart smtpd || failed=yes
 fi
 if [ "$failed" = yes ]; then
 	echo "At least one certificate request failed" >&2

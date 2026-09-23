@@ -13,10 +13,14 @@
 # Covers: an up-to-date run reloads nothing; a renewed site certificate
 # reloads relayd only; a renewed host certificate also restarts smtpd; exit 0
 # without new bytes is unchanged; a host served by the other frontend is
-# skipped, unless its placeholder had to be created; a failed lookup is a
-# skip, not an update; a failure still reloads for other changes and makes
-# the run exit 1; legacy symlinked standby files are replaced; relayd is
-# restarted when it is not running; the certificate list drives the requests.
+# skipped, unless its placeholder had to be created; an NXDOMAIN lookup is a
+# skip, not an update, but a SERVFAIL or timed-out lookup is a failure (m52);
+# a failure still reloads for other changes and makes the run exit 1; a
+# failed relayd reload falls back to a restart, and either failing (or a
+# failed smtpd restart) also fails the run, without skipping the other
+# reload/restart (m52); legacy symlinked standby files are replaced; relayd
+# is restarted when it is not running; the certificate list drives the
+# requests.
 
 set -eu
 
@@ -69,6 +73,13 @@ EOF
 
 cat >"$fake/host" <<EOF
 #!/bin/sh
+if [ -f "$root/dns-timeout.\$1" ]; then
+	exit 124
+fi
+if [ -f "$root/dns-servfail.\$1" ]; then
+	echo "Host \$1 not found: 2(SERVFAIL)"
+	exit 1
+fi
 [ -f "$root/dns.\$1" ] || { echo "Host \$1 not found: 3(NXDOMAIN)"; exit 1; }
 echo "\$1 has address \$(cat "$root/dns.\$1")"
 EOF
@@ -92,7 +103,10 @@ cat >"$fake/rcctl" <<EOF
 #!/bin/sh
 case \$1 in
 check) [ ! -f "$root/relayd.stopped" ] ;;
-*) echo "rcctl \$*" >>"$log" ;;
+*)
+	echo "rcctl \$*" >>"$log"
+	[ ! -f "$root/rcctl-fail.\$1.\$2" ]
+	;;
 esac
 EOF
 chmod +x "$fake"/*
@@ -196,9 +210,23 @@ check "placeholder created: reported changed" said "Certificate other.example.or
 reset
 rm "$root/dns.example.org"
 run
-check "lookup failed: exit 0" [ "$status" -eq 0 ]
-check "lookup failed: skipped" said "Certificate example.org: skipped"
-check "lookup failed: no reload" not_logged rcctl
+check "lookup NXDOMAIN: exit 0" [ "$status" -eq 0 ]
+check "lookup NXDOMAIN: skipped" said "Certificate example.org: skipped"
+check "lookup NXDOMAIN: no reload" not_logged rcctl
+
+reset
+: >"$root/dns-servfail.example.org"
+run
+check "lookup SERVFAIL: exit 1" [ "$status" -eq 1 ]
+check "lookup SERVFAIL: reported failed, not skipped" \
+    said "Certificate example.org: failed"
+
+reset
+: >"$root/dns-timeout.example.org"
+run
+check "lookup timeout: exit 1" [ "$status" -eq 1 ]
+check "lookup timeout: reported failed, not skipped" \
+    said "Certificate example.org: failed"
 
 reset
 sed -i.bak '/"other.example.org"/d' "$root/etc/httpd.conf"
@@ -230,6 +258,22 @@ print renew >"$root/acme.example.org"
 run
 check "relayd stopped: restarted instead" logged "rcctl restart relayd"
 check "relayd stopped: not reloaded" not_logged "reload relayd"
+
+reset
+print renew >"$root/acme.other.example.org"
+: >"$root/rcctl-fail.reload.relayd"
+: >"$root/rcctl-fail.restart.relayd"
+run
+check "relayd reload and fallback restart both fail: exit 1" [ "$status" -eq 1 ]
+check "relayd reload and fallback restart both fail: restart attempted" \
+    logged "rcctl restart relayd"
+
+reset
+print renew >"$root/acme.blowfish.example.org"
+: >"$root/rcctl-fail.restart.smtpd"
+run
+check "smtpd restart fails: exit 1" [ "$status" -eq 1 ]
+check "smtpd restart fails: relayd still reloaded" logged "rcctl reload relayd"
 
 if [ "$failures" -ne 0 ]; then
     print "$failures check(s) failed"
