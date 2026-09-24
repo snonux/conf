@@ -47,11 +47,17 @@ func (MailDNS) DescSMTPD() string {
 // newaliases is intentionally limited to the aliases member; smtpd restarts for
 // its own configuration and the other lookup tables, matching the Rex behavior.
 // The obsolete fixed-path candidate directory of the previous recipe is
-// removed.
+// removed. A smtpd.conf render failure refuses the host's SMTPD declarations
+// (see refuseRender) instead of declaring the set with an empty smtpd.conf.
 func (MailDNS) SMTPD() {
 	ForHosts(ValueServer, func(_ string, server Server) {
+		smtpdConf, err := renderSMTPD(server)
+		if err != nil {
+			refuseRender("/etc/mail/smtpd.conf", err)
+			return
+		}
 		NoDir(legacySMTPDValidationDir, WithPrune)
-		mail := ConfigSet("smtpd", smtpdConfigSet(server)...)
+		mail := ConfigSet("smtpd", smtpdConfigSet(smtpdConf)...)
 		newAliases := Command("newaliases", List(), OnChange(mail.Member("aliases")), WithName("rebuild-mail-aliases"))
 		Service("smtpd", WithRestart, DependsOn(newAliases), OnChange(mail.Members(smtpdRestartMembers()...)...))
 	})
@@ -113,12 +119,18 @@ func nsdFlags() Resource {
 // owns effective zones, SOA serials, failover state, validation, locking, and
 // rollback, and it makes the running NSD pick up each commit: a zone reload
 // for zone-only changes, a restart when its nsd.conf or TSIG key changed (the
-// Service below only watches the flags).
+// Service below only watches the flags). Every publisher input is rendered
+// first (renderPublisherFiles): a render failure refuses the host's publisher
+// declarations instead of declaring an input with empty content.
 func nsdPublisher(data Data, key string) {
+	files, ok := renderPublisherFiles(data, key)
+	if !ok {
+		return
+	}
 	flags := nsdFlags()
 	publisherScript := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
 		WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-	inputs := dnsPublisherInputs(data, key)
+	inputs := dnsPublisherInputs(data.DNSZones, files)
 	deps := append([]resource.Dependency{flags, publisherScript}, inputs...)
 	publisher := Command(dnsPublishCommand, List(), DependsOn(deps...), WithName("publish-nsd-zones"))
 	Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
@@ -128,47 +140,99 @@ func nsdPublisher(data Data, key string) {
 // templates and no zone-writing command: its slave zone files are solely NSD's
 // transfer destination. The key include and the configuration are validated
 // together with nsd-checkconf, staged inside NSD's chroot, before either is
-// live, and a published change restarts NSD.
+// live, and a published change restarts NSD. Both members are rendered
+// before anything is declared, so a render failure refuses the host's
+// secondary declarations (renderBatch).
 func nsdSecondary(data Data, key string) {
+	var batch renderBatch
+	keyConf := batch.render("/var/nsd/etc/key.conf", func() (string, error) { return renderNSDKey(key) })
+	nsdConf := batch.render("/var/nsd/etc/nsd.conf", func() (string, error) {
+		return renderNSDSlaveConfig(MemberPath("key.conf"), data.DNSZones)
+	})
+	if batch.refused() {
+		return
+	}
 	flags := nsdFlags()
 	config := ConfigSet("nsd",
-		ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(renderNSDKey(key)),
+		ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(keyConf),
 			WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
-		ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(renderNSDSlaveConfig(MemberPath("key.conf"), data.DNSZones)),
+		ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(nsdConf),
 			WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
 		WithChroot("/var/nsd"),
 		WithSetValidation("nsd-checkconf", List(MemberPath("nsd.conf"))))
 	Service("nsd", WithRestart, OnChange(flags, config))
 }
 
-func dnsPublisherInputs(data Data, key string) []resource.Dependency {
+// publisherFiles is the rendered content of the publisher's immutable
+// inputs: one zone template per DNS zone (zones, in data.DNSZones order),
+// plus its shell-sourced publisher.conf, TSIG key.conf and master nsd.conf.
+type publisherFiles struct {
+	zones         []string
+	publisherConf string
+	keyConf       string
+	nsdConf       string
+}
+
+// publisherZonePath is the live path of zone's immutable publisher input.
+func publisherZonePath(zone string) string {
+	return filepath.Join(dnsPublisherZones, zone+".zone.tpl")
+}
+
+// renderPublisherFiles renders every publisher input on the controller. On
+// a render failure it reports the declaration error (renderBatch.refused)
+// and returns false, so nsdPublisher declares none of the host's resources.
+func renderPublisherFiles(data Data, key string) (publisherFiles, bool) {
+	var batch renderBatch
+	files := publisherFiles{zones: make([]string, 0, len(data.DNSZones))}
+	for _, zone := range data.DNSZones {
+		files.zones = append(files.zones, batch.render(publisherZonePath(zone), func() (string, error) {
+			return renderZoneTemplate(zone, data.F3SHosts)
+		}))
+	}
+	files.publisherConf = batch.render(filepath.Join(dnsPublisherDir, "publisher.conf"), func() (string, error) {
+		return renderDNSPublisherConfig(data.DNSZones, data.DNSZonesRemove)
+	})
+	files.keyConf = batch.render(filepath.Join(dnsPublisherDir, "key.conf"), func() (string, error) {
+		return renderNSDKey(key)
+	})
+	files.nsdConf = batch.render(filepath.Join(dnsPublisherDir, "nsd.conf"), func() (string, error) {
+		return renderNSDConfig("/var/nsd/etc/key.conf", data.DNSZones, "master")
+	})
+	return files, !batch.refused()
+}
+
+// dnsPublisherInputs declares the publisher's input directories and its
+// already-rendered input files (see renderPublisherFiles); zones and
+// files.zones share one order.
+func dnsPublisherInputs(zones []string, files publisherFiles) []resource.Dependency {
 	inputDir := Dir(dnsPublisherDir, WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
 	zoneDir := Dir(dnsPublisherZones, WithMode(0o700), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir))
 	inputs := []resource.Dependency{inputDir, zoneDir}
-	for _, zone := range data.DNSZones {
-		inputs = append(inputs, File(filepath.Join(dnsPublisherZones, zone+".zone.tpl"),
-			WithContent(renderZoneTemplate(zone, data.F3SHosts)), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(zoneDir)))
+	for i, zone := range zones {
+		inputs = append(inputs, File(publisherZonePath(zone),
+			WithContent(files.zones[i]), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(zoneDir)))
 	}
 	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "publisher.conf"),
-		WithContent(renderDNSPublisherConfig(data.DNSZones, data.DNSZonesRemove)), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
-	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "key.conf"), WithContent(renderNSDKey(key)),
+		WithContent(files.publisherConf), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
+	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "key.conf"), WithContent(files.keyConf),
 		WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
 	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "nsd.conf"),
-		WithContent(renderNSDConfig("/var/nsd/etc/key.conf", data.DNSZones, "master")), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
+		WithContent(files.nsdConf), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
 	return inputs
 }
 
 // smtpdConfigSet returns the SMTPD set: every lookup table (keyed by its file
-// name), smtpd.conf referencing them through member placeholders, and the
-// `smtpd -n` validator run against the staged configuration.
-func smtpdConfigSet(server Server) []ConfigSetOption {
+// name), smtpd.conf (smtpdConf, already rendered by renderSMTPD) referencing
+// them through member placeholders, and the `smtpd -n` validator run against
+// the staged configuration.
+func smtpdConfigSet(smtpdConf string) []ConfigSetOption {
 	opts := make([]ConfigSetOption, 0, len(mailTableNames)+2)
 	for _, name := range mailTableNames {
 		opts = append(opts, ConfigFile(name, filepath.Join("/etc/mail", name), WithSource(legacyFrontendAsset(filepath.Join("etc/mail", name))),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel")))
 	}
 	return append(opts,
-		ConfigFile("smtpd.conf", "/etc/mail/smtpd.conf", WithContent(renderSMTPD(server)),
+		ConfigFile("smtpd.conf", "/etc/mail/smtpd.conf", WithContent(smtpdConf),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel")),
 		WithSetValidation("smtpd", List("-n", "-f", MemberPath("smtpd.conf"))))
 }
@@ -209,8 +273,9 @@ type smtpdTemplateData struct {
 }
 
 // renderSMTPD renders smtpd.conf from the native assets/smtpd.conf.tmpl
-// template, run on the controller (see renderControllerTemplate).
-func renderSMTPD(server Server) string {
+// template, run on the controller (see renderControllerTemplate, whose
+// error it returns).
+func renderSMTPD(server Server) (string, error) {
 	data := smtpdTemplateData{
 		FQDN:             server.FQDN,
 		Aliases:          MemberPath("aliases"),
@@ -234,7 +299,7 @@ type nsdKeyTemplateData struct {
 }
 
 // renderNSDKey renders the TSIG key stanza both NSD roles include.
-func renderNSDKey(key string) string {
+func renderNSDKey(key string) (string, error) {
 	data := nsdKeyTemplateData{Name: nsdKeyName, Secret: strconv.Quote(key)}
 	return renderControllerTemplate(frontendAsset("key.conf.tmpl"), data)
 }
@@ -286,7 +351,7 @@ func nsdZoneRecords(zones []string, zoneDir, peer string) []nsdZoneRecord {
 // transfers both run over IPv4. keyPath here is a fixed live path, not a
 // ConfigSet placeholder, so it is quoted with strconv.Quote like the zone
 // names and zonefile paths.
-func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
+func renderNSDConfig(keyPath string, zones []string, zoneDir string) (string, error) {
 	secondary := MustServer(Master).IPv4 + " " + nsdKeyName
 	data := nsdConfigData{Include: strconv.Quote(keyPath), Zones: nsdZoneRecords(zones, zoneDir, secondary)}
 	return renderControllerTemplate(frontendAsset("nsd-master.conf.tmpl"), data)
@@ -303,7 +368,7 @@ func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
 // publisher's IPv4 from the frontend inventory and the key is nsdKeyName,
 // matching the Rex nsd.conf.slave.tpl ("23.88.35.144 blowfish.buetow.org").
 // The explicit AXFR transfer type is kept from the earlier gonf port.
-func renderNSDSlaveConfig(keyPath string, zones []string) string {
+func renderNSDSlaveConfig(keyPath string, zones []string) (string, error) {
 	master := MustServer(DNSPublisher).IPv4 + " " + nsdKeyName
 	data := nsdConfigData{Include: `"` + keyPath + `"`, Zones: nsdZoneRecords(zones, "slave", master)}
 	return renderControllerTemplate(frontendAsset("nsd-slave.conf.tmpl"), data)
@@ -329,7 +394,7 @@ type publisherConfigData struct {
 
 // renderDNSPublisherConfig renders the publisher's shell-sourced identity and
 // zone-list file from assets/publisher.conf.tmpl.
-func renderDNSPublisherConfig(zones, removedZones []string) string {
+func renderDNSPublisherConfig(zones, removedZones []string) (string, error) {
 	master := MustServer(Master)
 	standby := MustServer(Standby)
 	q := strconv.Quote
@@ -376,53 +441,25 @@ type zoneTemplateData struct {
 // identity regardless of what a template's own SOA line names, so it stays a
 // deliberate post-render replacement here rather than something a template
 // edit could accidentally change.
-func renderZoneTemplate(zone string, f3sHosts []string) string {
+//
+// A render failure, or a leftover legacy Rex "<%" directive in the result (a
+// template not fully ported to Go's text/template), is returned for the
+// caller to report (see renderPublisherFiles).
+func renderZoneTemplate(zone string, f3sHosts []string) (string, error) {
 	hosts := make([]f3sZoneHost, 0, len(f3sHosts))
 	for _, host := range f3sHosts {
 		family := SiteFor(host).Family
 		hosts = append(hosts, f3sZoneHost{Name: host, HasA: family != 6, HasAAAA: family != 4})
 	}
 	assetPath := legacyFrontendAsset(filepath.Join("var/nsd/zones/master", zone+".zone.tpl"))
-	content := renderControllerTemplate(assetPath, zoneTemplateData{F3SHosts: hosts})
+	content, err := renderControllerTemplate(assetPath, zoneTemplateData{F3SHosts: hosts})
+	if err != nil {
+		return "", err
+	}
 	content = strings.ReplaceAll(content,
 		"fishfinger.buetow.org. hostmaster.buetow.org.", DNSPublisher+"."+Domain+". hostmaster."+Domain+".")
 	if strings.Contains(content, "<%") {
-		panic(fmt.Sprintf("unrendered legacy NSD template directive in %q", zone))
+		return "", fmt.Errorf("unrendered legacy NSD template directive in %q", zone)
 	}
-	return content
-}
-
-// renderControllerTemplate renders the native text/template asset at
-// assetPath on the controller through api.RenderTemplate, the same engine
-// web.go's renderHTTPD/renderRelayd use, so every frontend asset shares one
-// template dialect: gonf's helper functions (join, lower, upper, trim,
-// replace) and no conf-local extras. There is deliberately no "quote" func:
-// a value that needs Go's %q quoting is pre-quoted with strconv.Quote by its
-// data builder instead (renderNSDKey, renderNSDConfig,
-// renderDNSPublisherConfig), so moving a stanza between assets never breaks
-// on a function only one renderer defines.
-//
-// api.RenderTemplate JSON-encodes data once (a defensive snapshot; the whole
-// value is also available as .Data), so the typed data structs here must stay
-// JSON-compatible: exported string/bool/slice fields, no json tags and no
-// methods a template calls. Templates therefore see the decoded maps, which
-// is also what makes "missingkey=error" effective: a misspelled field name
-// fails the render instead of rendering empty.
-//
-// Unlike WithTemplateData, which renders on the destination host from facts
-// detected there at apply time, this always runs here while the recipe
-// records: SMTPD/NSD candidate content must be identical regardless of which
-// frontend later applies it, so the frontend Go renderers deliberately keep
-// the controller-render distinction the consumer DSL review asked to preserve
-// (see docs/consumer-dsl-simplification-plan.md, "External templates and
-// consumer layout"). A missing or malformed asset is a broken
-// source-controlled template, not a recipe or input error, so this panics
-// like the rest of this package's asset loading (e.g. MustServer,
-// renderHTTPD).
-func renderControllerTemplate(assetPath string, data any) string {
-	rendered, err := RenderTemplate(assetPath, data)
-	if err != nil {
-		panic(fmt.Errorf("render frontend template %q: %w", assetPath, err))
-	}
-	return rendered
+	return content, nil
 }

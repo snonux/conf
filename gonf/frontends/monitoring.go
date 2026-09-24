@@ -9,6 +9,7 @@ import (
 
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
+	"github.com/snonux/gonf/resource"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -80,7 +81,16 @@ func (Monitoring) DescGogios() string {
 
 // Gogios renders the old embedded-Perl configuration from the shared Go
 // topology, retaining stable check names because peer state keys use them.
+// A missing check_shuriken_age plugin source (shurikenAgePlugin) is reported
+// as a declaration error before anything is declared, which fails the
+// recording with its actionable message; the Gogios resources, whose
+// schedules depend on the plugin, are then not declared at all.
 func (Monitoring) Gogios() {
+	pluginSource, err := shurikenAgePlugin()
+	if err != nil {
+		resource.Refuse("File", "/usr/local/bin/check_shuriken_age", err)
+		return
+	}
 	ForHosts(ValueServer, func(_ string, server Server) {
 		plugins := Package(List("monitoring-plugins", "nrpe"))
 		cleanup := cleanupLegacyGogios()
@@ -89,7 +99,7 @@ func (Monitoring) Gogios() {
 		statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
 		runDir := Dir("/var/run/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
 		config := File("/etc/gogios.json", WithContent(renderGogios(server)), WithMode(0o744), WithOwner("root"), WithGroup("wheel"), DependsOn(plugins, gogios, statusDir, runDir))
-		plugin := InstallFile("/usr/local/bin/check_shuriken_age", shurikenAgePlugin(), WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"),
 			WithLegacyCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin))
 		Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"),
@@ -132,8 +142,9 @@ func (Monitoring) Foostats() {
 // shurikenAgePlugin is the Gogios album-age plugin in the controller's
 // shuriken.sh checkout (paths.Shuriken, ~/git/shuriken.sh by default), its
 // one source of truth as in Rex; there is no in-repo copy to fall back to,
-// so a missing checkout fails the Gogios recording saying how to fix it.
-func shurikenAgePlugin() string {
+// so a missing checkout is returned as an error saying how to fix it, which
+// Gogios reports to fail its recording.
+func shurikenAgePlugin() (string, error) {
 	return paths.RequireFile(filepath.Join(paths.Shuriken, "contrib", "check_shuriken_age"),
 		"frontends_gogios (check_shuriken_age plugin)",
 		"clone shuriken.sh to ~/git/shuriken.sh or set GONF_SHURIKEN_ROOT to its checkout")
@@ -201,6 +212,14 @@ type gogiosConfig struct {
 
 // renderGogios renders server's Gogios configuration. Each frontend polls the
 // other one as its peer; the primary/secondary names follow the roles.
+//
+// Its one panic is a genuine programmer-bug invariant, not a recipe or input
+// error, so it stays a panic rather than a declaration error (see gonf's
+// AGENTS.md, "Registration-time contract"): gogiosConfig holds only strings,
+// ints, string slices and a string-keyed map of such structs, which
+// encoding/json always marshals, so MarshalIndent cannot fail unless a
+// future edit adds an unmarshalable field type. (MustServer's names are the
+// package's own constants; see its doc comment.)
 func renderGogios(server Server) string {
 	peer := MustServer(Master)
 	if server.Name == Master {

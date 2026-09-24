@@ -15,6 +15,7 @@ import (
 	"codeberg.org/snonux/conf/gonf/rnodes"
 	"codeberg.org/snonux/conf/gonf/rocky"
 	. "github.com/snonux/gonf/api"
+	"github.com/snonux/gonf/resource"
 )
 
 // frontendTaskPrefix is the RegisterMethods prefix shared by every frontend
@@ -26,8 +27,9 @@ const frontendTaskPrefix = "frontends_"
 // recorded it in, so the aggregate's plan is unchanged). It deliberately
 // leaves out the operational actions in frontendExcludedTasks. A new
 // frontends_* task must be added either here (to join the aggregate) or to
-// frontendExcludedTasks; checkFrontendMembership panics at registration
-// otherwise, so a new task can never be silently left out of setup runs.
+// frontendExcludedTasks; checkFrontendMembership reports a declaration
+// error at registration otherwise, so a new task can never be silently left
+// out of setup runs.
 // AggregateTasks additionally fails the record on a member name that is not
 // registered, so a typo cannot silently shrink a setup run either.
 func frontendSetupTasks() []string {
@@ -111,13 +113,19 @@ func Register() {
 	Aggregate("garage", "Install all Garage configuration", "^garage_")
 }
 
-// checkFrontendMembership panics unless every registered frontends_* task is
-// classified exactly once: listed in frontendSetupTasks or in
-// frontendExcludedTasks. The aggregate itself is named "frontends" and so
-// carries no prefix. A registration-time panic makes a forgotten task fail
-// every invocation, -list included, instead of being silently left out of
-// setup runs. Stale entries (a classified name that is no longer
+// checkFrontendMembership fails the invocation unless every registered
+// frontends_* task is classified exactly once: listed in frontendSetupTasks
+// or in frontendExcludedTasks. The aggregate itself is named "frontends" and
+// so carries no prefix. Stale entries (a classified name that is no longer
 // registered) fail too, so the lists cannot drift from the registrations.
+//
+// A misclassification is recipe misuse, so it is reported as a gonf
+// declaration error through resource.Refuse (Task[frontends], the aggregate
+// whose membership is wrong) instead of panicking. Register runs from main
+// before the CLI, so gonf's CLI then refuses every invocation, -list
+// included, printing the error and exiting 1: a forgotten task still fails
+// loudly instead of being silently left out of setup runs, just without the
+// stack trace a panic dumped.
 //
 // Tasks() activates the registry with the controller's facts; the CLI
 // re-activates it after flag parsing (-profile), so calling it here changes
@@ -125,12 +133,17 @@ func Register() {
 // predicate today, so all of them are active. Adding one would make the
 // stale check fire on controllers where it is inactive, loudly, not silently.
 func checkFrontendMembership() {
-	classified := map[string]bool{}
-	for _, name := range append(frontendSetupTasks(), frontendExcludedTasks()...) {
-		if classified[name] {
-			panic(fmt.Sprintf("frontends aggregate: %q is both a member and excluded, or listed twice", name))
-		}
-		classified[name] = true
+	if err := frontendMembershipError(); err != nil {
+		resource.Refuse("Task", "frontends", err)
+	}
+}
+
+// frontendMembershipError returns the first frontends aggregate
+// classification problem (see checkFrontendMembership), or nil.
+func frontendMembershipError() error {
+	classified, err := classifiedFrontendTasks()
+	if err != nil {
+		return err
 	}
 	var unclassified []string
 	registered := map[string]bool{}
@@ -144,8 +157,8 @@ func checkFrontendMembership() {
 		}
 	}
 	if len(unclassified) > 0 {
-		panic(fmt.Sprintf("frontends aggregate: add %s to frontendSetupTasks or frontendExcludedTasks in gonf/tasks/tasks.go",
-			strings.Join(unclassified, ", ")))
+		return fmt.Errorf("frontends aggregate: add %s to frontendSetupTasks or frontendExcludedTasks in gonf/tasks/tasks.go",
+			strings.Join(unclassified, ", "))
 	}
 	var stale []string
 	for name := range classified {
@@ -155,7 +168,22 @@ func checkFrontendMembership() {
 	}
 	if len(stale) > 0 {
 		sort.Strings(stale)
-		panic(fmt.Sprintf("frontends aggregate: %s listed in gonf/tasks/tasks.go but not registered",
-			strings.Join(stale, ", ")))
+		return fmt.Errorf("frontends aggregate: %s listed in gonf/tasks/tasks.go but not registered",
+			strings.Join(stale, ", "))
 	}
+	return nil
+}
+
+// classifiedFrontendTasks returns the set of names listed in
+// frontendSetupTasks and frontendExcludedTasks, or an error when a name is
+// listed twice (in both lists, or twice in one).
+func classifiedFrontendTasks() (map[string]bool, error) {
+	classified := map[string]bool{}
+	for _, name := range append(frontendSetupTasks(), frontendExcludedTasks()...) {
+		if classified[name] {
+			return nil, fmt.Errorf("frontends aggregate: %q is both a member and excluded, or listed twice", name)
+		}
+		classified[name] = true
+	}
+	return classified, nil
 }

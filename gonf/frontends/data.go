@@ -252,7 +252,13 @@ func ServerFor(name string) (Server, bool) {
 }
 
 // MustServer returns one frontend's stable addressing data. An unknown name
-// is a programmer error in static consumer inventory.
+// is a programmer error in static consumer inventory, so it panics rather
+// than reporting a declaration error: servers is a compile-time map and
+// every caller passes a package constant (Master, Standby, DNSPublisher) or
+// a literal server name (gonf/cluster), never recipe or input data, so no
+// recipe run or input file can reach the panic (see gonf's AGENTS.md,
+// "Registration-time contract"). A lookup driven by input data would use
+// ServerFor instead and report its own declaration error.
 func MustServer(name string) Server {
 	server, ok := ServerFor(name)
 	if !ok {
