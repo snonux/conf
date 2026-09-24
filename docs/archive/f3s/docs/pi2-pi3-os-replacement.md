@@ -54,7 +54,7 @@ document is about ending it.
    compose file, bind mounts and dnsmasq wildcard
    (`f3s/pihole/docker-pi/`) carry over unchanged.
 4. Room for the partner-gated **unattended upgrades with reboot**
-   (`frontends/docs/unattended-upgrades-pi.plan.md`) managed through gonf.
+   (`docs/archive/frontends/docs/unattended-upgrades-pi.plan.md`) managed through gonf.
 5. **Low migration effort, easy rollback**, and fits in 1 GB of RAM.
 
 ## 3. Candidates at a glance

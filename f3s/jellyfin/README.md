@@ -1,86 +1,36 @@
-# Jellyfin Kubernetes Deployment
+# Jellyfin
 
-This directory contains the Kubernetes configuration for deploying [Jellyfin](https://jellyfin.org/) - a free software media system that puts you in control of your media and data.
+Media server, `https://jellyfin.f3s.buetow.org` (LAN:
+`jellyfin.f3s.lan.buetow.org`). Namespace `services`, ArgoCD app
+`jellyfin`, image `jellyfin/jellyfin:10.11.6`, selector `app=jellyfin-server`.
 
-## Architecture
+| PVC | hostPath | Mount |
+|---|---|---|
+| `jellyfin-config-pvc` | `/data/nfs/k3svolumes/jellyfin/config` | `/config` |
+| `jellyfin-libraries-pvc` | `/data/nfs/k3svolumes/jellyfin/libraries` | `/media/libraries` |
+| `jellyfin-data-pvc` | `/data/nfs/k3svolumes/jellyfin/data` | `/data` |
 
-Jellyfin is a single-component deployment consisting of:
-- **Server**: Main media server with web interface and API
+Owner 911:911. Each volume has an NFS sentinel check.
 
-## Prerequisites
+Networking: NodePorts 30096 (HTTP) and 30920. The OpenBSD relayd terminates
+TLS on 443 and forwards `jellyfin.f3s.buetow.org` to table `f3s_jellyfin`
+port 30096 directly, bypassing Traefik
+(`gonf/frontends/assets/relayd.conf.tmpl`). relayd must send the full chain
+(leaf + intermediate) or the Android app fails with "Unsupported version or
+product". Jellyfin network settings: HTTPS off,
+`PublicPort` 443, `KnownProxies` 10.0.0.0/8 and 192.168.0.0/16. Jellyfin
+owns `network.xml` on the config PVC; don't mount it from a ConfigMap (the
+migrations need to write it).
 
-1. **Create storage directory on the NFS server**:
-   ```bash
-   for host in f0 f1 f2; do
-     ssh paul@$host "doas mkdir -p /data/nfs/k3svolumes/jellyfin"
-     ssh paul@$host "doas chown -R 911:911 /data/nfs/k3svolumes/jellyfin/"
-   done
-   ```
-
-## Deployment
-
-1. **Install the custom resources** (PVs, PVCs, ingress):
-   ```bash
-   just install-resources
-   ```
-
-2. **Install Jellyfin using Helm** (or ArgoCD):
-   ```bash
-   just sync
-   ```
-
-3. **Check deployment status**:
-   ```bash
-   just status
-   ```
-
-   Wait for all pods to be in `Running` state (may take a few minutes for image pulls).
-
-## Access
-
-Once deployed, Jellyfin will be available at: **https://jellyfin.f3s.buetow.org**
-
-Default setup instructions:
-1. Navigate to the URL above
-2. Complete the setup wizard on first access
-3. Configure libraries and preferences
-
-## Storage
-
-Persistent storage is configured with:
-- **Data**: Main configuration and metadata at `/data/nfs/k3svolumes/jellyfin`
-- **Media**: Mount your media directories from other NFS sources as needed
-
-## Maintenance
-
-### Restart Jellyfin
-```bash
-just restart
+```sh
+just status | logs [lines] | port-forward [8096] | sync | argocd-status | restart
+curl https://jellyfin.f3s.buetow.org/System/Info/Public
+echo | openssl s_client -servername jellyfin.f3s.buetow.org -connect jellyfin.f3s.buetow.org:443 | grep -c "BEGIN CERTIFICATE"   # expect 2
+kubectl delete application jellyfin -n cicd    # uninstall, data stays
 ```
 
-### View logs
-```bash
-just logs
-```
+Upgrades from 10.8.x must go 10.8.13, 10.10.7, then 10.11.x; skipping
+corrupts the DB (10.11 needs a DB from 10.9.11 or later).
 
-### Port forward for local access
-```bash
-just port-forward
-```
-
-### Uninstall (keeps data)
-```bash
-kubectl delete application jellyfin -n cicd
-```
-
-## Troubleshooting
-
-### Check pod logs
-```bash
-kubectl logs -n services -l app=jellyfin-server --tail=100
-```
-
-### Verify persistent volumes
-```bash
-kubectl get pv,pvc -n services | grep jellyfin
-```
+Records: [`docs/archive/f3s/jellyfin/`](../../docs/archive/f3s/jellyfin/)
+(deployment summary, yoga library quality survey).

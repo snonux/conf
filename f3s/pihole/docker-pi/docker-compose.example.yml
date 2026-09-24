@@ -1,5 +1,5 @@
 # Reference for pi2 / pi3 (~paul/pihole). Merge the `dnsmasq.d` volume with your live compose.
-# WEBPASSWORD lives in host-local `.env` (not in git). See f3s/docs/pi-phase-2-2.md.
+# WEBPASSWORD lives in host-local `.env` (not in git). See f3s/pihole/README.md.
 services:
   pihole:
     image: pihole/pihole:latest
@@ -11,5 +11,5 @@ services:
       DNS1: 1.1.1.1
       DNS2: 1.0.0.1
     volumes:
-      # Production Pis use ./etc-dnsmasq.d (see pi-phase-2-2); same content as docker-pi/dnsmasq.d/ here.
+      # Production Pis use ./etc-dnsmasq.d; same content as docker-pi/dnsmasq.d/ here.
       - ./etc-dnsmasq.d:/etc/dnsmasq.d:ro

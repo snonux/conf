@@ -11,7 +11,7 @@ Before installing the chart, you must manually create the following directories 
 
 ## Installing the Chart
 
-To install the chart with the release name `my-release`, run the following command:
+Manual install (normally ArgoCD deploys it):
 
 ```bash
 helm install wallabag . --namespace services --create-namespace

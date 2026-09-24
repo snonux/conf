@@ -221,10 +221,10 @@ Configuration:
 - `f3s/navidrome/helm-chart/templates/ingress.yaml` - Added LAN ingress
 
 Documentation:
-- `f3s/docs/freebsd-relayd-lan-access.md` - relayd configuration reference
+- `docs/archive/f3s/docs/freebsd-relayd-lan-access.md` - relayd configuration reference
 - `f3s/docs/lan-access-setup-guide.md` - Complete setup guide
 - `f3s/cert-manager/README.md` - Certificate management
-- `f3s/docs/LAN-ACCESS-TEST-RESULTS.md` - This file
+- `docs/archive/f3s/docs/LAN-ACCESS-TEST-RESULTS.md` - This file
 
 FreeBSD Configuration (on f0, f1):
 - `/usr/local/etc/relayd.conf` - TCP forwarding config

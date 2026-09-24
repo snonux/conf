@@ -1,6 +1,6 @@
 // Package openbsd declares OpenBSD frontend host tasks for the conf
 // repository — most notably the
-// unattended-upgrade deployment per frontends/docs/unattended-upgrades.*.
+// unattended-upgrade deployment per frontends/docs/unattended-upgrades.md.
 package openbsd
 
 import (
@@ -12,7 +12,7 @@ import (
 )
 
 // unattendedServicesAsset is the operator-edited daemon restart list
-// deployed to /etc/unattended-upgrade-services (implementation doc section
+// deployed to /etc/unattended-upgrade-services (archived implementation doc section
 // 4): a plain, native file (assets/unattended-upgrade-services), not a
 // template — its content never varies with recipe input.
 func unattendedServicesAsset() string {
@@ -20,7 +20,7 @@ func unattendedServicesAsset() string {
 }
 
 // unattendedNewsyslogLine is appended to /etc/newsyslog.conf so
-// /var/log/unattended-upgrade.log rotates (implementation doc section 6).
+// /var/log/unattended-upgrade.log rotates (archived implementation doc section 6).
 // The literal matches the line added to frontends/etc/newsyslog.conf, which
 // the Rex-deployed wholesale copy carries too, so both mechanisms converge.
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t600  5     1024  *     Z"

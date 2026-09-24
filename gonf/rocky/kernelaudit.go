@@ -12,7 +12,7 @@ import (
 // the Rocky Pis. pi2/pi3 boot the SIG AltArch raspberrypi2-kernel4 package,
 // which Rocky's updateinfo does not cover, so the audit maps the running
 // kernel's upstream version against the OSV Linux-kernel CVE export instead
-// (frontends/docs/unattended-upgrades-pi.plan.md §13). It is separate from
+// (docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §13). It is separate from
 // Unattended so the regular dnf update/audit path stays untouched, and it is
 // registered with WithCluster(cluster.NameRockyPis): the r-nodes run the
 // ordinary Rocky kernel, which dnf updateinfo does cover.

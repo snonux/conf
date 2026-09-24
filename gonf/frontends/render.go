@@ -28,7 +28,7 @@ import (
 // records: SMTPD/NSD candidate content must be identical regardless of which
 // frontend later applies it, so the frontend Go renderers deliberately keep
 // the controller-render distinction the consumer DSL review asked to preserve
-// (see docs/consumer-dsl-simplification-plan.md, "External templates and
+// (see gonf's docs/design/consumer-dsl-simplification-plan.md, "External templates and
 // consumer layout"). A missing or malformed asset is returned, wrapped with
 // the asset path, for the caller to report as a declaration error (see
 // renderBatch and refuseRender) instead of panicking.

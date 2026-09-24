@@ -10,7 +10,7 @@
 # Intended for root's crontab. Everything it prints is mailed to root by
 # cron AND appended to /var/log/unattended-upgrade.log (rotated via
 # newsyslog(8)). Silence = clean no-op; mail = change or failure.
-# Companion docs: frontends/docs/unattended-upgrades*.md
+# Companion doc: frontends/docs/unattended-upgrades.md
 #
 # Update and reboot modes are gated on the partner frontend being operational
 # (same https://<host>/index.txt health check as dns-failover.ksh, see the

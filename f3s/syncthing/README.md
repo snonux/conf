@@ -1,20 +1,13 @@
-# Syncthing Kubernetes Deployment
+# Syncthing
 
-This directory contains the Kubernetes configuration for deploying Syncthing.
+Web UI `https://syncthing.f3s.buetow.org`, sync port 22000. Namespace
+`services`, ArgoCD app `syncthing`.
 
-## Deployment
+| PV | hostPath |
+|---|---|
+| `syncthing-config-pv` | `/data/nfs/k3svolumes/syncthing/config` |
+| `syncthing-data-pv` | `/data/nfs/k3svolumes/syncthing/data` |
 
-To deploy Syncthing, apply the Kubernetes manifests in this directory:
-
-```bash
-make apply
+```sh
+just status | logs [lines] | port-forward [8384] | sync | argocd-status | restart
 ```
-
-## Configuration
-
-The deployment uses two persistent volumes:
-- `syncthing-config-pv`: for the syncthing configuration. Mapped to `/data/nfs/k3svolumes/syncthing/config` on the host.
-- `syncthing-data-pv`: for the syncthing data. Mapped to `/data/nfs/k3svolumes/syncthing/data` on the host.
-
-The web UI is available at http://syncthing.f3s.buetow.org.
-The data port is exposed on port 22000.

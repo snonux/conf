@@ -32,7 +32,8 @@
 #               NTP-synchronised or lies behind a recorded time, or state
 #               that cannot be written
 #
-# Alerting (the Pis have no MTA, plan §9.5/§14): only UNKNOWN — broken
+# Alerting (the Pis have no MTA; plan = docs/archive/frontends/docs/
+# unattended-upgrades-pi.plan.md, §9.5/§14): only UNKNOWN — broken
 # coverage — exits non-zero (3). VULNERABLE is expected to be the steady
 # state (e.g. perl's permanent CVE-2011-4116 entry), so it exits 0 and is
 # reported against a baseline, the findings of the last run that assessed

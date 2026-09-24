@@ -1,11 +1,11 @@
 # Frontends
 
-Configuration of my internet-facing OpenBSD frontends (blowfish,
-fishfinger). It is deployed with Gonf from `../gonf` (package
-`gonf/frontends`, tasks `frontends_*`); this directory still holds the
-assets those tasks install (`etc/`, `scripts/`, `var/`). The former Rex
-`Rexfile` and its Perl `.tpl` templates were retired (conf task v42; see
-git history): Gonf is the only configuration owner.
+The internet-facing OpenBSD frontends blowfish and fishfinger (SSH
+`rex@<host>.buetow.org` port 2, doas). Deployed with gonf from `../gonf`
+(package `gonf/frontends`, tasks `frontends_*`); this directory holds the
+assets those tasks install (`etc/`, `scripts/`, `var/`). Routing, TLS and
+template rules: [`AGENTS.md`](AGENTS.md). Unattended upgrades for every OS:
+[`docs/unattended-upgrades.md`](docs/unattended-upgrades.md).
 
 ```sh
 ./gonf.sh -list | grep frontends                 # from the repository root

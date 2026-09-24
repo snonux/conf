@@ -8,7 +8,8 @@
 # Cron-driven (per-host minute offsets). Partner ping gates reboots only
 # (not pkg) so a sibling powered off on purpose does not block patches.
 # f3 never auto-reboots. Companion:
-# frontends/docs/unattended-upgrades-freebsd.plan.md
+# frontends/docs/unattended-upgrades.md (plan record:
+# docs/archive/frontends/docs/unattended-upgrades-freebsd.plan.md)
 #
 # FreeBSD shells/ksh package ships /usr/local/bin/ksh93 by default (KSH
 # option off). Use typeset, not local.

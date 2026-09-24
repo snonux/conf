@@ -1,6 +1,6 @@
 # Unattended security upgrades — implementation plan
 
-**Status: IMPLEMENTED on blowfish (2026-09-15, deployed via gonf `frontends_*` tasks — no Rex).** fishfinger stays disabled until the gated fishfinger-enablement task after the blowfish soak. The source of truth for the wrapper is [`frontends/scripts/unattended-upgrade.sh`](../scripts/unattended-upgrade.sh); this doc no longer embeds a copy. All shell code in this repo must be **ksh** (house rule), hence the wrapper script uses `#!/bin/ksh`.
+**Status: IMPLEMENTED on blowfish (2026-09-15, deployed via gonf `frontends_*` tasks — no Rex).** fishfinger stays disabled until the gated fishfinger-enablement task after the blowfish soak. The source of truth for the wrapper is [`frontends/scripts/unattended-upgrade.sh`](../../../../frontends/scripts/unattended-upgrade.sh); this doc no longer embeds a copy. All shell code in this repo must be **ksh** (house rule), hence the wrapper script uses `#!/bin/ksh`.
 
 Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) — design rationale, research summary, and decisions. This document is the build & rollout playbook.
 

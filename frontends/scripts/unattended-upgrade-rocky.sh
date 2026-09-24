@@ -8,7 +8,8 @@
 # Timer-driven (NO script jitter — per-host OnCalendar offsets are the
 # anti-coincidence mechanism). Logs to the journal via stdout and to
 # /var/log/unattended-upgrade.log. Companion plan:
-# frontends/docs/unattended-upgrades-pi.plan.md §12.
+# frontends/docs/unattended-upgrades.md; "plan §N" below refers to
+# docs/archive/frontends/docs/unattended-upgrades-pi.plan.md (§12 here).
 #
 # Rocky ships AT&T ksh93u+m — use typeset, not local (local is a pdkshism).
 # Note that in ksh93 a typeset inside a POSIX-style name() function is NOT

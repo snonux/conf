@@ -1,6 +1,7 @@
 // Package freebsd declares FreeBSD f0–f3 host tasks for the conf repository —
 // unattended package upgrades per
-// frontends/docs/unattended-upgrades-freebsd.plan.md.
+// frontends/docs/unattended-upgrades.md (plan record:
+// docs/archive/frontends/docs/unattended-upgrades-freebsd.plan.md).
 package freebsd
 
 import (

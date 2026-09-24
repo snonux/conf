@@ -1,6 +1,6 @@
 # Radicale Helm Chart
 
-This chart deploys a gpodder sync server using Radicale.
+This chart deploys Radicale (CalDAV/CardDAV), `radicale.f3s.buetow.org`.
 
 ## Prerequisites
 
@@ -11,7 +11,7 @@ Before installing the chart, you must manually create the following directories 
 
 ## Installing the Chart
 
-To install the chart with the release name `radicale`, run the following command:
+Manual install (normally ArgoCD deploys it):
 
 ```bash
 helm install radicale . --namespace services --create-namespace

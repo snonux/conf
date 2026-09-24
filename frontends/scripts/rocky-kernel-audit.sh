@@ -22,7 +22,8 @@
 #               or the state (status, new-CVE list/history, baseline) cannot
 #               be written
 #
-# Alerting (the Pis have no MTA, plan §9.5/§13): only UNKNOWN — broken
+# Alerting (the Pis have no MTA; plan = docs/archive/frontends/docs/
+# unattended-upgrades-pi.plan.md, §9.5/§13): only UNKNOWN — broken
 # coverage — exits non-zero (3) and so fails the systemd oneshot unit, with an
 # err-priority journal line. VULNERABLE is the steady state while no fixed
 # AltArch kernel exists, so it exits 0 and is reported against a baseline

@@ -52,7 +52,7 @@ const (
 // Pi, r-node, and f-host SSH must use port 22 explicitly: ~/.ssh/config maps
 // Host *.buetow.org to Port 2 (OpenBSD frontends), so an unqualified ssh to
 // piN.lan.buetow.org / rN.lan.buetow.org / fN.lan.buetow.org times out on
-// port 2. See frontends/docs/unattended-upgrades-pi.plan.md §2.
+// port 2. See docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §2.
 //
 // Inventory names (pi0…pi3, r0…r2, f0…f3) are substrings of the live OS
 // hostnames so WhenHostname("piN") / WhenHostname("rN") / WhenHostname("fN")

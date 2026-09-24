@@ -5,8 +5,8 @@ hourly stamp gate on FreeBSD hypervisors, driven by root cron.
 
 Companion scripts/recipes:
 
-- [`frontends/scripts/unattended-upgrade-freebsd.sh`](../scripts/unattended-upgrade-freebsd.sh)
-- [`gonf/freebsd/unattended.go`](../../gonf/freebsd/unattended.go)
+- [`frontends/scripts/unattended-upgrade-freebsd.sh`](../../../../frontends/scripts/unattended-upgrade-freebsd.sh)
+- [`gonf/freebsd/unattended.go`](../../../../gonf/freebsd/unattended.go)
 
 ## Why hourly + stamp
 

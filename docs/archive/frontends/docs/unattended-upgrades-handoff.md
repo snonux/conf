@@ -181,11 +181,11 @@ Do **not** run local dry-runs of the privileged tasks (`./gonf.sh -n …`)
 
 - Script source: `/home/paul/git/conf/frontends/scripts/unattended-upgrade.sh`
   (the deployed copies are byte-identical to it — the source of truth).
-- Implementation doc: `frontends/docs/unattended-upgrades.implementation.md`
+- Implementation doc: `docs/archive/frontends/docs/unattended-upgrades.implementation.md`
   (design + rollout + the hardening table). Plan/overview:
-  `frontends/docs/unattended-upgrades.plan.md`. Pi/Rocky plan (for the
+  `docs/archive/frontends/docs/unattended-upgrades.plan.md`. Pi/Rocky plan (for the
   on-demand Rocky pattern, later r0/r1/r2/pi2/pi3):
-  `frontends/docs/unattended-upgrades-pi.plan.md`.
+  `docs/archive/frontends/docs/unattended-upgrades-pi.plan.md`.
 - gonf library: `/home/paul/git/gonf` (docs in `docs/`; the deployed remote
   binary is 0.7.8; the controller runs the conf go.mod version).
 - The failure mail path: cron output → root → aliases → paul's Proton

@@ -9,7 +9,7 @@ import (
 )
 
 // The daily vulnerability audit of pi0/pi1 (task 652,
-// frontends/docs/unattended-upgrades-pi.plan.md §14): pkgsrc packages via
+// docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §14): pkgsrc packages via
 // the pkgsrc-security pkg-vulnerabilities list and `pkg_admin audit`, the
 // base system via the NetBSD supported-release list and security
 // advisories. It is a separate script and cron job so a feed outage never

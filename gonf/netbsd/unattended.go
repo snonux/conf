@@ -1,5 +1,6 @@
 // Package netbsd declares NetBSD pi0/pi1 host tasks for the conf repository —
-// unattended upgrades per frontends/docs/unattended-upgrades-pi.plan.md.
+// unattended upgrades per frontends/docs/unattended-upgrades.md (plan record:
+// docs/archive/frontends/docs/unattended-upgrades-pi.plan.md).
 package netbsd
 
 import (

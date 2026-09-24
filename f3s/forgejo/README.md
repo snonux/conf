@@ -1,208 +1,70 @@
 # Forgejo
 
-Self-hosted git forge at `https://code.f3s.buetow.org`, running in the `services`
-namespace of the f3s k3s cluster.
-
-## Relationship to the retired cgit git-server
-
-Forgejo is now the sole git forge in the cluster. It was preseeded from a
-legacy cgit/git-server install (`cicd` namespace, `c-git.f3s.buetow.org`,
-`/data/nfs/k3svolumes/git-server/repos`, SSH NodePort 30022) that served as a
-14-day read-only rollback fallback after the 2026-08-05 cutover. That fallback
-was retired 2026-08-30 (task 3x0) once the retention window passed with a
-clean re-verification: its ArgoCD Application, helm chart and ArgoCD SSH
-known_hosts/repo-creds were removed from this repo, and its hostnames were
-dropped from `@f3s_hosts` in the then-current `frontends/Rexfile` (since
-ported to `f3sHosts` in `gonf/frontends/data.go`). Its NFS data directory and
-final ZFS snapshot are preserved pending a separate, explicitly-confirmed
-deletion. See `f3s/argocd/README.md` for what now stands in for a rollback
-path (ZFS/zrepl snapshots of `zdata/enc/nfsdata`, not a second git service).
-
-All 80 cgit repositories were preseeded in Forgejo on 2026-08-04. ArgoCD reads
-`conf` anonymously from `http://forgejo.services.svc.cluster.local/snonux/conf.git`.
-
-### Preseed migration report (2026-08-04)
-
-- Authoritative source inventory: 80 bare repositories, 1,238,877,184 bytes
-  (1.154 GiB) on disk; 79 newly preseeded and the previously migrated `conf`
-  revalidated. All source and destination repositories passed strict, full
-  `git fsck`.
-- The inventory covered descriptions, symbolic HEAD, every ref/object ID,
-  hooks, alternates and LFS indicators. There were no empty repositories,
-  unsafe hooks, alternates, LFS indicators or refs outside heads/tags/notes.
-- All safe refs in the 79 newly preseeded repositories match exactly. The
-  already-live `conf` repository was deliberately not overwritten. Thirty-nine
-  source repositories have a stale symbolic `HEAD` pointing at absent `master`;
-  Forgejo therefore uses their existing pushed branch as the usable default
-  rather than creating a synthetic `master` ref. The other 41 defaults match
-  the source symbolic HEAD exactly.
-- All 80 targets are public and visible through the anonymous API. Names and
-  descriptions match the source. Validation included the two largest repos
-  (`foo.zone` and `pages`), the tag-heavy `hexai`, mixed-case
-  `Adv360-Pro-ZMK`, and `conf`. There was no empty source repository to sample.
-- Bulk Git payload never traversed a laptop, mobile connection or the public
-  endpoint. Inventory, fsck and pushes ran on `f0`, reading
-  `/data/nfs/k3svolumes/git-server/repos/*.git` locally and pushing over the LAN
-  directly to `ssh://git@r0.lan.buetow.org:30222/snonux/REPO.git`. Only small API
-  metadata calls were made from the administration workstation.
-
-### Final cutover and retention (2026-08-05)
-
-- The legacy repository service became read-only at **2026-08-05T06:48:19Z**.
-  The earliest retirement time, after 14 full days of successful read-only
-  retention, is **2026-08-19T06:48:19Z**. Do not retire the service or delete its
-  data before that timestamp, and require separate confirmation before deleting
-  either the dataset or retained snapshots.
-- Both legacy containers mount `/repos` read-only. cgit, anonymous smart HTTP
-  fetches and rollback data remain available, while an actual HTTP push probe
-  reached `git-receive-pack` and was rejected by the read-only filesystem. The
-  pre-cutover snapshot is
-  `zdata/enc/nfsdata@forgejo-cutover-pre-20260805T064657Z`. The matching
-  authorized-keys file is retained on `f0` as root-owned mode 0600 at
-  `/root/git-server-authorized_keys.20260805T064657Z`.
-- The final gitsyncer pass completed both directions for every configured public
-  repository discovered from Codeberg (47) and GitHub (46), including Forgejo
-  backup pushes and API description updates. The installed 49-repository config
-  validates and its Forgejo credential remains an owner-only mode 0600 regular
-  file outside Git.
-- Final inventory found the same 80 legacy names plus the expected Forgejo-only
-  `failunderd`: 81 unique public, non-empty repositories. Names, descriptions,
-  usable default branches and expected safe refs passed. The old service had 787
-  safe refs and Forgejo had 798 after configured repositories' newer primary
-  work and `failunderd`; every old ref was preserved or replaced by its reviewed
-  current primary ref. Strict full `git fsck` passed for all 80 old and all 81
-  Forgejo repositories. Anonymous HTTPS and public SSH both resolved `conf` at
-  the cutover commit.
-- All 32 ArgoCD Applications were Synced/Healthy. Thirty applications read
-  `conf` from Forgejo; the external-chart applications retain their upstream
-  sources, and the retiring `git-server` Application intentionally retains its
-  Codeberg source. No live Application uses an old cgit URL. The read-only
-  cutover commit advanced Forgejo `conf` and was observed by the Forgejo-backed
-  Applications, proving reconciliation after the final backup.
-- **Update 2026-08-30 (task 3x0):** the above old-service references were
-  intentional only through the end of the 14-day retention window
-  (2026-08-19T06:48:19Z). With that window long passed and a fresh
-  verification pass clean (all repos present in Forgejo, anonymous clones and
-  gitsyncer pushes/description updates working, no live automation left
-  pointing at the old server), `f3s/git-server/` and
-  `f3s/argocd/git-server-{repo-creds,known-hosts}.yaml` were removed from this
-  repo, and `c-git.f3s.buetow.org`/`git.f3s.buetow.org` were dropped from
-  the then-current `frontends/Rexfile`. The old NFS data directory and its final ZFS snapshot
-  are preserved and untouched pending a separate, explicitly-confirmed
-  deletion — see that commit's message for the exact runbook. There is no
-  longer a git-server rollback path; if Forgejo itself needs recovery, restore
-  from ZFS/zrepl snapshots of `zdata/enc/nfsdata` instead.
-
-## Architecture
+The git forge, `https://code.f3s.buetow.org`, namespace `services`. It also
+serves `snonux/conf` to ArgoCD
+(`http://forgejo.services.svc.cluster.local/snonux/conf.git`, anonymous), so
+every other Application depends on it.
 
 ```
-Internet -> relayd (OpenBSD GW, TLS) -> WireGuard -> Traefik -> forgejo svc:80 -> pod:3000
-git+ssh  -> NodePort 30222 -----------------------------------> pod:2222
-                                                                  |
-                                        /var/lib/gitea (repos, SQLite)  NFS -> ZFS
-                                        /etc/gitea     (app.ini, secrets)
+Internet -> relayd (OpenBSD, TLS) -> WireGuard -> Traefik -> svc forgejo:80 -> pod:3000
+git+ssh  -> relayd :2022 (TCP) ----> NodePort 30222 -------------------------> pod:2222
 ```
 
-- Image `codeberg.org/forgejo/forgejo:16.0.1-rootless` — the rootless variant, so
-  the whole pod runs as UID/GID 1000 with all capabilities dropped.
-- SQLite, not PostgreSQL, with one writer (`replicas: 1` + `Recreate`). The
-  database currently shares the NFS data volume. Forgejo defaults SQLite to WAL,
-  which SQLite does not support on network filesystems; the bulk preseed exposed
-  this as repeated `locking protocol` failures. The deployment explicitly uses
-  `SQLITE_JOURNAL_MODE=DELETE` and a 60-second busy timeout. Rollback journaling
-  avoids WAL's shared-memory requirement but does not make SQLite-on-NFS fully
-  safe. Move the database to local block storage or PostgreSQL if lock failures
-  recur.
-- Both volumes carry the standard `.nfs-sentinel` guard so the pod refuses to
-  start against the local-XFS shadow if a node has NFS unmounted.
+- Image `codeberg.org/forgejo/forgejo:16.0.1-rootless`: UID/GID 1000, all
+  capabilities dropped.
+- SQLite, one writer (`replicas: 1`, strategy `Recreate`). The DB sits on
+  the NFS data volume, so WAL is off: `SQLITE_JOURNAL_MODE=DELETE`, 60 s busy
+  timeout. If `locking protocol` errors come back, move the DB to local block
+  storage or PostgreSQL.
+- Volumes: `/var/lib/gitea` (repos, DB) and `/etc/gitea` (`app.ini`), both
+  guarded by `.nfs-sentinel` (see
+  [`../docs/nfs-sentinel-initcontainer.md`](../docs/nfs-sentinel-initcontainer.md)).
+- Installer locked (`INSTALL_LOCK=true`), registration disabled.
 
-## Initial setup
+## First install
 
-### 1. Create the storage directories
+1. Storage, on the CARP storage master (`ifconfig | grep MASTER` on f0/f1).
+   The PVs are `type: Directory`, so the pod won't schedule without them:
 
-On the current CARP storage master (check with `ifconfig | grep MASTER` on f0/f1):
+   ```sh
+   doas mkdir -p /data/nfs/k3svolumes/forgejo/data /data/nfs/k3svolumes/forgejo/config
+   doas touch    /data/nfs/k3svolumes/forgejo/data/.nfs-sentinel \
+                 /data/nfs/k3svolumes/forgejo/config/.nfs-sentinel
+   doas chown -R 1000:1000 /data/nfs/k3svolumes/forgejo
+   doas chmod 0750 /data/nfs/k3svolumes/forgejo/data /data/nfs/k3svolumes/forgejo/config
+   doas chmod 0644 /data/nfs/k3svolumes/forgejo/*/.nfs-sentinel
+   ```
+
+   Keep the sentinels 0644; don't sweep them into a recursive chmod.
+
+2. Hostname: `code.f3s.buetow.org` must be in `f3sHosts` in
+   `gonf/frontends/data.go` (drives DNS, relayd, ACME and gogios checks; its
+   HTTPS relay port is in `siteHTTPSPorts`). relayd needs the keypair at
+   startup, so deploy the cert first, one gateway at a time:
+
+   ```sh
+   ./gonf.sh push -- -p 2 rex@blowfish.buetow.org frontends_nsd frontends_httpd frontends_acme frontends_acme_invoke frontends_relayd frontends_gogios
+   ./gonf.sh push -- -p 2 rex@fishfinger.buetow.org frontends_nsd frontends_httpd frontends_acme frontends_acme_invoke frontends_relayd frontends_gogios
+   ```
+
+   The standby gateway keeps the `foo.zone` placeholder cert until it takes
+   over the DNS master IP. That's expected.
+
+3. `kubectl apply -f ../argocd-apps/services/forgejo.yaml` (no app-of-apps;
+   later chart edits auto-sync).
+4. `just create-admin` (defaults `username=paul`; prints a random password
+   once).
+
+## Clone URLs
 
 ```sh
-doas mkdir -p /data/nfs/k3svolumes/forgejo/data /data/nfs/k3svolumes/forgejo/config
-doas touch    /data/nfs/k3svolumes/forgejo/data/.nfs-sentinel \
-              /data/nfs/k3svolumes/forgejo/config/.nfs-sentinel
-doas chown -R 1000:1000 /data/nfs/k3svolumes/forgejo
-doas chmod 0750 /data/nfs/k3svolumes/forgejo/data /data/nfs/k3svolumes/forgejo/config
-doas chmod 0644 /data/nfs/k3svolumes/forgejo/data/.nfs-sentinel \
-                /data/nfs/k3svolumes/forgejo/config/.nfs-sentinel
-```
-
-The sentinel files are 0644 per `f3s/docs/nfs-sentinel-initcontainer.md` — do not
-sweep them up in a recursive chmod of the directories.
-
-The PVs use `type: Directory`, so the pod will not schedule until these exist.
-
-### 2. Publish the hostname
-
-`code.f3s.buetow.org` must be listed in `f3sHosts` in `gonf/frontends/data.go`. That
-one array drives the DNS zone, the relayd routing rule, the ACME certificate and
-the gogios monitoring checks.
-
-Deploy order matters — relayd loads `tls keypair code.f3s.buetow.org` at startup,
-so the certificate has to exist first:
-
-```sh
-cd /home/paul/git/conf
-./gonf.sh push -- -p 2 rex@blowfish.buetow.org frontends_nsd frontends_httpd frontends_acme frontends_acme_invoke frontends_relayd frontends_gogios
-./gonf.sh push -- -p 2 rex@fishfinger.buetow.org frontends_nsd frontends_httpd frontends_acme frontends_acme_invoke frontends_relayd frontends_gogios
-```
-
-`acme.sh` copies the `foo.zone` cert as a placeholder for any host that has none
-yet, so relayd will still start on the first pass. The *real* certificate is only
-issued on the gateway currently holding the DNS master IP — `acme.sh` skips
-`acme-client` on the standby, which keeps the placeholder until a failover. That
-is normal; the standby is not serving the name yet.
-
-`gogios` is included because the TLS and HTTP checks for the new host are
-rendered from `@acme_hosts`; without it `code.f3s.buetow.org` gets no monitoring.
-
-Deploying one gateway at a time avoids restarting both public frontends
-simultaneously.
-
-### 3. Deploy
-
-```sh
-kubectl apply -f ../argocd-apps/services/forgejo.yaml
-```
-
-This apply is required and cannot be skipped: there is no app-of-apps or
-ApplicationSet watching `f3s/argocd-apps/`, so pushing the repo alone does
-nothing. Once the Application exists, later edits to the chart do auto-sync.
-
-### 4. Create the admin user
-
-The web installer is locked (`INSTALL_LOCK=true`) and registration is disabled,
-because this instance is reachable from the public internet. Create the first
-account from the CLI:
-
-```sh
-just create-admin
-```
-
-## Repository URLs
-
-```sh
-# HTTPS
 git clone https://code.f3s.buetow.org/<user>/<repo>.git
-
-# SSH, from anywhere -- relayd listens on 2022 and TCP-forwards to the NodePort
-git clone ssh://git@code.f3s.buetow.org:2022/<user>/<repo>.git
-
-# SSH direct to a node, bypassing the gateways (LAN only)
-git clone ssh://git@r0.lan.buetow.org:30222/<user>/<repo>.git
+git clone ssh://git@code.f3s.buetow.org:2022/<user>/<repo>.git   # via relayd
+git clone ssh://git@r0.lan.buetow.org:30222/<user>/<repo>.git    # LAN, direct NodePort
 ```
 
-Port 2022 rather than 22 keeps the forge away from the mass scanning the default
-port attracts; 2222 was unavailable, dserver (DTail) already uses it on the
-gateways. To administer blowfish/fishfinger, SSH is on port 2 as usual.
-
-To use the short `git@code.f3s.buetow.org:user/repo.git` form, put the port in
-`~/.ssh/config`:
+SSH is on 2022 because 22 draws scanners and 2222 is dserver on the gateways.
+Gateway admin SSH stays on port 2. For the short form:
 
 ```
 Host code.f3s.buetow.org
@@ -210,22 +72,24 @@ Host code.f3s.buetow.org
   User git
 ```
 
-## Operations
+## Operate
 
 ```sh
-just status          # pods, services, ingress, PVCs, ArgoCD sync
-just logs            # follow logs
-just restart         # rollout restart
-just shell           # shell inside the pod
-just port-forward    # reach the UI on localhost:3000
+just status          # pods, svc forgejo/forgejo-ssh, ingresses, PVCs, ArgoCD
+just logs [lines]
+just restart
+just shell
+just port-forward    # localhost:3000
+just sync            # ArgoCD refresh
 ```
 
-## Backup
+## Backup and restore
 
-Covered by the ZFS snapshots and zrepl replication of `/data/nfs`. The SQLite
-database and `app.ini` both live on that volume. To restore: roll back the ZFS
-snapshot and restart the deployment.
+ZFS snapshots and zrepl replication of `/data/nfs` (`zdata/enc/nfsdata`)
+cover repos, DB and `app.ini`. Restore: roll back the snapshot, restart the
+deployment. `app.ini` holds `SECRET_KEY` and `INTERNAL_TOKEN`; restore data
+and config together or sessions and stored credentials break.
 
-Note that `/etc/gitea/app.ini` holds `SECRET_KEY` and `INTERNAL_TOKEN`, generated
-on first start. Restoring the data volume without the matching config volume
-invalidates sessions and stored credentials.
+The retired cgit git-server's data at `/data/nfs/k3svolumes/git-server` and
+its final ZFS snapshot are still on disk; delete only with explicit
+confirmation. There is no git-server fallback any more.

@@ -1,56 +1,24 @@
-# Miniflux Helm Chart
+# Miniflux
 
-This chart deploys Miniflux.
+RSS reader, `https://flux.f3s.buetow.org`. Namespace `services`, ArgoCD app
+`miniflux`, with its own `miniflux-postgres`. Volume
+`/data/nfs/k3svolumes/miniflux/data` (create once).
 
-## Prerequisites
+Secrets (not in git), create before the first sync:
 
-Before installing the chart, you must manually create the following:
+```sh
+kubectl create secret generic miniflux-db-password \
+  --from-literal=fluxdb_password='...' -n services
+kubectl create secret generic miniflux-admin-password \
+  --from-literal=admin_password='...' -n services
+```
 
-1.  **Database Password Secret:**
+The chart builds
+`postgres://miniflux:${POSTGRES_PASSWORD}@miniflux-postgres:5432/miniflux?sslmode=disable`
+from `fluxdb_password`. `admin_password` is read as `ADMIN_PASSWORD` on first
+start only, for user `admin`.
 
-    Create a secret that contains only the database password. The chart reads
-    this value and constructs the Miniflux `DATABASE_URL` internally at runtime:
-
-    ```bash
-    kubectl create secret generic miniflux-db-password \
-      --from-literal=fluxdb_password='YOUR_PASSWORD' \
-      -n services
-    ```
-
-    Replace `YOUR_PASSWORD` with your desired database password. You do not
-    need to provide a full DSN in the secret; the chart uses the password from
-    `fluxdb_password` to build:
-
-    `postgres://miniflux:${POSTGRES_PASSWORD}@miniflux-postgres:5432/miniflux?sslmode=disable`
-
-2.  **Admin Password Secret:**
-
-    Create a secret for the initial Miniflux admin user password. The chart
-    reads this secret into the `ADMIN_PASSWORD` environment variable during
-    the first startup to create the admin user. The admin username is set
-    to `admin` in the deployment template.
-
-    ```bash
-    kubectl create secret generic miniflux-admin-password \
-      --from-literal=admin_password='YOUR_ADMIN_PASSWORD' \
-      -n services
-    ```
-
-    Replace `YOUR_ADMIN_PASSWORD` with your desired password. The secret key
-    used by the chart is `admin_password`.
-
-3.  **Persistent Volume Directory:**
-
-    You must manually create the directory on your host system to be used by the persistent volume:
-
-    ```bash
-    mkdir -p /data/nfs/k3svolumes/miniflux/data
-    ```
-
-## Installing the Chart
-
-To install the chart with the release name `miniflux`, run the following command:
-
-```bash
-helm install miniflux . --namespace services --create-namespace
+```sh
+just status | logs [lines] | logs-postgres | port-forward [8080] | port-forward-postgres [5432]
+just sync | argocd-status | restart | restart-postgres | psql
 ```

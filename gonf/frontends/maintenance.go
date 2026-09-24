@@ -121,7 +121,7 @@ func (Maintenance) DescGoprecords() string {
 // unlabelled side effect of the early return below). OptionalSecret
 // distinguishes "no such secret" (secret.ErrNotFound) from every other
 // failure: a locked, unreachable or misconfigured secret store still fails
-// the whole plan record loudly (see gonf's docs/secrets.md), it is never
+// the whole plan record loudly (see gonf's docs/design/secrets.md), it is never
 // read as "this host has no token". Given a genuine not-found, three
 // policies were considered for a host's already-deployed
 // /etc/goprecords-upload.token and its daily.local hook:
@@ -131,7 +131,7 @@ func (Maintenance) DescGoprecords() string {
 //     declaration/mechanism-layer scope: actively disabling or removing a
 //     live token is a destination-state change of its own, which needs its
 //     own controlled rotation/recovery exercise (see
-//     docs/consumer-dsl-simplification-plan.md, P9) and explicit
+//     gonf's docs/design/consumer-dsl-simplification-plan.md, P9) and explicit
 //     authorization, not a side effect of a secret-provider change.
 //   - disable: also strip the daily.local hook line (WithoutLine) so a
 //     stale token stops being submitted even though the token file itself
