@@ -50,6 +50,16 @@ func (Monitoring) DescDTail() string {
 
 // DTail preserves the former cleanup, account, retention, key-cache, and
 // daemon behavior. Cleanup only removes an old unpackaged installation.
+//
+// /etc/dserver/dtail.json is managed too (task 3h2): an unmanaged, hand-edited
+// copy on blowfish once pointed HostKeyFile below /var/run, which OpenBSD
+// wipes at boot, so dserver failed after a reboot. The asset pins the host key
+// to /var/db/dserver/ssh_host_key (persistent; the key itself is never managed
+// here) and keeps the key cache under /var/run/dserver/cache, which the daily
+// dserver-update-key-cache.sh run rebuilds. It holds only paths and settings,
+// no secrets. Mode and ownership match the package's 0644 root:bin install.
+// The file depends on the package, which creates /etc/dserver, and a changed
+// config restarts dserver so the daemon reads it.
 func (Monitoring) DTail() {
 	onFrontends(func() {
 		cleanup := cleanupLegacyDTail()
@@ -59,7 +69,9 @@ func (Monitoring) DTail() {
 			WithLine("/usr/local/bin/dserver-update-key-cache.sh"),
 			WithLine("find /var/log/dserver -name \"*.log\" -mtime +7 -delete"),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(pkg, account))
-		Service("dserver", DependsOn(pkg, account))
+		config := InstallFile("/etc/dserver/dtail.json", frontendAsset("dtail.json"),
+			WithMode(0o644), WithOwner("root"), WithGroup("bin"), DependsOn(pkg))
+		Service("dserver", WithRestart, DependsOn(pkg, account), OnChange(config))
 	})
 }
 
