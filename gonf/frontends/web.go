@@ -6,6 +6,7 @@ import (
 
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
+	"github.com/snonux/gonf/resource"
 )
 
 // webConfigData is the controller-side input to the frontend web and relay
@@ -49,12 +50,19 @@ func (Web) DescHTTPD() string { return "Render, validate, and converge frontend 
 // HTTPD renders each host's configuration on the controller. The core File
 // validation (WithValidation) checks a private candidate with `httpd -n`
 // before every non-dry-run live reconciliation, while OnChange limits a
-// restart to a changed live config or rc flag.
+// restart to a changed live config or rc flag. A render failure refuses the
+// host's httpd declarations (see refuseRender) instead of declaring a File
+// with empty content.
 func (Web) HTTPD() {
 	ForHosts(ValueServer, func(_ string, server Server) {
+		content, err := renderHTTPD(webData(server))
+		if err != nil {
+			refuseRender("/etc/httpd.conf", err)
+			return
+		}
 		flags := rcConfLocalLine("httpd_flags=", "rc-conf-httpd-flags")
 		NoFile(legacyCandidate("/etc/httpd.conf"))
-		config := File("/etc/httpd.conf", WithContent(renderHTTPD(webData(server))),
+		config := File("/etc/httpd.conf", WithContent(content),
 			WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
 			WithValidation("httpd", List("-n", "-f", CandidatePath)))
 		fallbackIndex := htdocs(server)
@@ -105,12 +113,19 @@ func (Web) DescRelayd() string {
 // running daemon picks up the login.conf class. Afterwards the handle is
 // unchanged and restarts nothing. No database rebuild is needed: the
 // removal does not touch /etc/login.conf or /etc/login.conf.db.
+//
+// As in HTTPD, a render failure refuses the host's relayd declarations.
 func (Web) Relayd() {
 	ForHosts(ValueServer, func(_ string, server Server) {
+		content, err := renderRelayd(webData(server))
+		if err != nil {
+			refuseRender("/etc/relayd.conf", err)
+			return
+		}
 		flags := rcConfLocalLine("relayd_flags=", "rc-conf-relayd-flags")
 		class := NoLoginClass("daemon")
 		NoFile(legacyCandidate("/etc/relayd.conf"))
-		config := File("/etc/relayd.conf", WithContent(renderRelayd(webData(server))),
+		config := File("/etc/relayd.conf", WithContent(content),
 			WithMode(0o600), WithOwner("root"), WithGroup("wheel"),
 			WithValidation("relayd", List("-n", "-f", CandidatePath)))
 		Service("relayd", WithRestart, OnChange(flags, class, config))
@@ -135,7 +150,12 @@ func (Web) PF() {
 }
 
 // pfAndExporter declares host's validated PF ruleset and reload, and the
-// pf-labels exporter feeding node_exporter's textfile collector.
+// pf-labels exporter feeding node_exporter's textfile collector. A host
+// missing from the WireGuard inventory has no listen address for
+// node_exporter: its flags line is refused as a declaration error (which
+// fails the record) and node_exporter is not declared, since its restart
+// gate watches that line; the PF and exporter resources, which do not need
+// the address, are still declared and checked.
 func pfAndExporter(host string) {
 	config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
 		WithMode(0o600), WithOwner("root"), WithGroup("wheel"), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
@@ -147,7 +167,12 @@ func pfAndExporter(host string) {
 	// pfctl needs root, so the exporter runs from root's crontab.
 	Cron("frontend-pf-labels-exporter", WithCommand("-ns /usr/local/bin/pf-labels-exporter.sh"),
 		WithLegacyCommand("-ns /usr/local/bin/pf-labels-exporter.sh"), WithMinute("*"), DependsOn(collector, exporter))
-	flags := rcConfLocalLine(nodeExporterFlags(host), "rc-conf-node-exporter-flags")
+	line, err := nodeExporterFlags(host)
+	if err != nil {
+		resource.Refuse("File", "rc-conf-node-exporter-flags", err)
+		return
+	}
+	flags := rcConfLocalLine(line, "rc-conf-node-exporter-flags")
 	Service("node_exporter", WithRestart, DependsOn(collector, exporter), OnChange(flags, exporter))
 }
 
@@ -155,14 +180,17 @@ func pfAndExporter(host string) {
 // `rcctl set node_exporter flags` wrote it on the hosts: unquoted, listening
 // on the host's WireGuard IPv4 from the inventory. The former literal line
 // kept a `$(ifconfig wg0 ...)` substitution, which rc(8) does not expand and
-// which never matched the live line, so it was appended beside it.
-func nodeExporterFlags(host string) string {
+// which never matched the live line, so it was appended beside it. A host
+// without an inventory address is returned as an error for the caller to
+// report.
+func nodeExporterFlags(host string) (string, error) {
 	for _, peer := range WireGuardAddresses() {
 		if peer.Name == host {
-			return "node_exporter_flags=--web.listen-address=" + peer.IPv4 + ":9100 --collector.textfile.directory=/var/node_exporter"
+			return "node_exporter_flags=--web.listen-address=" + peer.IPv4 +
+				":9100 --collector.textfile.directory=/var/node_exporter", nil
 		}
 	}
-	panic(fmt.Sprintf("no WireGuard address for frontend %q", host))
+	return "", fmt.Errorf("no WireGuard address for frontend %q", host)
 }
 
 // htdocs declares the httpd document roots and their static files, and
@@ -211,15 +239,28 @@ func legacyCandidate(path string) string {
 // text is handed to WithContent like any other literal string, preserving
 // the pre-P4 controller-render semantics (see api.RenderTemplate's doc
 // comment for why that differs from a destination-rendered
-// WithTemplateData file). A render/parse failure can only be a checked-in
-// template or data-builder bug, never recipe input, so it panics the way
-// nodeExporterFlags below reports its own controller-only invariant.
-func renderHTTPD(data webConfigData) string {
+// WithTemplateData file). A read/parse/render failure is returned, wrapped
+// with the template's name, for the caller to report (refuseRender).
+func renderHTTPD(data webConfigData) (string, error) {
 	rendered, err := RenderTemplate(frontendAsset("httpd.conf.tmpl"), httpdTemplateDataFor(data))
 	if err != nil {
-		panic(fmt.Sprintf("render httpd.conf.tmpl: %v", err))
+		return "", fmt.Errorf("render httpd.conf.tmpl: %w", err)
 	}
-	return rendered
+	return rendered, nil
+}
+
+// refuseRender reports a failed controller render of the live file path as
+// a gonf declaration error through resource.Refuse (File[path] is the
+// resource left undeclared), instead of panicking: gonf's contract is that
+// recipe and input errors never end the process. While a plan is recorded
+// the error fails that record with the resource.Refuse line below as its
+// location (the CLI prints both and exits 1); a panic would instead bypass
+// gonf's error path and dump a raw stack trace to stderr. The caller then
+// declares none of the host's resources that depend on the rendered file,
+// so nothing is registered with empty content, while the rest of the
+// recipe keeps running and later declarations are still checked.
+func refuseRender(path string, err error) {
+	resource.Refuse("File", path, err)
 }
 
 // httpdTemplateData is httpd.conf.tmpl's typed root. Every field is either
@@ -360,14 +401,14 @@ func httpdF3SBlocks(data webConfigData) []string {
 // renderRelayd renders /etc/relayd.conf on the controller from the native
 // relayd.conf.tmpl asset with the typed relaydTemplateData built from data.
 // See renderHTTPD above for why this stays a controller render (WithContent,
-// not a destination-rendered WithTemplateData file) and why a render
-// failure panics.
-func renderRelayd(data webConfigData) string {
+// not a destination-rendered WithTemplateData file) and how a render
+// failure is returned.
+func renderRelayd(data webConfigData) (string, error) {
 	rendered, err := RenderTemplate(frontendAsset("relayd.conf.tmpl"), relaydTemplateDataFor(data))
 	if err != nil {
-		panic(fmt.Sprintf("render relayd.conf.tmpl: %v", err))
+		return "", fmt.Errorf("render relayd.conf.tmpl: %w", err)
 	}
-	return rendered
+	return rendered, nil
 }
 
 // relaydTemplateData is relayd.conf.tmpl's typed root; see httpdTemplateData
