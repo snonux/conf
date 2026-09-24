@@ -33,14 +33,19 @@ func main() {
 // possibly stale file copy. The vault is only read when a task resolves a
 // secret, so tasks without secrets and -list never run foostore.
 //
-// The per-host goprecords tokens (etc/goprecords/<host>.token) are left
-// unmapped on purpose: they are currently unset, so OptionalSecret skips
-// them through the file fallback; map them here once real tokens exist in
-// the vault.
+// The per-host goprecords upload tokens (etc/goprecords/<host>.token) are
+// mapped too: they were imported from the Rex-era copies, whose content
+// matches the tokens Rex installed on the hosts. With them resolvable,
+// Maintenance.Goprecords manages /etc/goprecords-upload.token and the
+// uploader on each frontend instead of keeping the Rex-installed files
+// as-is. A frontend host added later has no entry, so its token falls back
+// to gonf/secrets/ (absent: nothing is declared for it, as before).
 func setSecretProvider() error {
 	items, err := foostore.Items(map[secret.Ref]foostore.Item{
 		secret.Ref(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")): foostore.Field("Infra/nsd-tsig-key", "Password"),
 		secret.Ref(paths.GarageSecret("rpc_secret")):                foostore.Field("Infra/garage-rpc", "Password"),
+		secret.Ref(goprecordsToken("blowfish")):                     foostore.Field("Infra/goprecords-token-blowfish", "Password"),
+		secret.Ref(goprecordsToken("fishfinger")):                   foostore.Field("Infra/goprecords-token-fishfinger", "Password"),
 	})
 	if err != nil {
 		return err
@@ -53,4 +58,10 @@ func setSecretProvider() error {
 	// CLI refuses to run with, so it needs no error check here.
 	api.SetSecretProvider(secret.NewSnapshot(secret.NewFallback(vault, secret.FileProvider{})))
 	return nil
+}
+
+// goprecordsToken is the logical secret reference Maintenance.Goprecords
+// resolves for one frontend host's upload token.
+func goprecordsToken(host string) string {
+	return paths.FrontendSecret("etc/goprecords/" + host + ".token")
 }
