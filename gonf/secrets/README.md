@@ -1,16 +1,19 @@
 # Gonf controller secrets
 
-`api.MustSecret` and `api.OptionalSecret` intentionally read only below this
-directory, through gonf's default file secret provider (`secret.FileProvider`,
-see gonf's `docs/secrets.md`); this repository configures no other provider.
-They never read the legacy Rex-era secret roots directly. This keeps a
-gonf plan's controller inputs explicit and makes the logical paths used by
-recipes stable:
+`api.MustSecret` and `api.OptionalSecret` resolve through the provider
+`cmd/gonf/main.go` configures (task ze2): the foostore/KeePass vault for the
+references it maps, and below this directory, through gonf's file secret
+provider (`secret.FileProvider`, see gonf's `docs/secrets.md`), for every
+other reference. They never read the legacy Rex-era secret roots directly.
+This keeps a gonf plan's controller inputs explicit and makes the logical
+paths used by recipes stable:
 
-- `paths.FrontendSecret("var/nsd/etc/nsd_key.txt")` reads
+- `paths.FrontendSecret("var/nsd/etc/nsd_key.txt")` reads the vault entry
+  `Infra/nsd-tsig-key` (Password field); its legacy copy is
   `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt`.
-- `paths.GarageSecret("rpc_secret")` reads
-`gonf/secrets/garage/rpc_secret`.
+- `paths.GarageSecret("rpc_secret")` reads the vault entry `Infra/garage-rpc`
+  (Password field); its legacy copy is `gonf/secrets/garage/rpc_secret`.
+- `etc/goprecords/<host>.token` is unmapped and reads this directory.
 
 Run gonf through the repository's `gonf.sh` wrapper (from any working
 directory: it changes into this checkout's `gonf` directory itself and passes
@@ -45,48 +48,40 @@ needs its own explicit authorization, never this bootstrap. `gonf/secrets/.gitig
 secret payloads, and no command above emits a secret value. Do not add secrets
 to task names, inventory values, plan fixtures, or commits.
 
-## Typed provider references and cutover policy (task 262)
+## Typed provider references and cutover policy (tasks 262, ze2)
 
-Every logical reference this repository resolves — `FrontendSecret`,
-`GarageSecret`, and the per-host `etc/goprecords/<name>.token` references
-`Maintenance.Goprecords` builds directly — still reads exactly this
-directory, through gonf's default `secret.FileProvider`, exactly as before
-this task. No `api.SetSecretProvider` call exists anywhere in this
-repository yet, and this task does not add one: switching the active
-provider means real store credentials and a real reachable vault, which is a
-live-vault change needing its own, separately authorized rotation/recovery
-exercise (see `docs/consumer-dsl-simplification-plan.md`, P9), not something
-to bundle into a mechanism task.
-
-What this task adds is the mechanism a later, authorized cutover uses:
-gonf-core's `secret.NewFallback(primary, secondary)` (see gonf's
-`docs/secrets.md`, "secret.NewFallback"). It resolves through `primary` and
-falls back to `secondary` only when `primary` reports the reference not
-found — the answer a reference not yet listed in `primary`'s own lookup
-table gives — so a future cutover looks like:
+`cmd/gonf/main.go` sets the provider once, at the composition root:
 
 ```go
-items, err := foostore.Items(map[secret.Ref]foostore.Item{
-    // add one logical reference at a time as each secret is migrated,
-    // e.g. "garage/rpc_secret": foostore.Field("<real vault entry>", "<real field>"),
-})
-provider, err := foostore.New(foostore.Config{Lookup: items})
-api.SetSecretProvider(secret.NewSnapshot(secret.NewFallback(provider, secret.FileProvider{})))
+api.SetSecretProvider(secret.NewSnapshot(secret.NewFallback(vault, secret.FileProvider{})))
 ```
 
-with an empty (or partial) `items` table every reference not yet listed keeps
-reading this directory unchanged — byte for byte, since `secret.FileProvider`
-never moves and every recipe keeps passing the exact same logical path
-strings documented above. Crucially, `NewFallback` never falls back to this
-directory when the new store answers with anything other than "not found":
-a locked, unauthenticated, corrupt or otherwise broken store fails the whole
-plan record loudly instead of silently serving this directory's possibly
-stale copy of an already-migrated secret (see gonf's `docs/secrets.md` for
-why that distinction, and not merely "did the read succeed", is the one that
-matters). Wiring the actual `foostore.Items` table with real vault entries,
-calling `api.SetSecretProvider` from `cmd/gonf/main.go`, and rotating any
-secret once real access is authorized are explicitly out of this task's
-scope; see the follow-up task filed for that work.
+`vault` is a `secret/foostore` provider whose `foostore.Items` table maps the
+NSD TSIG key and the Garage RPC secret to their KeePass entries (see the list
+above). foostore unlocks the store with its own configured `kdbx_pass_file`;
+no passphrase passes through gonf. The vault is read only when a task
+resolves a secret, so `-list` and secret-free tasks never run foostore.
+
+`secret.NewFallback` (gonf's `docs/secrets.md`, "secret.NewFallback")
+resolves through the vault and falls back to this directory only when the
+vault reports the reference not found — the answer for a reference the table
+does not list. Migrating one more secret is one more table row; every recipe
+keeps passing the exact same logical path strings. Crucially, `NewFallback`
+never falls back to this directory when the vault answers with anything other
+than "not found": a locked, unauthenticated, corrupt or otherwise unavailable
+vault (or a missing `foostore` binary) fails the whole plan record loudly for
+a mapped reference instead of silently serving this directory's possibly
+stale copy of an already-migrated secret.
+
+The per-host goprecords tokens stay unmapped: they are currently unset, and
+`OptionalSecret` skips a host whose token file is absent here. Map them once
+real tokens exist in the vault.
+
+Task ze2 verified the cutover (all 61 recorded plans byte-identical to the
+file-only baseline, a fallback drill, a locked-vault drill and a rotation
+drill; see that task's annotations). The legacy copies of the migrated
+secrets are kept in this directory and in the Rex-era roots: deleting them is
+a further, separately authorized step.
 
 The Goprecords per-host token additionally has an explicit "keep" policy for
 what happens to an already-deployed `/etc/goprecords-upload.token` once its

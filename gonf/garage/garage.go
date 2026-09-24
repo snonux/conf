@@ -61,15 +61,14 @@ func (Deployment) DescConfig() string {
 // and running on every apply.
 //
 // The logical reference paths.GarageSecret("rpc_secret") resolves through
-// whatever provider is configured (api.SetSecretProvider); today that is
-// unchanged from before task 262 — gonf's default secret.FileProvider,
-// reading gonf/secrets/garage/rpc_secret below this checkout. A later,
-// separately authorized cutover to a real external store (see
-// gonf/secrets/README.md, "Typed provider references and cutover policy")
-// can move this one reference without touching this call site or the
-// byte-for-byte template_data it feeds into defaultConfig below: gonf's
-// secret.NewFallback composes the new store with secret.FileProvider so an
-// unmigrated reference keeps reading this checkout exactly as it does now.
+// the provider cmd/gonf/main.go configures (api.SetSecretProvider): since
+// task ze2 the foostore/KeePass entry Infra/garage-rpc (Password field),
+// through secret.NewFallback. A locked or unavailable vault fails the plan
+// loudly rather than falling back to gonf/secrets/garage/rpc_secret, which
+// is kept only as a legacy copy for an unmapped reference (see
+// gonf/secrets/README.md, "Typed provider references and cutover policy").
+// The vault value has no trailing newline; trimFinalNewline keeps the
+// rendered template_data byte-identical for either source.
 func (Deployment) Config() {
 	secret := trimFinalNewline(MustSecret(paths.GarageSecret("rpc_secret")))
 	ForHosts(cluster.ValueGarageRPCPublicAddr, func(_ string, rpcPublicAddr string) {

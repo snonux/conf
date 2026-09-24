@@ -75,15 +75,14 @@ func (MailDNS) DescNSD() string {
 // scope per host and no enclosing all-frontends scope.
 //
 // The logical reference paths.FrontendSecret("var/nsd/etc/nsd_key.txt")
-// resolves through whatever provider is configured (api.SetSecretProvider);
-// today that is unchanged from before task 262 — gonf's default
-// secret.FileProvider, reading gonf/secrets/frontends/var/nsd/etc/nsd_key.txt
-// below this checkout. A later, separately authorized cutover to a real
-// external store (see secrets/README.md, "Typed provider references and
-// cutover policy") can move this one reference without touching this call
-// site or the byte-for-byte key.conf output below it: gonf's
-// secret.NewFallback composes the new store with secret.FileProvider so an
-// unmigrated reference keeps reading this checkout exactly as it does now.
+// resolves through the provider cmd/gonf/main.go configures
+// (api.SetSecretProvider): since task ze2 the foostore/KeePass entry
+// Infra/nsd-tsig-key (Password field), through secret.NewFallback. A locked
+// or unavailable vault fails the plan loudly rather than falling back to
+// gonf/secrets/frontends/var/nsd/etc/nsd_key.txt, which is kept only as a
+// legacy copy for an unmapped reference (see gonf/secrets/README.md, "Typed
+// provider references and cutover policy"). This call site and the
+// byte-for-byte key.conf output below it are unchanged by the cutover.
 func (MailDNS) NSD() {
 	key := strings.TrimSpace(MustSecret(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")))
 	data := TemplateData()

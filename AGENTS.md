@@ -29,7 +29,7 @@ inventory). The configuration-management **library** lives separately at
 
 ```
 gonf/
-  cmd/gonf/          # main: cluster.Register + tasks.Register + CLI only
+  cmd/gonf/          # main: secret provider (vault + file fallback), cluster.Register, tasks.Register, CLI
   tasks/tasks.go     # composition root: RegisterMethods + aggregates
   cluster/           # Host / Cluster inventory (SSH + per-host WithValue)
   frontends/         # OpenBSD frontend recipes (Maintenance, Web, ...)
