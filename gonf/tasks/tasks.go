@@ -77,8 +77,9 @@ func frontendExcludedTasks() []string {
 }
 
 // Register makes every current recipe group and its deployment aggregate
-// available to the CLI. Future Rex ports join this composition root rather
-// than extending main directly.
+// available to the CLI. New recipe groups (Rex, the former engine, was
+// retired in conf task v42) join this composition root rather than
+// extending main directly.
 func Register() {
 	RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.Maintenance{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
