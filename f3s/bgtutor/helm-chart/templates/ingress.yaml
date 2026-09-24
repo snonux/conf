@@ -1,0 +1,49 @@
+# Public host: TLS is terminated by relayd on the frontends (bgtutor.f3s.buetow.org
+# is in @f3s_hosts in frontends/Rexfile), which forward plain HTTP to traefik.
+# The voice AI connector URL is https://bgtutor.f3s.buetow.org/mcp and every
+# /mcp request must carry the bearer token.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bgtutor-ingress
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: bgtutor.f3s.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bgtutor-service
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bgtutor-ingress-lan
+  namespace: services
+  annotations:
+    spec.ingressClassName: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - bgtutor.f3s.lan.buetow.org
+      secretName: f3s-lan-tls
+  rules:
+    - host: bgtutor.f3s.lan.buetow.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bgtutor-service
+                port:
+                  number: 80

@@ -17,6 +17,7 @@ argocd-apps/
 │   └── tempo.yaml       # Distributed tracing
 ├── services/            # User-facing applications (namespace: services)
 │   ├── anki-sync-server.yaml    # Anki flashcard synchronization
+│   ├── bgtutor.yaml             # Bulgarian Podcast Tutor MCP server
 │   ├── audiobookshelf.yaml      # Audiobook/podcast streaming
 │   ├── filebrowser.yaml         # Web-based file browser
 │   ├── freshrss.yaml            # RSS feed reader
