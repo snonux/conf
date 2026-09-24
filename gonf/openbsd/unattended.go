@@ -62,7 +62,7 @@ func (Unattended) DescScript() string {
 // Script installs the hardened ksh wrapper script.
 func (Unattended) Script() {
 	InstallFile("/usr/local/sbin/unattended-upgrade",
-		paths.Frontends+"/scripts/unattended-upgrade.sh",
+		paths.FrontendAsset("scripts/unattended-upgrade.sh"),
 		WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 }
 

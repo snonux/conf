@@ -50,7 +50,7 @@ func (KernelAudit) Script() {
 		dir := EnsureDir("/usr/local/sbin",
 			WithMode(0o755), WithOwner("root"), WithGroup("root"))
 		InstallFile("/usr/local/sbin/rocky-kernel-audit",
-			paths.Frontends+"/scripts/rocky-kernel-audit.sh",
+			paths.FrontendAsset("scripts/rocky-kernel-audit.sh"),
 			WithMode(0o755), WithOwner("root"), WithGroup("root"),
 			DependsOn(dir))
 	})

@@ -53,7 +53,7 @@ func (Unattended) Script() {
 		dir := EnsureDir("/usr/local/sbin",
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		InstallFile("/usr/local/sbin/unattended-upgrade-freebsd",
-			paths.Frontends+"/scripts/unattended-upgrade-freebsd.sh",
+			paths.FrontendAsset("scripts/unattended-upgrade-freebsd.sh"),
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"),
 			DependsOn(dir))
 	})

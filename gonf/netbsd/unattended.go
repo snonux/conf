@@ -40,7 +40,7 @@ func (Unattended) Script() {
 		dir := EnsureDir("/usr/local/sbin",
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		InstallFile("/usr/local/sbin/unattended-upgrade-netbsd",
-			paths.Frontends+"/scripts/unattended-upgrade-netbsd.sh",
+			paths.FrontendAsset("scripts/unattended-upgrade-netbsd.sh"),
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"),
 			DependsOn(dir))
 	})

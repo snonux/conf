@@ -1,7 +1,6 @@
 package frontends
 
 import (
-	"path/filepath"
 	"strings"
 
 	. "github.com/snonux/gonf/api"
@@ -250,20 +249,8 @@ func (Maintenance) IRCBouncer() {
 	})
 }
 
-// frontendAsset is a thin wrapper around the shared paths.GonfAsset helper,
-// so this package's assets go through the one path-join implementation
-// shared with openbsd, freebsd, and netbsd instead of spelling out
-// gonf/frontends/assets itself.
-func frontendAsset(name string) string {
-	return paths.GonfAsset("frontends", name)
-}
-
 func onFrontends(fn func()) {
 	WhenHostname(ClusterHosts(), fn)
-}
-
-func legacyFrontendAsset(name string) string {
-	return filepath.Join(paths.Frontends, name)
 }
 
 // ensureRCLocal declares /etc/rc.local with the attributes it has on both

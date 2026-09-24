@@ -57,7 +57,7 @@ func (Unattended) Script() {
 		dir := EnsureDir("/usr/local/sbin",
 			WithMode(0o755), WithOwner("root"), WithGroup("root"))
 		InstallFile("/usr/local/sbin/unattended-upgrade-rocky",
-			paths.Frontends+"/scripts/unattended-upgrade-rocky.sh",
+			paths.FrontendAsset("scripts/unattended-upgrade-rocky.sh"),
 			WithMode(0o755), WithOwner("root"), WithGroup("root"),
 			DependsOn(dir))
 	})
@@ -106,7 +106,7 @@ func (Unattended) DescLogrotate() string {
 
 // Logrotate installs the logrotate snippet.
 func (Unattended) Logrotate() {
-	src := paths.Frontends + "/systemd/unattended-upgrade.logrotate"
+	src := paths.FrontendAsset("systemd/unattended-upgrade.logrotate")
 	WhenHostname(ClusterHosts(), func() {
 		InstallFile("/etc/logrotate.d/unattended-upgrade",
 			src,

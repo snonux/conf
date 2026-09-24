@@ -9,7 +9,9 @@ import (
 // Repo roots used when declaring resources. Conf is this repository's
 // checkout on the controller: ~/git/conf, or GONF_CONF_ROOT when set, which
 // gonf.sh sets to the checkout it runs from so a second worktree records its
-// own assets.
+// own assets. Recipes do not join onto these roots themselves: they go
+// through the *Asset helpers below, so each tree has one path-join
+// implementation and a rename only needs an edit here.
 var (
 	Conf      = checkoutRoot("GONF_CONF_ROOT", "conf")
 	Frontends = filepath.Join(Conf, "frontends")
@@ -18,7 +20,11 @@ var (
 )
 
 // FrontendAsset returns the controller-local path of a source-controlled
-// frontend asset such as etc/httpd.conf.tpl.
+// asset under the repository's top-level frontends/ tree, such as
+// etc/pf.conf.tpl or scripts/unattended-upgrade.sh. It is the one
+// implementation of that path-join: the frontends package reaches it through
+// legacyFrontendAsset, and the rocky, openbsd, freebsd and netbsd packages
+// call it directly for the scripts/ and systemd/ assets they share.
 func FrontendAsset(relativePath string) string {
 	return filepath.Join(Frontends, relativePath)
 }

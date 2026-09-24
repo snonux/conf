@@ -49,7 +49,7 @@ func (Unattended) VulnAuditScript() {
 		dir := EnsureDir("/usr/local/sbin",
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
 		InstallFile(vulnAuditScript,
-			paths.Frontends+"/scripts/netbsd-vuln-audit.sh",
+			paths.FrontendAsset("scripts/netbsd-vuln-audit.sh"),
 			WithMode(0o755), WithOwner("root"), WithGroup("wheel"),
 			DependsOn(dir))
 	})
