@@ -28,8 +28,8 @@ Internet -> relayd :443 -> routing decision -> httpd :8080 (<localhost>) or f3s 
   expected HTTPS statuses, relayd upstreams). `TemplateData` appends the f3s
   hosts and Garage bucket names to the ACME hosts.
 - `web.go`, `maildns.go`, `monitoring.go`, `acme.go` render httpd, relayd,
-  NSD, Gogios and ACME per frontend on the controller (`ForHosts` over the
-  inventory `Server` values).
+  NSD, Gogios and ACME per frontend on the controller (`EachHost` over the
+  inventory `Server` values, `WithData` in `gonf/cluster`).
 - `acmeHosts` get ACME certs, port-80 challenge blocks and explicit relayd
   routes to `<localhost>`. A host not in it falls through to f3s.
 - `f3sHosts` get httpd's cluster-down fallback page (rewrite to
@@ -75,11 +75,18 @@ NSD TSIG key: controller secret
 `../gonf/secrets/README.md`). Use the gonf secret helper; never put the value
 in a resource name, description, command argument, log line or stdout plan.
 
-The DNS-failover, rsync, PF labels-exporter and Gogios cron jobs adopt legacy
-lines via exact-command `WithLegacyCommand`: an unmarked crontab line with
-exactly that command is replaced by the gonf block. Any difference means it
-isn't adopted and runs next to the gonf job, so check `crontab -l` before
-changing a command. No raw crontab surgery in scripts.
+Cron jobs adopt an identical unmarked crontab line (same schedule and exact
+command, no `NAME=value` line after it): it is replaced by the gonf block.
+Any other difference means it isn't adopted and runs next to the gonf job,
+so check `crontab -l` before changing a command or schedule; for a
+different old line add `WithLegacyCommand(old)`. No raw crontab surgery in
+scripts.
+
+rc flags: `Service(name, WithFlags(""))` (httpd, relayd, inetd) and
+`WithFlags(...)` (node_exporter) set them through `rcctl set`. nsd keeps its
+`nsd_flags=` line in `/etc/rc.conf.local` (`nsdFlags`): its rc.d script has
+default flags, so empty flags would never converge. `pkg_scripts` is a
+plain line too (`rcConfLocalLine`).
 
 ## Deploy and test
 

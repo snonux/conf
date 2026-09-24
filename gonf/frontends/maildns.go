@@ -38,8 +38,16 @@ type MailDNS struct {
 
 // DescSMTPD returns the description for the OpenSMTPD recipe.
 func (MailDNS) DescSMTPD() string {
-	return "Render, validate, and converge frontend OpenSMTPD (needs /etc/ssl certificates from frontends_acme + a frontends_acme_invoke run)"
+	return "Render, validate, and converge frontend OpenSMTPD (needs /etc/ssl certificates from a frontends_acme_invoke run)"
 }
+
+// OptsSMTPD records the ACME setup (frontends_acme) before SMTPD; the
+// certificates themselves come from the explicit, Operational
+// frontends_acme_invoke, which Needs must not name (a task needing
+// Operational work would drop out of the frontends aggregate).
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (MailDNS) OptsSMTPD() TaskOptions { return TaskOptions{Privileged(), Needs("acme")} }
 
 // SMTPD publishes every lookup table plus the host-specific configuration as
 // one Gonf ConfigSet: the complete set is staged privately under /etc/mail and
@@ -50,7 +58,7 @@ func (MailDNS) DescSMTPD() string {
 // removed. A smtpd.conf render failure refuses the host's SMTPD declarations
 // (see refuseRender) instead of declaring the set with an empty smtpd.conf.
 func (MailDNS) SMTPD() {
-	ForHosts(ValueServer, func(_ string, server Server) {
+	EachHost(func(server Server) {
 		smtpdConf, err := renderSMTPD(server)
 		if err != nil {
 			refuseRender("/etc/mail/smtpd.conf", err)
@@ -58,7 +66,7 @@ func (MailDNS) SMTPD() {
 		}
 		NoDir(legacySMTPDValidationDir, WithPrune)
 		mail := ConfigSet("smtpd", smtpdConfigSet(smtpdConf)...)
-		newAliases := Command("newaliases", List(), OnChange(mail.Member("aliases")), WithName("rebuild-mail-aliases"))
+		newAliases := Sh("newaliases", OnChange(mail.Member("aliases")), WithName("rebuild-mail-aliases"))
 		Service("smtpd", WithRestart, DependsOn(newAliases), OnChange(mail.Members(smtpdRestartMembers()...)...))
 	})
 }
@@ -72,7 +80,7 @@ func (MailDNS) DescNSD() string {
 // blowfish (DNSPublisher), and configures fishfinger (the Master service host)
 // as the NSD secondary that receives the effective zones by zone transfer.
 // Each host block declares its own nsd_flags line, so the task records one
-// scope per host and no enclosing all-frontends scope.
+// scope per host inside the task's frontends guard.
 //
 // The logical reference paths.FrontendSecret("var/nsd/etc/nsd_key.txt")
 // resolves through the provider cmd/gonf/main.go configures
@@ -99,17 +107,18 @@ func (MailDNS) DescDNSFailover() string {
 // zone: successful role changes are handed to dns-publish.ksh, which shares the
 // same lock and transaction as ordinary Gonf publication.
 func (MailDNS) DNSFailover() {
-	onFrontends(func() {
-		script := InstallFile(dnsFailoverCommand, legacyFrontendAsset("scripts/dns-failover.ksh"),
-			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-		publisher := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
-			WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
-		Cron("frontend-nsd-failover", WithCommand("-ns "+dnsFailoverCommand),
-			WithLegacyCommand("-ns "+dnsFailoverCommand), WithMinute("*"), DependsOn(script, publisher))
-	})
+	script := InstallFile(dnsFailoverCommand, legacyFrontendAsset("scripts/dns-failover.ksh"),
+		Perm(0o500, Root))
+	publisher := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
+		Perm(0o500, Root))
+	CronAt("frontend-nsd-failover", "* * * * *", "-ns "+dnsFailoverCommand, DependsOn(script, publisher))
 }
 
 // nsdFlags declares the empty nsd_flags line that enables NSD on the host.
+// It stays a line of /etc/rc.conf.local instead of Service WithFlags(""):
+// /etc/rc.d/nsd sets default flags (-c /var/nsd/etc/nsd.conf), which
+// `rcctl get nsd flags` reports for the empty line, so empty flags would
+// never converge.
 func nsdFlags() Resource {
 	return rcConfLocalLine("nsd_flags=", "rc-conf-nsd-flags")
 }
@@ -128,10 +137,10 @@ func nsdPublisher(data Data, key string) {
 	}
 	flags := nsdFlags()
 	publisherScript := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
-		WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
+		Perm(0o500, Root))
 	inputs := dnsPublisherInputs(data.DNSZones, files)
 	deps := append([]resource.Dependency{flags, publisherScript}, inputs...)
-	publisher := Command(dnsPublishCommand, List(), DependsOn(deps...), WithName("publish-nsd-zones"))
+	publisher := Sh(dnsPublishCommand, DependsOn(deps...), WithName("publish-nsd-zones"))
 	Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
 }
 
@@ -139,9 +148,9 @@ func nsdPublisher(data Data, key string) {
 // templates and no zone-writing command: its slave zone files are solely NSD's
 // transfer destination. The key include and the configuration are validated
 // together with nsd-checkconf, staged inside NSD's chroot, before either is
-// live, and a published change restarts NSD. Both members are rendered
-// before anything is declared, so a render failure refuses the host's
-// secondary declarations (renderBatch).
+// live, and a published change restarts NSD. Both
+// members are rendered before anything is declared, so a render failure
+// refuses the host's secondary declarations (renderBatch).
 func nsdSecondary(data Data, key string) {
 	var batch renderBatch
 	keyConf := batch.render("/var/nsd/etc/key.conf", func() (string, error) { return renderNSDKey(key) })
@@ -154,9 +163,9 @@ func nsdSecondary(data Data, key string) {
 	flags := nsdFlags()
 	config := ConfigSet("nsd",
 		ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(keyConf),
-			WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
+			Perm(0o640, "root:_nsd")),
 		ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(nsdConf),
-			WithMode(0o640), WithOwner("root"), WithGroup("_nsd")),
+			Perm(0o640, "root:_nsd")),
 		WithChroot("/var/nsd"),
 		WithSetValidation("nsd-checkconf", List(MemberPath("nsd.conf"))))
 	Service("nsd", WithRestart, OnChange(flags, config))
@@ -202,21 +211,22 @@ func renderPublisherFiles(data Data, key string) (publisherFiles, bool) {
 
 // dnsPublisherInputs declares the publisher's input directories and its
 // already-rendered input files (see renderPublisherFiles); zones and
-// files.zones share one order.
+// files.zones share one order. Each file applies after its directory
+// without DependsOn: gonf orders a path after the Dir that contains it.
 func dnsPublisherInputs(zones []string, files publisherFiles) []resource.Dependency {
-	inputDir := Dir(dnsPublisherDir, WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
-	zoneDir := Dir(dnsPublisherZones, WithMode(0o700), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir))
-	inputs := []resource.Dependency{inputDir, zoneDir}
-	for i, zone := range zones {
-		inputs = append(inputs, File(publisherZonePath(zone),
-			WithContent(files.zones[i]), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(zoneDir)))
+	inputs := []resource.Dependency{
+		Dir(dnsPublisherDir, Perm(0o700, Root)),
+		Dir(dnsPublisherZones, Perm(0o700, Root)),
 	}
-	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "publisher.conf"),
-		WithContent(files.publisherConf), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
-	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "key.conf"), WithContent(files.keyConf),
-		WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
-	inputs = append(inputs, File(filepath.Join(dnsPublisherDir, "nsd.conf"),
-		WithContent(files.nsdConf), WithMode(0o600), WithOwner("root"), WithGroup("wheel"), DependsOn(inputDir)))
+	input := func(path, content string) {
+		inputs = append(inputs, File(path, WithContent(content), Perm(0o600, Root)))
+	}
+	for i, zone := range zones {
+		input(publisherZonePath(zone), files.zones[i])
+	}
+	input(filepath.Join(dnsPublisherDir, "publisher.conf"), files.publisherConf)
+	input(filepath.Join(dnsPublisherDir, "key.conf"), files.keyConf)
+	input(filepath.Join(dnsPublisherDir, "nsd.conf"), files.nsdConf)
 	return inputs
 }
 
@@ -228,11 +238,11 @@ func smtpdConfigSet(smtpdConf string) []ConfigSetOption {
 	opts := make([]ConfigSetOption, 0, len(mailTableNames)+2)
 	for _, name := range mailTableNames {
 		opts = append(opts, ConfigFile(name, filepath.Join("/etc/mail", name), WithSource(legacyFrontendAsset(filepath.Join("etc/mail", name))),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel")))
+			Perm(0o644, Root)))
 	}
 	return append(opts,
 		ConfigFile("smtpd.conf", "/etc/mail/smtpd.conf", WithContent(smtpdConf),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel")),
+			Perm(0o644, Root)),
 		WithSetValidation("smtpd", List("-n", "-f", MemberPath("smtpd.conf"))))
 }
 

@@ -3,13 +3,19 @@
 package cluster
 
 import (
+	"codeberg.org/snonux/conf/gonf/freebsd"
 	"codeberg.org/snonux/conf/gonf/frontends"
+	"codeberg.org/snonux/conf/gonf/garage"
+	"codeberg.org/snonux/conf/gonf/netbsd"
+	"codeberg.org/snonux/conf/gonf/openbsd"
+	"codeberg.org/snonux/conf/gonf/rocky"
 	. "github.com/snonux/gonf/api"
 )
 
 // Cluster names — the source of truth for which hosts a task package targets.
-// RegisterMethods(..., WithCluster(Name…)) so recipes use ForHosts (or
-// ClusterHosts() / MustHostValue) without naming the cluster again.
+// RegisterMethods(..., OnCluster(Name…)) binds the tasks to the cluster, so
+// recipes use EachHost (or ClusterHosts()) without naming it again, and
+// guards every task to the cluster's hosts.
 //
 //	cluster          → Aggregate / deploy
 //	NameFrontends    → frontends / frontends_*
@@ -28,45 +34,31 @@ const (
 	NameGarage    = "garage"
 )
 
-// Per-host recipe value keys (WithValue). Every cluster member that a recipe
-// reads must have the key set with the recipe's type — otherwise ForHosts
-// fails the record with an error (MustHostValue exits), before any SSH
-// connection. ForHosts checks every member, even when a push targets only
-// one host.
-const (
-	ValueUnattendedCron        = "unattended.cron"          // frontend [3]string hours; netbsd [2]string hours
-	ValueUnattendedOnCalendar  = "unattended.on_calendar"   // rocky OnCalendar= string
-	ValueKernelAuditOnCalendar = "kernel_audit.on_calendar" // rocky-pis daily kernel CVE audit OnCalendar= string
-	ValueVulnAuditCron         = "vuln_audit.cron"          // netbsd-pis daily vulnerability audit [2]string{minute, hour}
-	ValueUnattendedCronMinute  = "unattended.cron_minute"   // freebsd hourly minute string
-	ValueUnattendedAllowReboot = "unattended.allow_reboot"  // freebsd bool; false on f3
-	ValueFrontendServer        = frontends.ValueServer      // frontends.Server address and role data
-	ValueGarageRPCPublicAddr   = "garage.rpc_public_addr"   // Garage node RPC address, including port
-)
+// Per-host recipe data is attached with WithData, one small struct type per
+// recipe (openbsd.UnattendedSchedule, frontends.Server, ...), defined in the
+// recipe package that reads it with EachHost. Every member of a task's
+// cluster must carry the type the task reads, otherwise the record fails
+// before any SSH connection. EachHost checks every member, even when a push
+// targets only one host.
 
 // Register registers the OpenBSD frontend hosts, the four Raspberry Pis, the
 // Rocky k3s nodes (r0–r2), the FreeBSD hypervisors (f0–f3), and the clusters
 // that group them. Privileged tasks apply via doas (OpenBSD / NetBSD /
 // FreeBSD) or sudo (Rocky).
 //
-// Pi, r-node, and f-host SSH must use port 22 explicitly: ~/.ssh/config maps
-// Host *.buetow.org to Port 2 (OpenBSD frontends), so an unqualified ssh to
-// piN.lan.buetow.org / rN.lan.buetow.org / fN.lan.buetow.org times out on
-// port 2. See docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §2.
-//
 // Inventory names (pi0…pi3, r0…r2, f0…f3) are substrings of the live OS
-// hostnames so WhenHostname("piN") / WhenHostname("rN") / WhenHostname("fN")
-// match via hostname_contains. Keep that invariant if renaming hosts.
+// hostnames so OnCluster and WhenHostname("piN") / WhenHostname("rN") /
+// WhenHostname("fN") match via hostname_contains. Keep that invariant if
+// renaming hosts.
 //
-// r-nodes are reached on the LAN as root@rN.lan.buetow.org (amd64 Rocky VMs),
-// same Port-22 rule as the Pis. Login is already root; PrivilegeSudo still
-// wraps elevated chunks as sudo -n so gonf push works with RequiresRoot tasks.
+// r-nodes are reached on the LAN as root@rN.lan.buetow.org (amd64 Rocky VMs).
+// Login is already root; PrivilegeSudo still wraps elevated chunks as
+// sudo -n so gonf push works with RequiresRoot tasks.
 //
 // f-hosts are paul@fN.lan.buetow.org with doas (never root SSH).
 //
-// Register itself only sequences the host/cluster groups below, each built
-// by one helper in the same order as the original single function, so the
-// recorded plan (host and cluster registration order) is unchanged.
+// Register itself only sequences the host/cluster groups below, in a fixed
+// order, so the host and cluster registration order stays stable.
 func Register() {
 	registerFrontends()
 	pi2, pi3 := registerPis()
@@ -74,28 +66,34 @@ func Register() {
 	registerFreeBSD()
 }
 
+// lan bundles the SSH settings every LAN host (piN, rN, fN) shares. The port
+// must be 22 explicitly: ~/.ssh/config maps Host *.buetow.org to Port 2 (the
+// OpenBSD frontends), so an ssh without -p to piN.lan.buetow.org /
+// rN.lan.buetow.org / fN.lan.buetow.org would time out on port 2. See
+// docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §2.
+func lan(user string) HostOption {
+	return HostDefaults(WithSSHUser(user), WithSSHPort(22))
+}
+
 // registerFrontends registers the two OpenBSD frontend hosts and the
-// frontends cluster. Reached on port 2 per Register's doc comment above.
+// frontends cluster. They are reached as rex on port 2.
 func registerFrontends() {
-	blowfish := Host("blowfish",
+	frontend := HostDefaults(
 		WithSSHUser("rex"),
-		WithSSHHost("blowfish.buetow.org"),
 		WithSSHPort(2),
 		WithPrivilege(PrivilegeDoas),
 		WithGOOS("openbsd"),
 		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedCron, [3]string{"6", "6", "7"}),
-		WithValue(ValueFrontendServer, frontends.MustServer("blowfish")),
 	)
-	fishfinger := Host("fishfinger",
-		WithSSHUser("rex"),
+	blowfish := Host("blowfish", frontend,
+		WithSSHHost("blowfish.buetow.org"),
+		WithData(openbsd.UnattendedSchedule{BaseHour: "6", PkgsHour: "6", AuditHour: "7"}),
+		WithData(frontends.MustServer("blowfish")),
+	)
+	fishfinger := Host("fishfinger", frontend,
 		WithSSHHost("fishfinger.buetow.org"),
-		WithSSHPort(2),
-		WithPrivilege(PrivilegeDoas),
-		WithGOOS("openbsd"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedCron, [3]string{"22", "22", "23"}),
-		WithValue(ValueFrontendServer, frontends.MustServer("fishfinger")),
+		WithData(openbsd.UnattendedSchedule{BaseHour: "22", PkgsHour: "22", AuditHour: "23"}),
+		WithData(frontends.MustServer("fishfinger")),
 	)
 	Cluster(NameFrontends, blowfish, fishfinger).Parallel(5)
 }
@@ -118,53 +116,43 @@ func registerPis() (pi2, pi3 HostRef) {
 
 // registerNetBSDPiHosts registers pi0 and pi1, the NetBSD/doas Pis.
 func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
-	pi0 = Host("pi0",
-		WithSSHUser("paul"),
-		WithSSHHost("pi0.lan.buetow.org"),
-		WithSSHPort(22),
+	netbsdPi := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeDoas),
 		WithGOOS("netbsd"),
 		WithGOARCH("arm64"),
-		WithValue(ValueUnattendedCron, [2]string{"2", "2"}),
+	)
+	pi0 = Host("pi0", netbsdPi,
+		WithSSHHost("pi0.lan.buetow.org"),
+		WithData(netbsd.UnattendedSchedule{PkgsHour: "2", RebootHour: "2"}),
 		// After the 02:10 pkgs / 02:50 reboot window (each with up to
 		// 20 min jitter), before /etc/daily at 04:15.
-		WithValue(ValueVulnAuditCron, [2]string{"40", "3"}),
+		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "3"}),
 	)
-	pi1 = Host("pi1",
-		WithSSHUser("paul"),
+	pi1 = Host("pi1", netbsdPi,
 		WithSSHHost("pi1.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeDoas),
-		WithGOOS("netbsd"),
-		WithGOARCH("arm64"),
-		WithValue(ValueUnattendedCron, [2]string{"22", "22"}),
+		WithData(netbsd.UnattendedSchedule{PkgsHour: "22", RebootHour: "22"}),
 		// After the 22:10 pkgs / 22:50 reboot window.
-		WithValue(ValueVulnAuditCron, [2]string{"40", "23"}),
+		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "23"}),
 	)
 	return pi0, pi1
 }
 
 // registerRockyPiHosts registers pi2 and pi3, the Rocky/sudo Pis.
 func registerRockyPiHosts() (pi2, pi3 HostRef) {
-	pi2 = Host("pi2",
-		WithSSHUser("paul"),
-		WithSSHHost("pi2.lan.buetow.org"),
-		WithSSHPort(22),
+	rockyPi := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeSudo),
 		WithGOOS("linux"),
 		WithGOARCH("arm64"),
-		WithValue(ValueUnattendedOnCalendar, "*-*-* *:05:00"),
-		WithValue(ValueKernelAuditOnCalendar, "*-*-* 06:15:00"),
 	)
-	pi3 = Host("pi3",
-		WithSSHUser("paul"),
+	pi2 = Host("pi2", rockyPi,
+		WithSSHHost("pi2.lan.buetow.org"),
+		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
+		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
+	)
+	pi3 = Host("pi3", rockyPi,
 		WithSSHHost("pi3.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeSudo),
-		WithGOOS("linux"),
-		WithGOARCH("arm64"),
-		WithValue(ValueUnattendedOnCalendar, "*-*-* *:35:00"),
-		WithValue(ValueKernelAuditOnCalendar, "*-*-* 06:45:00"),
+		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
+		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
 	)
 	return pi2, pi3
 }
@@ -173,32 +161,22 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 // rocky-all clusters. pi2 and pi3 (from registerPis) fold into rocky-all,
 // which is every Rocky unattended host (Pis + k3s).
 func registerRockyK3s(pi2, pi3 HostRef) {
-	r0 := Host("r0",
-		WithSSHUser("root"),
+	rnode := HostDefaults(lan("root"),
+		WithPrivilege(PrivilegeSudo),
+		WithGOOS("linux"),
+		WithGOARCH("amd64"),
+	)
+	r0 := Host("r0", rnode,
 		WithSSHHost("r0.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeSudo),
-		WithGOOS("linux"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedOnCalendar, "*-*-* *:05:00"),
+		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
-	r1 := Host("r1",
-		WithSSHUser("root"),
+	r1 := Host("r1", rnode,
 		WithSSHHost("r1.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeSudo),
-		WithGOOS("linux"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedOnCalendar, "*-*-* *:25:00"),
+		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
-	r2 := Host("r2",
-		WithSSHUser("root"),
+	r2 := Host("r2", rnode,
 		WithSSHHost("r2.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeSudo),
-		WithGOOS("linux"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedOnCalendar, "*-*-* *:45:00"),
+		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
 	)
 	// rocky-k3s = r0/r1/r2 only. rocky-all = every Rocky unattended host
 	// (Pis + k3s). Prefer OS-pair / role clusters for deploys.
@@ -207,67 +185,34 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 }
 
 // registerFreeBSD registers the FreeBSD hypervisor hosts (f0–f3) and their
-// freebsd-hosts / garage clusters.
+// freebsd-hosts / garage clusters. f0–f2 are also Garage nodes (each carries
+// the garage.Node the Garage recipe reads); f3 stays out of the Garage
+// cluster. f3 never auto-reboots: unattended-upgrade-freebsd hardcodes that.
 func registerFreeBSD() {
-	f0, f1, f2 := registerGarageFreeBSDHosts()
-	f3 := registerNonGarageFreeBSDHost()
-	// freebsd-hosts = all FreeBSD hypervisors. f3 never auto-reboots
-	// (allow_reboot=false); script also hardcodes that for defense in depth.
+	fhost := HostDefaults(lan("paul"),
+		WithPrivilege(PrivilegeDoas),
+		WithGOOS("freebsd"),
+		WithGOARCH("amd64"),
+	)
+	f0 := Host("f0", fhost,
+		WithSSHHost("f0.lan.buetow.org"),
+		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
+		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
+	)
+	f1 := Host("f1", fhost,
+		WithSSHHost("f1.lan.buetow.org"),
+		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
+		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
+	)
+	f2 := Host("f2", fhost,
+		WithSSHHost("f2.lan.buetow.org"),
+		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
+		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
+	)
+	f3 := Host("f3", fhost,
+		WithSSHHost("f3.lan.buetow.org"),
+		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
+	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
 	Cluster(NameGarage, f0, f1, f2).Parallel(1)
-}
-
-// registerGarageFreeBSDHosts registers f0–f2, the FreeBSD hosts that are
-// also Garage cluster members (each carries a garage.rpc_public_addr value
-// the Garage recipe reads).
-func registerGarageFreeBSDHosts() (f0, f1, f2 HostRef) {
-	f0 = Host("f0",
-		WithSSHUser("paul"),
-		WithSSHHost("f0.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeDoas),
-		WithGOOS("freebsd"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedCronMinute, "5"),
-		WithValue(ValueUnattendedAllowReboot, true),
-		WithValue(ValueGarageRPCPublicAddr, "192.168.1.130:3901"),
-	)
-	f1 = Host("f1",
-		WithSSHUser("paul"),
-		WithSSHHost("f1.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeDoas),
-		WithGOOS("freebsd"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedCronMinute, "25"),
-		WithValue(ValueUnattendedAllowReboot, true),
-		WithValue(ValueGarageRPCPublicAddr, "192.168.1.131:3901"),
-	)
-	f2 = Host("f2",
-		WithSSHUser("paul"),
-		WithSSHHost("f2.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeDoas),
-		WithGOOS("freebsd"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedCronMinute, "45"),
-		WithValue(ValueUnattendedAllowReboot, true),
-		WithValue(ValueGarageRPCPublicAddr, "192.168.1.132:3901"),
-	)
-	return f0, f1, f2
-}
-
-// registerNonGarageFreeBSDHost registers f3, the one FreeBSD hypervisor that
-// stays out of the Garage cluster and never auto-reboots.
-func registerNonGarageFreeBSDHost() HostRef {
-	return Host("f3",
-		WithSSHUser("paul"),
-		WithSSHHost("f3.lan.buetow.org"),
-		WithSSHPort(22),
-		WithPrivilege(PrivilegeDoas),
-		WithGOOS("freebsd"),
-		WithGOARCH("amd64"),
-		WithValue(ValueUnattendedCronMinute, "15"),
-		WithValue(ValueUnattendedAllowReboot, false),
-	)
 }

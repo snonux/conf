@@ -20,15 +20,12 @@ const (
 	// effective NSD zone files and SOA serials. It is independent of
 	// Master/Standby service-routing roles; e52 enforces the contract.
 	DNSPublisher = "blowfish"
-
-	// ValueServer is the inventory key for one frontend's stable addressing
-	// facts. It lives with Server so frontend task packages can consume the
-	// value without creating an import cycle through cluster.
-	ValueServer = "frontends.server"
 )
 
 // Server is the stable per-frontend data that Rex previously derived from its
-// %ips map. It is suitable for WithTemplateData and WithValue.
+// %ips map. gonf/cluster attaches each frontend's Server as host data
+// (WithData), which the tasks read with EachHost; it is also suitable for
+// WithTemplateData.
 type Server struct {
 	Name string
 	FQDN string

@@ -4,7 +4,6 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
@@ -14,10 +13,16 @@ import (
 // kernel's upstream version against the OSV Linux-kernel CVE export instead
 // (docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §13). It is separate from
 // Unattended so the regular dnf update/audit path stays untouched, and it is
-// registered with WithCluster(cluster.NameRockyPis): the r-nodes run the
+// registered with OnCluster(cluster.NameRockyPis): the r-nodes run the
 // ordinary Rocky kernel, which dnf updateinfo does cover.
 type KernelAudit struct {
 	RequiresRoot
+}
+
+// KernelAuditCalendar is a Rocky Pi's daily audit schedule (host data, see
+// gonf/cluster), a systemd OnCalendar= expression.
+type KernelAuditCalendar struct {
+	OnCalendar string
 }
 
 // DescPackages returns the description for the audit's tool dependencies.
@@ -31,29 +36,28 @@ func (KernelAudit) DescPackages() string {
 // version ranges. ksh is also declared by Unattended.Packages; the duplicate
 // declaration is idempotent.
 func (KernelAudit) Packages() {
-	WhenHostname(ClusterHosts(), func() {
-		Package("ksh")
-		Package("unzip")
-		Package("jq")
-		Package("curl")
-	})
+	Packages("ksh", "unzip", "jq", "curl")
 }
 
 // DescScript returns the description for the audit script deployment.
 func (KernelAudit) DescScript() string {
-	return "Install /usr/local/sbin/rocky-kernel-audit (0755 root:root; needs rocky_kernel_audit_packages)"
+	return "Install /usr/local/sbin/rocky-kernel-audit (0755 root:root)"
 }
 
-// Script installs the ksh audit script.
+// OptsScript records the audit's tools before the script. Privileged() is
+// repeated because the per-method companion replaces the RequiresRoot
+// struct default.
+func (KernelAudit) OptsScript() TaskOptions {
+	return TaskOptions{Privileged(), Needs("packages")}
+}
+
+// Script installs the ksh audit script (after its directory, which gonf
+// orders as the parent).
 func (KernelAudit) Script() {
-	WhenHostname(ClusterHosts(), func() {
-		dir := EnsureDir("/usr/local/sbin",
-			WithMode(0o755), WithOwner("root"), WithGroup("root"))
-		InstallFile("/usr/local/sbin/rocky-kernel-audit",
-			paths.FrontendAsset("scripts/rocky-kernel-audit.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("root"),
-			DependsOn(dir))
-	})
+	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	InstallFile("/usr/local/sbin/rocky-kernel-audit",
+		paths.FrontendAsset("scripts/rocky-kernel-audit.sh"),
+		Perm(0o755, Root))
 }
 
 // DescStateDir returns the description for the audit state directory.
@@ -70,15 +74,19 @@ func (KernelAudit) DescStateDir() string {
 // baseline-cve-records accepts a lower feed record count at once; deleting
 // affected-cves re-baselines (every affected CVE is reported as new once).
 func (KernelAudit) StateDir() {
-	WhenHostname(ClusterHosts(), func() {
-		EnsureDir("/var/lib/rocky-kernel-audit",
-			WithMode(0o700), WithOwner("root"), WithGroup("root"))
-	})
+	EnsureDir("/var/lib/rocky-kernel-audit", Perm(0o700, Root))
 }
 
 // DescUnits returns the description for the audit timer.
 func (KernelAudit) DescUnits() string {
-	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar; needs rocky_kernel_audit_script, rocky_kernel_audit_state_dir)"
+	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
+}
+
+// OptsUnits records the script and the state directory before the timer.
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (KernelAudit) OptsUnits() TaskOptions {
+	return TaskOptions{Privileged(), Needs("script", "state_dir")}
 }
 
 // Units installs the daily oneshot+timer pair. Persistent catches a run
@@ -87,10 +95,10 @@ func (KernelAudit) DescUnits() string {
 // VULNERABLE is reported in the journal at notice/warning priority (new
 // CVEs, status changes) and in the status record. The Pis have no MTA.
 func (KernelAudit) Units() {
-	ForHosts(cluster.ValueKernelAuditOnCalendar, func(_ string, calendar string) {
+	EachHost(func(c KernelAuditCalendar) {
 		SystemdTimer("rocky-kernel-audit",
 			WithCommand("/usr/local/sbin/rocky-kernel-audit"),
-			WithOnCalendar(calendar),
+			WithOnCalendar(c.OnCalendar),
 			WithPersistent,
 			WithDescription("Daily Raspberry Pi kernel CVE audit"),
 			WithServiceDescription("Raspberry Pi kernel CVE audit (OSV Linux feed)"),

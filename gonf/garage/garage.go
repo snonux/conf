@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/paths"
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
@@ -16,6 +15,12 @@ const (
 	configPath = "/usr/local/etc/garage.toml"
 	template   = "etc/garage.toml.tmpl"
 )
+
+// Node is a Garage node's own address (host data, see gonf/cluster):
+// RPCPublicAddr is the RPC address other nodes reach it on, with its port.
+type Node struct {
+	RPCPublicAddr string
+}
 
 // tomlData carries the per-node values rendered into garage.toml. It stays
 // JSON-compatible because WithTemplateData serializes it with the plan for
@@ -71,10 +76,10 @@ func (Deployment) DescConfig() string {
 // rendered template_data byte-identical for either source.
 func (Deployment) Config() {
 	secret := trimFinalNewline(MustSecret(paths.GarageSecret("rpc_secret")))
-	ForHosts(cluster.ValueGarageRPCPublicAddr, func(_ string, rpcPublicAddr string) {
+	EachHost(func(node Node) {
 		config := InstallFile(configPath, paths.GarageAsset(template),
-			WithMode(0o640), WithOwner("root"), WithGroup("garage"),
-			WithTemplateData(defaultConfig(secret, rpcPublicAddr)),
+			Perm(0o640, "root:garage"),
+			WithTemplateData(defaultConfig(secret, node.RPCPublicAddr)),
 		)
 		Service("garage", WithRestart, OnChange(config))
 	})

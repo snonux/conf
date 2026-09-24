@@ -9,7 +9,8 @@ import (
 )
 
 // Maintenance carries the root-only r-node maintenance tasks. Register it
-// with cluster.NameRockyK3s so ClusterHosts resolves to r0, r1, and r2.
+// with OnCluster(cluster.NameRockyK3s) so every task applies on r0, r1, and
+// r2 only.
 type Maintenance struct {
 	RequiresRoot
 }
@@ -23,30 +24,26 @@ func (Maintenance) DescNFSMountMonitor() string {
 // shutdown ordering helpers. Every changed managed input reloads systemd once
 // and restarts the timer once; the marker and drain services still converge to
 // enabled and active on every run. Split into three phases (dirs, files,
-// systemd wiring) that run in the original order, so the recorded plan is
-// unchanged.
+// systemd wiring) that run in this order.
 func (Maintenance) NFSMountMonitor() {
-	WhenHostname(ClusterHosts(), func() {
-		monitorDir := "nfs-mount-monitor"
-		ensureNFSMountMonitorDirs()
-		inputs := installNFSMountMonitorFiles(monitorDir)
-		activateNFSMountMonitorUnits(inputs)
-	})
+	ensureNFSMountMonitorDirs()
+	inputs := installNFSMountMonitorFiles("nfs-mount-monitor")
+	activateNFSMountMonitorUnits(inputs)
 }
 
 // ensureNFSMountMonitorDirs creates the state, node_exporter textfile
 // collector, and systemd drop-in directories the monitor's files land in.
 func ensureNFSMountMonitorDirs() {
 	EnsureDir("/var/lib/nfs-mount-monitor",
-		WithMode(0o700), WithOwner("root"), WithGroup("root"))
+		Perm(0o700, Root))
 	EnsureDir("/var/lib/node_exporter",
-		WithMode(0o755), WithOwner("root"), WithGroup("root"))
+		Perm(0o755, Root))
 	EnsureDir("/var/lib/node_exporter/textfile_collector",
-		WithMode(0o755), WithOwner("root"), WithGroup("root"))
+		Perm(0o755, Root))
 	EnsureDir("/etc/systemd/system/data-nfs-k3svolumes.mount.d",
-		WithMode(0o755), WithOwner("root"), WithGroup("root"))
+		Perm(0o755, Root))
 	EnsureDir("/etc/systemd/system/k3s.service.d",
-		WithMode(0o755), WithOwner("root"), WithGroup("root"))
+		Perm(0o755, Root))
 }
 
 // installNFSMountMonitorFiles installs the monitor script, its systemd
@@ -58,32 +55,32 @@ func installNFSMountMonitorFiles(monitorDir string) []Resource {
 	return []Resource{
 		InstallFile("/usr/local/bin/check-nfs-mount.sh",
 			paths.RNodeAsset(monitorDir+"/check-nfs-mount.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("root")),
+			Perm(0o755, Root)),
 		InstallFile("/etc/default/nfs-mount-monitor",
 			paths.RNodeAsset(monitorDir+"/nfs-mount-monitor.default"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 		InstallFile("/etc/systemd/system/nfs-mount-monitor.service",
 			paths.RNodeAsset(monitorDir+"/nfs-mount-monitor.service"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 		InstallFile("/etc/systemd/system/nfs-mount-monitor.timer",
 			paths.RNodeAsset(monitorDir+"/nfs-mount-monitor.timer"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 		InstallFile("/etc/systemd/system/nfs-shutdown-marker.service",
 			paths.RNodeAsset(monitorDir+"/nfs-shutdown-marker.service"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 		InstallFile("/usr/local/bin/k3s-nfs-drain.sh",
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-drain.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("root")),
+			Perm(0o755, Root)),
 		InstallFile("/etc/systemd/system/k3s-nfs-drain.service",
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-drain.service"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 		InstallFile(
 			"/etc/systemd/system/data-nfs-k3svolumes.mount.d/10-stunnel-ordering.conf",
 			paths.RNodeAsset(monitorDir+"/nfs-stunnel-ordering.conf"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 		InstallFile("/etc/systemd/system/k3s.service.d/10-nfs-ordering.conf",
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-ordering.conf"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root")),
+			Perm(0o644, Root)),
 	}
 }
 
@@ -108,18 +105,13 @@ func (Maintenance) DescPersistentJournal() string {
 // journald drop-in. A changed drop-in creates journal state and restarts
 // journald before the unconditional journal flush.
 func (Maintenance) PersistentJournal() {
-	WhenHostname(ClusterHosts(), func() {
-		EnsureDir("/etc/systemd/journald.conf.d",
-			WithMode(0o755), WithOwner("root"), WithGroup("root"))
-		EnsureDir("/var/log/journal",
-			WithMode(0o2755), WithOwner("root"), WithGroup("systemd-journal"))
+	EnsureDir("/etc/systemd/journald.conf.d", Perm(0o755, Root))
+	EnsureDir("/var/log/journal", Perm(0o2755, "root:systemd-journal"))
 
-		dropIn := InstallFile("/etc/systemd/journald.conf.d/10-persistent.conf",
-			paths.RNodeAsset("journald-persistent.conf"),
-			WithMode(0o644), WithOwner("root"), WithGroup("root"))
-		tmpfiles := Command("systemd-tmpfiles", List("--create", "--prefix", "/var/log/journal"),
-			OnChange(dropIn))
-		journald := Command("systemctl", List("restart", "systemd-journald"), OnChange(dropIn))
-		Command("journalctl", List("--flush"), DependsOn(tmpfiles, journald))
-	})
+	dropIn := InstallFile("/etc/systemd/journald.conf.d/10-persistent.conf",
+		paths.RNodeAsset("journald-persistent.conf"),
+		Perm(0o644, Root))
+	tmpfiles := Sh("systemd-tmpfiles --create --prefix /var/log/journal", OnChange(dropIn))
+	journald := Sh("systemctl restart systemd-journald", OnChange(dropIn))
+	Sh("journalctl --flush", DependsOn(tmpfiles, journald))
 }

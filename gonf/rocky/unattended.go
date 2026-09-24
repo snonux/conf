@@ -9,15 +9,20 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
 // Unattended carries the unattended-upgrade deployment for all Rocky hosts.
-// Register with WithCluster(cluster.NameRockyAll). Per-host OnCalendar lives on
-// each Host via WithValue(cluster.ValueUnattendedOnCalendar, …).
+// Register with OnCluster(cluster.NameRockyAll). Per-host OnCalendar lives on
+// each Host as WithData(UnattendedCalendar{…}).
 type Unattended struct {
 	RequiresRoot
+}
+
+// UnattendedCalendar is a Rocky host's timer schedule (host data, see
+// gonf/cluster), a systemd OnCalendar= expression.
+type UnattendedCalendar struct {
+	OnCalendar string
 }
 
 // DescGonfLink returns the description for the sudo PATH link.
@@ -28,9 +33,7 @@ func (Unattended) DescGonfLink() string {
 // GonfLink puts gonf on sudo's secure_path so privileged push
 // works (sudo -n gonf …). The bootstrap installs to /usr/local/bin.
 func (Unattended) GonfLink() {
-	WhenHostname(ClusterHosts(), func() {
-		Link("/usr/bin/gonf", WithSymlink("/usr/local/bin/gonf"))
-	})
+	Link("/usr/bin/gonf", WithSymlink("/usr/local/bin/gonf"))
 }
 
 // DescPackages returns the description for required packages.
@@ -41,27 +44,28 @@ func (Unattended) DescPackages() string {
 // Packages installs ksh (script interpreter) and yum-utils
 // (needs-restarting -s/-r).
 func (Unattended) Packages() {
-	WhenHostname(ClusterHosts(), func() {
-		Package("ksh")
-		Package("yum-utils")
-	})
+	Packages("ksh", "yum-utils")
 }
 
 // DescScript returns the description for the wrapper deployment.
 func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-rocky (0755 root:root; needs rocky_packages)"
+	return "Install /usr/local/sbin/unattended-upgrade-rocky (0755 root:root)"
 }
 
-// Script installs the Rocky ksh wrapper.
+// OptsScript records ksh and yum-utils before the script that uses them.
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (Unattended) OptsScript() TaskOptions {
+	return TaskOptions{Privileged(), Needs("packages")}
+}
+
+// Script installs the Rocky ksh wrapper (after its directory, which gonf
+// orders as the parent).
 func (Unattended) Script() {
-	WhenHostname(ClusterHosts(), func() {
-		dir := EnsureDir("/usr/local/sbin",
-			WithMode(0o755), WithOwner("root"), WithGroup("root"))
-		InstallFile("/usr/local/sbin/unattended-upgrade-rocky",
-			paths.FrontendAsset("scripts/unattended-upgrade-rocky.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("root"),
-			DependsOn(dir))
-	})
+	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	InstallFile("/usr/local/sbin/unattended-upgrade-rocky",
+		paths.FrontendAsset("scripts/unattended-upgrade-rocky.sh"),
+		Perm(0o755, Root))
 }
 
 // DescStampDir returns the description for the stamp directory.
@@ -71,25 +75,29 @@ func (Unattended) DescStampDir() string {
 
 // StampDir creates the persistent stamp directory.
 func (Unattended) StampDir() {
-	WhenHostname(ClusterHosts(), func() {
-		EnsureDir("/var/lib/unattended-upgrade",
-			WithMode(0o700), WithOwner("root"), WithGroup("root"))
-	})
+	EnsureDir("/var/lib/unattended-upgrade", Perm(0o700, Root))
 }
 
 // DescUnits returns the description for systemd timer install.
 func (Unattended) DescUnits() string {
-	return "Install unattended-upgrade-rocky SystemdTimer (oneshot + per-host calendar; needs rocky_script, rocky_stamp_dir)"
+	return "Install unattended-upgrade-rocky SystemdTimer (oneshot + per-host calendar)"
+}
+
+// OptsUnits records the script and the stamp directory before the timer.
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (Unattended) OptsUnits() TaskOptions {
+	return TaskOptions{Privileged(), Needs("script", "stamp_dir")}
 }
 
 // Units installs the oneshot+timer pair via SystemdTimer and
-// enables the timer. ForHosts supplies each host's OnCalendar under its
-// hostname guard; identical bodies use WhenHostname(ClusterHosts()).
+// enables the timer. EachHost supplies each host's OnCalendar under its
+// hostname guard.
 func (Unattended) Units() {
-	ForHosts(cluster.ValueUnattendedOnCalendar, func(_ string, calendar string) {
+	EachHost(func(c UnattendedCalendar) {
 		SystemdTimer("unattended-upgrade-rocky",
 			WithCommand("/usr/local/sbin/unattended-upgrade-rocky daily"),
-			WithOnCalendar(calendar),
+			WithOnCalendar(c.OnCalendar),
 			WithOnBootSec("10min"),
 			WithPersistent,
 			WithDescription("Hourly unattended-upgrade check (updates once per day)"),
@@ -107,10 +115,7 @@ func (Unattended) DescLogrotate() string {
 
 // Logrotate installs the logrotate snippet.
 func (Unattended) Logrotate() {
-	src := paths.FrontendAsset("systemd/unattended-upgrade.logrotate")
-	WhenHostname(ClusterHosts(), func() {
-		InstallFile("/etc/logrotate.d/unattended-upgrade",
-			src,
-			WithMode(0o644), WithOwner("root"), WithGroup("root"))
-	})
+	InstallFile("/etc/logrotate.d/unattended-upgrade",
+		paths.FrontendAsset("systemd/unattended-upgrade.logrotate"),
+		Perm(0o644, Root))
 }

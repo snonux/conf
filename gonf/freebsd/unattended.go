@@ -8,7 +8,6 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
@@ -25,10 +24,17 @@ func unattendedServicesAsset() string {
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\t\troot:wheel\t600  5     1024  *     Z"
 
 // Unattended carries the unattended-upgrade deployment for FreeBSD hosts.
-// Register with WithCluster(cluster.NameFreeBSD). Per-host hourly minute and
-// allow-reboot live on each Host via WithValue.
+// Register with OnCluster(cluster.NameFreeBSD). The per-host hourly minute
+// lives on each Host as WithData(UnattendedSchedule{…}); the reboot policy
+// (f3 never reboots) is hardcoded in the script.
 type Unattended struct {
 	RequiresRoot
+}
+
+// UnattendedSchedule is a FreeBSD host's cron minute (host data, see
+// gonf/cluster): the hourly job runs at this minute past every hour.
+type UnattendedSchedule struct {
+	Minute string
 }
 
 // DescPackages returns the description for required packages.
@@ -38,26 +44,28 @@ func (Unattended) DescPackages() string {
 
 // Packages installs ksh (script interpreter, house rule).
 func (Unattended) Packages() {
-	WhenHostname(ClusterHosts(), func() {
-		Package("ksh")
-	})
+	Package("ksh")
 }
 
 // DescScript returns the description for the wrapper deployment.
 func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-freebsd (0755 root:wheel; needs freebsd_packages)"
+	return "Install /usr/local/sbin/unattended-upgrade-freebsd (0755 root:wheel)"
 }
 
-// Script installs the FreeBSD ksh wrapper.
+// OptsScript records ksh, the script's interpreter, before the script.
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (Unattended) OptsScript() TaskOptions {
+	return TaskOptions{Privileged(), Needs("packages")}
+}
+
+// Script installs the FreeBSD ksh wrapper (after its directory, which gonf
+// orders as the parent).
 func (Unattended) Script() {
-	WhenHostname(ClusterHosts(), func() {
-		dir := EnsureDir("/usr/local/sbin",
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		InstallFile("/usr/local/sbin/unattended-upgrade-freebsd",
-			paths.FrontendAsset("scripts/unattended-upgrade-freebsd.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"),
-			DependsOn(dir))
-	})
+	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	InstallFile("/usr/local/sbin/unattended-upgrade-freebsd",
+		paths.FrontendAsset("scripts/unattended-upgrade-freebsd.sh"),
+		Perm(0o755, Root))
 }
 
 // DescServices returns the description for the restart list.
@@ -67,10 +75,8 @@ func (Unattended) DescServices() string {
 
 // Services installs the rc.d restart list.
 func (Unattended) Services() {
-	WhenHostname(ClusterHosts(), func() {
-		InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-	})
+	InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
+		Perm(0o644, Root))
 }
 
 // DescStampDir returns the description for the stamp directory.
@@ -80,24 +86,28 @@ func (Unattended) DescStampDir() string {
 
 // StampDir creates the persistent stamp directory.
 func (Unattended) StampDir() {
-	WhenHostname(ClusterHosts(), func() {
-		EnsureDir("/var/lib/unattended-upgrade",
-			WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
-	})
+	EnsureDir("/var/lib/unattended-upgrade", Perm(0o700, Root))
 }
 
 // DescCron returns the description for the hourly cron.
 func (Unattended) DescCron() string {
-	return "Root cron: unattended-upgrade-freebsd daily, per-host hourly minute (needs freebsd_script, freebsd_services, freebsd_stamp_dir)"
+	return "Root cron: unattended-upgrade-freebsd daily, per-host hourly minute"
+}
+
+// OptsCron records the script, the restart list and the stamp directory
+// before the job. Privileged() is repeated because the per-method companion
+// replaces the RequiresRoot struct default.
+func (Unattended) OptsCron() TaskOptions {
+	return TaskOptions{Privileged(), Needs("script", "services", "stamp_dir")}
 }
 
 // Cron installs the hourly daily-mode job (stamp-gated in-script).
 // Boot catch-up is the next hourly tick (gonf Cron has no @reboot field).
 func (Unattended) Cron() {
-	ForHosts(cluster.ValueUnattendedCronMinute, func(_ string, minute string) {
+	EachHost(func(s UnattendedSchedule) {
 		Cron("unattended-upgrade-freebsd-daily",
 			WithCommand("/usr/local/sbin/unattended-upgrade-freebsd daily"),
-			WithMinute(minute), WithHour("*"),
+			WithMinute(s.Minute), WithHour("*"),
 			WithCronEnv("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin"),
 		)
 	})
@@ -110,7 +120,5 @@ func (Unattended) DescNewsyslog() string {
 
 // Newsyslog appends the rotation line.
 func (Unattended) Newsyslog() {
-	WhenHostname(ClusterHosts(), func() {
-		File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
-	})
+	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }

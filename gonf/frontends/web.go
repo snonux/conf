@@ -41,7 +41,7 @@ func (Web) OptsACMEInvoke() TaskOptions { return TaskOptions{Privileged(), Opera
 // matching Rex's separate acme_invoke task. It is not part of the aggregate
 // setup path, so adding configuration never unexpectedly contacts an ACME CA.
 func (Web) ACMEInvoke() {
-	onFrontends(func() { Command("/usr/local/bin/acme.sh", List()) })
+	Sh("/usr/local/bin/acme.sh")
 }
 
 // DescHTTPD returns the description for the OpenBSD httpd recipe.
@@ -50,23 +50,23 @@ func (Web) DescHTTPD() string { return "Render, validate, and converge frontend 
 // HTTPD renders each host's configuration on the controller. The core File
 // validation (WithValidation) checks a private candidate with `httpd -n`
 // before every non-dry-run live reconciliation, while OnChange limits a
-// restart to a changed live config or rc flag. A render failure refuses the
-// host's httpd declarations (see refuseRender) instead of declaring a File
-// with empty content.
+// restart to a changed live config; a changed rc flag (WithFlags("") keeps
+// the httpd_flags= line rcctl writes) restarts it too. A render failure
+// refuses the host's httpd declarations (see refuseRender) instead of
+// declaring a File with empty content.
 func (Web) HTTPD() {
-	ForHosts(ValueServer, func(_ string, server Server) {
+	EachHost(func(server Server) {
 		content, err := renderHTTPD(webData(server))
 		if err != nil {
 			refuseRender("/etc/httpd.conf", err)
 			return
 		}
-		flags := rcConfLocalLine("httpd_flags=", "rc-conf-httpd-flags")
 		NoFile(legacyCandidate("/etc/httpd.conf"))
 		config := File("/etc/httpd.conf", WithContent(content),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"),
+			Perm(0o644, Root),
 			WithValidation("httpd", List("-n", "-f", CandidatePath)))
 		fallbackIndex := htdocs(server)
-		Service("httpd", WithRestart, DependsOn(fallbackIndex), OnChange(flags, config))
+		Service("httpd", WithFlags(""), WithRestart, DependsOn(fallbackIndex), OnChange(config))
 	})
 }
 
@@ -75,6 +75,7 @@ func (Web) DescInetd() string { return "Install and converge frontend inetd" }
 
 // Inetd renders no host-specific content, but still treats its login class as
 // a change input because the daemon must re-exec to receive revised limits.
+// WithFlags("") keeps the inetd_flags= line that enables it.
 // LoginClass installs the root:wheel 0644 fragment under an OpenBSD-only plan
 // requirement; OpenBSD reads /etc/login.conf.d/<class> directly, so no
 // cap_mkdb step is needed (cap_mkdb /etc/login.conf never reads fragments).
@@ -82,19 +83,21 @@ func (Web) DescInetd() string { return "Install and converge frontend inetd" }
 // tc=daemon, which resolves against /etc/login.conf (not other fragments), so
 // it builds on the full stock daemon class and is kept as is.
 func (Web) Inetd() {
-	onFrontends(func() {
-		flags := rcConfLocalLine("inetd_flags=", "rc-conf-inetd-flags")
-		class := LoginClass("inetd", legacyFrontendAsset("etc/login.conf.d/inetd"))
-		config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-		Service("inetd", WithRestart, OnChange(flags, class, config))
-	})
+	class := LoginClass("inetd", legacyFrontendAsset("etc/login.conf.d/inetd"))
+	config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"), Perm(0o644, Root))
+	Service("inetd", WithFlags(""), WithRestart, OnChange(class, config))
 }
 
 // DescRelayd returns the description for the TLS relay recipe.
 func (Web) DescRelayd() string {
-	return "Render, validate, and converge frontend relayd (needs /etc/ssl certificates from frontends_acme + a frontends_acme_invoke run)"
+	return "Render, validate, and converge frontend relayd (needs /etc/ssl certificates from a frontends_acme_invoke run)"
 }
+
+// OptsRelayd records the ACME setup (frontends_acme) before relayd; see
+// MailDNS.OptsSMTPD for why the Operational frontends_acme_invoke is not a
+// need. Privileged() is repeated because the per-method companion replaces
+// the RequiresRoot struct default.
+func (Web) OptsRelayd() TaskOptions { return TaskOptions{Privileged(), Needs("acme")} }
 
 // Relayd validates a candidate with `relayd -n` (core WithValidation) before
 // changing its live configuration. Its daemon login class is watched too: a
@@ -114,23 +117,23 @@ func (Web) DescRelayd() string {
 // unchanged and restarts nothing. No database rebuild is needed: the
 // removal does not touch /etc/login.conf or /etc/login.conf.db.
 //
-// As in HTTPD, a render failure refuses the host's relayd declarations.
+// As in HTTPD, WithFlags("") keeps the relayd_flags= line, and a render
+// failure refuses the host's relayd declarations.
 func (Web) Relayd() {
-	ForHosts(ValueServer, func(_ string, server Server) {
+	EachHost(func(server Server) {
 		content, err := renderRelayd(webData(server))
 		if err != nil {
 			refuseRender("/etc/relayd.conf", err)
 			return
 		}
-		flags := rcConfLocalLine("relayd_flags=", "rc-conf-relayd-flags")
 		class := NoLoginClass("daemon")
 		NoFile(legacyCandidate("/etc/relayd.conf"))
 		config := File("/etc/relayd.conf", WithContent(content),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"),
+			Perm(0o600, Root),
 			WithValidation("relayd", List("-n", "-f", CandidatePath)))
-		Service("relayd", WithRestart, OnChange(flags, class, config))
+		Service("relayd", WithFlags(""), WithRestart, OnChange(class, config))
 		File(dailyLocal, WithLine("/usr/sbin/rcctl start relayd"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+			Perm(0o644, Root))
 	})
 }
 
@@ -144,49 +147,45 @@ func (Web) DescPF() string { return "Validate and reload frontend PF plus its no
 // and change-gated. node_exporter's flags carry each host's own WireGuard
 // address, so the task iterates the hosts.
 func (Web) PF() {
-	for _, host := range ClusterHosts() {
-		WhenHostname(host, func() { pfAndExporter(host) })
-	}
+	EachHost(func(server Server) { pfAndExporter(server.Name) })
 }
 
 // pfAndExporter declares host's validated PF ruleset and reload, and the
 // pf-labels exporter feeding node_exporter's textfile collector. A host
 // missing from the WireGuard inventory has no listen address for
-// node_exporter: its flags line is refused as a declaration error (which
-// fails the record) and node_exporter is not declared, since its restart
-// gate watches that line; the PF and exporter resources, which do not need
-// the address, are still declared and checked.
+// node_exporter: its Service is refused as a declaration error (which fails
+// the record) and not declared; the PF and exporter resources, which do not
+// need the address, are still declared and checked.
 func pfAndExporter(host string) {
 	config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
-		WithMode(0o600), WithOwner("root"), WithGroup("wheel"), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
-	Command("pfctl", List("-f", "/etc/pf.conf"), OnChange(config), WithName("pf-reload"))
+		Perm(0o600, Root), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
+	Sh("pfctl -f /etc/pf.conf", OnChange(config), WithName("pf-reload"))
 
-	collector := Dir("/var/node_exporter", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+	collector := Dir("/var/node_exporter", Perm(0o755, Root))
 	exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
-		WithMode(0o500), WithOwner("root"), WithGroup("wheel"))
+		Perm(0o500, Root))
 	// pfctl needs root, so the exporter runs from root's crontab.
-	Cron("frontend-pf-labels-exporter", WithCommand("-ns /usr/local/bin/pf-labels-exporter.sh"),
-		WithLegacyCommand("-ns /usr/local/bin/pf-labels-exporter.sh"), WithMinute("*"), DependsOn(collector, exporter))
-	line, err := nodeExporterFlags(host)
+	CronAt("frontend-pf-labels-exporter", "* * * * *", "-ns /usr/local/bin/pf-labels-exporter.sh",
+		DependsOn(collector, exporter))
+	flags, err := nodeExporterFlags(host)
 	if err != nil {
-		resource.Refuse("File", "rc-conf-node-exporter-flags", err)
+		resource.Refuse("Service", "node_exporter", err)
 		return
 	}
-	flags := rcConfLocalLine(line, "rc-conf-node-exporter-flags")
-	Service("node_exporter", WithRestart, DependsOn(collector, exporter), OnChange(flags, exporter))
+	Service("node_exporter", WithFlags(flags), WithRestart, DependsOn(collector, exporter), OnChange(exporter))
 }
 
-// nodeExporterFlags renders the node_exporter_flags line exactly as
-// `rcctl set node_exporter flags` wrote it on the hosts: unquoted, listening
-// on the host's WireGuard IPv4 from the inventory. The former literal line
-// kept a `$(ifconfig wg0 ...)` substitution, which rc(8) does not expand and
-// which never matched the live line, so it was appended beside it. A host
+// nodeExporterFlags returns node_exporter's rc flags, set with `rcctl set
+// node_exporter flags` (WithFlags): listening on the host's WireGuard IPv4
+// from the inventory. rcctl stores them unquoted as the node_exporter_flags
+// line of /etc/rc.conf.local. The former literal line kept a
+// `$(ifconfig wg0 ...)` substitution, which rc(8) does not expand. A host
 // without an inventory address is returned as an error for the caller to
 // report.
 func nodeExporterFlags(host string) (string, error) {
 	for _, peer := range WireGuardAddresses() {
 		if peer.Name == host {
-			return "node_exporter_flags=--web.listen-address=" + peer.IPv4 +
+			return "--web.listen-address=" + peer.IPv4 +
 				":9100 --collector.textfile.directory=/var/node_exporter", nil
 		}
 	}
@@ -201,15 +200,17 @@ func nodeExporterFlags(host string) (string, error) {
 // world-readable modes allow regardless of owner; Gogios writes solely into
 // its own self/gogios (_gogios, declared by the Gogios task) and Foostats
 // runs as root. Re-owning them to root:wheel would only churn the hosts.
+// The files apply after their Dir without DependsOn (gonf orders a path
+// after its parent).
 func htdocs(server Server) Resource {
-	Dir("/var/www/htdocs/buetow.org", WithMode(0o755), WithOwner("admin"), WithGroup("daemon"))
-	self := Dir("/var/www/htdocs/buetow.org/self", WithMode(0o755), WithOwner("root"), WithGroup("daemon"))
-	fallback := Dir("/var/www/htdocs/f3s_fallback", WithMode(0o755), WithOwner("root"), WithGroup("daemon"))
+	Dir("/var/www/htdocs/buetow.org", Perm(0o755, "admin:daemon"))
+	Dir("/var/www/htdocs/buetow.org/self", Perm(0o755, "root:daemon"))
+	Dir("/var/www/htdocs/f3s_fallback", Perm(0o755, "root:daemon"))
 	fallbackIndex := InstallFile("/var/www/htdocs/f3s_fallback/index.html",
 		legacyFrontendAsset("var/www/htdocs/f3s_fallback/index.html"),
-		WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(fallback))
+		Perm(0o644, Root))
 	File("/var/www/htdocs/buetow.org/self/index.txt", WithContent("Welcome to "+server.FQDN+"!\n"),
-		WithMode(0o644), WithOwner("rex"), WithGroup("wheel"), DependsOn(self))
+		Perm(0o644, "rex:wheel"))
 	return fallbackIndex
 }
 

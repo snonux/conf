@@ -38,10 +38,8 @@ func (Monitoring) DescPkgRepo() string {
 // line edit without WithMode applies gonf's 0640 default even when the line
 // is already present.
 func (Monitoring) PkgRepo() {
-	onFrontends(func() {
-		File("/root/.profile", WithKeyedLine("export PKG_PATH=", `export PKG_PATH="`+customOpenBSDPackages+`"`),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-	})
+	File("/root/.profile", WithKeyedLine("export PKG_PATH=", `export PKG_PATH="`+customOpenBSDPackages+`"`),
+		Perm(0o644, Root))
 }
 
 func (Monitoring) DescDTail() string {
@@ -61,18 +59,16 @@ func (Monitoring) DescDTail() string {
 // The file depends on the package, which creates /etc/dserver, and a changed
 // config restarts dserver so the daemon reads it.
 func (Monitoring) DTail() {
-	onFrontends(func() {
-		cleanup := cleanupLegacyDTail()
-		pkg := Package("dtail", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
-		account := frontendAccount(serviceAccount{Name: "_dserver", Home: "/var/run/dserver", LoginClass: "nologin"})
-		File(dailyLocal,
-			WithLine("/usr/local/bin/dserver-update-key-cache.sh"),
-			WithLine("find /var/log/dserver -name \"*.log\" -mtime +7 -delete"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(pkg, account))
-		config := InstallFile("/etc/dserver/dtail.json", frontendAsset("dtail.json"),
-			WithMode(0o644), WithOwner("root"), WithGroup("bin"), DependsOn(pkg))
-		Service("dserver", WithRestart, DependsOn(pkg, account), OnChange(config))
-	})
+	cleanup := cleanupLegacyDTail()
+	pkg := Package("dtail", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
+	account := frontendAccount(serviceAccount{Name: "_dserver", Home: "/var/run/dserver", LoginClass: "nologin"})
+	File(dailyLocal,
+		WithLine("/usr/local/bin/dserver-update-key-cache.sh"),
+		WithLine("find /var/log/dserver -name \"*.log\" -mtime +7 -delete"),
+		Perm(0o644, Root), DependsOn(pkg, account))
+	config := InstallFile("/etc/dserver/dtail.json", frontendAsset("dtail.json"),
+		Perm(0o644, "root:bin"), DependsOn(pkg))
+	Service("dserver", WithRestart, DependsOn(pkg, account), OnChange(config))
 }
 
 func cleanupLegacyDTail() Resource {
@@ -103,26 +99,24 @@ func (Monitoring) Gogios() {
 		resource.Refuse("File", "/usr/local/bin/check_shuriken_age", err)
 		return
 	}
-	ForHosts(ValueServer, func(_ string, server Server) {
-		plugins := Package(List("monitoring-plugins", "nrpe"))
+	EachHost(func(server Server) {
+		plugins := Packages("monitoring-plugins", "nrpe")
 		cleanup := cleanupLegacyGogios()
 		gogios := Package("gogios", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
 		account := frontendAccount(serviceAccount{Name: "_gogios", Home: "/var/run/gogios"})
-		statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
-		runDir := Dir("/var/run/gogios", WithMode(0o755), WithOwner("_gogios"), WithGroup("_gogios"), DependsOn(account))
-		config := File("/etc/gogios.json", WithContent(renderGogios(server)), WithMode(0o744), WithOwner("root"), WithGroup("wheel"), DependsOn(plugins, gogios, statusDir, runDir))
-		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		Cron("gogios-renotify", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"),
-			WithLegacyCommand("/usr/local/bin/gogios -renotify >/dev/null 2>&1"), WithMinute("0"), WithHour("7"), DependsOn(config, plugin))
-		Cron("gogios-checks", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios >/dev/null 2>&1"),
-			WithLegacyCommand("/usr/local/bin/gogios >/dev/null 2>&1"), WithMinute("*/5"), WithHour("8-22"), DependsOn(config, plugin))
-		Cron("gogios-force", WithCronUser("_gogios"), WithCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"),
-			WithLegacyCommand("/usr/local/bin/gogios -force >/dev/null 2>&1"), WithMinute("0"), WithHour("3"), WithWeekday("0"), DependsOn(config, plugin))
+		statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
+		runDir := Dir("/var/run/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
+		config := File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o744, Root), DependsOn(plugins, gogios, statusDir, runDir))
+		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, Perm(0o755, Root))
+		gogiosUser := WithCronUser("_gogios")
+		CronAt("gogios-renotify", "0 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		CronAt("gogios-checks", "*/5 8-22 * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		CronAt("gogios-force", "0 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		rcLocal := ensureRCLocal()
 		File("/etc/rc.local",
 			WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
 			WithLine("chown _gogios /var/run/gogios"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(account, rcLocal))
+			Perm(0o644, Root), DependsOn(account, rcLocal))
 	})
 }
 
@@ -140,15 +134,13 @@ func (Monitoring) DescFoostats() string {
 }
 
 func (Monitoring) Foostats() {
-	onFrontends(func() {
-		deps := Package(List("p5-Digest-SHA3", "p5-PerlIO-gzip", "p5-JSON", "p5-String-Util", "p5-LWP-Protocol-https"))
-		script := InstallFile("/usr/local/bin/foostats.pl", foostatsSource("foostats.pl"), WithMode(0o500), WithOwner("root"), WithGroup("wheel"), DependsOn(deps))
-		data := InstallFile("/var/www/htdocs/buetow.org/self/foostats/fooodds.txt", foostatsSource("fooodds.txt"), WithMode(0o440), WithOwner("root"), WithGroup("wheel"))
-		Dir("/var/www/htdocs/gemtexter/stats.foo.zone", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		Dir("/var/gemini/stats.foo.zone", WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		File(dailyLocal, WithLine("perl /usr/local/bin/foostats.pl --parse-logs --replicate --report"), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(script, data))
-		InstallFile("/etc/newsyslog.conf", legacyFrontendAsset("etc/newsyslog.conf"), WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-	})
+	deps := Packages("p5-Digest-SHA3", "p5-PerlIO-gzip", "p5-JSON", "p5-String-Util", "p5-LWP-Protocol-https")
+	script := InstallFile("/usr/local/bin/foostats.pl", foostatsSource("foostats.pl"), Perm(0o500, Root), DependsOn(deps))
+	data := InstallFile("/var/www/htdocs/buetow.org/self/foostats/fooodds.txt", foostatsSource("fooodds.txt"), Perm(0o440, Root))
+	Dir("/var/www/htdocs/gemtexter/stats.foo.zone", Perm(0o755, Root))
+	Dir("/var/gemini/stats.foo.zone", Perm(0o755, Root))
+	File(dailyLocal, WithLine("perl /usr/local/bin/foostats.pl --parse-logs --replicate --report"), Perm(0o644, Root), DependsOn(script, data))
+	InstallFile("/etc/newsyslog.conf", legacyFrontendAsset("etc/newsyslog.conf"), Perm(0o644, Root))
 }
 
 // shurikenAgePlugin is the Gogios album-age plugin in the controller's

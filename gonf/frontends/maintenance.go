@@ -32,9 +32,7 @@ func (Maintenance) DescServiceAccounts() string {
 }
 
 func (Maintenance) ServiceAccounts() {
-	onFrontends(func() {
-		frontendAccount(serviceAccount{Name: "_gorum", Home: "/var/run/gorum", LoginClass: "nologin"})
-	})
+	frontendAccount(serviceAccount{Name: "_gorum", Home: "/var/run/gorum", LoginClass: "nologin"})
 }
 
 // DescBase returns the description shown for the frontend base task.
@@ -47,8 +45,8 @@ func (Maintenance) DescBase() string {
 // pkg_scripts here (see pkgScriptsLine); their packages and services are owned
 // by the tasks that install them.
 func (Maintenance) Base() {
-	ForHosts(ValueServer, func(_ string, server Server) {
-		Package(List("figlet", "tig", "vger", "zsh", "bash", "helix"))
+	EachHost(func(server Server) {
+		Packages("figlet", "tig", "vger", "zsh", "bash", "helix")
 		ensureRCLocal()
 		rcConfLocalLine(pkgScriptsLine(server.Name), "rc-conf-pkg-scripts-"+server.Name)
 	})
@@ -62,9 +60,9 @@ func (Maintenance) DescMyname() string {
 // Myname writes the stable FQDN from inventory rather than rendering the Rex
 // closure-based template on the destination.
 func (Maintenance) Myname() {
-	ForHosts(ValueServer, func(_ string, server Server) {
+	EachHost(func(server Server) {
 		File("/etc/myname", WithContent(server.FQDN+"\n"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+			Perm(0o644, Root))
 	})
 }
 
@@ -80,10 +78,7 @@ func (Maintenance) DescWireGuardHosts() string {
 // an unreadable /etc/hosts breaks wg0 name resolution for every non-root
 // daemon (Gogios checks run as _gogios).
 func (Maintenance) WireGuardHosts() {
-	onFrontends(func() {
-		File("/etc/hosts", WithLines(WireGuardHostLines()...),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-	})
+	File("/etc/hosts", WithLines(WireGuardHostLines()...), Perm(0o644, Root))
 }
 
 // DescUptimed returns the description shown for the uptime recorder task.
@@ -93,10 +88,8 @@ func (Maintenance) DescUptimed() string {
 
 // Uptimed installs the recorder and converges it to enabled/running.
 func (Maintenance) Uptimed() {
-	onFrontends(func() {
-		uptimed := Package("uptimed")
-		Service("uptimed", DependsOn(uptimed))
-	})
+	uptimed := Package("uptimed")
+	Service("uptimed", DependsOn(uptimed))
 }
 
 // DescGoprecords returns the description shown for the optional uploader task.
@@ -108,7 +101,7 @@ func (Maintenance) DescGoprecords() string {
 // controller-side token receives no token, hook, or schedule, matching Rex's
 // safe skip behavior while keeping a missing token out of plans and logs.
 //
-// The token is read inside the ForHosts body, so only runs that ForHosts
+// The token is read inside the EachHost body, so only runs that EachHost
 // narrows to a host selection skip other hosts' tokens: a single-host push
 // or preview whose destination maps exactly to one inventory host resolves
 // only that frontend's token (plus any alias sharing its SSH host), and a
@@ -148,7 +141,7 @@ func (Maintenance) DescGoprecords() string {
 // change; until then this function's behavior is unchanged from before this
 // comment, only its policy is now named and documented instead of implicit.
 func (Maintenance) Goprecords() {
-	ForHosts(ValueServer, func(_ string, server Server) {
+	EachHost(func(server Server) {
 		token, ok := OptionalSecret(paths.FrontendSecret("etc/goprecords/" + server.Name + ".token"))
 		Package("curl")
 		if !ok {
@@ -160,15 +153,15 @@ func (Maintenance) Goprecords() {
 			return
 		}
 		File("/etc/goprecords-upload.token", WithContent(token+"\n"),
-			WithMode(0o600), WithOwner("root"), WithGroup("wheel"))
+			Perm(0o600, Root))
 		uploader := InstallFile("/usr/local/bin/goprecords-upload-client.sh",
 			legacyFrontendAsset("scripts/goprecords-upload-client.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
+			Perm(0o755, Root))
 		NoFile("/usr/local/bin/goprecords-upload.sh")
 		File(dailyLocal,
 			WithoutLine("/usr/local/bin/goprecords-upload.sh"),
 			WithLine("GOPRECORDS_HOST="+server.Name+" /usr/local/bin/goprecords-upload-client.sh"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(uploader))
+			Perm(0o644, Root), DependsOn(uploader))
 	})
 }
 
@@ -177,18 +170,15 @@ func (Maintenance) DescRsync() string {
 	return "Install frontend rsync service configuration and synchronization cron"
 }
 
-// Rsync installs the common daemon configuration and adopts the former Rex
-// root cron entry. The command intentionally retains Rex's leading -ns argument.
+// Rsync installs the common daemon configuration and the root cron entry
+// (which adopted the former Rex line). The command intentionally retains
+// Rex's leading -ns argument.
 func (Maintenance) Rsync() {
-	onFrontends(func() {
-		rsync := Package("rsync")
-		InstallFile("/etc/rsyncd.conf", frontendAsset("rsyncd.conf"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-		script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		Cron("frontend-rsync", WithCommand("-ns /usr/local/bin/rsync.sh"),
-			WithLegacyCommand("-ns /usr/local/bin/rsync.sh"), WithMinute("*/5"), DependsOn(rsync, script))
-	})
+	rsync := Package("rsync")
+	InstallFile("/etc/rsyncd.conf", frontendAsset("rsyncd.conf"), Perm(0o644, Root))
+	script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
+		Perm(0o755, Root))
+	CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh", DependsOn(rsync, script))
 }
 
 // DescGemtexter returns the description shown for the static-site task.
@@ -199,12 +189,9 @@ func (Maintenance) DescGemtexter() string {
 // Gemtexter installs the source-controlled updater and appends it to the
 // existing daily.local file without replacing other maintenance hooks.
 func (Maintenance) Gemtexter() {
-	onFrontends(func() {
-		script := InstallFile("/usr/local/bin/gemtexter.sh", legacyFrontendAsset("scripts/gemtexter.sh.tpl"),
-			WithMode(0o744), WithOwner("root"), WithGroup("wheel"))
-		File(dailyLocal, WithLine("/usr/local/bin/gemtexter.sh"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(script))
-	})
+	script := InstallFile("/usr/local/bin/gemtexter.sh", legacyFrontendAsset("scripts/gemtexter.sh.tpl"),
+		Perm(0o744, Root))
+	File(dailyLocal, WithLine("/usr/local/bin/gemtexter.sh"), Perm(0o644, Root), DependsOn(script))
 }
 
 // DescACME returns the description shown for the certificate setup task.
@@ -217,14 +204,14 @@ func (Maintenance) DescACME() string {
 // invocation remains a separate network-service task so a setup plan cannot
 // request certificates or restart daemons.
 func (Maintenance) ACME() {
-	ForHosts(ValueServer, func(_ string, server Server) {
+	EachHost(func(server Server) {
 		data := acmeData(server)
 		config := InstallFile("/etc/acme-client.conf", frontendAsset("acme-client.conf.tmpl"),
-			WithTemplateData(data), WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+			WithTemplateData(data), Perm(0o644, Root))
 		script := InstallFile("/usr/local/bin/acme.sh", frontendAsset("acme.sh.tmpl"),
-			WithTemplateData(data), WithMode(0o744), WithOwner("root"), WithGroup("wheel"))
+			WithTemplateData(data), Perm(0o744, Root))
 		File(dailyLocal, WithLine("/usr/local/bin/acme.sh"),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"), DependsOn(config, script))
+			Perm(0o644, Root), DependsOn(config, script))
 	})
 }
 
@@ -249,25 +236,22 @@ func (Maintenance) IRCBouncer() {
 	})
 }
 
-func onFrontends(fn func()) {
-	WhenHostname(ClusterHosts(), fn)
-}
-
 // ensureRCLocal declares /etc/rc.local with the attributes it has on both
 // frontends, 0644 root:wheel. Base and Gogios both declare it, and every
 // declaration and line edit of the file must agree: a line edit without a
 // mode would chmod it to gonf's 0640 default on every apply.
 func ensureRCLocal() Resource {
-	return EnsureFile("/etc/rc.local", WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
+	return EnsureFile("/etc/rc.local", Perm(0o644, Root))
 }
 
-// rcConfLocalLine declares one line of /etc/rc.conf.local under name. Every
-// line edit of the file sets the same attributes, 0644 root:wheel as rcctl
-// leaves it (and as it is on both frontends): a line edit without a mode
-// defaults to 0640, so mixing the two chmodded the file back and forth on
-// every apply.
+// rcConfLocalLine declares one line of /etc/rc.conf.local under name: the
+// pkg_scripts line and nsd_flags (see nsdFlags); the other daemons' NAME_flags
+// lines are set through rcctl by Service(..., WithFlags(...)). Every line edit of the file sets
+// the same attributes, 0644 root:wheel as rcctl leaves it (and as it is on
+// both frontends): a line edit without a mode defaults to 0640, which would
+// chmod the file back and forth on every apply.
 func rcConfLocalLine(line, name string) Resource {
-	return File("/etc/rc.conf.local", WithLine(line), WithMode(0o644), WithOwner("root"), WithGroup("wheel"), WithName(name))
+	return File("/etc/rc.conf.local", WithLine(line), Perm(0o644, Root), WithName(name))
 }
 
 // pkgScriptsLine renders the rc.conf.local pkg_scripts line exactly as

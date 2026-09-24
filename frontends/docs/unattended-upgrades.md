@@ -41,7 +41,7 @@ jitter: `ssh -p 2 -tt rex@<host> 'doas -n /usr/local/sbin/unattended-upgrade <mo
 | `audit` | 07:05 | 23:05 | read-only `pkg_add -Iun` against fresh metadata; clean result logged quietly; findings, custom repo down or errors mail root and exit non-zero |
 | `reboot` | 07:35 | 23:35 | reboots only when `what /bsd` differs from `sysctl -n kern.version` |
 
-Hours come from `cluster.ValueUnattendedCron` in `gonf/cluster/cluster.go`.
+Hours come from `openbsd.UnattendedSchedule` (host data) in `gonf/cluster/cluster.go`.
 `base`, `pkgs` and `reboot` run only while the partner frontend passes the
 `https://<partner>.buetow.org/index.txt` "Welcome to <partner>" check over
 IPv4 and IPv6 (same as `dns-failover.ksh`); `audit` is never gated. Output is

@@ -42,6 +42,30 @@ binary on a destination that lacks a current one. Pi, r-node and f-host
 entries use SSH port 22 explicitly because `~/.ssh/config` maps
 `*.buetow.org` to port 2.
 
+Recipe style (conventions in [`AGENTS.md`](AGENTS.md)):
+
+```go
+// gonf/tasks/tasks.go: bind the group to a cluster, guard every task to it
+RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
+
+// gonf/cluster/cluster.go: typed per-host data
+Host("f0", fhost, WithSSHHost("f0.lan.buetow.org"), WithData(freebsd.UnattendedSchedule{Minute: "5"}))
+
+// a task: prerequisites, ownership, per-host data, cron
+func (Unattended) OptsCron() TaskOptions { return TaskOptions{Privileged(), Needs("script", "services", "stamp_dir")} }
+func (Unattended) Script() {
+	EnsureDir("/usr/local/sbin", Perm(0o755, Root)) // Root: root:wheel on BSD, root:root on Rocky
+	InstallFile("/usr/local/sbin/unattended-upgrade-freebsd", src, Perm(0o755, Root))
+}
+func (Unattended) Cron() {
+	EachHost(func(s UnattendedSchedule) {
+		Cron("unattended-upgrade-freebsd-daily", WithCommand(cmd), WithMinute(s.Minute))
+	})
+}
+CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh")
+Service("httpd", WithFlags(""), WithRestart, OnChange(config))
+```
+
 ### Hosts and clusters
 
 Inventory: [`gonf/cluster/cluster.go`](gonf/cluster/cluster.go) (SSH target,
@@ -61,9 +85,10 @@ family.
 
 ### Tasks
 
-61 tasks. Each group targets one cluster. An aggregate runs its whole group;
-`frontends` is an explicit list that leaves out the three by-name tasks
-marked below.
+61 tasks. Each group targets one cluster (`OnCluster`) and applies only on
+its hosts. An aggregate runs its whole group, except the three `Operational()`
+by-name tasks marked below. A task's "needs" are recorded before it
+(`Needs`), also when it runs alone.
 
 ```sh
 ./gonf.sh cluster frontends frontends
@@ -160,9 +185,8 @@ FreeBSD (cluster `freebsd-hosts`) and Garage (cluster `garage`):
 | `garage` | aggregate `^garage_` |
 | `garage_config` | Garage TOML on f0-f2 (config only; Garage must already be installed) |
 
-Adding a `frontends_*` task: put it in `frontendSetupTasks` or
-`frontendExcludedTasks` in `gonf/tasks/tasks.go`, or every gonf invocation
-fails with a declaration error.
+A new `frontends_*` task joins the `frontends` aggregate unless its `OptsX`
+marks it `Operational()`.
 
 Unattended upgrades across all OSes:
 [`frontends/docs/unattended-upgrades.md`](frontends/docs/unattended-upgrades.md).

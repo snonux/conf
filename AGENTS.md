@@ -31,7 +31,7 @@ inventory). The configuration-management **library** lives separately at
 gonf/
   cmd/gonf/          # main: secret provider (vault + file fallback), cluster.Register, tasks.Register, CLI
   tasks/tasks.go     # composition root: RegisterMethods + aggregates
-  cluster/           # Host / Cluster inventory (SSH + per-host WithValue)
+  cluster/           # Host / Cluster inventory (SSH, HostDefaults, per-host WithData)
   frontends/         # OpenBSD frontend recipes (Maintenance, Web, ...)
   openbsd/unattended.go
   netbsd/unattended.go
@@ -42,18 +42,18 @@ gonf/
 
 Unattended tasks follow one schema per OS package: type `Unattended`
 with `RequiresRoot`, file name `unattended.go`, registered with a prefix
-and cluster. Name methods for the action (`Script`, `Cron`, …), not
+and `OnCluster`. Name methods for the action (`Script`, `Cron`, …), not
 `UnattendedScript` — the type and `WithPrefix` already namespace:
 
 ```go
-RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(cluster.NameFrontends))
+RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 ```
 
 ### Hosts and per-host values
 
 | Cluster constant | Tasks / Aggregate |
 |-------------------|-------------------
-| `NameFrontends` | `frontends` / explicit `frontends_*` list (see below) |
+| `NameFrontends` | `frontends` / `frontends_*` except `Operational()` |
 | `NameNetBSDPis` | `pis_netbsd` / `pis_netbsd_*` |
 | `NameRockyAll` | `rocky` / `rocky_*` |
 | `NameRockyPis` | `rocky_kernel_audit` / `rocky_kernel_audit_*` |
@@ -61,32 +61,63 @@ RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), WithCluster(clus
 | `NameFreeBSD` | `freebsd` / `freebsd_*` |
 | `NameGarage` | `garage` / `garage_*` |
 
-All aggregates are registered in `gonf/tasks/tasks.go`. Most are pattern
-`Aggregate`s; `frontends` is an `AggregateTasks` with an explicit member list
-(`frontendSetupTasks`). The operational `frontends_acme_invoke`,
-`frontends_irc_bouncer` and `frontends_ping` (the unprivileged push-pipeline
-diagnostic, excluded since 2026-09-22) are marked `Operational()` and listed
-in `frontendExcludedTasks` instead. `checkFrontendMembership` reports a gonf
-declaration error at registration (so every invocation, `-list` included,
-is refused with exit 1) when a `frontends_*` task is in neither list, or a
-listed name is not registered: a new frontend task must be added to one of
-the two lists.
+All aggregates are pattern `Aggregate`s in `gonf/tasks/tasks.go`. A pattern
+never picks up an `Operational()` task, so `frontends_acme_invoke`,
+`frontends_irc_bouncer` and `frontends_ping` stay by-name actions. A new
+`frontends_*` task joins the `frontends` aggregate unless its `OptsX`
+marks it `Operational()`.
 
-- Iterate hosts with a per-host value via `ForHosts(key, func(host string, v T) {…})`
-  (the cluster from `WithCluster` on the current task). It type-checks every
-  host's value before recording, wraps each body in a destination-side
-  `hostname_contains` guard, and on runs with a known target (single-host
-  push, local run) skips other hosts, so read host-specific inputs such as
-  secrets inside the body. Cluster pushes and `gonf plan` still visit all hosts.
-- `ClusterHosts()` plus `WhenHostname` remains for loops that need no typed
-  value (it never narrows to the push target).
-- Store schedules on the host: `WithValue(cluster.ValueUnattendedCron, …)` /
-  `ValueUnattendedOnCalendar` / `ValueUnattendedCronMinute` /
-  `ValueUnattendedAllowReboot` in `cluster.Register()`.
-- Outside `ForHosts`, read with `MustHostValue[T](host, key)` — a missing key or
-  wrong type is a gonf declaration error (the record fails, or the CLI
-  refuses the run with exit 1). Do **not** keep parallel hostname→value maps
-  in the recipe packages.
+- `OnCluster(name)` on `RegisterMethods` binds the tasks to the cluster and
+  guards each task to the cluster's hosts. Bodies need no
+  `WhenHostname(ClusterHosts(), ...)` wrapper; keep `WhenHostname(Master,
+  ...)` and other per-host guards.
+- Per-host data is a small struct in the recipe package
+  (`openbsd.UnattendedSchedule`, `rocky.UnattendedCalendar`,
+  `garage.Node`, `frontends.Server`, ...), attached with `WithData(...)` in
+  `cluster.Register()` and read with `EachHost(func(v T) {…})`
+  (`EachHostNamed` when the host name matters, `HostData[T](host)` outside a
+  loop). Every cluster member must carry the type; a missing one fails the
+  record before any SSH connection. `EachHost` wraps each body in a
+  destination-side hostname guard and, on single-host pushes, skips other
+  hosts, so read host-specific secrets inside the body.
+- Shared host options go in a `HostDefaults(...)` bundle per group. LAN
+  hosts (piN, rN, fN) keep `WithSSHPort(22)` (the `lan` bundle).
+- Do **not** keep parallel hostname→value maps in the recipe packages.
+
+### Recipe style
+
+```go
+func (Unattended) OptsCron() TaskOptions {
+	return TaskOptions{Privileged(), Needs("script", "services")}
+}
+
+func (Unattended) Cron() {
+	EachHost(func(s UnattendedSchedule) {
+		Cron("unattended-upgrade-netbsd-pkgs",
+			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd pkgs"),
+			WithMinute("10"), WithHour(s.PkgsHour))
+	})
+}
+
+EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+InstallFile("/usr/local/sbin/x", src, Perm(0o755, Root)) // ordered after its parent dir
+CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh", DependsOn(script))
+Sh("systemctl restart systemd-journald", OnChange(dropIn))
+Service("httpd", WithFlags(""), WithRestart, OnChange(config))
+```
+
+- `Perm(mode, Root)` for root plus the OS root group (wheel / root);
+  spell other groups out (`"root:bin"`, `"_gogios:_gogios"`).
+- `Needs(...)` in `OptsX` for task prerequisites, not prose in the
+  description. `OptsX` replaces the `RequiresRoot` default, so repeat
+  `Privileged()`. Never need an `Operational()` task: the dependent would
+  drop out of its aggregate.
+- `CronAt` for fixed schedules, options for per-host fields. An identical
+  unmanaged line is adopted; `WithLegacyCommand` only for a different old
+  command or schedule.
+- `Sh("cmd args")` when no shell is needed; `Command("sh", List("-c", ...))`
+  otherwise. `Noop(name)` for a do-nothing task. `Packages("a", "b")`.
+- A path inside a `Dir`/`EnsureDir` of the same plan needs no `DependsOn`.
 
 ### Secrets
 

@@ -4,7 +4,6 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
@@ -24,6 +23,12 @@ const (
 	vulnAuditStateDir = "/var/db/netbsd-vuln-audit"
 )
 
+// VulnAuditTime is a Pi's daily audit time (host data, see gonf/cluster).
+type VulnAuditTime struct {
+	Minute string
+	Hour   string
+}
+
 // DescVulnAuditPackages returns the description for the audit's tools.
 func (Unattended) DescVulnAuditPackages() string {
 	return "Install curl for netbsd-vuln-audit"
@@ -33,26 +38,28 @@ func (Unattended) DescVulnAuditPackages() string {
 // conditional HTTPS downloads. gzip, awk, pkg_admin and ntpq (the
 // clock gate) are in base.
 func (Unattended) VulnAuditPackages() {
-	WhenHostname(ClusterHosts(), func() {
-		Package("curl")
-	})
+	Package("curl")
 }
 
 // DescVulnAuditScript returns the description for the script deployment.
 func (Unattended) DescVulnAuditScript() string {
-	return "Install " + vulnAuditScript + " (0755 root:wheel; needs pis_netbsd_vuln_audit_packages)"
+	return "Install " + vulnAuditScript + " (0755 root:wheel)"
 }
 
-// VulnAuditScript installs the ksh audit script.
+// OptsVulnAuditScript records curl before the script that needs it.
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (Unattended) OptsVulnAuditScript() TaskOptions {
+	return TaskOptions{Privileged(), Needs("vuln_audit_packages")}
+}
+
+// VulnAuditScript installs the ksh audit script (after its directory, which
+// gonf orders as the parent).
 func (Unattended) VulnAuditScript() {
-	WhenHostname(ClusterHosts(), func() {
-		dir := EnsureDir("/usr/local/sbin",
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		InstallFile(vulnAuditScript,
-			paths.FrontendAsset("scripts/netbsd-vuln-audit.sh"),
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"),
-			DependsOn(dir))
-	})
+	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	InstallFile(vulnAuditScript,
+		paths.FrontendAsset("scripts/netbsd-vuln-audit.sh"),
+		Perm(0o755, Root))
 }
 
 // DescVulnAuditStateDir returns the description for the state directory.
@@ -68,28 +75,31 @@ func (Unattended) DescVulnAuditStateDir() string {
 // installed in PKGVULNDIR (/usr/pkg/pkgdb), where interactive
 // `pkg_admin audit` and the daily /etc/security check read it.
 func (Unattended) VulnAuditStateDir() {
-	WhenHostname(ClusterHosts(), func() {
-		EnsureDir(vulnAuditStateDir,
-			WithMode(0o700), WithOwner("root"), WithGroup("wheel"))
-	})
+	EnsureDir(vulnAuditStateDir, Perm(0o700, Root))
 }
 
 // DescVulnAuditCron returns the description for the daily cron job.
 func (Unattended) DescVulnAuditCron() string {
-	return "Root cron: netbsd-vuln-audit daily, per-host time (needs pis_netbsd_vuln_audit_script, pis_netbsd_vuln_audit_state_dir)"
+	return "Root cron: netbsd-vuln-audit daily, per-host time"
 }
 
-// VulnAuditCron runs the audit once a day at the host's
-// cluster.ValueVulnAuditCron {minute, hour}, after the host's unattended
-// pkgs/reboot window (so it audits the updated packages) and before
-// /etc/daily at 04:15. The script also takes unattended-upgrade-netbsd's
+// OptsVulnAuditCron records the script and its state directory before the
+// job. Privileged() is repeated because the per-method companion replaces
+// the RequiresRoot struct default.
+func (Unattended) OptsVulnAuditCron() TaskOptions {
+	return TaskOptions{Privileged(), Needs("vuln_audit_script", "vuln_audit_state_dir")}
+}
+
+// VulnAuditCron runs the audit once a day at the host's VulnAuditTime,
+// after the host's unattended pkgs/reboot window (so it audits the updated
+// packages) and before /etc/daily at 04:15. The script also takes unattended-upgrade-netbsd's
 // lock around pkg_admin audit, in case a window overruns. Only UNKNOWN
 // (broken coverage, including an unsynchronised clock) exits non-zero; the
 // script prints only err/warning lines, so cron's mail carries alerts only.
 func (Unattended) VulnAuditCron() {
-	ForHosts(cluster.ValueVulnAuditCron, func(_ string, at [2]string) {
+	EachHost(func(at VulnAuditTime) {
 		Cron("netbsd-vuln-audit",
 			WithCommand(vulnAuditScript),
-			WithMinute(at[0]), WithHour(at[1]))
+			WithMinute(at.Minute), WithHour(at.Hour))
 	})
 }
