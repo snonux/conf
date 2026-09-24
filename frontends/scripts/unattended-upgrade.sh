@@ -258,11 +258,12 @@ pkgs)
             exit 1
         fi
     done
-    # Root crontabs have no /root/.profile, so PKG_PATH must include the
-    # custom fleet repo (see frontends Rexfile pkgrepo_setup) alongside the
-    # official installurl tree, or pkg_add -u fails on custom packages
-    # (dserver, dtail, gogios, ...). 'installpath' resolves installurl(5)
-    # and keeps the automatic packages-stable errata search.
+    # Root crontabs have no /root/.profile (where gonf task
+    # frontends_pkg_repo exports the interactive PKG_PATH), so PKG_PATH
+    # must include the custom fleet repo alongside the official
+    # installurl tree, or pkg_add -u fails on custom packages (dserver,
+    # dtail, gogios, ...). 'installpath' resolves installurl(5) and keeps
+    # the automatic packages-stable errata search.
     #
     # The custom repo is k3s-backed; when it is down (relayd "Server turned
     # off" page) skip its packages for this window and update the official

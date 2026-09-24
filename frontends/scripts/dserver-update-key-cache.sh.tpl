@@ -2,7 +2,7 @@
 # Refresh the dserver SSH key cache from user authorized_keys files.
 # OpenBSD variant: called from the dserver rc.d rc_pre (because /var/run is
 # wiped by /etc/rc at boot) and from a daily /etc/daily.local entry added by
-# the Rex 'dtail' task — see the pkgrepo skill's dtail-package.md.
+# Gonf's frontends_d_tail task — see the pkgrepo skill's dtail-package.md.
 
 CACHEDIR=/var/run/dserver/cache
 DSERVER_USER=_dserver

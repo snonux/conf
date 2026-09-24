@@ -5,7 +5,7 @@
 # NFS_FAIL_THRESHOLD (consecutive failures before auto-reboot) is tunable
 # via /etc/default/nfs-mount-monitor without touching this unit or the script.
 #
-# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+# Deploy via Gonf: ./gonf.sh cluster rocky-k3s rnodes_nfs_mount_monitor
 
 [Unit]
 Description=NFS Mount Health Monitor
