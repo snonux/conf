@@ -57,13 +57,14 @@ record, certificate and relayd keypair.
 
 ## Adding episodes
 
-Prepare an episode on a workstation (needs `GOOGLE_API_KEY`), then copy it into
-the library:
+Prepare an episode in the totalrecall checkout with a coding agent (Claude
+Code, Codex, or a Claude cloud session) following `bgtutor/PREPARE.md`; no API
+key is needed. Then check it, publish it and copy it into the library:
 
 ```sh
 cd /home/paul/git/totalrecall
-go run ./cmd/bgtutor prepare transcript.txt --id 002-morning-news --title "Morning News" \
-  --speaker "Host:Maria:news anchor" --difficulty B1
+go run ./cmd/bgtutor validate 002-morning-news
+go run ./cmd/bgtutor publish 002-morning-news
 cd /home/paul/git/conf/f3s/bgtutor
 just upload-episode /home/paul/git/totalrecall/bgtutor/data/episodes/002-morning-news
 BGTUTOR_TOKEN=... just episodes

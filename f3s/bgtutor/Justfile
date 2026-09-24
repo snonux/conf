@@ -45,7 +45,7 @@ restart:
 	@echo "Restarting bgtutor..."
 	kubectl rollout restart -n {{NAMESPACE}} deployment/bgtutor
 
-# Copy a prepared episode folder (from `bgtutor prepare`) into the library on
+# Copy a prepared, published episode folder (see totalrecall bgtutor/PREPARE.md) into the library on
 # the NFS export. Run against the current CARP storage master (f0 or f1, check
 # with `ifconfig | grep MASTER`). The server re-scans the library on every
 # request, so no restart is needed. (kubectl cp doesn't work: the image is
