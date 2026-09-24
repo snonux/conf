@@ -38,7 +38,8 @@ release. Two consequences follow, and they are the whole design:
    its own DNS records, its own Let's Encrypt certificate and its own relayd
    keypair from the same loops as every other f3s host, and relayd routes the
    subtree to `<garage>` by suffix. Adding a future bucket is one entry in
-   `@garage_buckets` in `frontends/Rexfile` plus a rex run.
+   `garageBuckets` in `gonf/frontends/data.go` plus a
+   `./gonf.sh cluster frontends frontends` run.
 
 Path-style still works alongside it — the existing `watchos-app` consumer was
 unaffected. An IP endpoint such as `http://192.168.1.130:3900` gets path-style
@@ -46,7 +47,7 @@ automatically and needs none of the above, but only works on the LAN.
 
 `taskrc` holds no secrets: it expands environment variables, so it refers to
 `$GARAGE_*` and `$TASK_SYNC_SECRET`. It is managed at
-`dotfiles:taskwarrior/taskrc` and installed by the `home_taskwarrior` Rex task,
+`dotfiles:taskwarrior/taskrc` and installed by the dotfiles `home_taskwarrior` Gonf task,
 which is **Linux-only** by design.
 
 ### The fleet
@@ -169,7 +170,7 @@ instead of a merge — exactly the weakness the upstream man page calls out unde
 |---|---|---|
 | Fedora laptop | 2.6.2 (`task2`) | this investigation |
 | macOS work laptop | (unchanged) | **stays on local file storage — no remote sync backend, by decision** |
-| OpenBSD frontends | 2.6.2p1 from ports | configured by `frontends/Rexfile` -> `frontends/etc/taskrc.tpl`, daily reminder via `scripts/taskwarrior.sh.tpl` |
+| OpenBSD frontends | 2.6.2p1 from ports | no longer configured: the Rex-era `taskrc` and daily reminder were retired in conf b509df8 |
 
 OpenBSD ports is still on 2.6.2p1, so the frontends cannot follow a move to 3.x
 by package. They would either drop out of the sync mesh or need a from-source
@@ -214,7 +215,7 @@ path-style only:
 * The former per-node Garage TOML set `[s3_api] s3_region = "garage"` and
   **no `root_domain`**. Without `root_domain`, Garage cannot resolve
   virtual-hosted-style requests (`<bucket>.garage.f3s.buetow.org`) to a bucket.
-* The edge only routes the bare host: `frontends/etc/relayd.conf.tpl` matches
+* The edge only routes the bare host: `gonf/frontends/assets/relayd.conf.tmpl` matches
   `Host: garage.f3s.buetow.org` and forwards to the `<garage>` table on port
   3900. A `<bucket>.garage.f3s.buetow.org` request matches no rule.
 * TLS is terminated by relayd for `garage.f3s.buetow.org`. A wildcard for
@@ -279,7 +280,7 @@ costs: `root_domain` in `f3s/garage/etc/garage.toml.tmpl` and a
 `taskwarrior.garage.f3s.buetow.org`; TLS
 cert coverage for that name (the `*.f3s.buetow.org` wildcard does **not** cover
 it — DNS wildcards are single-label, so prefer `*.garage.f3s.buetow.org`); and a
-relayd match rule, since `frontends/etc/relayd.conf.tpl` matches only the bare
+relayd match rule, since `gonf/frontends/assets/relayd.conf.tmpl` matches only the bare
 host today. The trade-off is that the bucket name becomes part of the DNS name,
 so each future bucket needs a record and cert coverage.
 

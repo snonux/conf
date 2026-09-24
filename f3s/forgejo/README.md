@@ -12,7 +12,8 @@ legacy cgit/git-server install (`cicd` namespace, `c-git.f3s.buetow.org`,
 was retired 2026-08-30 (task 3x0) once the retention window passed with a
 clean re-verification: its ArgoCD Application, helm chart and ArgoCD SSH
 known_hosts/repo-creds were removed from this repo, and its hostnames were
-dropped from `@f3s_hosts` in `frontends/Rexfile`. Its NFS data directory and
+dropped from `@f3s_hosts` in the then-current `frontends/Rexfile` (since
+ported to `f3sHosts` in `gonf/frontends/data.go`). Its NFS data directory and
 final ZFS snapshot are preserved pending a separate, explicitly-confirmed
 deletion. See `f3s/argocd/README.md` for what now stands in for a rollback
 path (ZFS/zrepl snapshots of `zdata/enc/nfsdata`, not a second git service).
@@ -86,7 +87,7 @@ All 80 cgit repositories were preseeded in Forgejo on 2026-08-04. ArgoCD reads
   pointing at the old server), `f3s/git-server/` and
   `f3s/argocd/git-server-{repo-creds,known-hosts}.yaml` were removed from this
   repo, and `c-git.f3s.buetow.org`/`git.f3s.buetow.org` were dropped from
-  `frontends/Rexfile`. The old NFS data directory and its final ZFS snapshot
+  the then-current `frontends/Rexfile`. The old NFS data directory and its final ZFS snapshot
   are preserved and untouched pending a separate, explicitly-confirmed
   deletion — see that commit's message for the exact runbook. There is no
   longer a git-server rollback path; if Forgejo itself needs recovery, restore
@@ -138,7 +139,7 @@ The PVs use `type: Directory`, so the pod will not schedule until these exist.
 
 ### 2. Publish the hostname
 
-`code.f3s.buetow.org` must be added to `@f3s_hosts` in `frontends/Rexfile`. That
+`code.f3s.buetow.org` must be listed in `f3sHosts` in `gonf/frontends/data.go`. That
 one array drives the DNS zone, the relayd routing rule, the ACME certificate and
 the gogios monitoring checks.
 

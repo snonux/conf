@@ -81,7 +81,7 @@ NOT SSH -- no key/Secret needed. The frontends run rsyncd via inetd with
 `hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the k3s pods run on r-nodes
 with `.wg0` (WireGuard) connectivity, so they're authorized to push over the
 mesh. The writable modules `irregular-ninja` and `alt-irregular-ninja` are
-declared in `frontends/etc/rsyncd.conf.tpl` (deploy with
+declared in `gonf/frontends/assets/rsyncd.conf` (deploy with
 `./gonf.sh cluster frontends frontends_rsync` from the repository root).
 
 It only publishes a site whose content actually **changed**: each site's

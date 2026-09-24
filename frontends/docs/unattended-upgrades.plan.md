@@ -2,6 +2,10 @@
 
 **Status: PLAN ONLY — nothing implemented yet.** No crontabs, scripts, or configs were changed on the hosts or in this repo.
 
+> Historical plan: it was implemented with Gonf `frontends_*` tasks instead
+> (see `unattended-upgrades.implementation.md`), and Rex was retired in conf
+> task v42. Its Rex task references describe the original plan only.
+
 ## 1. Goals & scope
 
 | In scope | Out of scope |

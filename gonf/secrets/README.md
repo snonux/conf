@@ -3,7 +3,7 @@
 `api.MustSecret` and `api.OptionalSecret` intentionally read only below this
 directory, through gonf's default file secret provider (`secret.FileProvider`,
 see gonf's `docs/secrets.md`); this repository configures no other provider.
-They never read the legacy Rex secret roots directly. This keeps a
+They never read the legacy Rex-era secret roots directly. This keeps a
 gonf plan's controller inputs explicit and makes the logical paths used by
 recipes stable:
 
@@ -39,8 +39,9 @@ find gonf/secrets -type d -exec chmod 700 {} +
 find gonf/secrets -type f ! -name .gitignore ! -name README.md -exec chmod 600 {} +
 ```
 
-Keep the existing Rex roots while their tasks remain unported; do not remove
-or move them as part of this bootstrap. `gonf/secrets/.gitignore` ignores all
+Rex itself is retired (conf task v42), but keep the legacy Rex-era secret
+roots (`frontends/secrets`, `f3s/garage/secrets`): deleting or moving them
+needs its own explicit authorization, never this bootstrap. `gonf/secrets/.gitignore` ignores all
 secret payloads, and no command above emits a secret value. Do not add secrets
 to task names, inventory values, plan fixtures, or commits.
 

@@ -366,7 +366,8 @@ func renderNSDConfig(keyPath string, zones []string, zoneDir string) (string, er
 // NSD's allow-notify and request-xfr take an address followed by a TSIG key
 // name (or NOKEY); a bare hostname does not parse. The address is the DNS
 // publisher's IPv4 from the frontend inventory and the key is nsdKeyName,
-// matching the Rex nsd.conf.slave.tpl ("23.88.35.144 blowfish.buetow.org").
+// matching the retired Rex nsd.conf.slave.tpl ("23.88.35.144
+// blowfish.buetow.org"; removed in conf task v42, see git history).
 // The explicit AXFR transfer type is kept from the earlier gonf port.
 func renderNSDSlaveConfig(keyPath string, zones []string) (string, error) {
 	master := MustServer(DNSPublisher).IPv4 + " " + nsdKeyName

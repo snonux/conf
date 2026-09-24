@@ -32,13 +32,13 @@ Internet → relayd (port 443) → routing decision → httpd (port 8080) or f3s
   relayd, NSD, Gogios and ACME from that one model on the controller, per
   frontend (`ForHosts` over the inventory's `Server` values)
 - `./gonf.sh cluster frontends ...` deploys to both frontends in parallel
-- The legacy `Rexfile` and its `.tpl` Perl templates are no longer deployed;
-  the Perl snippets below document where the rules came from, and the Go
-  renderers keep the same rules
+- The former Rex `Rexfile` and its `.tpl` Perl templates were removed (conf
+  task v42; they remain in git history). The Perl snippets below document
+  where the rules came from, and the Go renderers keep the same rules
 
 ## Configuration Arrays
 
-The `@name` arrays are the Rexfile's names; Gonf's are `acmeHosts`,
+The `@name` arrays are the retired Rexfile's names; Gonf's are `acmeHosts`,
 `f3sHosts` and `prefixes` in `../gonf/frontends/data.go` (`TemplateData`
 appends the f3s hosts and Garage bucket names to the ACME hosts).
 
@@ -98,7 +98,8 @@ shell helper.
 
 ## Template Processing (legacy Rex)
 
-Historical: Rex processed `.tpl` files using embedded Perl. Gonf renders the
+Historical: Rex processed `.tpl` files using embedded Perl (those templates
+were removed in conf task v42; see git history). Gonf renders the
 same output in Go; the frontend FQDN skips below are `Site.FrontendHost`,
 the ipv4./ipv6. handling is `Site.Family`.
 
@@ -114,7 +115,7 @@ Templates are processed **per-server** with different values:
 
 ## Routing Configuration
 
-### Explicit Routing Rules (relayd.conf.tpl:45-50)
+### Explicit Routing Rules (legacy relayd.conf.tpl; Go: `assets/relayd.conf.tmpl`)
 
 ```perl
 <% for my $host (@$acme_hosts) {
@@ -136,7 +137,7 @@ match request header "Host" value "<%= $prefix.$host -%>" forward to <localhost>
 
 ## TLS Certificate Management
 
-### Certificate Loading (relayd.conf.tpl:24-31)
+### Certificate Loading (legacy relayd.conf.tpl; Go: `assets/relayd.conf.tmpl`)
 
 ```perl
 http protocol "https" {
@@ -164,7 +165,7 @@ The line `tls keypair <%= $hostname.'.'.$domain -%>` loads the correct cert for 
 
 ## Server Block Management
 
-### httpd.conf.tpl Patterns
+### httpd Patterns (legacy httpd.conf.tpl; Go: `assets/httpd.conf.tmpl`)
 
 **ACME and redirect blocks (port 80)**:
 ```perl
@@ -239,8 +240,8 @@ Process:
 ### Configuration
 - Runs as user `_gogios`
 - Config: `/etc/gogios.json` (typed `gogiosConfig` rendered by
-  `renderGogios` in `../gonf/frontends/monitoring.go`; `etc/gogios.json.tpl`
-  is the legacy Rex template)
+  `renderGogios` in `../gonf/frontends/monitoring.go`; the legacy Rex
+  template `etc/gogios.json.tpl` was removed in conf task v42)
 - Output: `/var/www/htdocs/buetow.org/self/gogios/index.html`
 - State: `/var/run/gogios/state.json`
 - Cron schedule: Every 5 minutes between 08:00-22:00
@@ -250,7 +251,7 @@ Process:
 
 ### Template Pattern (legacy gogios.json.tpl; Go: addFrontendHostChecks / addSiteChecks)
 
-**Dedicated server checks (lines 29-46)**: Bare hostnames only
+**Dedicated server checks**: Bare hostnames only
 ```perl
 <% for my $host (qw(fishfinger blowfish)) { -%>
 "Check TLS Certificate <%= $host %>.buetow.org": { ... }
@@ -260,7 +261,7 @@ Creates checks for:
 - `fishfinger.buetow.org` (bare hostname)
 - `blowfish.buetow.org` (bare hostname)
 
-**Service domain checks (lines 47-66)**: All prefix variants
+**Service domain checks**: All prefix variants
 ```perl
 <% for my $host (@$acme_hosts) {
      # Skip server hostnames - they have dedicated checks above without www/standby variants

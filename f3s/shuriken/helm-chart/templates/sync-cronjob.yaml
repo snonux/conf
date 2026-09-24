@@ -4,8 +4,8 @@
 # rsyncd via inetd with `hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the
 # k3s pods run on r-nodes that have .wg0 (WireGuard) connectivity, so they match
 # and can push over the mesh. The writable modules `irregular-ninja` and
-# `alt-irregular-ninja` are declared in frontends/etc/rsyncd.conf.tpl (deploy
-# with `rex -f frontends/Rexfile rsync`).
+# `alt-irregular-ninja` are declared in gonf/frontends/assets/rsyncd.conf (deploy
+# with `./gonf.sh cluster frontends frontends_rsync`).
 #
 # It only publishes a site when its content actually changed: each site's
 # dist/status.json (image_count + total_size_bytes) is compared against a

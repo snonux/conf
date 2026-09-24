@@ -104,7 +104,7 @@ Deploy Jellyfin 10.11.6 (latest stable) with proper reverse proxy configuration 
 
 - **Deployment**: `jellyfin/helm-chart/templates/deployment.yaml`
 - **Persistent Storage**: `jellyfin/helm-chart/templates/persistent-volume.yaml`
-- **Relayd Config**: `/home/paul/git/conf/frontends/etc/relayd.conf.tpl` (lines ~15-130)
+- **Relayd Config**: `/home/paul/git/conf/gonf/frontends/assets/relayd.conf.tmpl` (rendered by Gonf `frontends_relayd`)
 - **ArgoCD App**: Created via kubectl in services namespace
 
 ## Testing Commands

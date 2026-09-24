@@ -3,9 +3,9 @@
 Configuration of my internet-facing OpenBSD frontends (blowfish,
 fishfinger). It is deployed with Gonf from `../gonf` (package
 `gonf/frontends`, tasks `frontends_*`); this directory still holds the
-assets those tasks install (`etc/`, `scripts/`) and the legacy
-`Rexfile`, which is kept only until its retirement is approved. Do not run
-Rex tasks against the frontends: Gonf owns their configuration.
+assets those tasks install (`etc/`, `scripts/`, `var/`). The former Rex
+`Rexfile` and its Perl `.tpl` templates were retired (conf task v42; see
+git history): Gonf is the only configuration owner.
 
 ```sh
 ./gonf.sh -list | grep frontends                 # from the repository root

@@ -1,7 +1,7 @@
 # Forgejo web UI ingress.
 #
-# code.f3s.buetow.org must also be listed in @f3s_hosts in frontends/Rexfile --
-# that array drives the DNS zone, the relayd routing rule and the ACME cert.
+# code.f3s.buetow.org must also be listed in f3sHosts in gonf/frontends/data.go
+# (Gonf frontends tasks) -- that list drives the DNS zone, the relayd routing rule and the ACME cert.
 # Adding it here alone is not enough to make the name resolve or serve TLS.
 #
 # The legacy cgit git-server at c-git.f3s.buetow.org was retired 2026-08-30
