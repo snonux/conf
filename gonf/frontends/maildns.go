@@ -2,11 +2,9 @@ package frontends
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/template"
 
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
@@ -222,7 +220,7 @@ func renderSMTPD(server Server) string {
 		RejectDomains:    MemberPath("reject-domains"),
 		RejectRecipients: MemberPath("reject-recipients"),
 	}
-	return renderControllerTemplate("smtpd.conf", frontendAsset("smtpd.conf.tmpl"), data)
+	return renderControllerTemplate(frontendAsset("smtpd.conf.tmpl"), data)
 }
 
 // nsdKeyTemplateData is the explicit, typed data for assets/key.conf.tmpl.
@@ -238,13 +236,15 @@ type nsdKeyTemplateData struct {
 // renderNSDKey renders the TSIG key stanza both NSD roles include.
 func renderNSDKey(key string) string {
 	data := nsdKeyTemplateData{Name: nsdKeyName, Secret: strconv.Quote(key)}
-	return renderControllerTemplate("key.conf", frontendAsset("key.conf.tmpl"), data)
+	return renderControllerTemplate(frontendAsset("key.conf.tmpl"), data)
 }
 
 // nsdZoneRecord is one zone's row in a rendered nsd.conf: master and
 // secondary configurations both key each zone by name, its zonefile path,
 // and the one peer address+TSIG-key pair NSD needs for notify/provide-xfr
-// (master) or allow-notify/request-xfr (secondary).
+// (master) or allow-notify/request-xfr (secondary). Name and ZoneFile already
+// carry Go's %q quoting (strconv.Quote, see nsdZoneRecords) because the
+// templates interpolate them verbatim; Peer is emitted unquoted.
 type nsdZoneRecord struct {
 	Name     string
 	ZoneFile string
@@ -252,10 +252,27 @@ type nsdZoneRecord struct {
 }
 
 // nsdConfigData is the explicit, typed data shared by assets/nsd-master.conf.tmpl
-// and assets/nsd-slave.conf.tmpl.
+// and assets/nsd-slave.conf.tmpl. Include is the complete, already-quoted
+// operand of the "include:" line: each role's renderer decides how its key
+// path is quoted (see renderNSDConfig and renderNSDSlaveConfig), so both
+// templates just interpolate it.
 type nsdConfigData struct {
-	KeyPath string
+	Include string
 	Zones   []nsdZoneRecord
+}
+
+// nsdZoneRecords builds one pre-quoted nsdZoneRecord per zone, with its
+// zonefile below zoneDir and the shared peer ("<IPv4> <TSIG key name>").
+func nsdZoneRecords(zones []string, zoneDir, peer string) []nsdZoneRecord {
+	records := make([]nsdZoneRecord, 0, len(zones))
+	for _, zone := range zones {
+		records = append(records, nsdZoneRecord{
+			Name:     strconv.Quote(zone),
+			ZoneFile: strconv.Quote(filepath.Join(zoneDir, zone+".zone")),
+			Peer:     peer,
+		})
+	}
+	return records
 }
 
 // renderNSDConfig renders the publisher's (blowfish's) NSD master
@@ -267,22 +284,19 @@ type nsdConfigData struct {
 // secondary's IPv4 mirrors its own allow-notify/request-xfr
 // (renderNSDSlaveConfig), which name the publisher's IPv4, so notifies and
 // transfers both run over IPv4. keyPath here is a fixed live path, not a
-// ConfigSet placeholder, so the template quotes it with the "quote" func.
+// ConfigSet placeholder, so it is quoted with strconv.Quote like the zone
+// names and zonefile paths.
 func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
 	secondary := MustServer(Master).IPv4 + " " + nsdKeyName
-	records := make([]nsdZoneRecord, 0, len(zones))
-	for _, zone := range zones {
-		records = append(records, nsdZoneRecord{Name: zone, ZoneFile: filepath.Join(zoneDir, zone+".zone"), Peer: secondary})
-	}
-	data := nsdConfigData{KeyPath: keyPath, Zones: records}
-	return renderControllerTemplate("nsd-master.conf", frontendAsset("nsd-master.conf.tmpl"), data)
+	data := nsdConfigData{Include: strconv.Quote(keyPath), Zones: nsdZoneRecords(zones, zoneDir, secondary)}
+	return renderControllerTemplate(frontendAsset("nsd-master.conf.tmpl"), data)
 }
 
 // renderNSDSlaveConfig renders the NSD secondary's (fishfinger's)
 // configuration from assets/nsd-slave.conf.tmpl. keyPath is a ConfigSet
-// member placeholder, which contains NUL bytes: the template wraps it in
-// literal quotes instead of passing it through the "quote" func, because
-// quoting would escape the placeholder.
+// member placeholder, which contains NUL bytes: it is wrapped in literal
+// quotes instead of strconv.Quote, because quoting would escape the NUL
+// bytes and break the placeholder gonf substitutes.
 //
 // NSD's allow-notify and request-xfr take an address followed by a TSIG key
 // name (or NOKEY); a bare hostname does not parse. The address is the DNS
@@ -291,15 +305,15 @@ func renderNSDConfig(keyPath string, zones []string, zoneDir string) string {
 // The explicit AXFR transfer type is kept from the earlier gonf port.
 func renderNSDSlaveConfig(keyPath string, zones []string) string {
 	master := MustServer(DNSPublisher).IPv4 + " " + nsdKeyName
-	records := make([]nsdZoneRecord, 0, len(zones))
-	for _, zone := range zones {
-		records = append(records, nsdZoneRecord{Name: zone, ZoneFile: filepath.Join("slave", zone+".zone"), Peer: master})
-	}
-	data := nsdConfigData{KeyPath: keyPath, Zones: records}
-	return renderControllerTemplate("nsd-slave.conf", frontendAsset("nsd-slave.conf.tmpl"), data)
+	data := nsdConfigData{Include: `"` + keyPath + `"`, Zones: nsdZoneRecords(zones, "slave", master)}
+	return renderControllerTemplate(frontendAsset("nsd-slave.conf.tmpl"), data)
 }
 
 // publisherConfigData is the explicit, typed data for assets/publisher.conf.tmpl.
+// Every field already carries Go's %q quoting (strconv.Quote, applied by
+// renderDNSPublisherConfig), which also makes each value a valid double-quoted
+// shell word for the ksh scripts that source the file; the template only
+// interpolates them.
 type publisherConfigData struct {
 	DefaultRole   string
 	MasterName    string
@@ -318,19 +332,20 @@ type publisherConfigData struct {
 func renderDNSPublisherConfig(zones, removedZones []string) string {
 	master := MustServer(Master)
 	standby := MustServer(Standby)
+	q := strconv.Quote
 	data := publisherConfigData{
-		DefaultRole:   Master,
-		MasterName:    master.Name,
-		MasterIPv4:    master.IPv4,
-		MasterIPv6:    master.IPv6,
-		StandbyName:   standby.Name,
-		StandbyIPv4:   standby.IPv4,
-		StandbyIPv6:   standby.IPv6,
-		PublisherFQDN: DNSPublisher + "." + Domain,
-		Zones:         strings.Join(zones, " "),
-		RemovedZones:  strings.Join(removedZones, " "),
+		DefaultRole:   q(Master),
+		MasterName:    q(master.Name),
+		MasterIPv4:    q(master.IPv4),
+		MasterIPv6:    q(master.IPv6),
+		StandbyName:   q(standby.Name),
+		StandbyIPv4:   q(standby.IPv4),
+		StandbyIPv6:   q(standby.IPv6),
+		PublisherFQDN: q(DNSPublisher + "." + Domain),
+		Zones:         q(strings.Join(zones, " ")),
+		RemovedZones:  q(strings.Join(removedZones, " ")),
 	}
-	return renderControllerTemplate("publisher.conf", frontendAsset("publisher.conf.tmpl"), data)
+	return renderControllerTemplate(frontendAsset("publisher.conf.tmpl"), data)
 }
 
 // f3sZoneHost is one f3s host's row in the buetow.org zone template's
@@ -368,7 +383,7 @@ func renderZoneTemplate(zone string, f3sHosts []string) string {
 		hosts = append(hosts, f3sZoneHost{Name: host, HasA: family != 6, HasAAAA: family != 4})
 	}
 	assetPath := legacyFrontendAsset(filepath.Join("var/nsd/zones/master", zone+".zone.tpl"))
-	content := renderControllerTemplate(zone+".zone.tpl", assetPath, zoneTemplateData{F3SHosts: hosts})
+	content := renderControllerTemplate(assetPath, zoneTemplateData{F3SHosts: hosts})
 	content = strings.ReplaceAll(content,
 		"fishfinger.buetow.org. hostmaster.buetow.org.", DNSPublisher+"."+Domain+". hostmaster."+Domain+".")
 	if strings.Contains(content, "<%") {
@@ -377,36 +392,37 @@ func renderZoneTemplate(zone string, f3sHosts []string) string {
 	return content
 }
 
-// controllerTemplateFuncs are the functions available to every controller-
-// side native template rendered through renderControllerTemplate. quote
-// applies Go's %q string quoting (strconv.Quote), matching the previous
-// fmt.Sprintf %q verb used throughout the raw-string renderers these
-// templates replace.
-var controllerTemplateFuncs = template.FuncMap{"quote": strconv.Quote}
-
-// renderControllerTemplate reads, parses, and executes a native
-// text/template asset on the controller, returning the rendered content.
-// Unlike WithTemplateData (resource/file/template.go), which renders on the
-// destination host from facts detected there at apply time, this always runs
-// here while the recipe records: SMTPD/NSD candidate content must be
-// identical regardless of which frontend later applies it, so the frontend
-// Go renderers deliberately keep the controller-render distinction the
-// consumer DSL review asked to preserve (see docs/consumer-dsl-simplification-plan.md,
-// "External templates and consumer layout"). A missing or malformed asset is
-// a broken source-controlled template, not a recipe or input error, so this
-// panics like the rest of this package's asset loading (e.g. MustServer).
-func renderControllerTemplate(name, assetPath string, data any) string {
-	raw, err := os.ReadFile(assetPath)
+// renderControllerTemplate renders the native text/template asset at
+// assetPath on the controller through api.RenderTemplate, the same engine
+// web.go's renderHTTPD/renderRelayd use, so every frontend asset shares one
+// template dialect: gonf's helper functions (join, lower, upper, trim,
+// replace) and no conf-local extras. There is deliberately no "quote" func:
+// a value that needs Go's %q quoting is pre-quoted with strconv.Quote by its
+// data builder instead (renderNSDKey, renderNSDConfig,
+// renderDNSPublisherConfig), so moving a stanza between assets never breaks
+// on a function only one renderer defines.
+//
+// api.RenderTemplate JSON-encodes data once (a defensive snapshot; the whole
+// value is also available as .Data), so the typed data structs here must stay
+// JSON-compatible: exported string/bool/slice fields, no json tags and no
+// methods a template calls. Templates therefore see the decoded maps, which
+// is also what makes "missingkey=error" effective: a misspelled field name
+// fails the render instead of rendering empty.
+//
+// Unlike WithTemplateData, which renders on the destination host from facts
+// detected there at apply time, this always runs here while the recipe
+// records: SMTPD/NSD candidate content must be identical regardless of which
+// frontend later applies it, so the frontend Go renderers deliberately keep
+// the controller-render distinction the consumer DSL review asked to preserve
+// (see docs/consumer-dsl-simplification-plan.md, "External templates and
+// consumer layout"). A missing or malformed asset is a broken
+// source-controlled template, not a recipe or input error, so this panics
+// like the rest of this package's asset loading (e.g. MustServer,
+// renderHTTPD).
+func renderControllerTemplate(assetPath string, data any) string {
+	rendered, err := RenderTemplate(assetPath, data)
 	if err != nil {
-		panic(fmt.Errorf("read required frontend template %q: %w", assetPath, err))
-	}
-	tmpl, err := template.New(name).Funcs(controllerTemplateFuncs).Option("missingkey=error").Parse(string(raw))
-	if err != nil {
-		panic(fmt.Errorf("parse frontend template %q: %w", assetPath, err))
-	}
-	var buf strings.Builder
-	if err := tmpl.Execute(&buf, data); err != nil {
 		panic(fmt.Errorf("render frontend template %q: %w", assetPath, err))
 	}
-	return buf.String()
+	return rendered
 }

@@ -1,4 +1,4 @@
-include: {{.KeyPath | quote}}
+include: {{.Include}}
 
 server:
 	hide-version: yes
@@ -11,8 +11,8 @@ remote-control:
 	control-interface: /var/run/nsd.sock
 {{range .Zones}}
 zone:
-	name: {{.Name | quote}}
-	zonefile: {{.ZoneFile | quote}}
+	name: {{.Name}}
+	zonefile: {{.ZoneFile}}
 	notify: {{.Peer}}
 	provide-xfr: {{.Peer}}
 {{end -}}
