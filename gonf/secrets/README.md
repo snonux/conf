@@ -13,7 +13,11 @@ paths used by recipes stable:
   `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt`.
 - `paths.GarageSecret("rpc_secret")` reads the vault entry `Infra/garage-rpc`
   (Password field); its legacy copy is `gonf/secrets/garage/rpc_secret`.
-- `etc/goprecords/<host>.token` is unmapped and reads this directory.
+- `paths.FrontendSecret("etc/goprecords/<host>.token")` reads the vault
+  entry `Infra/goprecords-token-<host>` (Password field) for blowfish and
+  fishfinger; its legacy copy is
+  `gonf/secrets/frontends/etc/goprecords/<host>.token`. A frontend added
+  later has no entry and reads this directory.
 
 Run gonf through the repository's `gonf.sh` wrapper (from any working
 directory: it changes into this checkout's `gonf` directory itself and passes
@@ -56,11 +60,27 @@ to task names, inventory values, plan fixtures, or commits.
 api.SetSecretProvider(secret.NewSnapshot(secret.NewFallback(vault, secret.FileProvider{})))
 ```
 
-`vault` is a `secret/foostore` provider whose `foostore.Items` table maps the
-NSD TSIG key and the Garage RPC secret to their KeePass entries (see the list
+`vault` is a `secret/foostore` provider whose `foostore.Items` table maps
+four references to their KeePass entries: the NSD TSIG key, the Garage RPC
+secret and the blowfish and fishfinger goprecords upload tokens (see the list
 above). foostore unlocks the store with its own configured `kdbx_pass_file`;
 no passphrase passes through gonf. The vault is read only when a task
 resolves a secret, so `-list` and secret-free tasks never run foostore.
+
+Controller prerequisites for a task that resolves a mapped secret (gonf's
+`docs/secrets.md`, "Operator prerequisites"):
+
+- `foostore` with the machine read contract (`foostore read`) on `PATH`;
+- `~/.config/foostore.json` for the user running gonf, setting
+  `kdbx_pass_file` explicitly (foostore never uses its `~/.master.pass`
+  default for machine reads) and `kdbx_path` if the store is not at
+  foostore's default `~/Documents/Keepass/master.kdbx`;
+- the pass file: a regular file owned by that user, mode `0600` (or `0400`).
+
+Without them a mapped reference fails the plan record as unavailable (it
+never falls back to this directory). Check one entry without printing it:
+`foostore read --backend keepass --exact --raw --non-interactive --field
+Password -- Infra/garage-rpc >/dev/null; echo $?` (0 means readable).
 
 `secret.NewFallback` (gonf's `docs/secrets.md`, "secret.NewFallback")
 resolves through the vault and falls back to this directory only when the
@@ -73,13 +93,16 @@ vault (or a missing `foostore` binary) fails the whole plan record loudly for
 a mapped reference instead of silently serving this directory's possibly
 stale copy of an already-migrated secret.
 
-The per-host goprecords tokens stay unmapped: they are currently unset, and
-`OptionalSecret` skips a host whose token file is absent here. Map them once
-real tokens exist in the vault.
+The per-host goprecords tokens are mapped too (conf commit 59393f6): they
+were imported from the Rex-era copies, which match the tokens already on the
+hosts, so `frontends_goprecords` now manages `/etc/goprecords-upload.token`
+and the uploader. `OptionalSecret` still skips a host that has neither a
+vault entry nor a token file here.
 
 Task ze2 verified the cutover (all 61 recorded plans byte-identical to the
 file-only baseline, a fallback drill, a locked-vault drill and a rotation
-drill; see that task's annotations). The legacy copies of the migrated
+drill; see that task's annotations); mapping the goprecords tokens left
+every other task's plan byte-identical. The legacy copies of the migrated
 secrets are kept in this directory and in the Rex-era roots: deleting them is
 a further, separately authorized step.
 

@@ -66,10 +66,11 @@ All aggregates are registered in `gonf/tasks/tasks.go`. Most are pattern
 (`frontendSetupTasks`). The operational `frontends_acme_invoke`,
 `frontends_irc_bouncer` and `frontends_ping` (the unprivileged push-pipeline
 diagnostic, excluded since 2026-09-22) are marked `Operational()` and listed
-in `frontendExcludedTasks` instead. `checkFrontendMembership` panics at
-registration (so every invocation, `-list` included, fails) when a
-`frontends_*` task is in neither list, or a listed name is not registered:
-a new frontend task must be added to one of the two lists.
+in `frontendExcludedTasks` instead. `checkFrontendMembership` reports a gonf
+declaration error at registration (so every invocation, `-list` included,
+is refused with exit 1) when a `frontends_*` task is in neither list, or a
+listed name is not registered: a new frontend task must be added to one of
+the two lists.
 
 - Iterate hosts with a per-host value via `ForHosts(key, func(host string, v T) {…})`
   (the cluster from `WithCluster` on the current task). It type-checks every
@@ -82,9 +83,20 @@ a new frontend task must be added to one of the two lists.
 - Store schedules on the host: `WithValue(cluster.ValueUnattendedCron, …)` /
   `ValueUnattendedOnCalendar` / `ValueUnattendedCronMinute` /
   `ValueUnattendedAllowReboot` in `cluster.Register()`.
-- Outside `ForHosts`, read with `MustHostValue[T](host, key)` — missing key or
-  wrong type fails fast (`logger.Fatal`, exit 1). Do **not** keep parallel
-  hostname→value maps in the recipe packages.
+- Outside `ForHosts`, read with `MustHostValue[T](host, key)` — a missing key or
+  wrong type is a gonf declaration error (the record fails, or the CLI
+  refuses the run with exit 1). Do **not** keep parallel hostname→value maps
+  in the recipe packages.
+
+### Secrets
+
+Recipes read secrets only with `MustSecret` / `OptionalSecret` and the
+logical paths from `gonf/paths` (`FrontendSecret`, `GarageSecret`).
+`cmd/gonf/main.go` resolves them through a foostore/KeePass vault for the
+references its table maps, falling back to `gonf/secrets/` for every other
+one (`secret.NewFallback`). Migrating a secret is one more table row; see
+`gonf/secrets/README.md` for the mapped references, the controller
+prerequisites and the policy. Never print, commit or log a secret value.
 
 ### DSL: use `List`, not `[]string{…}`
 

@@ -27,9 +27,10 @@ service account exists, `frontends_service_accounts`).
 The aggregate converges an existing frontend. A new host additionally needs,
 in this order:
 
-1. Controller inputs: the secrets under `gonf/secrets/frontends` (see
+1. Controller inputs: the secrets, read from the foostore/KeePass vault
+   with a file fallback under `gonf/secrets/frontends` (see
    `gonf/secrets/README.md`; the NSD TSIG key is required, the goprecords
-   token optional) and the controller checkouts `~/git/shuriken.sh`
+   token optional and needs a vault entry or token file for the new host) and the controller checkouts `~/git/shuriken.sh`
    (`check_shuriken_age` for Gogios, required) and `~/git/foostats`
    (optional; `scripts/` holds a fallback copy). `GONF_SHURIKEN_ROOT` and
    `GONF_FOOSTATS_ROOT` point elsewhere.
@@ -50,10 +51,13 @@ in this order:
 
 Uptimed stats are pushed once per day from `/etc/daily.local` by
 `/usr/local/bin/goprecords-upload-client.sh` (task `frontends_goprecords`).
-The per-host bearer token is a controller secret,
-`gonf/secrets/frontends/etc/goprecords/<host>.token` (one line), installed
-as `/etc/goprecords-upload.token` (0600). A host without its token gets no
-uploader.
+The per-host bearer token is a controller secret, logical reference
+`frontends/etc/goprecords/<host>.token` (one line): for blowfish and
+fishfinger it is read from the vault entry `Infra/goprecords-token-<host>`
+(Password field), any other host falls back to the file of that name under
+`gonf/secrets/` (see `gonf/secrets/README.md`). It is installed as
+`/etc/goprecords-upload.token` (0600). For a host without a token gonf
+declares nothing (no uploader; files already there are left as they are).
 
 Issue or rotate keys on the goprecords daemon (Kubernetes example):
 
@@ -64,4 +68,5 @@ kubectl exec -n services deployment/goprecords -- \
   goprecords --create-client-key blowfish -stats-dir=/data/stats
 ```
 
-Then update the matching token file and run `frontends_goprecords` again.
+Then update the host's vault entry (or, for a host without one, its token
+file) and run `frontends_goprecords` again.

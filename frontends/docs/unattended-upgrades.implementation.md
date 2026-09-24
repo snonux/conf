@@ -11,7 +11,7 @@ Companion doc: [`unattended-upgrades.plan.md`](./unattended-upgrades.plan.md) �
 | 1 | Wrapper script (`ksh`) | `/usr/local/sbin/unattended-upgrade` (0755 root:wheel) | `frontends/scripts/unattended-upgrade.sh` (plain file, identical on both hosts) | gonf `frontends_script` (Privileged) |
 | 2 | Daemon restart list | `/etc/unattended-upgrade-services` (0644) | inline in the gonf task (`unattended.go` const) | gonf `frontends_services` (Privileged) |
 | 3 | Staggered cron lines (root) | root crontab | `Cron` resources in the gonf tasks | gonf `frontends_cron` (Privileged; per-host schedule selected inside the body via the `WhenHostname` recipe — one task, both hosts) |
-| 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_newsyslog` (Privileged) + the Rex-deployed wholesale copy stays in sync |
+| 4 | Log rotation | `/var/log/unattended-upgrade.log` | one line in `etc/newsyslog.conf` + `WithLine` on the live file | gonf `frontends_newsyslog` (Privileged); the wholesale copy, now installed by gonf too (`frontends_foostats`), carries the same line |
 | 5 | Root mail routing | `root: paul` | **already done** (`etc/mail/aliases`, deployed with `newaliases` on change) | — |
 | 6 | State | `/var/run/unattended-upgrade.lock` (2 h stale-lock recovery); NO needs-reboot flag — the reboot decision is derived from the kernel version compare | created by script | — |
 
@@ -300,7 +300,7 @@ A second review suggested the same three layers, but with a different packages m
 **Rejected (tooling does not exist on OpenBSD):**
 - "`pkg security`" / "OpenBSD vulnerability database" — no such tool or database. `pkg_add(1)` has no security mode (its `-c` means "delete extra config files when replacing packages"), `man.openbsd.org/pkg_security` and the `portsec@openbsd.org` list both 404, and FAQ 15 documents `pkg_add -u` as the update mechanism. OpenBSD's model is errata trees, not per-CVE tracking.
 - The proposed `pkg-sec-update` script is a fragile reimplementation of what `pkg_add -u` already does better: signature-verified (signify), dependency-resolved updates straight from the `packages-stable` tree that `pkg_add` searches automatically. It also uses `fetch(1)` (a FreeBSD command; OpenBSD has `ftp(1)`) and hardcodes `ftp.openbsd.org` instead of `/etc/installurl`.
-- `/etc/crontab` is not used on OpenBSD — root crontab is managed via `crontab(1)` (our Rex task does exactly that).
+- `/etc/crontab` is not used on OpenBSD — root crontab is managed via `crontab(1)` (the gonf `Cron` resources do exactly that).
 - `make pkg-patch` is not a ports target (`make patch` / `make package` exist).
 
 **Equivalent / already covered:**
