@@ -17,7 +17,7 @@ idempotent steps:
 | Storage | |
 |---|---|
 | `navidrome-music-pvc` | 200Gi hostPath `/data/nfs/k3svolumes/navidrome/music` at `/music`, shared with Navidrome (RWX, so either pod can run on any r-node) |
-| `beets-art-state-pvc` | 2Gi local-path, `library.db` + `import.log`, disposable |
+| `beets-art-state-pvc` | 2Gi RWX NFS hostPath (`/data/nfs/k3svolumes/beets-art/state`), `library.db` + `import.log`, disposable |
 | `beets-art-config` ConfigMap | `/etc/beets/config.yaml`, `BEETSDIR=/etc/beets` |
 
 ## Operate

@@ -3,9 +3,10 @@
 # scan (ND_SCANSCHEDULE=1h) pick the changes up.
 #
 # Why this works alongside Navidrome:
-#   - The music PVC is RWO. Kubernetes RWO permits multi-pod mounts as long
-#     as all pods land on the *same node*. Both Navidrome and this CronJob
-#     pin to r1 via nodeSelector, so concurrent mounts are fine.
+#   - The music volume is an NFS hostPath PV. Kubernetes does not enforce
+#     RWO for hostPath, and the NFS export is mounted on every r-node, so
+#     this CronJob and Navidrome can run on different nodes at once. Nothing
+#     is pinned to a node (house rule since 2026-09-25).
 #   - Navidrome and beets only conflict on file *write* if they touch the
 #     same file at the same instant. Navidrome writes nothing under /music
 #     (read-only consumer); beets writes art into album folders and embeds

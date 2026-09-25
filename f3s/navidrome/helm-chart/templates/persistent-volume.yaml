@@ -8,7 +8,9 @@
 # deployment.yaml): serving thumbnails through the stunnel TLS tunnel made
 # the "Image cache" init take ~19 s, the reason the data once left NFS.
 # SQLite-on-NFS lock fragility is contained by the Recreate strategy and a
-# single RWO claim: only one pod ever opens the DB.
+# single RWO claim: normally only one pod opens the DB (Kubernetes does not enforce RWO for
+# hostPath volumes: during a node partition a replacement pod can start while
+# the old one still runs, and only NFSv4 locking guards SQLite then).
 #
 # The NFS export is mounted at the same path on r0/r1/r2, so the hostPath
 # resolves identically on every node. type: Directory makes the mount fail

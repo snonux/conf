@@ -19,25 +19,31 @@ spec:
         app: navidrome
     spec:
       initContainers:
-      - name: nfs-check-music
+      - name: nfs-check
         image: busybox:stable
         command:
         - sh
         - -c
         - |
-          test -f /mnt/.nfs-sentinel || (
-            echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
-            echo "refusing to start; node likely has NFS unmounted"
-            echo "pod would otherwise bind-mount the local-XFS shadow"
-            exit 1
-          )
+          # Both volumes are NFS: the SQLite DB under /data since 2026-09-25.
+          for m in /mnt /data; do
+            test -f $m/.nfs-sentinel || {
+              echo "ERROR: NFS sentinel missing at $m/.nfs-sentinel"
+              echo "refusing to start; node likely has NFS unmounted"
+              exit 1
+            }
+          done
         volumeMounts:
         - name: navidrome-music
           mountPath: /mnt
           readOnly: true
+        - name: navidrome-data
+          mountPath: /data
+          readOnly: true
       # No nodeSelector: /data and /music are both on the NFS export that is
       # mounted on every r-node, so the pod can run on r0, r1 or r2. The
-      # init container above refuses to start on a node without the mount.
+      # init container above refuses to start on a node without the mount
+      # (.nfs-sentinel in both directories).
       containers:
       - name: navidrome
         image: deluan/navidrome:0.61.2
@@ -79,7 +85,17 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
+        # Liveness follows the house NFS pattern: the SQLite DB is on NFS, and
+        # after an NFS server restart or CARP failover its handles go ESTALE
+        # while /ping keeps answering, so only a file check on the mount
+        # notices; a restart re-binds the healthy mount.
         livenessProbe:
+          exec:
+            command: ["test", "-f", "/data/.nfs-sentinel"]
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
           httpGet:
             path: /ping
             port: 4533
