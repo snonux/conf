@@ -56,12 +56,13 @@ spec:
               name: http
           # HTTP probes only, never tcpSocket: old builds segfaulted on an
           # empty TCP open+close (f015a1b survives it, but a real GET is the
-          # safer check). The liveness probe matters: a "POST / " without an
-          # event parameter sends f015a1b into an endless loop in its
-          # single-threaded event loop, so the whole chat stops answering
-          # until the 128Mi limit OOM-kills it (seen as repeated OOMKilled
-          # restarts). The probe restarts it after ~1 minute instead
-          # (audit 2026-09-25 #20).
+          # safer check). Known hang: a "POST / " without an event parameter
+          # sends f015a1b into an endless loop in its single-threaded event
+          # loop; the chat stops answering and memory grows until the 128Mi
+          # limit OOM-kills it (~25s, seen as repeated OOMKilled restarts).
+          # Readiness takes it out of the Service meanwhile, and liveness
+          # restarts it if a hang ever stays under the memory limit
+          # (audit 2026-09-25 #20). The real fix belongs in the ychat repo.
           livenessProbe:
             httpGet:
               path: /
