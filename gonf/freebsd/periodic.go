@@ -90,7 +90,7 @@ func (Periodic) Times() {
 
 // DescConf returns the description for the periodic.conf settings.
 func (Periodic) DescConf() string {
-	return "periodic.conf: ZFS scrubs (30-day threshold) on, weekly locate off, output to /var/log/*.log"
+	return "periodic.conf: ZFS scrubs (30-day threshold) on, weekly locate off, output to /var/log/*.log; zfs-periodic removed"
 }
 
 // Conf enables the daily periodic scrub check -- each pool is scrubbed once
@@ -113,8 +113,17 @@ func (Periodic) DescConf() string {
 // alone. The logs are created here 0640 root:wheel, the mode newsyslog gives
 // them on rotation: periodic(8) would create them world-readable under
 // cron's umask, and they now carry the security run's output.
+//
+// zfs-periodic (the 000.zfs-snapshot scripts) is removed with its dead
+// settings (task hk2): zrepl's snap and push jobs took over the snapshots,
+// every *_zfs_snapshot_enable was "NO", and the stock /etc/crontab never
+// runs the package's hourly script. The package goes first, so no run of
+// its scripts ever sees the settings gone. daily_zfs_enable (the base
+// 404.status-zfs pool check) is not part of it and stays.
 func (Periodic) Conf() {
+	zfsPeriodic := NoPackage("zfs-periodic")
 	File("/etc/periodic.conf",
+		WithoutLines(deadZfsPeriodicLines()...),
 		WithLine(`daily_scrub_zfs_enable="YES"`),
 		WithLine(`daily_scrub_zfs_default_threshold="30"`),
 		WithLine(`weekly_locate_enable="NO"`),
@@ -124,7 +133,8 @@ func (Periodic) Conf() {
 		WithLine(`weekly_status_security_inline="YES"`),
 		WithLine(`monthly_output="/var/log/monthly.log"`),
 		WithLine(`monthly_status_security_inline="YES"`),
-		WithMode(0o644))
+		WithMode(0o644),
+		DependsOn(zfsPeriodic))
 	for _, logFile := range List("/var/log/daily.log", "/var/log/weekly.log", "/var/log/monthly.log") {
 		EnsureFile(logFile, Perm(0o640, Root))
 	}
@@ -140,4 +150,23 @@ func (Periodic) DescNosuid() string {
 func (Periodic) Nosuid() {
 	Command("zfs", List("set", "setuid=off", "zdata"),
 		OnlyIf("sh", List("-c", `zfs get -H -o value setuid zdata 2>/dev/null | grep -qx on`)))
+}
+
+// deadZfsPeriodicLines are the zfs-periodic settings the hosts carried, in
+// every spelling found live on 2026-09-25: pools "zroot" (f0, f1) or
+// "zroot zdata" (f2) and f2's *_skip of the zrepl sink. The three empty
+// lines that separated f2's skip lines were deleted by hand on 2026-09-25:
+// WithoutLine("") matches no line in gonf.
+func deadZfsPeriodicLines() []string {
+	var lines []string
+	for _, p := range []struct{ period, keep string }{{"daily", "7"}, {"weekly", "5"}, {"monthly", "6"}} {
+		prefix := p.period + "_zfs_snapshot_"
+		lines = append(lines,
+			prefix+`enable="NO"`,
+			prefix+`pools="zroot"`,
+			prefix+`pools="zroot zdata"`,
+			prefix+`keep="`+p.keep+`"`,
+			prefix+`skip="zroot/sink"`)
+	}
+	return lines
 }

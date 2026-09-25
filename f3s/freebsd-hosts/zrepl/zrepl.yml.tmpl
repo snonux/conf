@@ -1,0 +1,76 @@
+{{- /*
+  /usr/local/etc/zrepl/zrepl.yml of one f-host, rendered on the controller by
+  gonf/freebsd/zrepl.go (freebsd_zrepl_config) from the host's
+  freebsd.ZreplJobs (gonf/cluster/cluster.go). A host has at most one push or
+  one sink job, plus the local_zfs_snapshots snap job every host runs.
+  Comments sit at column 38, the layout of the hand-written f0/f2 files.
+*/ -}}
+global:
+  logging:
+    - type: stdout
+      level: info
+      format: human
+
+jobs:
+{{- with .Push}}
+  - name: {{.Name}}
+    type: push
+    connect:
+      type: tcp
+      {{printf "%-32s" (printf "address: %q" .Address)}}# {{.Peer}} WireGuard IP
+    filesystems:
+{{- range .Filesystems}}
+      {{printf "%q" .}}: true
+{{- end}}
+    send:
+      encrypted: true
+    snapshotting:
+      type: periodic
+      prefix: zrepl_
+      {{printf "%-32s" (printf "interval: %s" .Interval)}}# {{.IntervalNote}}
+    pruning:
+      keep_sender:
+        - type: last_n
+          count: 10
+        - type: grid
+          grid: {{.Grid}}
+          regex: "^zrepl_.*"
+      keep_receiver:
+        - type: last_n
+          count: 10
+        - type: grid
+          grid: {{.Grid}}
+          regex: "^zrepl_.*"
+{{end}}
+{{- with .Sink}}
+  - name: sink
+    type: sink
+    serve:
+      type: tcp
+      {{printf "%-32s" (printf "listen: %q" .Listen)}}# {{.Self}} WireGuard IP
+      clients:
+        {{printf "%-30s" (printf "%q: %q" .ClientIP .ClientName)}}# accept from {{.ClientName}}
+    recv:
+      placeholder:
+        encryption: inherit
+    root_fs: {{printf "%q" .RootFS}}
+{{end}}
+  - name: local_zfs_snapshots
+    type: snap
+    filesystems:
+{{- range .Snap}}
+      {{printf "%q" .Pattern}}: {{.Include}}
+{{- end}}
+    snapshotting:
+      type: cron
+      prefix: zrepl_local_
+      cron: "0 3 * * *"
+    pruning:
+      keep:
+        - type: regex
+          regex: "^(daily|weekly|monthly)-.*"
+        - type: regex
+          regex: "^pre-.*"
+        - type: grid
+          grid: 14x1d | 6x30d
+          regex: "^zrepl_local_.*"

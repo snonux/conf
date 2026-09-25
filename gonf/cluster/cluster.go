@@ -183,6 +183,8 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 // freebsd-hosts / garage clusters. f0–f2 are also Garage nodes (each carries
 // the garage.Node the Garage recipe reads); f3 stays out of the Garage
 // cluster. f3 never auto-reboots: unattended-upgrade-freebsd hardcodes that.
+// The zrepl jobs and ZFS key datasets (fNZrepl, fNKeys) live in
+// freebsd_storage.go.
 func registerFreeBSD() {
 	// f0 has the UPS on USB and serves its status on its LAN address; f1-f3
 	// poll it there (by IP, so apcupsd never depends on name resolution).
@@ -194,24 +196,28 @@ func registerFreeBSD() {
 	f0 := Host("f0", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
+		WithData(f0Zrepl), WithData(f0Keys),
 		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
 	f1 := Host("f1", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
+		WithData(f1Zrepl), WithData(f1Keys),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
 	f2 := Host("f2", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
+		WithData(f2Zrepl), WithData(f2Keys),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
 	f3 := Host("f3", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
+		WithData(f3Zrepl), WithData(f3Keys),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
