@@ -27,7 +27,7 @@ spec:
         fsGroup: 1000
       initContainers:
       - name: nfs-check-data
-        image: busybox:stable
+        image: busybox:1.36.1
         command:
         - sh
         - -c
@@ -43,7 +43,7 @@ spec:
           mountPath: /mnt
           readOnly: true
       - name: nfs-check-config
-        image: busybox:stable
+        image: busybox:1.36.1
         command:
         - sh
         - -c
