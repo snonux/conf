@@ -69,6 +69,13 @@ spec:
       containers:
       - name: audiobookshelf
         image: ghcr.io/advplyr/audiobookshelf:2.36.1
+        # Memory from the 14-day peak working set (140Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 128Mi
+          limits:
+            memory: 1Gi
         ports:
         - containerPort: 80
         livenessProbe:
