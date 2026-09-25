@@ -4,16 +4,19 @@ kube-prometheus-stack 55.5.0, release `prometheus`, namespace `monitoring`,
 deployed by ArgoCD from `argocd-apps/monitoring/prometheus.yaml`. That
 Application has two sources: the upstream chart with inline
 `valuesObject`, and `f3s/prometheus/manifests/` (rules, dashboards,
-scrape-config secret, PVs, NodePort, PostSync hook). ArgoCD applies only
+scrape-config secret, Prometheus PV, NodePort). ArgoCD applies only
 `manifests/`; the YAML files at this directory's top level aren't synced.
 
 Current values worth knowing:
 
 - Grafana is disabled (`grafana.enabled: false`): SQLite on NFS didn't
   survive restarts, and Loki/Tempo are off too. The Grafana settings stay in
-  the values for when it comes back (PVC `grafana-data-pvc`, UID 911,
-  datasources from ConfigMap `grafana-datasources-all` mounted at
-  `/etc/grafana/provisioning/datasources`, sidecar off).
+  the values for when it comes back (UID 911, datasources from ConfigMap
+  `grafana-datasources-all` mounted at `/etc/grafana/provisioning/datasources`,
+  sidecar off). Its NFS PV/PVC (`grafana-data-pv`/`-pvc`) and the PostSync
+  Grafana restart hook were removed (audit 2026-09-25 #16); the old data
+  stays in `/data/nfs/k3svolumes/grafana/data`. Re-enabling needs a new PVC
+  (preferably local-path, not SQLite on NFS) for `existingClaim`.
 - etcd and controller-manager scraped at 192.168.2.120-122 (ports 2381,
   10257). kube-proxy and kube-scheduler are off (embedded in k3s).
 - node-exporter reads the textfile collector at
