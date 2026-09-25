@@ -12,9 +12,9 @@ metadata:
   name: forgejo-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: code.f3s.buetow.org
       http:
@@ -35,9 +35,9 @@ metadata:
   name: forgejo-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - code.f3s.lan.buetow.org
