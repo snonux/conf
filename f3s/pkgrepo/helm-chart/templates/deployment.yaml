@@ -39,6 +39,13 @@ spec:
       containers:
       - name: nginx
         image: nginx:1.27-alpine
+        # Memory from the 14-day peak working set (8Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 16Mi
+          limits:
+            memory: 128Mi
         ports:
         - containerPort: 8080
         # Liveness probe: restart if nginx stops responding
