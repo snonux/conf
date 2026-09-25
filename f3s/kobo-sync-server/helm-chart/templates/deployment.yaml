@@ -35,7 +35,7 @@ spec:
               readOnly: true
       containers:
         - name: koreader-sync-server
-          image: koreader/kosync:latest
+          image: koreader/kosync:v2.1.1
           ports:
             - containerPort: 17200
           livenessProbe:
