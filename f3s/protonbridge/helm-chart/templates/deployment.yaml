@@ -38,7 +38,7 @@ spec:
         # Initializes GPG + pass on first run so Bridge v3 has a working keychain.
         # All state is written to /bridge-data (the PVC) so it persists across restarts.
         # No-op on subsequent starts (idempotency checks on pubring.kbx + password-store).
-        image: shenxn/protonmail-bridge:latest
+        image: shenxn/protonmail-bridge:3.19.0-1
         command:
         - /bin/sh
         - -c
@@ -87,7 +87,7 @@ spec:
         #   SMTP: <any-r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
         #   Username: your ProtonMail address
         #   Password: bridge-generated password (from 'info' in the CLI above)
-        image: shenxn/protonmail-bridge:latest
+        image: shenxn/protonmail-bridge:3.19.0-1
         stdin: true
         tty: true
         command:
