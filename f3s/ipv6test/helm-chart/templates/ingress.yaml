@@ -4,9 +4,9 @@ metadata:
   name: ipv6test-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: ipv6test.f3s.buetow.org
       http:
@@ -45,9 +45,9 @@ metadata:
   name: ipv6test-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - ipv6test.f3s.lan.buetow.org
