@@ -14,9 +14,11 @@
 #      cache but ALL writes block; only the write probe catches this, well
 #      inside the hard mount's 60s retransmit timeout)
 #
-# On a successful repair it force-deletes any pods on this node that are
-# stuck in Unknown/Pending/ContainerCreating, allowing the kubelet to
-# reschedule them against the now-healthy volume.
+# On a successful repair (mount back AND writable) it force-deletes pods on
+# this node stuck in Unknown/Pending/ContainerCreating, and marks a restart of
+# every NFS-backed workload on the node as pending: on the next run with all
+# probes passing it rollout-restarts them (Recreate: stop before start), at
+# most once per 10 minutes, retrying until the restart succeeds.
 #
 # fix_mount recovery sequence:
 #   1. kill D-state processes pinning the mount (so umount can succeed)
@@ -106,6 +108,11 @@ touch "$LOCK_FILE"
 trap "rm -f $LOCK_FILE" EXIT
 
 MOUNT_FIXED=0
+# Pending full NFS-workload restart after a repair (see
+# restart_nfs_workloads_on_node), and its throttle.
+RESTART_PENDING=/run/nfs-mount-monitor/restart-pending
+RESTART_STAMP=/run/nfs-mount-monitor/last-workload-restart
+RESTART_MIN_INTERVAL=600
 
 # read_fail_count — return the current consecutive-failure counter.
 # Returns 0 if the file is absent or contains a non-integer.
@@ -323,30 +330,65 @@ detach_all_mounts() {
     (( $(nfs_mount_count) == 0 ))
 }
 
-# restart_nfs_pods_on_node NODE — delete every pod on NODE whose volumes are
-# NFS-backed: a hostPath under the mount point, or a PVC bound to a PV whose
-# hostPath is under it. Called only after a repair that detached the mount.
-# Deletion is graceful and does not wait, so a pod stuck on a stale handle
-# cannot block this run; its controller recreates it.
-restart_nfs_pods_on_node() {
-    local node="$1" claims
-    claims=$(timeout 20 kubectl get pv -o json 2>/dev/null | jq -c --arg mp "$MOUNT_POINT" '
-        [.items[] | select((.spec.hostPath.path // "") | startswith($mp))
-         | .spec.claimRef | select(. != null) | "\(.namespace)/\(.name)"]') || return 0
-    [ -n "$claims" ] || claims='[]'
+# restart_nfs_workloads_on_node NODE — rollout-restart every workload that
+# has a pod on NODE whose volumes are NFS-backed (a hostPath under the mount
+# point, or a PVC bound to a PV whose hostPath is under it). Such pods hold
+# handles to the superblock a repair detached and stay broken even when they
+# look Ready (Forgejo on r1, 2026-09-25: SQLite "bad file descriptor").
+#
+# A rollout restart rather than a pod delete: every stateful app here uses the
+# Recreate strategy, so the old pod stops before the new one starts and a
+# database (Postgres, SQLite) never has two writers on the same NFS
+# directory; a plain delete would let the ReplicaSet start the replacement
+# while the old pod still terminates. Pods without a Deployment/StatefulSet
+# owner are deleted instead.
+#
+# Returns non-zero if anything could not be listed or restarted, so the
+# caller keeps the restart-pending marker and retries next run.
+restart_nfs_workloads_on_node() {
+    local node="$1" d=/run/nfs-mount-monitor claims rc=0
+    # The API objects go through files, not shell variables or --argjson:
+    # the ReplicaSet list alone exceeds the kernel's argument-size limit.
+    mkdir -p "$d"
+    timeout 20 kubectl get pv -o json > "$d/pv.json" 2>/dev/null || return 1
     timeout 20 kubectl get pods --all-namespaces --field-selector="spec.nodeName=$node" \
-      -o json 2>/dev/null | jq -r --arg mp "$MOUNT_POINT" --argjson claims "$claims" '
-        .items[] | . as $p
+        -o json > "$d/pods.json" 2>/dev/null || return 1
+    timeout 20 kubectl get replicasets --all-namespaces -o json > "$d/rs.json" 2>/dev/null || return 1
+    claims=$(jq -c --arg mp "$MOUNT_POINT" '
+        [.items[] | select((.spec.hostPath.path // "") | startswith($mp))
+         | .spec.claimRef | select(. != null) | "\(.namespace)/\(.name)"]' "$d/pv.json") || return 1
+    if [ "$claims" = "[]" ]; then
+        echo "restart_nfs_workloads_on_node: no NFS PVs found — refusing to guess, will retry"
+        return 1
+    fi
+    # One line per workload: "<kind> <namespace> <name>", deduplicated.
+    jq -r --arg mp "$MOUNT_POINT" --argjson claims "$claims" --slurpfile rs "$d/rs.json" '
+        ($rs[0].items | map({key: "\(.metadata.namespace)/\(.metadata.name)",
+                          value: ((.metadata.ownerReferences // [])[0])}) | from_entries) as $rsowner
+        | .items[] | . as $p
         | select(any(.spec.volumes[]?;
               ((.hostPath.path // "") | startswith($mp))
               or ((.persistentVolumeClaim.claimName // null) as $c
                   | $c != null and ($claims | index("\($p.metadata.namespace)/\($c)")) != null)))
-        | "\(.metadata.namespace) \(.metadata.name)"' | \
-      while read -r ns pod; do
-        [ -n "$ns" ] || continue
-        echo "Restarting NFS pod $ns/$pod (stale handles after the repair)"
-        timeout 20 kubectl delete pod -n "$ns" "$pod" --wait=false 2>&1
-      done
+        | ((.metadata.ownerReferences // [])[0]) as $o
+        | if $o == null then "pod \(.metadata.namespace) \(.metadata.name)"
+          elif $o.kind == "ReplicaSet" then
+            ($rsowner["\(.metadata.namespace)/\($o.name)"]) as $d
+            | if $d != null and $d.kind == "Deployment" then "deployment \(.metadata.namespace) \($d.name)"
+              else "pod \(.metadata.namespace) \(.metadata.name)" end
+          elif $o.kind == "StatefulSet" then "statefulset \(.metadata.namespace) \($o.name)"
+          else "pod \(.metadata.namespace) \(.metadata.name)" end' "$d/pods.json" | sort -u > "$d/restart-list" || return 1
+    while read -r kind ns name; do
+        [ -n "$kind" ] || continue
+        if [ "$kind" = pod ]; then
+            echo "Deleting NFS pod $ns/$name (no Deployment/StatefulSet owner)"
+            timeout 20 kubectl delete pod -n "$ns" "$name" --wait=false 2>&1 || rc=1
+        else
+            echo "Rollout-restarting $kind $ns/$name (stale NFS handles after a repair)"
+            timeout 20 kubectl rollout restart "$kind" -n "$ns" "$name" 2>&1 || rc=1
+        fi
+    done < "$d/restart-list"
+    return $rc
 }
 
 fix_mount () {
@@ -406,8 +448,12 @@ fix_mount () {
     # stuck on an unreachable server, and a failed mount counts toward the
     # reboot escalation as before.
     echo "Attempting to mount $MOUNT_POINT"
+    # Success means the mount is back AND writable: a stat alone passed on an
+    # export that still could not write, and every such "success" would reset
+    # the fail counter and trigger the workload restarts below.
     if timeout -k 5 30 mount "$MOUNT_POINT" 2>/dev/null \
-        && timeout 5s stat "$MOUNT_POINT" >/dev/null 2>&1; then
+        && timeout 5s stat "$MOUNT_POINT" >/dev/null 2>&1 \
+        && timeout 5s sh -c "echo \$\$ > '$MOUNT_POINT/.healthcheck.$(hostname)' && rm -f '$MOUNT_POINT/.healthcheck.$(hostname)'" 2>/dev/null; then
         echo "NFS mount $MOUNT_POINT mounted successfully"
         MOUNT_FIXED=1
         return 0
@@ -487,7 +533,7 @@ run_fix_mount_with_counter() {
 # PROBE_FAILED tracks whether any probe fired run_fix_mount_with_counter.
 # If no probe fires, all checks passed cleanly and we can reset the counter.
 PROBE_FAILED=0
-# WRITE_PENDING marks a write-probe failure still below WRITE_FAIL_LIMIT: no
+# WRITE_PENDING marks a stat or write stall still below WRITE_FAIL_LIMIT: no
 # repair yet, but not a clean run either, so the fail counter is left alone.
 WRITE_PENDING=0
 
@@ -495,8 +541,9 @@ WRITE_PENDING=0
 # Each used to call fix_mount on its own, so a single outage could cycle the
 # mount (and restart stunnel) three times in one run.
 #
-# A missing, hung or stacked mount is repaired at once. A failed write probe
-# only counts toward WRITE_FAIL_LIMIT consecutive runs first: the repair's
+# A missing or stacked mount is repaired at once. A stalled stat or failed
+# write probe only counts toward WRITE_FAIL_LIMIT consecutive runs first
+# (streak kept in WRITE_FAIL_FILE for both): the repair's
 # umount -f aborts every in-flight RPC on the superblock, handing EIO to
 # every pod on the node even on a hard mount, which is worse than a single
 # 5-second stall that the hard mount would have ridden out.
@@ -601,11 +648,36 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
     # though it may look Ready (Forgejo on r1, 2026-09-25: SQLite "bad file
     # descriptor", 500s, while its HTTP health check passed). Restart them
     # all so they re-bind the fresh mount; they may land on any node.
-    restart_nfs_pods_on_node "$NODE"
+    # The workload restart itself runs below, on a run where the mount is
+    # healthy; the marker survives a run killed mid-way (TimeoutStartSec)
+    # and a failed kubectl call, so the restart is retried until it succeeds.
+    mkdir -p /run/nfs-mount-monitor
+    touch "$RESTART_PENDING"
 
     # On a healthy remount, also ensure the fail counter is reset.
     write_fail_count 0
     echo "Stuck-pod cleanup done; consecutive-failure counter reset to 0"
+fi
+
+# Restart the NFS workloads on this node once after a repair (see
+# restart_nfs_workloads_on_node). Only on a run whose probes all passed, so a
+# node whose export still cannot write is not put into a restart loop, and at
+# most once per RESTART_MIN_INTERVAL even if repairs keep succeeding.
+if [ -e "$RESTART_PENDING" ] && [ "$PROBE_FAILED" -eq 0 ] && [ "$WRITE_PENDING" -eq 0 ]; then
+    last_restart=0
+    [ -f "$RESTART_STAMP" ] && last_restart=$(stat -c %Y "$RESTART_STAMP" 2>/dev/null || echo 0)
+    if (( $(date +%s) - last_restart < RESTART_MIN_INTERVAL )); then
+        echo "NFS workload restart pending but throttled (last one $(( $(date +%s) - last_restart ))s ago)"
+    else
+        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+        touch "$RESTART_STAMP"
+        if restart_nfs_workloads_on_node "$(hostname)"; then
+            rm -f "$RESTART_PENDING"
+            echo "NFS workload restart done"
+        else
+            echo "NFS workload restart incomplete — will retry"
+        fi
+    fi
 fi
 
 # Reap pods broken by a stale NFS bind-mount even when the node-level mount is
