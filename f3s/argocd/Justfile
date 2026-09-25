@@ -3,19 +3,23 @@
 
 NAMESPACE := "cicd"
 RELEASE_NAME := "argocd"
+# Chart version in use (helm list -n cicd: argo-cd-9.3.4, app v3.2.5). Pinned
+# so `just upgrade` re-applies values.yaml without silently jumping to the
+# latest chart; bump it deliberately after reading the upstream changelog.
+CHART_VERSION := "9.3.4"
 
 install:
     helm repo add argo https://argoproj.github.io/argo-helm || true
     helm repo update
     kubectl create namespace {{NAMESPACE}} || true
     kubectl apply -f persistent-volumes.yaml
-    helm install {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
+    helm install {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml
     @echo "Waiting for ArgoCD to be ready..."
     @sleep 10
     kubectl apply -f ingress.yaml
     @echo ""
     @echo "ArgoCD deployed successfully!"
-    @echo "Access UI at: https://argocd.f3s.buetow.org"
+    @echo "Access UI at: https://argocd.f3s.buetow.org (LAN: https://argocd.f3s.lan.buetow.org)"
     @echo ""
     @echo "Get initial admin password with:"
     @echo "  just get-password"
@@ -23,7 +27,7 @@ install:
     @echo "NOTE: Password changes via UI are preserved on helm upgrade"
 
 upgrade:
-    helm upgrade {{RELEASE_NAME}} argo/argo-cd --namespace {{NAMESPACE}} -f values.yaml
+    helm upgrade {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml
     kubectl apply -f ingress.yaml
 
 uninstall:
@@ -37,7 +41,7 @@ uninstall:
 status:
     kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
     kubectl get svc -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
-    kubectl get ingress -n {{NAMESPACE}} argocd-server-ingress
+    kubectl get ingress -n {{NAMESPACE}} argocd-server-ingress argocd-server-ingress-lan
     kubectl get pvc -n {{NAMESPACE}} argocd-repo-server-pvc
 
 logs:

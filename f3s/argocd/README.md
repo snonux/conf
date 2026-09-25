@@ -3,7 +3,14 @@
 GitOps controller for the f3s k3s cluster. Helm release `argocd` (chart
 `argo/argo-cd`) in namespace `cicd`, single non-HA instance, Dex disabled.
 UI at `argocd.f3s.buetow.org` (Traefik ingress, server runs `--insecure`
-behind it). Metrics via ServiceMonitor.
+behind it) and on the LAN at `argocd.f3s.lan.buetow.org`
+(`argocd-server-ingress-lan`, `web,websecure`, wildcard `f3s-lan-tls` from the
+cicd `f3s-lan-wildcard` Certificate), the same public + `-ingress-lan` pair
+every other f3s service has. Metrics via ServiceMonitor.
+
+The chart version is pinned in the Justfile (`CHART_VERSION`, currently
+`9.3.4` = Argo CD v3.2.5, as shown by `helm list -n cicd`). Bump it on purpose;
+`just upgrade` never floats to the latest chart.
 
 Files: `values.yaml`, `persistent-volumes.yaml` (10Gi hostPath PV for the
 repo-server), `ingress.yaml`. The Application manifests live in
@@ -20,7 +27,7 @@ chmod 777 /data/nfs/k3svolumes/argocd/repo-server
 
 ```sh
 just install        # helm repo add, PV/PVC, helm install, ingress
-just upgrade        # helm upgrade -f values.yaml + ingress
+just upgrade        # helm upgrade --version CHART_VERSION -f values.yaml + ingress
 just status
 just logs
 just get-password   # initial admin password (user admin)
@@ -58,7 +65,7 @@ kubectl get pods -n cicd
 kubectl get pv argocd-repo-server-pv; kubectl get pvc -n cicd argocd-repo-server-pvc
 kubectl logs -n cicd -l app.kubernetes.io/name=argocd-repo-server
 kubectl logs -n cicd -l app.kubernetes.io/name=argocd-application-controller
-kubectl describe ingress -n cicd argocd-server-ingress
+kubectl describe ingress -n cicd argocd-server-ingress argocd-server-ingress-lan
 ```
 
 Reset a lost admin password:

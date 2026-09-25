@@ -56,7 +56,7 @@ spec:
   duration: 2160h # 90 days
   renewBefore: 360h # 15 days
 ---
-# cicd namespace: cgit-ingress-lan.
+# cicd namespace: argocd-server-ingress-lan (cgit, its first user, is gone).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
