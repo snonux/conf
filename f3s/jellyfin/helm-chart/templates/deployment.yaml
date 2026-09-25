@@ -19,7 +19,7 @@ spec:
     spec:
       initContainers:
         - name: nfs-check-config
-          image: busybox:stable
+          image: busybox:1.36.1
           command:
             - sh
             - -c
@@ -43,7 +43,7 @@ spec:
         # A genuine fresh install has no jellyfin.db yet, so its first-run wizard
         # is left untouched.
         - name: ensure-wizard-completed
-          image: busybox:stable
+          image: busybox:1.36.1
           command:
             - sh
             - -c
@@ -60,7 +60,7 @@ spec:
             - name: jellyfin-config
               mountPath: /config
         - name: nfs-check-libraries
-          image: busybox:stable
+          image: busybox:1.36.1
           command:
             - sh
             - -c
@@ -76,7 +76,7 @@ spec:
               mountPath: /mnt
               readOnly: true
         - name: nfs-check-data
-          image: busybox:stable
+          image: busybox:1.36.1
           command:
             - sh
             - -c
