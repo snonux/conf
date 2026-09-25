@@ -39,6 +39,13 @@ spec:
       containers:
       - name: registry
         image: registry:2
+        # Memory from the 14-day peak working set (45Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 512Mi
         ports:
         - containerPort: 5000
         # Startup probe: give registry time to initialize (especially if NFS is slow)
