@@ -43,7 +43,7 @@ spec:
         - name: ychat
           # SQLite is now mandatory (see ychat/DOCKER.md); the image tag tracks
           # the ychat repo commit that build was cut from.
-          image: registry.lan.buetow.org:30001/ychat:f015a1b
+          image: registry.lan.buetow.org:30001/ychat:fdb28f8
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -55,14 +55,15 @@ spec:
             - containerPort: 2000
               name: http
           # HTTP probes only, never tcpSocket: old builds segfaulted on an
-          # empty TCP open+close (f015a1b survives it, but a real GET is the
-          # safer check). Known hang: a "POST / " without an event parameter
-          # sends f015a1b into an endless loop in its single-threaded event
-          # loop; the chat stops answering and memory grows until the 128Mi
-          # limit OOM-kills it (~25s, seen as repeated OOMKilled restarts).
-          # Readiness takes it out of the Service meanwhile, and liveness
-          # restarts it if a hang ever stays under the memory limit
-          # (audit 2026-09-25 #20). The real fix belongs in the ychat repo.
+          # empty TCP open+close (current builds survive it, but a real GET
+          # is the safer check). Builds up to f015a1b also hung on a
+          # "POST /" without an event parameter (or any request for a
+          # directory): the template directory was read in an endless loop
+          # until the 128Mi limit OOM-killed the pod. Fixed in ychat
+          # fdb28f8 (correct request-target parsing; only bounded regular
+          # files are served). Readiness still takes a wedged pod out of the
+          # Service and liveness restarts it, as a safety net for any
+          # future hang of the single-threaded event loop.
           livenessProbe:
             httpGet:
               path: /
