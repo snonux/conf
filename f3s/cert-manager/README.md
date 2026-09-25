@@ -7,7 +7,7 @@ Full LAN path: [`../docs/lan-access-setup-guide.md`](../docs/lan-access-setup-gu
 
 | File | Content |
 |---|---|
-| `cert-manager.yaml` | upstream cert-manager v1.14.4 |
+| `cert-manager.yaml` | upstream cert-manager v1.20.4, unmodified (see its header for the upgrade path) |
 | `self-signed-issuer.yaml` | self-signed ClusterIssuer |
 | `ca-certificate.yaml` | CA `selfsigned-ca` (secret `selfsigned-ca-secret`), issuer `selfsigned-ca-issuer` |
 | `wildcard-certificate.yaml` | one `Certificate` `f3s-lan-wildcard` -> secret `f3s-lan-tls` per namespace |
@@ -24,6 +24,33 @@ just uninstall
 ```
 
 `just export-certs` still exists but nothing consumes its output any more.
+
+## Upgrading cert-manager
+
+Follow <https://cert-manager.io/docs/releases/upgrading/>: one minor version
+at a time, latest patch of each, and check the Kubernetes range in the
+supported-releases table (1.21 needs k8s >= 1.33; the cluster runs 1.32).
+With static manifests the CRDs ship inside `cert-manager.yaml`, so there is
+no Helm `installCRDs`/`crds.enabled` handling to worry about.
+
+1. Back up: `kubectl get -A certificates,issuers,clusterissuers -o yaml > backup.yaml`.
+2. Pause ArgoCD, or selfHeal reverts every intermediate step:
+   `kubectl -n cicd patch application cert-manager --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'`.
+3. Per minor: `kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/vX.Y.Z/cert-manager.yaml`,
+   wait for the three rollouts, check `kubectl get certificate -A` is all
+   Ready and issue a throwaway Certificate from `selfsigned-ca-issuer` in a
+   scratch namespace. On failure, re-apply the previous version's manifest.
+4. Vendor the final manifest here (keep the header), commit, push to
+   Forgejo, then `kubectl apply -f ../argocd-apps/infra/cert-manager.yaml`
+   to restore auto-sync; ArgoCD prunes objects the new release dropped.
+
+Things the 1.14 -> 1.20 upgrade changed for this setup:
+
+- 1.17: the RSA-4096 CA now signs leaves with SHA-512 instead of SHA-256.
+- 1.18: `rotationPolicy` defaults to `Always`. The CA pins `Never` so its key
+  (trusted by clients) survives renewal; the leaves set `Always` explicitly.
+- 1.18: `revisionHistoryLimit` defaults to 1, so only the latest
+  CertificateRequest per Certificate is kept.
 
 ## One certificate per namespace
 

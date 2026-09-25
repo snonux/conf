@@ -29,6 +29,7 @@ spec:
   privateKey:
     algorithm: RSA
     size: 2048
+    rotationPolicy: Always # cert-manager >= 1.18 default; explicit to silence the webhook warning
   duration: 2160h # 90 days
   renewBefore: 360h # 15 days
 ---
@@ -51,6 +52,7 @@ spec:
   privateKey:
     algorithm: RSA
     size: 2048
+    rotationPolicy: Always # cert-manager >= 1.18 default; explicit to silence the webhook warning
   duration: 2160h # 90 days
   renewBefore: 360h # 15 days
 ---
@@ -73,5 +75,6 @@ spec:
   privateKey:
     algorithm: RSA
     size: 2048
+    rotationPolicy: Always # cert-manager >= 1.18 default; explicit to silence the webhook warning
   duration: 2160h # 90 days
   renewBefore: 360h # 15 days

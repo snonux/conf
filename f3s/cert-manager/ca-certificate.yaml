@@ -12,6 +12,11 @@ spec:
   privateKey:
     algorithm: RSA
     size: 4096
+    # Keep the CA key across renewals. cert-manager >= 1.18 defaults to
+    # Always, which would give the renewed root a new key and break every
+    # client that trusts the exported f3s-lan-ca. The leaf wildcard certs
+    # keep the default (Always): a fresh leaf key per renewal is harmless.
+    rotationPolicy: Never
   issuerRef:
     name: selfsigned-issuer
     kind: ClusterIssuer
