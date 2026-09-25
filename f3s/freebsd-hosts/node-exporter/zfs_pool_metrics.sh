@@ -25,13 +25,20 @@
 # Pool I/O counters (task uk2): zfs_pool_{read,write}_{operations,bytes}_total
 # used to come from "zpool iostat -Hp", which without an interval prints the
 # AVERAGE operations and bytes per second since import, not totals, so rate()
-# over them was meaningless. They now come from the pool's cumulative kstat
-# kstat.zfs.<pool>.misc.iostats (OpenZFS 2.4 on FreeBSD 15.1): the sum of the
-# arc_* (I/O issued through the ARC) and direct_* (Direct I/O) counters. They
-# count from 0 at pool import, which rate() handles as a counter reset. Their
-# bytes track "zpool iostat" bandwidth closely (f0, 2026-09-25: 0.83 MB/s
-# written by both over 20 s); their operations are pre-aggregation requests,
-# so they read higher than the vdev operations "zpool iostat" shows.
+# over them was meaningless. OpenZFS exposes no cumulative vdev counters on
+# FreeBSD (kstat.zfs.<pool>.misc.iostats only counts I/O through the ARC and
+# Direct I/O, and misses "zfs receive": 3.4 KB/s against 656 KB/s written on
+# the zrepl sink f1 zdata, 2026-09-25). So the counters are now the devstat
+# totals since boot ("iostat -I -x") of the disks behind the pool's leaf
+# vdevs, summed per pool, which is the physical I/O "zpool iostat" reports
+# (f0 zroot over 30 s: 4.7/26.7 read/write ops/s and 200 KB/s / 1.13 MB/s
+# against 4/26 and 199 KB/s / 1.16 MB/s). Caveats:
+#   - devstat covers whole disks, not partitions. Swap I/O is subtracted
+#     (vm.stats.vm swap counters) when all swap lives on one disk, as on
+#     f0-f3 (ada0p3 next to zroot on ada0p4); other partitions on a pool's
+#     disk (efi, boot) are counted with the pool, and a disk shared by two
+#     pools is counted for both.
+#   - The counters restart at 0 on reboot, which rate() treats as a reset.
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 export PATH
@@ -47,26 +54,68 @@ TMP_FILE=$(mktemp "$TEXTFILE_DIR/.zfs_pools.XXXXXX") || exit 1
 trap 'rm -f "$TMP_FILE"' EXIT
 trap 'exit 1' HUP INT TERM
 
-# pool_iostats: print one tab-separated line per pool in $pools: name,
-# read ops, write ops, read bytes, write bytes, each the cumulative ARC plus
-# Direct I/O count from kstat.zfs.<pool>.misc.iostats. A missing kstat or
-# counter fails the whole run (the previous file stays published) rather than
-# exporting a bogus 0 that rate() would read as a counter reset. The direct_*
-# counters are optional: OpenZFS before 2.3 has no Direct I/O.
+# disk_of DEV: print the devstat disk behind the device path DEV
+# ("/dev/ada0p4" and "/dev/ada0p4.eli" -> "ada0"), resolving GEOM labels
+# ("/dev/gpt/zfs0") through glabel first. Prints nothing if unresolvable.
+disk_of() {
+    dev=${1#/dev/}
+    case $dev in
+    */*) dev=$(glabel status -s | awk -v l="$dev" '$1 == l { print $3 }') ;;
+    esac
+    printf '%s\n' "$dev" | sed -n 's/^\([a-z][a-z]*[0-9][0-9]*\).*/\1/p'
+}
+
+# disks_of: read device paths on stdin (first field, other lines ignored) and
+# print their distinct disks space-separated; fails if any path does not map
+# to a disk. (No "| sort -u": the pipeline would hide the loop's status.)
+disks_of() {
+    list=" "
+    while read -r dev _; do
+        case $dev in /dev/*) ;; *) continue ;; esac
+        disk=$(disk_of "$dev")
+        [ -n "$disk" ] || return 1
+        case $list in *" $disk "*) ;; *) list="$list$disk " ;; esac
+    done
+    echo $list
+}
+
+# swap_io: print "disk read_ops write_ops read_bytes write_bytes" of all swap
+# I/O since boot when every swap device is on the same disk, else nothing
+# (no swap, or several swap disks whose share cannot be told apart).
+swap_io() {
+    sdisks=$(swapctl -l | disks_of) || return 1
+    case $sdisks in "" | *" "*) return 0 ;; esac
+    vm=$(sysctl -n hw.pagesize vm.stats.vm.v_swapin vm.stats.vm.v_swapout \
+        vm.stats.vm.v_swappgsin vm.stats.vm.v_swappgsout) || return 1
+    printf '%s\n' "$vm" | awk -v d="$sdisks" '
+        { v[NR] = $1 }
+        END { printf "%s %s %s %.0f %.0f\n", d, v[2], v[3], v[4] * v[1], v[5] * v[1] }'
+}
+
+# pool_iostats: print one tab-separated line per pool in $pools: name, read
+# ops, write ops, read bytes, write bytes since boot, summed over the devstat
+# totals of the pool's disks minus swap_io (see "Pool I/O counters" in the
+# header). A pool with an unresolvable vdev or a disk missing from iostat
+# fails the whole run (the previous file stays published) rather than
+# exporting a partial sum that rate() would read as a counter reset.
 pool_iostats() {
+    devstat=$(iostat -I -x -d) || return 1
+    swap=$(swap_io) || return 1
     for pool in $(printf '%s\n' "$pools" | cut -f 1); do
-        stats=$(sysctl "kstat.zfs.$pool.misc.iostats") || return 1
-        printf '%s\n' "$stats" | awk -v pool="$pool" '
-            { sub(/^.*\./, ""); split($0, kv, ": "); v[kv[1]] = kv[2] }
+        pdisks=$(zpool status -P "$pool" | disks_of) || return 1
+        [ -n "$pdisks" ] || return 1
+        # iostat -I -x columns: device r/i w/i kr/i kw/i ... (kr/kw in KiB).
+        printf '%s\n' "$devstat" | awk -v pool="$pool" -v disks="$pdisks" -v swap="$swap" '
+            BEGIN { n = split(disks, d, " "); for (i = 1; i <= n; i++) want[d[i]] = 1 }
+            ($1 in want) && !($1 in seen) {
+                seen[$1] = 1; found++
+                r += $2; w += $3; rb += $4 * 1024; wb += $5 * 1024
+            }
             END {
-                if (!("arc_read_count" in v) || !("arc_write_count" in v) ||
-                    !("arc_read_bytes" in v) || !("arc_write_bytes" in v))
-                    exit 1
-                printf "%s\t%.0f\t%.0f\t%.0f\t%.0f\n", pool,
-                    v["arc_read_count"] + v["direct_read_count"],
-                    v["arc_write_count"] + v["direct_write_count"],
-                    v["arc_read_bytes"] + v["direct_read_bytes"],
-                    v["arc_write_bytes"] + v["direct_write_bytes"]
+                if (found != n) exit 1
+                split(swap, s, " ")
+                if (s[1] in want) { r -= s[2]; w -= s[3]; rb -= s[4]; wb -= s[5] }
+                printf "%s\t%.0f\t%.0f\t%.0f\t%.0f\n", pool, r, w, rb, wb
             }' || return 1
     done
 }
@@ -130,10 +179,10 @@ pool_health() {
 
     # I/O counters (columns of pool_iostats: name read_ops write_ops
     # read_bytes write_bytes; see "Pool I/O counters" in the header).
-    pool_metric zfs_pool_read_operations_total counter "Read operations issued to the pool (ARC and Direct I/O) since pool import" 2 "$iostat"
-    pool_metric zfs_pool_write_operations_total counter "Write operations issued to the pool (ARC and Direct I/O) since pool import" 3 "$iostat"
-    pool_metric zfs_pool_read_bytes_total counter "Bytes read from the pool (ARC and Direct I/O) since pool import" 4 "$iostat"
-    pool_metric zfs_pool_write_bytes_total counter "Bytes written to the pool (ARC and Direct I/O) since pool import" 5 "$iostat"
+    pool_metric zfs_pool_read_operations_total counter "Read operations on the pool's disks since boot (devstat, swap excluded)" 2 "$iostat"
+    pool_metric zfs_pool_write_operations_total counter "Write operations on the pool's disks since boot (devstat, swap excluded)" 3 "$iostat"
+    pool_metric zfs_pool_read_bytes_total counter "Bytes read from the pool's disks since boot (devstat, swap excluded)" 4 "$iostat"
+    pool_metric zfs_pool_write_bytes_total counter "Bytes written to the pool's disks since boot (devstat, swap excluded)" 5 "$iostat"
 
     dataset_metric zfs_dataset_used_bytes "Used space in ZFS dataset in bytes" 2
     dataset_metric zfs_dataset_available_bytes "Available space in ZFS dataset in bytes" 3
