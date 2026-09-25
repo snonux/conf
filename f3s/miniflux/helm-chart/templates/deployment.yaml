@@ -28,7 +28,7 @@ spec:
               echo "Postgres is ready."
       containers:
         - name: miniflux
-          image: miniflux/miniflux:latest
+          image: miniflux/miniflux:2.3.3
           ports:
             - containerPort: 8080
           env:
