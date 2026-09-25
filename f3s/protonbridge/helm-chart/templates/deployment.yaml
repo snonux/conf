@@ -88,6 +88,13 @@ spec:
         #   Username: your ProtonMail address
         #   Password: bridge-generated password (from 'info' in the CLI above)
         image: shenxn/protonmail-bridge:3.19.0-1
+        # Memory from the 14-day peak working set (347Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 384Mi
+          limits:
+            memory: 1536Mi
         stdin: true
         tty: true
         command:
