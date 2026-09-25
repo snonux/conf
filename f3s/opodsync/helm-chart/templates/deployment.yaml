@@ -38,6 +38,13 @@ spec:
       - name: opodsync
         # Upstream versions only exist as per-arch tags; the cluster is amd64.
         image: ganeshlab/opodsync:0.6.0-amd64
+        # Memory from the 14-day peak working set (32Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 32Mi
+          limits:
+            memory: 256Mi
         livenessProbe:
           exec:
             command: ["test", "-f", "/var/www/server/data/.nfs-sentinel"]
@@ -57,6 +64,13 @@ spec:
           mountPath: /var/www/server/data
       - name: nginx-proxy
         image: nginx:1.25-alpine
+        # Memory from the 14-day peak working set (8Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 16Mi
+          limits:
+            memory: 128Mi
         ports:
         - containerPort: 8081
         volumeMounts:
