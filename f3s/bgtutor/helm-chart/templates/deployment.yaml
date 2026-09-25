@@ -37,7 +37,7 @@ spec:
           readOnly: true
       containers:
       - name: bgtutor
-        image: registry.lan.buetow.org:30001/bgtutor:0.1.0
+        image: registry.lan.buetow.org:30001/bgtutor:0.1.1
         imagePullPolicy: Always
         # The image entrypoint is "bgtutor serve"; BGTUTOR_DATA_DIR and
         # BGTUTOR_ADDR are set here explicitly so the chart documents them.

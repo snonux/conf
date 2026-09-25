@@ -74,7 +74,7 @@ init=$(rpc initialize '{"protocolVersion":"2025-06-18","capabilities":{},"client
 check "initialize returns server name"      "$(jq -r '.result.serverInfo.name' <<<"$init")" bulgarian-podcast-tutor
 check "instructions mention get_paragraph"  "$(jq -r '.result.instructions | contains("get_paragraph")' <<<"$init")" true
 tools=$(rpc tools/list '{}' | jq -r '[.result.tools[].name] | sort | join(",")')
-check "tools/list has the four tools"       "$tools" get_paragraph,list_episodes,list_vocabulary,save_vocabulary
+check "tools/list has the five tools"       "$tools" delete_vocabulary,get_paragraph,list_episodes,list_vocabulary,save_vocabulary
 
 echo "-- episodes"
 eps=$(call list_episodes '{}')

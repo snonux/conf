@@ -69,7 +69,7 @@ Fixed names used below: namespace `services`, Deployment and label
 `app=bgtutor`, Service `bgtutor-service`, PVC `bgtutor-data-pvc`, PV
 `bgtutor-data-pv`, secret `bgtutor-secret` (key `BGTUTOR_TOKEN`), ArgoCD app
 `bgtutor` in namespace `cicd`, image
-`registry.lan.buetow.org:30001/bgtutor:0.1.0` (pushed via
+`registry.lan.buetow.org:30001/bgtutor:0.1.1` (pushed via
 `r0.lan.buetow.org:30001`), NFS path `/data/nfs/k3svolumes/bgtutor/data`.
 
 ## 1. Storage on NFS
@@ -114,16 +114,16 @@ just build-push      # docker build -f ~/git/totalrecall/bgtutor/Dockerfile ... 
 ```
 
 Check: `curl -s http://r0.lan.buetow.org:30001/v2/bgtutor/tags/list` lists
-`0.1.0` (use https or the registry's usual access if plain http is refused).
+`0.1.1` (use https or the registry's usual access if plain http is refused).
 A local run should refuse to start without a token and serve with one:
 
 ```sh
-docker run --rm bgtutor:0.1.0 ; echo "exit=$?"          # expect: refusing to listen ... exit=1
+docker run --rm bgtutor:0.1.1 ; echo "exit=$?"          # expect: refusing to listen ... exit=1
 # A real-length token: with a short one like "test" the "token prefix only"
 # check fails, because the first 8 characters are the whole token.
 export BGTUTOR_TOKEN="$(openssl rand -hex 32)"
 docker run --rm -d --name bgt -e BGTUTOR_TOKEN -p 18080:8080 \
-  -v ~/git/totalrecall/bgtutor/data:/data bgtutor:0.1.0
+  -v ~/git/totalrecall/bgtutor/data:/data bgtutor:0.1.1
 ./smoke-test.sh http://127.0.0.1:18080   # expect all ok
 docker rm -f bgt
 ```

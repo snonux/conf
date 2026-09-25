@@ -1,6 +1,6 @@
 REGISTRY := "r0.lan.buetow.org:30001"
 IMAGE := "bgtutor"
-TAG := "0.1.0"
+TAG := "0.1.1"
 # bgtutor is a sub-project of totalrecall; its Dockerfile builds from the repo root.
 SRC := "/home/paul/git/totalrecall"
 

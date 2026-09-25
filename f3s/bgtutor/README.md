@@ -41,8 +41,8 @@ cd /home/paul/git/conf/f3s/bgtutor
 just build-push   # builds /home/paul/git/totalrecall/bgtutor/Dockerfile
 ```
 
-Pushed as `r0.lan.buetow.org:30001/bgtutor:0.1.0`, pulled as
-`registry.lan.buetow.org:30001/bgtutor:0.1.0`. Bump the tag in
+Pushed as `r0.lan.buetow.org:30001/bgtutor:0.1.1`, pulled as
+`registry.lan.buetow.org:30001/bgtutor:0.1.1`. Bump the tag in
 `docker-image/Justfile` and `helm-chart/templates/deployment.yaml` together.
 
 ### 4. Deploy
