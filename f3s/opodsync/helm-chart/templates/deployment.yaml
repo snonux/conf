@@ -16,10 +16,15 @@ spec:
     metadata:
       labels:
         app: opodsync
+      # Roll the pod when either ConfigMap changes: nginx.conf is a subPath
+      # mount, which never sees ConfigMap updates in a running pod.
+      annotations:
+        checksum/app-config: {{ include (print $.Template.BasePath "/configmap-app.yaml") . | sha256sum }}
+        checksum/nginx-config: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
     spec:
       initContainers:
       - name: nfs-check-data
-        image: busybox:stable
+        image: busybox:1.36.1
         command:
         - sh
         - -c
@@ -63,16 +68,22 @@ spec:
           periodSeconds: 15
           timeoutSeconds: 5
           failureThreshold: 3
+        # oPodSync only reads its own constant names from the env (the old
+        # GPODDER_* variables were silently ignored). BASE_URL cannot come
+        # from the env, hence the config.local.php from opodsync-app-config.
         env:
-        - name: GPODDER_BASE_URL
-          value: "https://gpodder.f3s.buetow.org/gpodder"
-        - name: GPODDER_ALLOW_REGISTRATIONS
+        - name: DATA_ROOT
+          value: /etc/opodsync
+        - name: ENABLE_SUBSCRIPTIONS
           value: "true"
         ports:
         - containerPort: 8080
         volumeMounts:
         - name: opodsync-data
           mountPath: /var/www/server/data
+        - name: app-config
+          mountPath: /etc/opodsync
+          readOnly: true
       - name: nginx-proxy
         image: nginx:1.25-alpine
         # Memory from the 14-day peak working set (8Mi), limit well above
@@ -112,3 +123,6 @@ spec:
       - name: nginx-config
         configMap:
           name: opodsync-nginx-config
+      - name: app-config
+        configMap:
+          name: opodsync-app-config

@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opodsync-app-config
+  namespace: services
+data:
+  # oPodSync reads <DATA_ROOT env>/config.local.php. The deployment points
+  # the DATA_ROOT env at this ConfigMap's mount so the config lives in git,
+  # and the file sets the DATA_ROOT constant back to the NFS-backed data dir
+  # (the constant wins over the env for the database, cache and error log).
+  config.local.php: |
+    <?php
+    namespace OPodSync;
+
+    const DATA_ROOT = '/var/www/server/data';
+
+    // Without BASE_URL oPodSync derives it from php -S's SERVER_NAME, so the
+    # login-v2 API (used by AntennaPod & co.) handed out
+    // "http://0.0.0.0:8080/..." URLs. Both hostnames are TLS-terminated in
+    // front of the pod (relayd publicly, Traefik websecure on the LAN), so
+    // the scheme is always https. The Host header is only trusted when it
+    // is one of ours; anything else falls back to the public name.
+    define(__NAMESPACE__ . '\BASE_URL', 'https://' . (in_array(
+        $_SERVER['HTTP_HOST'] ?? '',
+        ['gpodder.f3s.buetow.org', 'gpodder.f3s.lan.buetow.org'],
+        true
+    ) ? $_SERVER['HTTP_HOST'] : 'gpodder.f3s.buetow.org') . '/');

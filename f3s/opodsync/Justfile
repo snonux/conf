@@ -22,7 +22,7 @@ logs lines="100":
 
 port-forward port="8080":
     @echo "Forwarding opodsync to localhost:{{port}}"
-    kubectl port-forward -n {{NAMESPACE}} svc/opodsync-service {{port}}:8080
+    kubectl port-forward -n {{NAMESPACE}} svc/opodsync-service {{port}}:80
 
 sync:
     @echo "Triggering ArgoCD sync..."

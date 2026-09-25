@@ -27,17 +27,10 @@ data:
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Root path internally proxies to /gpodder on backend
-        location = / {
-          proxy_pass http://backend/gpodder;
-        }
-
-        # Pass through existing /gpodder paths unchanged
-        location /gpodder {
-          proxy_pass http://backend;
-        }
-
-        # Fallback: proxy everything else as-is
+        # Pass every path through unchanged. oPodSync serves its web UI at
+        # "/" and its gPodder API under "/api/2/..." and "/index.php/...";
+        # it has no "/gpodder" prefix, so rewriting "/" to "/gpodder" (as
+        # this proxy used to do) made the landing page a 404.
         location / {
           proxy_pass http://backend;
         }
