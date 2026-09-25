@@ -2,10 +2,18 @@
 
 For an agent (or person) with access to Paul's workstation: the `~/git`
 checkouts, Docker, `kubectl`/`argocd` for the f3s cluster, SSH to the NFS
-server (`root@f0`) and the gonf controller setup for the frontends. The
-session that wrote this could not reach any of those, so everything below is
-still to do. Work through the steps in order; each has a check. Stop and
-report if a check fails. Don't improvise around it.
+server (`paul@f0` with `doas`; the f-hosts take no root logins) and the gonf
+controller setup for the frontends. The first deployment followed this file on
+2026-09-25; the steps below carry the corrections from that run. Work through
+them in order; each has a check. Stop and report if a check fails. Don't
+improvise around it.
+
+The kubeconfig talks to `r0.wg0.wan.buetow.org:6443`. On the LAN with `wg0`
+down that address has no route; point kubectl at the LAN name instead, e.g.
+`alias kubectl='kubectl --server https://r0.lan.buetow.org:6443'`. Bare `f0`
+resolves to port 22 in `~/.ssh/config`; `f0.lan.buetow.org` does not (all of
+`*.buetow.org` maps to port 2, the OpenBSD frontends), so use `f0` or pass
+`-p 22`.
 
 ## What bgtutor is
 
@@ -67,9 +75,9 @@ Fixed names used below: namespace `services`, Deployment and label
 ## 1. Storage on NFS
 
 ```sh
-ssh root@f0 'mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary \
-  && touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel \
-  && chmod 644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel'
+ssh paul@f0 'doas mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary \
+  && doas touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel \
+  && doas chmod 644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel'
 ```
 
 Seed the test episode so there is something to serve:
@@ -77,13 +85,15 @@ Seed the test episode so there is something to serve:
 ```sh
 cd ~/git/totalrecall && git checkout main && git pull   # or the PR branch
 go run ./cmd/bgtutor validate 001-cooking-basics          # expect "ready"
-rsync -av bgtutor/data/episodes/001-cooking-basics root@f0:/data/nfs/k3svolumes/bgtutor/data/episodes/
+just -f ~/git/conf/f3s/bgtutor/Justfile upload-episode ~/git/totalrecall/bgtutor/data/episodes/001-cooking-basics
 ```
 
-Check: `ssh root@f0 'ls -la /data/nfs/k3svolumes/bgtutor/data /data/nfs/k3svolumes/bgtutor/data/episodes/001-cooking-basics'`
+Check: `ssh paul@f0 'doas ls -la /data/nfs/k3svolumes/bgtutor/data /data/nfs/k3svolumes/bgtutor/data/episodes/001-cooking-basics'`
 shows `.nfs-sentinel` (0644), `episodes/`, `vocabulary/`, `meta.json` and
-`paragraphs.json`. If `f0` isn't the current NFS server, use whichever host
-`f3s/docs/nfs-sentinel-initcontainer.md` names.
+`paragraphs.json`. The pod runs as root, so root-owned directories are fine.
+If `f0` isn't the current NFS server (the CARP master, `ifconfig | grep
+MASTER`), use whichever host `f3s/docs/nfs-sentinel-initcontainer.md` names
+and pass it as the second argument of `upload-episode`.
 
 ## 2. Token secret
 
@@ -109,9 +119,12 @@ A local run should refuse to start without a token and serve with one:
 
 ```sh
 docker run --rm bgtutor:0.1.0 ; echo "exit=$?"          # expect: refusing to listen ... exit=1
-docker run --rm -d --name bgt -e BGTUTOR_TOKEN=test -p 18080:8080 \
+# A real-length token: with a short one like "test" the "token prefix only"
+# check fails, because the first 8 characters are the whole token.
+export BGTUTOR_TOKEN="$(openssl rand -hex 32)"
+docker run --rm -d --name bgt -e BGTUTOR_TOKEN -p 18080:8080 \
   -v ~/git/totalrecall/bgtutor/data:/data bgtutor:0.1.0
-BGTUTOR_TOKEN=test ./smoke-test.sh http://127.0.0.1:18080   # expect all ok
+./smoke-test.sh http://127.0.0.1:18080   # expect all ok
 docker rm -f bgt
 ```
 
@@ -123,6 +136,8 @@ manifest"), then:
 
 ```sh
 cd ~/git/conf
+# Plain "master" is ambiguous here: there is also a remote named master.
+git push forgejo refs/heads/master:refs/heads/master
 kubectl apply -f f3s/argocd-apps/services/bgtutor.yaml
 cd f3s/bgtutor && just sync && just status
 ```
@@ -142,13 +157,15 @@ Checks:
 ```sh
 export BGTUTOR_TOKEN="$(kubectl get secret bgtutor-secret -n services -o jsonpath='{.data.BGTUTOR_TOKEN}' | base64 -d)"
 cd ~/git/conf/f3s/bgtutor
-just port-forward 8080 &                                   # svc/bgtutor-service -> localhost:8080
-./smoke-test.sh http://127.0.0.1:8080 --write
+just port-forward 18081 &                                  # svc/bgtutor-service -> localhost:18081
+./smoke-test.sh http://127.0.0.1:18081 --write
 ./smoke-test.sh https://bgtutor.f3s.lan.buetow.org
 ```
 
-Both must end with `0 failed`. `--write` adds one entry,
-`smoketest-ябълка`, to the real notebook. Tell Paul, or remove it by editing
+Both must end with `0 failed`. Don't forward to 8080: a local `player`
+process usually holds it, the port-forward then dies silently and the smoke
+test hits the wrong server (401s without `WWW-Authenticate`). `--write` adds
+one entry, `smoketest-ябълка`, to the real notebook. Tell Paul, or remove it by editing
 `vocabulary/saved.json` on the NFS server while the pod is scaled to 0.
 
 ## 6. Public HTTPS on the frontends
@@ -175,6 +192,14 @@ Checks:
 - `curl -sv https://bgtutor.f3s.buetow.org/healthz` returns `ok` with a
   valid Let's Encrypt certificate for `bgtutor.f3s.buetow.org` (no `-k`).
 - Check both frontends if DNS points at both (`--resolve` with each IP).
+  If it points only at blowfish (like `goprecords`), fishfinger serving a
+  `foo.zone` certificate for `bgtutor.f3s.buetow.org` is expected: `acme.sh`
+  requests a site certificate only on the frontend the name resolves to and
+  copies a placeholder in elsewhere so relayd can load the keypair.
+  `standby.bgtutor.f3s.buetow.org` gets a real certificate there (and a 404
+  from traefik, same as `standby.goprecords`).
+- `frontends_gogios` always previews `pkg_add -u gogios` (the package is
+  `IsLatest`); it upgrades only if pkgrepo has a newer build.
 
 ## 7. Test over the internet
 
@@ -199,7 +224,13 @@ Extra checks the script doesn't do:
   default for port 80, or 401; never 200).
 - After the test, grep the relayd and traefik access logs for the token value.
   If the `?token=` requests show up there, tell Paul, so he can decide between
-  header-only clients or log scrubbing.
+  header-only clients or log scrubbing. Pull the logs back and grep locally
+  (`ssh … 'doas cat …' | grep -c -F "$BGTUTOR_TOKEN"`) so the token never
+  lands on a remote command line. As of 2026-09-25 there were no matches:
+  relayd (443) logs no request URLs and traefik's access log is off. The one
+  URL log is httpd's port-80 access log on the frontends, which keeps query
+  strings, so a client using `http://…/mcp?token=…` would leave the token
+  there before the 302 to https.
 - `kubectl exec` is not possible (distroless, no shell). That's expected.
 
 ## 8. Real session with a voice AI

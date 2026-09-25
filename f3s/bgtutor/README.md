@@ -19,9 +19,9 @@ paragraph.
 On the NFS server (per `f3s/docs/nfs-sentinel-initcontainer.md`):
 
 ```sh
-ssh root@f0 'mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary \
-  && touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel \
-  && chmod 644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel'
+ssh paul@f0 'doas mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary \
+  && doas touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel \
+  && doas chmod 644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel'
 ```
 
 The PV uses `type: Directory`, so the pod will not schedule until it exists.
