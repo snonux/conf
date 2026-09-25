@@ -1,4 +1,4 @@
-module codeberg.org/snonux/conf/gonf
+module github.com/snonux/conf/gonf
 
 go 1.26.4
 

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 )

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
-	"codeberg.org/snonux/conf/gonf/paths"
-	"codeberg.org/snonux/conf/gonf/tasks"
+	"github.com/snonux/conf/gonf/cluster"
+	"github.com/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/tasks"
 	"github.com/snonux/gonf/api"
 	"github.com/snonux/gonf/cli"
 	"github.com/snonux/gonf/secret"

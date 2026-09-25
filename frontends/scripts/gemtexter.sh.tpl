@@ -56,10 +56,10 @@ function ensure_links {
 for site in foo.zone; do
     ensure_site \
         /var/gemini/$site \
-        https://codeberg.org/snonux/$site \
+        https://github.com/snonux/$site \
         content-gemtext
     ensure_site \
         /var/www/htdocs/gemtexter/$site \
-        https://codeberg.org/snonux/$site \
+        https://github.com/snonux/$site \
         content-html
 done

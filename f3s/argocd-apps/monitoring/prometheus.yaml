@@ -73,9 +73,38 @@ spec:
                 mountPath: /host/textfile_collector
                 readOnly: true
                 mountPropagation: None
+            resources:
+              requests:
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+
+          # Memory requests/limits for every component (audit 2026-09-25
+          # #19): request near the 14-day peak working set, limit well above
+          # it so nothing is OOM-killed in normal operation. Peaks:
+          # prometheus 1988Mi (incl. WAL replay after a restart), alertmanager
+          # 57Mi, operator 74Mi, kube-state-metrics 112Mi, node-exporter 31Mi.
+          prometheusOperator:
+            resources:
+              requests:
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+
+          kube-state-metrics:
+            resources:
+              requests:
+                memory: 128Mi
+              limits:
+                memory: 512Mi
 
           prometheus:
             prometheusSpec:
+              resources:
+                requests:
+                  memory: 2Gi
+                limits:
+                  memory: 4Gi
               additionalArgs:
                 - name: web.enable-remote-write-receiver
                   value: ""
@@ -105,6 +134,12 @@ spec:
                         app: prometheus
 
           alertmanager:
+            alertmanagerSpec:
+              resources:
+                requests:
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
             config:
               global:
                 resolve_timeout: 5m

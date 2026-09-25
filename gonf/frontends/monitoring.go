@@ -11,7 +11,7 @@ import (
 	. "github.com/snonux/gonf/api/options"
 	"github.com/snonux/gonf/resource"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 const (

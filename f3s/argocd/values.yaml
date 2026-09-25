@@ -11,10 +11,24 @@ redis-ha:
 # Use standard Redis with authentication
 redis:
   enabled: true
+  # Memory from the 14-day peak working set (36Mi), limit well above it
+  # (audit 2026-09-25 #19).
+  resources:
+    requests:
+      memory: 64Mi
+    limits:
+      memory: 256Mi
 
 # Controller configuration (manages k8s resources)
 controller:
   replicas: 1
+  # Memory from the 14-day peak working set (736Mi), limit well above it: an
+  # OOM-killed controller stops all GitOps syncs (audit 2026-09-25 #19).
+  resources:
+    requests:
+      memory: 768Mi
+    limits:
+      memory: 2Gi
   # Enable metrics for Prometheus integration
   metrics:
     enabled: true
@@ -91,6 +105,13 @@ repoServer:
 # ApplicationSet controller (multi-app management)
 applicationSet:
   replicas: 1
+  # Memory from the 14-day peak working set (155Mi), limit well above it
+  # (audit 2026-09-25 #19).
+  resources:
+    requests:
+      memory: 192Mi
+    limits:
+      memory: 512Mi
 
 # Notifications controller - disabled
 notifications:

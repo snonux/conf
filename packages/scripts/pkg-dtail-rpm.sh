@@ -77,7 +77,7 @@ Version:        $rpm_version
 Release:        $rpm_release
 Summary:        Distributed log tail and grep tool
 License:        Apache-2.0
-URL:            https://codeberg.org/snonux/dtail
+URL:            https://github.com/snonux/dtail
 BuildArch:      $rpm_arch
 Requires(pre):  shadow-utils
 Requires(post): systemd

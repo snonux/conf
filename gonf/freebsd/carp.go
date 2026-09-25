@@ -4,7 +4,7 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // Carp deploys the CARP helper scripts of the storage pair f0/f1 (the

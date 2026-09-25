@@ -18,7 +18,7 @@ NAME="dtail"
 COMMENT="Distributed log tail and grep tool"
 DESC="DTail is a distributed DevOps tool for tailing, grepping, catting, and mapping across many remote machines at once via SSH."
 MAINTAINER="paul@buetow.org"
-WWW="https://codeberg.org/snonux/dtail"
+WWW="https://github.com/snonux/dtail"
 
 WORKDIR="/tmp/${NAME}-freebsd-pkg"
 rm -rf "$WORKDIR"

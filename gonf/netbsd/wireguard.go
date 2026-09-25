@@ -4,7 +4,7 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // The WireGuard watchdog for pi0/pi1. The mesh link is the userspace

@@ -1,6 +1,6 @@
 package frontends
 
-import "codeberg.org/snonux/conf/gonf/paths"
+import "github.com/snonux/conf/gonf/paths"
 
 // This package reads controller-local source assets from two trees, and each
 // has exactly one path-join implementation in the module, in package paths.

@@ -2,15 +2,15 @@
 package tasks
 
 import (
-	"codeberg.org/snonux/conf/gonf/cluster"
-	"codeberg.org/snonux/conf/gonf/freebsd"
-	"codeberg.org/snonux/conf/gonf/frontends"
-	"codeberg.org/snonux/conf/gonf/garage"
-	"codeberg.org/snonux/conf/gonf/netbsd"
-	"codeberg.org/snonux/conf/gonf/openbsd"
-	"codeberg.org/snonux/conf/gonf/pihole"
-	"codeberg.org/snonux/conf/gonf/rnodes"
-	"codeberg.org/snonux/conf/gonf/rocky"
+	"github.com/snonux/conf/gonf/cluster"
+	"github.com/snonux/conf/gonf/freebsd"
+	"github.com/snonux/conf/gonf/frontends"
+	"github.com/snonux/conf/gonf/garage"
+	"github.com/snonux/conf/gonf/netbsd"
+	"github.com/snonux/conf/gonf/openbsd"
+	"github.com/snonux/conf/gonf/pihole"
+	"github.com/snonux/conf/gonf/rnodes"
+	"github.com/snonux/conf/gonf/rocky"
 	. "github.com/snonux/gonf/api"
 )
 

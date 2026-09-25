@@ -5,7 +5,7 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // Maintenance carries the root-only r-node maintenance tasks. Register it

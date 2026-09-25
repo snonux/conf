@@ -7,7 +7,7 @@ Helm charts, host scripts.
 
 | Path | Content |
 |---|---|
-| `gonf/` | gonf recipes (Go module `codeberg.org/snonux/conf/gonf`), run with `./gonf.sh` |
+| `gonf/` | gonf recipes (Go module `github.com/snonux/conf/gonf`), run with `./gonf.sh` |
 | `gonf.sh` | wrapper: `cd gonf && go run ./cmd/gonf "$@"` |
 | `frontends/` | assets for the OpenBSD frontends blowfish and fishfinger, plus scripts for every OS ([README](frontends/README.md)) |
 | `f3s/` | f3s homelab: k3s apps and Helm charts, ArgoCD apps, FreeBSD host scripts, Pi setup, docs |

@@ -12,7 +12,7 @@ spec:
   project: default
   sources:
     # Source 1: Local resources (PVs, PVCs, Ingresses)
-    - repoURL: https://codeberg.org/snonux/conf.git
+    - repoURL: https://github.com/snonux/conf.git
       targetRevision: master
       path: f3s/pihole/helm-chart
     # Source 2: Official Pi-hole Helm chart

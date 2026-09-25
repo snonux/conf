@@ -9,7 +9,7 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // Unattended carries the unattended-upgrade deployment for all Rocky hosts.

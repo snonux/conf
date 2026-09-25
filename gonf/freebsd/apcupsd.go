@@ -6,7 +6,7 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // Apcupsd manages apcupsd on the f-hosts: f0 is wired to the APC BX750MI over
