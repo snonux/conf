@@ -4,7 +4,6 @@ import (
 	"strconv"
 
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -114,7 +113,7 @@ func (Apcupsd) DescConfig() string {
 // OptsConfig installs the quiet client scripts first, so the restart of a
 // client (which briefly loses f0) does not mail.
 func (Apcupsd) OptsConfig() TaskOptions {
-	return TaskOptions{Privileged(), Needs("client_events")}
+	return TaskOptions{Needs("client_events")}
 }
 
 // Config installs the package, renders each host's apcupsd.conf and restarts

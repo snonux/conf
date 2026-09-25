@@ -6,7 +6,6 @@ package freebsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -53,10 +52,8 @@ func (Unattended) DescScript() string {
 }
 
 // OptsScript records ksh, the script's interpreter, before the script.
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
 func (Unattended) OptsScript() TaskOptions {
-	return TaskOptions{Privileged(), Needs("packages")}
+	return TaskOptions{Needs("packages")}
 }
 
 // Script installs the FreeBSD ksh wrapper (after its directory, which gonf
@@ -95,10 +92,9 @@ func (Unattended) DescCron() string {
 }
 
 // OptsCron records the script, the restart list and the stamp directory
-// before the job. Privileged() is repeated because the per-method companion
-// replaces the RequiresRoot struct default.
+// before the job.
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script", "services", "stamp_dir")}
+	return TaskOptions{Needs("script", "services", "stamp_dir")}
 }
 
 // Cron installs the hourly daily-mode job (stamp-gated in-script).

@@ -2,7 +2,6 @@ package netbsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -38,11 +37,9 @@ func (Unattended) DescWireguardWatchdogCron() string {
 	return "Root cron: wireguard-watchdog every 5 minutes"
 }
 
-// OptsWireguardWatchdogCron records the script before the job. Privileged()
-// is repeated because the per-method companion replaces the RequiresRoot
-// struct default.
+// OptsWireguardWatchdogCron records the script before the job.
 func (Unattended) OptsWireguardWatchdogCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("wireguard_watchdog_script")}
+	return TaskOptions{Needs("wireguard_watchdog_script")}
 }
 
 // WireguardWatchdogCron checks the link every five minutes: a dead link is

@@ -2,7 +2,6 @@ package freebsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 )
 
 // Bhyve hardens the vm-bhyve guests on the f-hosts.

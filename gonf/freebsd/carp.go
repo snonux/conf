@@ -2,7 +2,6 @@ package freebsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -53,10 +52,9 @@ func (Carp) DescFailbackScript() string {
 }
 
 // OptsFailbackScript records the carp CLI first: the failback script calls
-// "carp state" and "carp master". Privileged() is repeated because the
-// per-method companion replaces the RequiresRoot struct default.
+// "carp state" and "carp master".
 func (Carp) OptsFailbackScript() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script")}
+	return TaskOptions{Needs("script")}
 }
 
 // FailbackScript installs the failback script on f0.
@@ -74,7 +72,7 @@ func (Carp) DescFailbackCron() string {
 
 // OptsFailbackCron records the script before the job.
 func (Carp) OptsFailbackCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("failback_script")}
+	return TaskOptions{Needs("failback_script")}
 }
 
 // DescFailbackNewsyslog returns the description for the log rotation line.

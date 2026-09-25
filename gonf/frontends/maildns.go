@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
-	"github.com/snonux/gonf/resource"
 
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -45,9 +43,7 @@ func (MailDNS) DescSMTPD() string {
 // certificates themselves come from the explicit, Operational
 // frontends_acme_invoke, which Needs must not name (a task needing
 // Operational work would drop out of the frontends aggregate).
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
-func (MailDNS) OptsSMTPD() TaskOptions { return TaskOptions{Privileged(), Needs("acme")} }
+func (MailDNS) OptsSMTPD() TaskOptions { return TaskOptions{Needs("acme")} }
 
 // SMTPD publishes every lookup table plus the host-specific configuration as
 // one Gonf ConfigSet: the complete set is staged privately under /etc/mail and
@@ -139,7 +135,7 @@ func nsdPublisher(data Data, key string) {
 	publisherScript := InstallFile(dnsPublishCommand, legacyFrontendAsset("scripts/dns-publish.ksh"),
 		Perm(0o500, Root))
 	inputs := dnsPublisherInputs(data.DNSZones, files)
-	deps := append([]resource.Dependency{flags, publisherScript}, inputs...)
+	deps := append([]Dependency{flags, publisherScript}, inputs...)
 	publisher := Sh(dnsPublishCommand, DependsOn(deps...), WithName("publish-nsd-zones"))
 	Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
 }
@@ -213,8 +209,8 @@ func renderPublisherFiles(data Data, key string) (publisherFiles, bool) {
 // already-rendered input files (see renderPublisherFiles); zones and
 // files.zones share one order. Each file applies after its directory
 // without DependsOn: gonf orders a path after the Dir that contains it.
-func dnsPublisherInputs(zones []string, files publisherFiles) []resource.Dependency {
-	inputs := []resource.Dependency{
+func dnsPublisherInputs(zones []string, files publisherFiles) []Dependency {
+	inputs := []Dependency{
 		Dir(dnsPublisherDir, Perm(0o700, Root)),
 		Dir(dnsPublisherZones, Perm(0o700, Root)),
 	}

@@ -2,7 +2,6 @@ package rocky
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -44,11 +43,9 @@ func (KernelAudit) DescScript() string {
 	return "Install /usr/local/sbin/rocky-kernel-audit (0755 root:root)"
 }
 
-// OptsScript records the audit's tools before the script. Privileged() is
-// repeated because the per-method companion replaces the RequiresRoot
-// struct default.
+// OptsScript records the audit's tools before the script.
 func (KernelAudit) OptsScript() TaskOptions {
-	return TaskOptions{Privileged(), Needs("packages")}
+	return TaskOptions{Needs("packages")}
 }
 
 // Script installs the ksh audit script (after its directory, which gonf
@@ -83,10 +80,8 @@ func (KernelAudit) DescUnits() string {
 }
 
 // OptsUnits records the script and the state directory before the timer.
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
 func (KernelAudit) OptsUnits() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script", "state_dir")}
+	return TaskOptions{Needs("script", "state_dir")}
 }
 
 // Units installs the daily oneshot+timer pair. Persistent catches a run

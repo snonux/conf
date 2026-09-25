@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 )
 
 // Periodic tunes periodic(8) on the f-hosts: when it runs, what it walks, and

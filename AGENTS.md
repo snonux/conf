@@ -88,7 +88,7 @@ marks it `Operational()`.
 
 ```go
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script", "services")}
+	return TaskOptions{Needs("script", "services")}
 }
 
 func (Unattended) Cron() {
@@ -109,9 +109,16 @@ Service("httpd", WithFlags(""), WithRestart, OnChange(config))
 - `Perm(mode, Root)` for root plus the OS root group (wheel / root);
   spell other groups out (`"root:bin"`, `"_gogios:_gogios"`).
 - `Needs(...)` in `OptsX` for task prerequisites, not prose in the
-  description. `OptsX` replaces the `RequiresRoot` default, so repeat
-  `Privileged()`. Never need an `Operational()` task: the dependent would
+  description. `OptsX` adds to the `RequiresRoot` default, so do not
+  repeat `Privileged()`; `Unprivileged()` opts one method out (see
+  `frontends_ping`). Never need an `Operational()` task: the dependent would
   drop out of its aggregate.
+- One import: `. "github.com/snonux/gonf/api"` (it re-exports the resource
+  options, the inventory, `Refuse` and `Dependency`). Never also dot-import
+  `api/options`.
+- Inventory: `WithSSHDomain` in a `HostDefaults` bundle gives
+  `<name>.<domain>`, and `WithPlatform("goos/goarch")`; no per-host
+  `WithSSHHost` unless a host's name differs.
 - `CronAt` for fixed schedules, options for per-host fields. An identical
   unmanaged line is adopted; `WithLegacyCommand` only for a different old
   command or schedule.

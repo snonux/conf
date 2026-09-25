@@ -49,10 +49,10 @@ Recipe style (conventions in [`AGENTS.md`](AGENTS.md)):
 RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 
 // gonf/cluster/cluster.go: typed per-host data
-Host("f0", fhost, WithSSHHost("f0.lan.buetow.org"), WithData(freebsd.UnattendedSchedule{Minute: "5"}))
+Host("f0", fhost, WithData(freebsd.UnattendedSchedule{Minute: "5"})) // fhost: WithSSHDomain("lan.buetow.org"), WithPlatform("freebsd/amd64")
 
 // a task: prerequisites, ownership, per-host data, cron
-func (Unattended) OptsCron() TaskOptions { return TaskOptions{Privileged(), Needs("script", "services", "stamp_dir")} }
+func (Unattended) OptsCron() TaskOptions { return TaskOptions{Needs("script", "services", "stamp_dir")} }
 func (Unattended) Script() {
 	EnsureDir("/usr/local/sbin", Perm(0o755, Root)) // Root: root:wheel on BSD, root:root on Rocky
 	InstallFile("/usr/local/sbin/unattended-upgrade-freebsd", src, Perm(0o755, Root))
