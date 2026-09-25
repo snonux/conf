@@ -293,10 +293,13 @@ func WireGuardAddresses() []WireGuardAddress {
 }
 
 // WireGuardHostLines returns the legacy /etc/hosts rows in their established
-// IPv4-then-IPv6 order. Consumers append these lines instead of replacing
-// administrator-owned host entries.
-func WireGuardHostLines() []string {
-	peers := WireGuardAddresses()
+// IPv4-then-IPv6 order, "IP fqdn short", for the shared peers followed by
+// extra. Consumers append these lines instead of replacing
+// administrator-owned host entries. extra is for hosts that resolve peers
+// kept out of wireGuardAddresses (see gonf/etchosts); it is the one
+// implementation of the row format.
+func WireGuardHostLines(extra ...WireGuardAddress) []string {
+	peers := append(WireGuardAddresses(), extra...)
 	lines := make([]string, 0, len(peers)*2)
 	for _, peer := range peers {
 		lines = append(lines, peer.IPv4+" "+peer.Name+".wg0.wan.buetow.org "+peer.Name+".wg0")

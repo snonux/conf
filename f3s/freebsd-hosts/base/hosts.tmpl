@@ -31,23 +31,12 @@
 
 # Everything above is the stock FreeBSD /etc/hosts. The rows below are
 # rendered by gonf (task freebsd_base_hosts, gonf/freebsd/base.go) from
-# f3s/freebsd-hosts/base/hosts.tmpl: edit them there, not on the host.
+# the gonf/etchosts inventory: edit them there, not on the host.
 
 # LAN (192.168.1.0/24)
-192.168.1.130 f0 f0.lan f0.lan.buetow.org
-192.168.1.131 f1 f1.lan f1.lan.buetow.org
-192.168.1.132 f2 f2.lan f2.lan.buetow.org
-192.168.1.133 f3 f3.lan f3.lan.buetow.org
-192.168.1.138 f3s-storage-ha f3s-storage-ha.lan f3s-storage-ha.lan.buetow.org
-192.168.1.120 r0 r0.lan r0.lan.buetow.org
-192.168.1.121 r1 r1.lan r1.lan.buetow.org
-192.168.1.122 r2 r2.lan r2.lan.buetow.org
-192.168.1.123 rocky rocky.lan rocky.lan.buetow.org
-192.168.1.125 pi0 pi0.lan pi0.lan.buetow.org
-192.168.1.126 pi1 pi1.lan pi1.lan.buetow.org
-192.168.1.127 pi2 pi2.lan pi2.lan.buetow.org
-192.168.1.128 pi3 pi3.lan pi3.lan.buetow.org
-192.168.1.27 t450 t450.lan t450.lan.buetow.org
+{{- range .LAN}}
+{{.}}
+{{- end}}
 
 # WireGuard mesh IPv4 and IPv6 addresses (wg0)
 {{- range .WireGuard}}

@@ -1,0 +1,22 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+# Everything above is the stock Rocky Linux /etc/hosts. The rows below are
+# rendered by gonf (task rnodes_base_hosts, gonf/rnodes/base.go) from
+# f3s/r-nodes/base/hosts.tmpl and the gonf/etchosts inventory: edit them
+# there, not on the host.
+
+# Images are named registry.lan.buetow.org:30001/..., the in-cluster
+# registry's NodePort; on a node that name is the node itself (f3s blog
+# part 7). The k3s registries.yaml mirror dials localhost:30001 directly.
+127.0.0.1 registry.lan.buetow.org
+
+# LAN (192.168.1.0/24)
+{{- range .LAN}}
+{{.}}
+{{- end}}
+
+# WireGuard mesh IPv4 and IPv6 addresses (wg0)
+{{- range .WireGuard}}
+{{.}}
+{{- end}}

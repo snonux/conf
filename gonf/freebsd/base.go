@@ -3,7 +3,7 @@ package freebsd
 import (
 	. "github.com/snonux/gonf/api"
 
-	"github.com/snonux/conf/gonf/frontends"
+	"github.com/snonux/conf/gonf/etchosts"
 	"github.com/snonux/conf/gonf/paths"
 )
 
@@ -45,32 +45,19 @@ const (
 // them.
 var basePackages = List("bash", "doas", "git", "helix", "jq", "ksh", "rsync", "tmux")
 
-// fHostWireGuardExtras are wg0 peers the f-hosts resolve beyond the shared
-// frontends inventory. f3 is a mesh member (wireguardmeshgenerator.yaml) but
-// is kept out of frontends.WireGuardAddresses on purpose: that list also
-// drives the frontends' Gogios ping checks.
-var fHostWireGuardExtras = []frontends.WireGuardAddress{
-	{Name: "f3", IPv4: "192.168.2.133", IPv6: "fd42:beef:cafe:2::133"},
-}
-
-// hostsData is hosts.tmpl's root (JSON-compatible for WithTemplateData).
-type hostsData struct {
-	WireGuard []string
-}
-
 // DescHosts returns the description for /etc/hosts.
 func (Base) DescHosts() string {
-	return "Render /etc/hosts (stock header, LAN rows, wg0 mesh rows from the shared frontends inventory + f3)"
+	return "Render /etc/hosts (stock header, LAN and wg0 mesh rows from the shared etchosts inventory)"
 }
 
 // Hosts renders the whole file: the rows were hand-appended and had to be
 // de-duplicated anyway, so a line edit would leave the junk in place. The
-// WireGuard rows are only name->address mappings; the wg0 configs, keys and
-// peers stay with ~/git/wireguardmeshgenerator, which does not touch
-// /etc/hosts.
+// LAN and wg0 rows come from gonf/etchosts, the inventory the r-nodes'
+// /etc/hosts (rnodes.Base.Hosts) shares; hosts.tmpl only holds the FreeBSD
+// stock header.
 func (Base) Hosts() {
 	InstallFile(etcHosts, paths.FHostAsset(baseAssetsPath+"hosts.tmpl"),
-		Perm(0o644, Root), WithTemplateData(hostsData{WireGuard: wireGuardHostLines()}))
+		Perm(0o644, Root), WithTemplateData(etchosts.TemplateData()))
 }
 
 // DescDoas returns the description for doas.conf.
@@ -124,19 +111,4 @@ func (Base) DescPkgRepo() string {
 func (Base) PkgRepo() {
 	EnsureDir(pkgReposDir, Perm(0o755, Root))
 	InstallFile(pkgRepoCustom, paths.FHostAsset(baseAssetsPath+"pkg-custom.conf"), Perm(0o644, Root))
-}
-
-// wireGuardHostLines returns the wg0 rows, all IPv4 then all IPv6, in the
-// "IP fqdn short" form of frontends.WireGuardHostLines, for the shared peers
-// plus fHostWireGuardExtras.
-func wireGuardHostLines() []string {
-	peers := append(frontends.WireGuardAddresses(), fHostWireGuardExtras...)
-	lines := make([]string, 0, len(peers)*2)
-	for _, peer := range peers {
-		lines = append(lines, peer.IPv4+" "+peer.Name+".wg0.wan.buetow.org "+peer.Name+".wg0")
-	}
-	for _, peer := range peers {
-		lines = append(lines, peer.IPv6+" "+peer.Name+".wg0.wan.buetow.org "+peer.Name+".wg0")
-	}
-	return lines
 }
