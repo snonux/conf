@@ -68,7 +68,7 @@ spec:
           readOnly: true
       containers:
       - name: audiobookshelf
-        image: ghcr.io/advplyr/audiobookshelf
+        image: ghcr.io/advplyr/audiobookshelf:2.36.1
         ports:
         - containerPort: 80
         livenessProbe:
