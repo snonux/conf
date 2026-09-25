@@ -54,9 +54,30 @@ spec:
           ports:
             - containerPort: 2000
               name: http
-          # No liveness/readiness probes: yChat segfaults on an empty TCP
-          # open+close (a TCP-socket probe would kill it). It serves real HTTP
-          # requests fine, and kubelet restarts the pod if the process exits.
+          # HTTP probes only, never tcpSocket: old builds segfaulted on an
+          # empty TCP open+close (f015a1b survives it, but a real GET is the
+          # safer check). The liveness probe matters: a "POST / " without an
+          # event parameter sends f015a1b into an endless loop in its
+          # single-threaded event loop, so the whole chat stops answering
+          # until the 128Mi limit OOM-kills it (seen as repeated OOMKilled
+          # restarts). The probe restarts it after ~1 minute instead
+          # (audit 2026-09-25 #20).
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               memory: 32Mi
