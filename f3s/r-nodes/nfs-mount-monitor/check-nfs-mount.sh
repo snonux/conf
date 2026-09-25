@@ -18,7 +18,7 @@
 # this node stuck in Unknown/Pending/ContainerCreating, and marks a restart of
 # every NFS-backed workload on the node as pending: on the next run with all
 # probes passing it rollout-restarts them (Recreate: stop before start), at
-# most once per 10 minutes, retrying until the restart succeeds.
+# most once per 2 minutes, retrying only the workloads that failed.
 #
 # fix_mount recovery sequence:
 #   1. kill D-state processes pinning the mount (so umount can succeed)
@@ -112,7 +112,12 @@ MOUNT_FIXED=0
 # restart_nfs_workloads_on_node), and its throttle.
 RESTART_PENDING=/run/nfs-mount-monitor/restart-pending
 RESTART_STAMP=/run/nfs-mount-monitor/last-workload-restart
-RESTART_MIN_INTERVAL=600
+RESTART_TRY_STAMP=/run/nfs-mount-monitor/last-workload-restart-attempt
+# Storms are already prevented by restarting only on clean runs after a
+# repair that proved writes work; the interval only spaces out full restarts
+# after back-to-back repairs, and failed attempts retry after a short backoff.
+RESTART_MIN_INTERVAL=120
+RESTART_RETRY_INTERVAL=60
 
 # read_fail_count — return the current consecutive-failure counter.
 # Returns 0 if the file is absent or contains a non-integer.
@@ -346,10 +351,19 @@ detach_all_mounts() {
 # Returns non-zero if anything could not be listed or restarted, so the
 # caller keeps the restart-pending marker and retries next run.
 restart_nfs_workloads_on_node() {
-    local node="$1" d=/run/nfs-mount-monitor claims rc=0
+    local node="$1" d=/run/nfs-mount-monitor claims rc=0 kind ns name
+    local -  # restores shell options on return
+    set -o pipefail
+    # 0700: the API dumps can contain literal env values of pod specs.
+    mkdir -p "$d" && chmod 700 "$d"
+    # A list left by an earlier, partly failed attempt is resumed as is:
+    # only the workloads that were not restarted yet are retried.
+    if [ -s "$d/restart-list" ]; then
+        restart_list_entries "$d"
+        return
+    fi
     # The API objects go through files, not shell variables or --argjson:
     # the ReplicaSet list alone exceeds the kernel's argument-size limit.
-    mkdir -p "$d"
     timeout 20 kubectl get pv -o json > "$d/pv.json" 2>/dev/null || return 1
     timeout 20 kubectl get pods --all-namespaces --field-selector="spec.nodeName=$node" \
         -o json > "$d/pods.json" 2>/dev/null || return 1
@@ -377,17 +391,33 @@ restart_nfs_workloads_on_node() {
             | if $d != null and $d.kind == "Deployment" then "deployment \(.metadata.namespace) \($d.name)"
               else "pod \(.metadata.namespace) \(.metadata.name)" end
           elif $o.kind == "StatefulSet" then "statefulset \(.metadata.namespace) \($o.name)"
-          else "pod \(.metadata.namespace) \(.metadata.name)" end' "$d/pods.json" | sort -u > "$d/restart-list" || return 1
+          else "pod \(.metadata.namespace) \(.metadata.name)" end' "$d/pods.json" | sort -u > "$d/restart-list.tmp" \
+        || { rm -f "$d/restart-list.tmp"; return 1; }
+    rm -f "$d/pv.json" "$d/pods.json" "$d/rs.json"
+    mv "$d/restart-list.tmp" "$d/restart-list"
+    restart_list_entries "$d"
+}
+
+# restart_list_entries DIR — restart every workload in DIR/restart-list and
+# keep only the entries that failed; returns non-zero while any are left.
+restart_list_entries() {
+    local d="$1" rc=0 kind ns name
+    : > "$d/restart-list.left"
     while read -r kind ns name; do
         [ -n "$kind" ] || continue
         if [ "$kind" = pod ]; then
             echo "Deleting NFS pod $ns/$name (no Deployment/StatefulSet owner)"
-            timeout 20 kubectl delete pod -n "$ns" "$name" --wait=false 2>&1 || rc=1
+            timeout 20 kubectl delete pod -n "$ns" "$name" --wait=false 2>&1 && continue
         else
             echo "Rollout-restarting $kind $ns/$name (stale NFS handles after a repair)"
-            timeout 20 kubectl rollout restart "$kind" -n "$ns" "$name" 2>&1 || rc=1
+            timeout 20 kubectl rollout restart "$kind" -n "$ns" "$name" 2>&1 && continue
         fi
+        echo "$kind $ns $name" >> "$d/restart-list.left"
+        rc=1
     done < "$d/restart-list"
+    mv "$d/restart-list.left" "$d/restart-list"
+    [ -s "$d/restart-list" ] && rc=1
+    [ "$rc" -eq 0 ] && rm -f "$d/restart-list"
     return $rc
 }
 
@@ -626,6 +656,11 @@ fi
 
 # After a successful remount, delete pods stuck on this node
 if [ "$MOUNT_FIXED" -eq 1 ]; then
+    # Only pods that never got a running container are force-deleted here.
+    # Running-but-NotReady pods (a database stuck on a stale handle) are
+    # left to the rollout restart below: a force delete lets the ReplicaSet
+    # start the replacement while the old container may still write through
+    # the detached mount, i.e. two writers on one Postgres/SQLite directory.
     echo "Mount was fixed, checking for stuck pods on this node..."
     NODE=$(hostname)
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -635,7 +670,6 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
         select(
           .status.phase == "Unknown" or
           .status.phase == "Pending" or
-          (.status.conditions // [] | any(.type == "Ready" and .status == "False")) or
           (.status.containerStatuses // [] | any(.state.waiting.reason == "ContainerCreating"))
         ) | "\(.metadata.namespace) \(.metadata.name)"' | \
       while read ns pod; do
@@ -651,7 +685,8 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
     # The workload restart itself runs below, on a run where the mount is
     # healthy; the marker survives a run killed mid-way (TimeoutStartSec)
     # and a failed kubectl call, so the restart is retried until it succeeds.
-    mkdir -p /run/nfs-mount-monitor
+    mkdir -p /run/nfs-mount-monitor && chmod 700 /run/nfs-mount-monitor
+    rm -f /run/nfs-mount-monitor/restart-list  # a new repair: recompute
     touch "$RESTART_PENDING"
 
     # On a healthy remount, also ensure the fail counter is reset.
@@ -664,18 +699,22 @@ fi
 # node whose export still cannot write is not put into a restart loop, and at
 # most once per RESTART_MIN_INTERVAL even if repairs keep succeeding.
 if [ -e "$RESTART_PENDING" ] && [ "$PROBE_FAILED" -eq 0 ] && [ "$WRITE_PENDING" -eq 0 ]; then
-    last_restart=0
-    [ -f "$RESTART_STAMP" ] && last_restart=$(stat -c %Y "$RESTART_STAMP" 2>/dev/null || echo 0)
-    if (( $(date +%s) - last_restart < RESTART_MIN_INTERVAL )); then
-        echo "NFS workload restart pending but throttled (last one $(( $(date +%s) - last_restart ))s ago)"
+    now=$(date +%s); last_ok=0; last_try=0
+    [ -f "$RESTART_STAMP" ] && last_ok=$(stat -c %Y "$RESTART_STAMP" 2>/dev/null || echo 0)
+    [ -f "$RESTART_TRY_STAMP" ] && last_try=$(stat -c %Y "$RESTART_TRY_STAMP" 2>/dev/null || echo 0)
+    if (( now - last_ok < RESTART_MIN_INTERVAL )); then
+        echo "NFS workload restart pending but throttled (last full restart $(( now - last_ok ))s ago)"
+    elif (( now - last_try < RESTART_RETRY_INTERVAL )); then
+        echo "NFS workload restart pending; retrying after backoff"
     else
         export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-        touch "$RESTART_STAMP"
+        touch "$RESTART_TRY_STAMP"
         if restart_nfs_workloads_on_node "$(hostname)"; then
             rm -f "$RESTART_PENDING"
+            touch "$RESTART_STAMP"
             echo "NFS workload restart done"
         else
-            echo "NFS workload restart incomplete — will retry"
+            echo "NFS workload restart incomplete — will retry the rest"
         fi
     fi
 fi
