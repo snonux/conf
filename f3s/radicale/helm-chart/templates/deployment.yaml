@@ -72,6 +72,13 @@ spec:
       - name: radicale
         # Local image; 3.5.4 is the same manifest that was pushed as :latest.
         image: registry.lan.buetow.org:30001/radicale:3.5.4
+        # Memory from the 14-day peak working set (30Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 256Mi
         ports:
         - containerPort: 8080
         livenessProbe:
