@@ -18,6 +18,10 @@ var (
 	// Foostats is the foostats checkout (preferred over the in-repo copies
 	// under frontends/scripts). Override: GONF_FOOSTATS_ROOT.
 	Foostats = checkoutRoot("GONF_FOOSTATS_ROOT", "foostats")
+	// WireGuardMeshGenerator is the wireguardmeshgenerator checkout, run in
+	// place by the opt-in wireguard_mesh_install task (gonf/wireguard).
+	// Override: GONF_WIREGUARDMESHGENERATOR_ROOT.
+	WireGuardMeshGenerator = checkoutRoot("GONF_WIREGUARDMESHGENERATOR_ROOT", "wireguardmeshgenerator")
 )
 
 // checkoutRoot returns the controller checkout root named by the environment

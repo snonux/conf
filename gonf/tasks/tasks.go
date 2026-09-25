@@ -11,6 +11,7 @@ import (
 	"github.com/snonux/conf/gonf/pihole"
 	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
+	"github.com/snonux/conf/gonf/wireguard"
 	. "github.com/snonux/gonf/api"
 )
 
@@ -60,7 +61,13 @@ func Register() {
 	RegisterMethods(freebsd.Goprecords{}, WithPrefix("freebsd_goprecords_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Monitoring{}, WithPrefix("freebsd_monitoring_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.F3sctl{}, WithPrefix("freebsd_f3sctl_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.WireGuard{}, WithPrefix("freebsd_wireguard_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
+	// Controller-local and Operational: wireguard_mesh_install runs
+	// ~/git/wireguardmeshgenerator on the laptop, which pushes to the whole
+	// mesh itself. No OnCluster (it targets no gonf cluster) and no aggregate
+	// matches ^wireguard_.
+	RegisterMethods(wireguard.Mesh{}, WithPrefix("wireguard_mesh_"))
 
 	// A pattern Aggregate never picks up an Operational() task, so the
 	// frontends aggregate leaves out the explicit, by-name actions:
