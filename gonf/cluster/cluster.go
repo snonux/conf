@@ -189,6 +189,9 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 // the garage.Node the Garage recipe reads); f3 stays out of the Garage
 // cluster. f3 never auto-reboots: unattended-upgrade-freebsd hardcodes that.
 func registerFreeBSD() {
+	// f0 has the UPS on USB and serves its status on its LAN address; f1-f3
+	// poll it there (by IP, so apcupsd never depends on name resolution).
+	const upsServer = "192.168.1.130:3551"
 	fhost := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeDoas),
 		WithGOOS("freebsd"),
@@ -198,24 +201,28 @@ func registerFreeBSD() {
 		WithSSHHost("f0.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
+		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
 	f1 := Host("f1", fhost,
 		WithSSHHost("f1.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
+		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
 	f2 := Host("f2", fhost,
 		WithSSHHost("f2.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
+		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
 	f3 := Host("f3", fhost,
 		WithSSHHost("f3.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
+		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
 	Cluster(NameGarage, f0, f1, f2).Parallel(1)

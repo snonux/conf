@@ -1,0 +1,40 @@
+## apcupsd.conf -- managed by gonf (freebsd_apcupsd_config, gonf/freebsd/apcupsd.go).
+## Local edits are overwritten on the next deploy. Directive reference:
+## /usr/local/etc/apcupsd/apcupsd.conf.sample and apcupsd(8).
+##
+## f0 is the UPS host (USB to the APC BX750MI) and the NIS server; f1-f3 are
+## network clients of f0. Clients shut down first (higher BATTERYLEVEL and
+## MINUTES) so they still see f0's UPS status while they go down; f0 goes
+## last. See the f3s skill, references/ups-power.md.
+
+UPSCABLE {{.Cable}}
+UPSTYPE {{.Type}}
+DEVICE {{.Device}}
+LOCKFILE /var/spool/lock
+SCRIPTDIR /usr/local/etc/apcupsd
+PWRFAILDIR /var/run
+NOLOGINDIR /var/run
+
+ONBATTERYDELAY 6
+BATTERYLEVEL {{.BatteryLevel}}
+MINUTES {{.Minutes}}
+TIMEOUT 0
+ANNOY 300
+ANNOYDELAY 60
+NOLOGON disable
+KILLDELAY 0
+
+# NIS server: f0 serves the UPS status to the LAN clients on its LAN address
+# only; a client serves only its own apcaccess on loopback.
+NETSERVER on
+NISIP {{.NISIP}}
+NISPORT 3551
+
+EVENTSFILE /var/log/apcupsd.events
+EVENTSFILEMAX 10
+UPSCLASS standalone
+UPSMODE disable
+STATTIME 0
+STATFILE /var/log/apcupsd.status
+LOGSTATS off
+DATATIME 0

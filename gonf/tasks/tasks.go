@@ -38,6 +38,7 @@ func Register() {
 	// The CARP helpers narrow to f0/f1 inside the bodies (WhenHostname).
 	RegisterMethods(freebsd.Carp{}, WithPrefix("freebsd_carp_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Periodic{}, WithPrefix("freebsd_periodic_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Apcupsd{}, WithPrefix("freebsd_apcupsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 
 	// A pattern Aggregate never picks up an Operational() task, so the

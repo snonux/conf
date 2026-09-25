@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# commfailure / commok for the apcupsd network clients f1-f3 -- managed by
+# gonf (freebsd_apcupsd_client_events, gonf/freebsd/apcupsd.go).
+#
+# The stock scripts mail root on every lost/restored event. A client loses its
+# UPS feed whenever f0 is down: at every nightly power-off and morning
+# power-on (the clients' apcupsd polls before f0's has started) and on every
+# f0 reboot. That produced ~900 mails on f2 and no real finding, so the
+# clients stay quiet: apcupsd itself still records the event in syslog and
+# /var/log/apcupsd.events. f0 keeps the stock (mailing) scripts, where a lost
+# USB link to the UPS is a real problem.
+#
+# Exit 99 tells apccontrol to skip its default action (a wall(1) broadcast).
+exit 99
