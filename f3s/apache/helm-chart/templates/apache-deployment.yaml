@@ -16,7 +16,7 @@ spec:
     spec:
       initContainers:
       - name: nfs-check-apache-htdocs
-        image: busybox:stable
+        image: busybox:1.36.1
         command:
         - sh
         - -c

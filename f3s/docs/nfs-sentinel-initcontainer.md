@@ -13,11 +13,14 @@ pod refuse to start instead.
 - Create it on the NFS server only, never in the local XFS fallback on r0-r2.
 - One initContainer per NFS-backed volume, mounting the same PVC read-only at
   `/mnt`, failing when `/mnt/.nfs-sentinel` is missing.
+- Image `busybox:1.36.1` everywhere (the digest `busybox:stable` resolved to
+  on 2026-09-25, sha256:73aaf090...). Never float `stable`/`latest`; bump all
+  charts together.
 
 ```yaml
 initContainers:
 - name: nfs-check-data          # one per volume: nfs-check-<volume>
-  image: busybox:stable
+  image: busybox:1.36.1   # pinned; bump deliberately across all charts
   command:
   - sh
   - -c
