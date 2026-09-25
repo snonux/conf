@@ -111,7 +111,11 @@ func (Monitoring) Gogios() {
 		removeStaleDNSRoleFiles()
 		gogiosUser := WithCronUser("_gogios")
 		CronAt("gogios-renotify", "0 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
-		CronAt("gogios-checks", "*/5 8-22 * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		// Checks run around the clock (audit item 23): an 08-22 window let an
+		// overnight outage go unnoticed until the morning. Gogios has no
+		// notification quiet hours, so overnight CRITICAL changes mail too;
+		// WARNING/UNKNOWN changes still wait for the 07:00 renotify.
+		CronAt("gogios-checks", "*/5 * * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		CronAt("gogios-force", "0 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		rcLocal := ensureRCLocal()
 		File("/etc/rc.local",
