@@ -7,6 +7,7 @@ import (
 	"codeberg.org/snonux/conf/gonf/frontends"
 	"codeberg.org/snonux/conf/gonf/garage"
 	"codeberg.org/snonux/conf/gonf/netbsd"
+	"codeberg.org/snonux/conf/gonf/pihole"
 	"codeberg.org/snonux/conf/gonf/openbsd"
 	"codeberg.org/snonux/conf/gonf/rnodes"
 	"codeberg.org/snonux/conf/gonf/rocky"
@@ -33,12 +34,14 @@ func Register() {
 	// rocky_kernel_audit_packages installs its own ksh interpreter, so it
 	// also deploys on its own.
 	RegisterMethods(rocky.KernelAudit{}, WithPrefix("rocky_kernel_audit_"), OnCluster(cluster.NameRockyPis))
+	RegisterMethods(pihole.Deployment{}, WithPrefix("pihole_"), OnCluster(cluster.NameRockyPis))
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	// The CARP helpers narrow to f0/f1 inside the bodies (WhenHostname).
 	RegisterMethods(freebsd.Carp{}, WithPrefix("freebsd_carp_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Periodic{}, WithPrefix("freebsd_periodic_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Apcupsd{}, WithPrefix("freebsd_apcupsd_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Bhyve{}, WithPrefix("freebsd_bhyve_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 
 	// A pattern Aggregate never picks up an Operational() task, so the
@@ -51,6 +54,7 @@ func Register() {
 	Aggregate("pis_netbsd", "Install all pis_netbsd_* configuration", "^pis_netbsd_")
 	Aggregate("rocky", "Install all rocky_* configuration", "^rocky_")
 	Aggregate("rocky_kernel_audit", "Install the Rocky Pi kernel CVE audit", "^rocky_kernel_audit_")
+	Aggregate("pihole", "Install the Pi-hole Docker deployment on pi2/pi3", "^pihole_")
 	Aggregate("rnodes", "Install all rnodes_* configuration", "^rnodes_")
 	Aggregate("freebsd", "Install all freebsd_* configuration", "^freebsd_")
 	Aggregate("garage", "Install all Garage configuration", "^garage_")
