@@ -67,9 +67,16 @@ var (
 		},
 	}
 	f2Keys = freebsd.KeyDatasets{
-		Datasets: []string{"zdata/enc", "zroot/bhyve", "zroot/garage", "zroot/sink/f3/zroot/bhyve/freebsd"},
+		Datasets: []string{"zdata/enc", "zroot/bhyve", "zroot/garage",
+			"zroot/sink/f3/zroot/bhyve/freebsd", "zroot/sink/f3/zroot/bhyve/rocky"},
+		// Both f3 VM sinks are their own encryption roots, keyed with f3's
+		// bhyve key (verified with zfs load-key -n on 2026-09-25). The rocky
+		// sink was keylocation=prompt and never unlocked at boot until then.
 		SinkKeys: []freebsd.SinkKey{{
 			Dataset: "zroot/sink/f3/zroot/bhyve/freebsd",
+			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
+		}, {
+			Dataset: "zroot/sink/f3/zroot/bhyve/rocky",
 			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
 		}},
 	}
