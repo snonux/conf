@@ -12,15 +12,16 @@ volumes are NFS hostPath; shared music PVC with
 
 | Volume | Size | Mount |
 |---|---|---|
-| `/data/nfs/k3svolumes/navidrome/data` (`navidrome-data-nfs-pvc`) | 10Gi | `/data` (SQLite DB, image/transcode cache) |
+| `/data/nfs/k3svolumes/navidrome/data` (`navidrome-data-nfs-pvc`) | 10Gi | `/data` (SQLite DB) |
 | `/data/nfs/k3svolumes/navidrome/music` (`navidrome-music-pvc`, RWX) | 200Gi | `/music` |
+| node-local `emptyDir` | 1Gi | `/cache` (`ND_CACHEFOLDER`, image/transcode cache, disposable) |
 
 Until 2026-09-25 `/data` was a local-path PVC on r1 with a `nodeSelector`;
-it moved back to NFS so r1 is no longer a single point of failure. No node
-pinning and no node-local volumes (house rule), so the cache is on NFS too.
+it moved back to NFS so r1 is no longer a single point of failure, with the
+cache kept node-local (the reason it had left NFS: ~19 s image-cache init).
 
 Env in `templates/deployment.yaml`: `ND_SCANSCHEDULE=1h`, `ND_LOGLEVEL=info`,
-`ND_BASEURL=""`. Add music by copying into the music dir on the NFS server;
+`ND_BASEURL=""`, `ND_CACHEFOLDER=/cache`. Add music by copying into the music dir on the NFS server;
 the hourly scan finds it. Users are managed in the web UI (first visit creates
 the admin).
 
