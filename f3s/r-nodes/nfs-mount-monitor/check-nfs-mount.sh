@@ -3,38 +3,41 @@
 # (nfs-mount-monitor.timer / nfs-mount-monitor.service)
 #
 # Checks whether /data/nfs/k3svolumes is mounted and responsive.
-# Three probes are run in order:
-#   1. mountpoint — detects completely missing mounts
+# Four probes run in order; the first failure triggers ONE repair per run:
+#   1. /proc/self/mounts — detects a missing mount (no stat, so a stale mount
+#      still counts as present)
 #   2. stat        — detects read hangs / stale cache misses
-#   3. write-probe — detects the "reads OK, writes hang" failure mode
+#   3. stack check — more than one mount on the path (left by older versions
+#      of this script, which mounted on top of a stale mount)
+#   4. write-probe — detects the "reads OK, writes hang" failure mode
 #      (stunnel-wrapped NFSv4 can enter a state where stat returns from
-#      cache but ALL writes block indefinitely; only the write probe
-#      catches this — mount timeo=10 deciseconds = 1s, so 5s gives one
-#      full retransmit window plus margin)
+#      cache but ALL writes block; only the write probe catches this, well
+#      inside the hard mount's 60s retransmit timeout)
 #
-# If any probe fails, fix_mount is called to attempt a remount, then a
-# fresh umount+mount cycle.  On a successful repair it force-deletes
-# any pods on this node that are stuck in Unknown/Pending/ContainerCreating,
-# allowing the kubelet to reschedule them against the now-healthy volume.
+# On a successful repair it force-deletes any pods on this node that are
+# stuck in Unknown/Pending/ContainerCreating, allowing the kubelet to
+# reschedule them against the now-healthy volume.
 #
 # fix_mount recovery sequence:
-#   1. mount -o remount -f  (cheapest — no disruption if mount is stale)
-#   2. kill D-state processes pinning the mount (so umount can succeed)
-#   3. umount -f            (force unmount)
-#   4. umount -l            (lazy detach VFS node if -f failed)
-#   5. systemctl restart stunnel + 2s sleep (refresh the TLS transport)
-#   6. mount with soft+short-timeo (NFS-specific; avoids infinite kernel D-state)
+#   1. kill D-state processes pinning the mount (so umount can succeed)
+#   2. unmount EVERY mount on the path (umount -f, then umount -l), and refuse
+#      to continue if one is left: mounting on top of a leftover is how r0/r2
+#      ended up with a soft mount stacked over a hard one (2026-09-25)
+#   3. systemctl restart stunnel + 2s sleep (refresh the TLS transport)
+#   4. mount with the fstab options (hard), bounded by timeout -k 5 30
 #
-# Step 6 uses explicit soft NFS options instead of `mount $MOUNT_POINT`
-# (which would read the fstab `hard` flag).  A `hard` NFS mount that fails
-# to reach the server enters uninterruptible kernel sleep (D-state), and
-# SIGKILL cannot wake a D-state process on Linux — the script would hang
-# indefinitely, leaving the lock file stale.  With `soft,timeo=50,retrans=3`
-# the kernel gives up after ~15s and returns ETIMEDOUT, allowing the fail
-# counter to increment and eventually trigger the reboot escalation.
+# Step 4 used to mount soft,timeo=50 on the belief that a hard mount against
+# an unreachable server wedges this script in D-state. The Linux NFS client
+# waits in TASK_KILLABLE, so timeout's SIGKILL does end such a mount; and the
+# soft repair mount silently switched every repaired node to soft semantics,
+# where writes can fail with EIO under load. A mount that times out counts as
+# a failed repair and feeds the reboot escalation below as before.
 #
-# A hard 60-second deadline is enforced so the function can never outlast
-# its own timer interval (10s) by more than 6x, preventing timer pile-up.
+# fix_mount checks a 60-second deadline between its steps, and every step
+# that can block on a dead server is itself bounded (umount and mount run
+# under timeout -k); nfs-mount-monitor.service adds TimeoutStartSec as the
+# backstop, so a wedged run is killed and the next timer tick starts fresh
+# instead of the monitor stopping for good.
 #
 # Consecutive-failure escalation:
 #   Each fix_mount failure increments a counter persisted to
@@ -166,7 +169,10 @@ kill_pinning_processes() {
         # Check whether this process is stuck in an NFS kernel wait state
         local wchan
         wchan=$(cat "$pid_dir/wchan" 2>/dev/null) || continue
-        [[ "$wchan" == nfs_* ]] || continue
+        # NFS waits show up as nfs_*, but also as the sunrpc/page-cache waits
+        # underneath (rpc_wait_bit_killable, folio_wait_*); matching only
+        # nfs_* missed most of them.
+        [[ "$wchan" == nfs_* || "$wchan" == rpc_* || "$wchan" == folio_wait* ]] || continue
 
         # Verify the process is actually using our mount point (cwd or fds)
         local cwd_link
@@ -197,13 +203,13 @@ kill_pinning_processes() {
 #
 # Why this exists separately from fix_mount:
 #   fix_mount (and its post-repair stuck-pod cleanup) only run when one of the
-#   three node-level probes fails — i.e. when /data/nfs/k3svolumes is itself
+#   node-level probes fails — i.e. when /data/nfs/k3svolumes is itself
 #   missing/hung/unwritable.  But after a CARP failover / f-host reboot /
 #   stunnel reconnect, the node can re-establish a perfectly healthy mount
 #   while individual pods that existed during the brief transition keep a
 #   STALE bind-mount to the old, detached NFS superblock.  Those pods are
 #   invisible to fix_mount (node mount is fine, so MOUNT_FIXED is never set and
-#   all three probes pass).  Observed real-world fallout of exactly this:
+#   all node-level probes pass).  Observed real-world fallout of exactly this:
 #     * git-server / prometheus: CreateContainerConfigError
 #       "failed to prepare subPath for volumeMount ..." — kubelet cannot even
 #       (re)create the container, and retries forever on the same node.
@@ -284,9 +290,44 @@ reap_stale_nfs_pods() {
     done
 }
 
+# nfs_mount_count — how many mounts are stacked on MOUNT_POINT, read from
+# /proc/self/mounts. Deliberately not mountpoint(1) or findmnt: both stat the
+# path, and a stat on a stale or hung NFS mount fails (ESTALE) or blocks, so
+# "is it mounted?" was answered "no" for a mount that was still there. That is
+# how a repair stacked a fresh mount on top of the old one (seen on r0/r2 on
+# 2026-09-25).
+nfs_mount_count() {
+    awk -v mp="$MOUNT_POINT" '$2 == mp' /proc/self/mounts | wc -l
+}
+
+# detach_all_mounts — unmount every mount stacked on MOUNT_POINT: force first,
+# lazy as a fallback. Returns non-zero if anything is still mounted, so the
+# caller never mounts on top of a leftover.
+detach_all_mounts() {
+    local tries=0
+    while (( $(nfs_mount_count) > 0 && tries < 3 )); do
+        (( tries++ ))
+        # Each try can take up to 2x15s when umount blocks; stop at fix_mount's
+        # deadline rather than piling tries on a mount that will not let go.
+        check_deadline || return 1
+        # -i skips the umount.nfs4 helper, and timeout bounds the syscall's
+        # path lookup, which can block on a dead NFS root.
+        if timeout -k 5 10 umount -i -f "$MOUNT_POINT" 2>/dev/null; then
+            echo "Force umount succeeded for $MOUNT_POINT"
+        elif timeout -k 5 10 umount -i -l "$MOUNT_POINT" 2>/dev/null; then
+            echo "Lazy umount succeeded for $MOUNT_POINT"
+        else
+            echo "umount -f and umount -l both failed for $MOUNT_POINT"
+        fi
+    done
+    (( $(nfs_mount_count) == 0 ))
+}
+
 fix_mount () {
-    # Hard deadline: fix_mount must complete within 60 seconds so the
-    # 10-second timer cannot accumulate an unbounded backlog of instances.
+    # Deadline checked between (and inside the umount loop of) the steps
+    # below. A step started just before it can still run to its own bound, so
+    # the worst case is ~60s plus one bounded step (<=35s for the mount),
+    # comfortably inside the unit's TimeoutStartSec.
     local deadline=$(( SECONDS + 60 ))
 
     check_deadline() {
@@ -297,62 +338,30 @@ fix_mount () {
         return 0
     }
 
-    echo "Attempting to remount NFS mount $MOUNT_POINT"
+    echo "Attempting to repair NFS mount $MOUNT_POINT ($(nfs_mount_count) mount(s) present)"
 
-    # --- Step 1: cheap remount (no disruption if the mount is merely stale) ---
-    if mount -o remount -f "$MOUNT_POINT" 2>/dev/null; then
-        echo "Remount succeeded for $MOUNT_POINT"
-    else
-        echo "Remount failed for $MOUNT_POINT — proceeding to full cycle"
-    fi
-
-    check_deadline || return 1
-
-    # If the path is already a healthy mountpoint after remount, we are done.
-    if mountpoint "$MOUNT_POINT" >/dev/null 2>&1; then
-        echo "$MOUNT_POINT is still a valid mountpoint after remount; trying fresh mount"
-    else
-        echo "$MOUNT_POINT is not a valid mountpoint — attempting direct mount"
-        if mount -t nfs4 -o port=2323,soft,timeo=50,retrans=3 \
-               127.0.0.1:/k3svolumes "$MOUNT_POINT" 2>/dev/null; then
-            echo "Successfully mounted $MOUNT_POINT"
-            MOUNT_FIXED=1
-            return 0
-        fi
-        echo "Direct mount failed — proceeding to umount+remount cycle"
-    fi
-
-    check_deadline || return 1
-
-    # --- Step 2: kill D-state processes so umount can detach cleanly ---
+    # --- Step 1: kill D-state processes so umount can detach cleanly ---
     kill_pinning_processes
 
     check_deadline || return 1
 
-    # --- Step 3: force unmount ---
-    echo "Attempting forced umount of $MOUNT_POINT"
-    if umount -f "$MOUNT_POINT" 2>/dev/null; then
-        echo "Force umount succeeded for $MOUNT_POINT"
-    else
-        echo "Force umount failed for $MOUNT_POINT — trying lazy umount"
-        # --- Step 4: lazy umount detaches the VFS node even when processes
-        # are still stuck, allowing a fresh mount to bind to a clean path ---
-        if umount -l "$MOUNT_POINT" 2>/dev/null; then
-            echo "Lazy umount succeeded for $MOUNT_POINT"
-        else
-            echo "Lazy umount also failed for $MOUNT_POINT — will still attempt mount"
-        fi
+    # --- Step 2: detach every mount on the path. Never mount on top of a
+    # leftover: a stacked mount hides the old one without releasing it, and
+    # pods keep writing through whichever layer they bound. ---
+    if ! detach_all_mounts; then
+        echo "Refusing to mount: $(nfs_mount_count) mount(s) still on $MOUNT_POINT"
+        return 1
     fi
 
     check_deadline || return 1
 
-    # --- Step 5: restart stunnel to refresh the TLS transport ---
+    # --- Step 3: restart stunnel to refresh the TLS transport ---
     # The most common root cause of mount hangs is a stale stunnel client
     # session (e.g. after a cluster-wide reboot or CARP failover). Restarting
     # stunnel tears down the old TCP connection and forces a fresh TLS
     # handshake before the mount call below.
     echo "Restarting stunnel to refresh TLS transport"
-    if systemctl restart stunnel 2>/dev/null; then
+    if timeout 20 systemctl restart stunnel 2>/dev/null; then
         echo "stunnel restarted successfully"
     else
         echo "stunnel restart failed — mount may fail too"
@@ -362,10 +371,17 @@ fix_mount () {
 
     check_deadline || return 1
 
-    # --- Step 6: fresh mount (soft options — see top comment for rationale) ---
+    # --- Step 4: fresh mount with the fstab options (hard) ---
+    # The repair used to mount soft,timeo=50 so a dead server could not wedge
+    # this script, which left every repaired node silently on a soft mount
+    # (writes can fail with EIO under load) while fresh boots were hard. Now
+    # it uses fstab's options like a boot does, bounded by timeout -k: the
+    # Linux NFS client waits in TASK_KILLABLE, so the SIGKILL does end a mount
+    # stuck on an unreachable server, and a failed mount counts toward the
+    # reboot escalation as before.
     echo "Attempting to mount $MOUNT_POINT"
-    if mount -t nfs4 -o port=2323,soft,timeo=50,retrans=3 \
-           127.0.0.1:/k3svolumes "$MOUNT_POINT" 2>/dev/null; then
+    if timeout -k 5 30 mount "$MOUNT_POINT" 2>/dev/null \
+        && timeout 5s stat "$MOUNT_POINT" >/dev/null 2>&1; then
         echo "NFS mount $MOUNT_POINT mounted successfully"
         MOUNT_FIXED=1
         return 0
@@ -389,7 +405,7 @@ escalate_reboot() {
     # Cordon the node so the scheduler will not place new pods here while
     # the reboot is in progress.  Failure to cordon is non-fatal: we still
     # reboot because a broken NFS node is worse than an uncordoned one.
-    if kubectl cordon "$node" 2>&1; then
+    if timeout 20 kubectl cordon "$node" 2>&1; then
         echo "Node $node cordoned successfully"
     else
         echo "kubectl cordon failed (will reboot anyway)"
@@ -405,16 +421,28 @@ escalate_reboot() {
 # failure counter.  On success, counter is reset to 0.  On failure, counter
 # is incremented; if it reaches NFS_FAIL_THRESHOLD, escalate_reboot is called.
 run_fix_mount_with_counter() {
+    # Count the attempt as a failure BEFORE running it and undo that on
+    # success: if systemd kills a wedged run at TimeoutStartSec, the failure
+    # is already recorded, so repeated wedged runs still reach the reboot
+    # escalation instead of silently never counting.
+    local pre
+    pre=$(read_fail_count)
+    if (( pre >= NFS_FAIL_THRESHOLD )); then
+        # Earlier attempts already used up the budget without escalating,
+        # which only happens when they were killed mid-repair (wedged).
+        escalate_reboot
+        return
+    fi
+    write_fail_count $(( pre + 1 ))
     if fix_mount; then
         # Repair succeeded — reset the failure streak.
         write_fail_count 0
         echo "NFS repair succeeded; consecutive-failure counter reset to 0"
     else
         # Repair failed — increment the counter and check the threshold.
+        # The pre-increment above already recorded this failure.
         local count
         count=$(read_fail_count)
-        (( count++ ))
-        write_fail_count "$count"
         echo "NFS repair failed; consecutive failures: $count / $NFS_FAIL_THRESHOLD"
 
         if (( count >= NFS_FAIL_THRESHOLD )); then
@@ -426,35 +454,74 @@ run_fix_mount_with_counter() {
 # PROBE_FAILED tracks whether any probe fired run_fix_mount_with_counter.
 # If no probe fires, all checks passed cleanly and we can reset the counter.
 PROBE_FAILED=0
+# WRITE_PENDING marks a write-probe failure still below WRITE_FAIL_LIMIT: no
+# repair yet, but not a clean run either, so the fail counter is left alone.
+WRITE_PENDING=0
 
-if ! mountpoint "$MOUNT_POINT" >/dev/null 2>&1; then
-    echo "NFS mount $MOUNT_POINT not found"
-    run_fix_mount_with_counter
-    PROBE_FAILED=1
-fi
-
-if ! timeout 2s stat "$MOUNT_POINT" >/dev/null 2>&1; then
-    echo "NFS mount $MOUNT_POINT appears to be unresponsive"
-    run_fix_mount_with_counter
-    PROBE_FAILED=1
-fi
-
-# Write-probe: detect the "reads OK, writes hang" failure mode.
-# A per-host filename prevents r0/r1/r2 from racing on the same file.
-# Timeout of 5s covers one full NFS retransmit window (timeo=10 = 1s,
-# retrans=2) plus margin, without making the 10-second cron run too long.
+# The probes run in order and stop at the first failure: one repair per run.
+# Each used to call fix_mount on its own, so a single outage could cycle the
+# mount (and restart stunnel) three times in one run.
+#
+# A missing, hung or stacked mount is repaired at once. A failed write probe
+# only counts toward WRITE_FAIL_LIMIT consecutive runs first: the repair's
+# umount -f aborts every in-flight RPC on the superblock, handing EIO to
+# every pod on the node even on a hard mount, which is worse than a single
+# 5-second stall that the hard mount would have ridden out.
+WRITE_FAIL_LIMIT=${WRITE_FAIL_LIMIT:-2}
+# In /run, not STATE_DIR: a streak must be consecutive runs, and a stall left
+# over from before a reboot says nothing about the mount after it.
+WRITE_FAIL_FILE=/run/nfs-mount-monitor/write-fail-streak
+read_write_streak() {
+    local n=0
+    [ -f "$WRITE_FAIL_FILE" ] && n=$(< "$WRITE_FAIL_FILE")
+    [[ "$n" =~ ^[0-9]+$ ]] || n=0
+    echo "$n"
+}
 HEALTHCHECK_FILE="$MOUNT_POINT/.healthcheck.$(hostname)"
-if ! timeout 5s sh -c "echo \$\$ > '$HEALTHCHECK_FILE' && rm -f '$HEALTHCHECK_FILE'" 2>/dev/null; then
-    echo "NFS writes hanging on $MOUNT_POINT"
-    run_fix_mount_with_counter
+if (( $(nfs_mount_count) == 0 )); then
+    echo "NFS mount $MOUNT_POINT not found"
     PROBE_FAILED=1
+elif ! timeout 2s stat "$MOUNT_POINT" >/dev/null 2>&1; then
+    echo "NFS mount $MOUNT_POINT appears to be unresponsive"
+    PROBE_FAILED=1
+elif (( $(nfs_mount_count) > 1 )); then
+    # A stacked mount left by an older version of this script: repair it so
+    # the node ends up with exactly one (hard) mount.
+    echo "NFS mount $MOUNT_POINT is stacked ($(nfs_mount_count) mounts)"
+    PROBE_FAILED=1
+# Write-probe: detect the "reads OK, writes hang" failure mode. A per-host
+# filename prevents r0/r1/r2 from racing on the same file. 5s is far below
+# the hard mount's retransmit timeout (timeo=600 = 60s), so a stalled server
+# is caught here rather than after a minute.
+elif ! timeout 5s sh -c "echo \$\$ > '$HEALTHCHECK_FILE' && rm -f '$HEALTHCHECK_FILE'" 2>/dev/null; then
+    streak=$(( $(read_write_streak) + 1 ))
+    mkdir -p "$(dirname "$WRITE_FAIL_FILE")"
+    echo "$streak" > "$WRITE_FAIL_FILE"
+    if (( streak >= WRITE_FAIL_LIMIT )); then
+        echo "NFS writes hanging on $MOUNT_POINT ($streak consecutive runs)"
+        PROBE_FAILED=1
+    else
+        echo "NFS write probe failed on $MOUNT_POINT ($streak/$WRITE_FAIL_LIMIT) — waiting for the next run"
+        WRITE_PENDING=1
+    fi
+else
+    rm -f "$WRITE_FAIL_FILE"
 fi
 
-# If all three probes passed cleanly (no repair attempt needed), reset the
+if [ "$PROBE_FAILED" -eq 1 ]; then
+    rm -f "$WRITE_FAIL_FILE"
+    run_fix_mount_with_counter
+fi
+
+# If every probe passed cleanly (no repair attempt needed), reset the
 # consecutive-failure counter so a previous partial failure streak does not
 # lower the effective reboot threshold.  write_fail_count also refreshes the
 # textfile metric so Prometheus always has a current sample.
-if [ "$PROBE_FAILED" -eq 0 ]; then
+if [ "$WRITE_PENDING" -eq 1 ]; then
+    # Not clean, not repaired: keep the counter, but refresh the metric so
+    # node_exporter never serves a stale sample.
+    write_textfile_metric "$(read_fail_count)"
+elif [ "$PROBE_FAILED" -eq 0 ]; then
     if [ "$(read_fail_count)" -ne 0 ]; then
         write_fail_count 0
         echo "All probes passed; consecutive-failure counter reset to 0"
@@ -470,7 +537,7 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
     echo "Mount was fixed, checking for stuck pods on this node..."
     NODE=$(hostname)
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    kubectl get pods --all-namespaces --field-selector="spec.nodeName=$NODE" \
+    timeout 20 kubectl get pods --all-namespaces --field-selector="spec.nodeName=$NODE" \
       -o json 2>/dev/null | jq -r '
         .items[] |
         select(
@@ -481,7 +548,7 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
         ) | "\(.metadata.namespace) \(.metadata.name)"' | \
       while read ns pod; do
         echo "Deleting stuck pod $ns/$pod"
-        kubectl delete pod -n "$ns" "$pod" --grace-period=0 --force 2>&1
+        timeout 20 kubectl delete pod -n "$ns" "$pod" --grace-period=0 --force 2>&1
       done
 
     # On a healthy remount, also ensure the fail counter is reset.
@@ -496,7 +563,12 @@ fi
 REAP_STAMP="$STATE_DIR/last-reap"
 last_reap=0
 [ -f "$REAP_STAMP" ] && last_reap=$(stat -c %Y "$REAP_STAMP" 2>/dev/null || echo 0)
-if (( $(date +%s) - last_reap >= REAP_INTERVAL )); then
+# Only on a clean run or right after a successful repair: while the node's own
+# mount is failing or a write stall is pending, every opt-in pod's write probe
+# fails too, and reaping them would be the very disruption the WRITE_PENDING
+# grace run avoids (and each probe costs up to ~42s of this run).
+if { { [ "$PROBE_FAILED" -eq 0 ] && [ "$WRITE_PENDING" -eq 0 ]; } || [ "$MOUNT_FIXED" -eq 1 ]; } \
+    && (( $(date +%s) - last_reap >= REAP_INTERVAL )); then
     mkdir -p "$STATE_DIR"
     touch "$REAP_STAMP"
     reap_stale_nfs_pods

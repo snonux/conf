@@ -13,6 +13,12 @@ After=network-online.target remote-fs.target
 
 [Service]
 Type=oneshot
+# Backstop for a run wedged on a dead NFS server: oneshot units have no start
+# timeout by default, so without this a hung umount/mount would stop the
+# monitor for good. A repair run is bounded at roughly 60s + one step (see
+# fix_mount); the repair is counted as failed before it starts, so a run
+# killed here still moves the node towards the reboot escalation.
+TimeoutStartSec=150
 EnvironmentFile=-/etc/default/nfs-mount-monitor
 ExecStart=/usr/local/bin/check-nfs-mount.sh
 StandardOutput=journal
