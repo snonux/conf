@@ -90,7 +90,7 @@ func (Periodic) Times() {
 
 // DescConf returns the description for the periodic.conf settings.
 func (Periodic) DescConf() string {
-	return "periodic.conf: ZFS scrubs (30-day threshold) on, weekly locate off"
+	return "periodic.conf: ZFS scrubs (30-day threshold) on, weekly locate off, output to /var/log/*.log"
 }
 
 // Conf enables the daily periodic scrub check -- each pool is scrubbed once
@@ -99,12 +99,35 @@ func (Periodic) DescConf() string {
 // off. A scrub cut by the nightly power-off resumes on the next import, but
 // may redo up to ~2h of work (ZFS checkpoints scrub progress periodically,
 // not continuously).
+//
+// It also sends the daily, weekly and monthly output to log files instead of
+// root's mailbox (task 2k2): root's mail is delivered locally by DMA and
+// never read, so /var/mail/root only grew (f0 held 204k messages), while
+// Gogios is the alert channel. The security run's output goes inline into
+// the same log (*_status_security_inline), rather than to a separate file or
+// mail. The stock /etc/newsyslog.conf already rotates the three logs
+// (bzip2) at midnight -- daily.log daily, weekly.log on Saturday, monthly.log
+// on the 1st -- and newsyslog only rotates a time-based log when it runs in
+// that hour, so on a night a host is powered off the rotation waits for the
+// next such midnight it is up. A run adds only a few KB, so that is left
+// alone. The logs are created here 0640 root:wheel, the mode newsyslog gives
+// them on rotation: periodic(8) would create them world-readable under
+// cron's umask, and they now carry the security run's output.
 func (Periodic) Conf() {
 	File("/etc/periodic.conf",
 		WithLine(`daily_scrub_zfs_enable="YES"`),
 		WithLine(`daily_scrub_zfs_default_threshold="30"`),
 		WithLine(`weekly_locate_enable="NO"`),
+		WithLine(`daily_output="/var/log/daily.log"`),
+		WithLine(`daily_status_security_inline="YES"`),
+		WithLine(`weekly_output="/var/log/weekly.log"`),
+		WithLine(`weekly_status_security_inline="YES"`),
+		WithLine(`monthly_output="/var/log/monthly.log"`),
+		WithLine(`monthly_status_security_inline="YES"`),
 		WithMode(0o644))
+	for _, logFile := range List("/var/log/daily.log", "/var/log/weekly.log", "/var/log/monthly.log") {
+		EnsureFile(logFile, Perm(0o640, Root))
+	}
 }
 
 // DescNosuid returns the description for the zdata setuid property.

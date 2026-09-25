@@ -43,8 +43,9 @@
 # alerted it); findings that went away are a notice in $RESOLVED_FILE. Every
 # line goes to the shared /var/log/unattended-upgrade.log (tag
 # "vuln-audit:") and to syslog (tag netbsd-vuln-audit, facility daemon);
-# only err and warning lines are printed on stdout, so the cron mail — should
-# the Pis ever get a mail relay — carries alerts only.
+# only err and warning lines are printed on stdout, for an interactive run.
+# The root cron job (gonf VulnAuditCron) discards stdout, since those lines
+# are in the log and syslog already and root's local mail is never read.
 #
 # The baseline is per component: a run that assesses only one component
 # (the other is UNKNOWN) reports and commits that component's findings and
@@ -160,7 +161,7 @@ fetched=""
 commit_error=""
 
 # log <priority> <message>: shared log file, syslog, and stdout for err and
-# warning only (cron mails stdout, so a quiet run mails nothing).
+# warning only (a quiet interactive run prints nothing).
 log() {
 	typeset prio="$1"
 	shift

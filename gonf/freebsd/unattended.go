@@ -99,10 +99,15 @@ func (Unattended) OptsCron() TaskOptions {
 
 // Cron installs the hourly daily-mode job (stamp-gated in-script).
 // Boot catch-up is the next hourly tick (gonf Cron has no @reboot field).
+//
+// The script tees every line it prints into /var/log/unattended-upgrade.log,
+// so stdout is dropped and stderr (a failing tool's own messages) is
+// appended to the same log: cron no longer mails root, whose local mailbox
+// nobody reads (task 2k2).
 func (Unattended) Cron() {
 	EachHost(func(s UnattendedSchedule) {
 		Cron("unattended-upgrade-freebsd-daily",
-			WithCommand("/usr/local/sbin/unattended-upgrade-freebsd daily"),
+			WithCommand("/usr/local/sbin/unattended-upgrade-freebsd daily >/dev/null 2>>/var/log/unattended-upgrade.log"),
 			WithMinute(s.Minute), WithHour("*"),
 			WithCronEnv("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin"),
 		)

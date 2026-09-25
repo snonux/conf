@@ -70,14 +70,21 @@ func (Unattended) OptsCron() TaskOptions {
 	return TaskOptions{Needs("script", "services")}
 }
 
-// Cron installs pkgs + reboot cron jobs with per-host windows.
+// unattendedLogRedirect drops a cron job's stdout, which the scripts
+// already tee into /var/log/unattended-upgrade.log, and appends its stderr
+// (a failing tool's own messages) to the same log, so cron mails root
+// nothing: root's local mailbox on the Pis is never read (task 2k2).
+const unattendedLogRedirect = " >/dev/null 2>>/var/log/unattended-upgrade.log"
+
+// Cron installs pkgs + reboot cron jobs with per-host windows; their output
+// goes to the unattended-upgrade log (unattendedLogRedirect).
 func (Unattended) Cron() {
 	EachHost(func(s UnattendedSchedule) {
 		Cron("unattended-upgrade-netbsd-pkgs",
-			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd pkgs"),
+			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd pkgs"+unattendedLogRedirect),
 			WithMinute("10"), WithHour(s.PkgsHour))
 		Cron("unattended-upgrade-netbsd-reboot",
-			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd reboot"),
+			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd reboot"+unattendedLogRedirect),
 			WithMinute("50"), WithHour(s.RebootHour))
 	})
 }

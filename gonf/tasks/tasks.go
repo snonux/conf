@@ -28,6 +28,7 @@ func Register() {
 	RegisterMethods(frontends.Web{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.MailDNS{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterMethods(netbsd.Periodic{}, WithPrefix("pis_netbsd_periodic_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;
@@ -47,6 +48,7 @@ func Register() {
 	RegisterMethods(freebsd.Debug{}, WithPrefix("freebsd_debug_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Microcode{}, WithPrefix("freebsd_microcode_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Loader{}, WithPrefix("freebsd_loader_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 
 	// A pattern Aggregate never picks up an Operational() task, so the

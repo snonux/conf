@@ -38,6 +38,7 @@ gonf/
   rocky/unattended.go
   freebsd/unattended.go
   paths/             # repo-relative path constants
+  mailbox/           # root-mailbox archive script shared by freebsd/netbsd
 ```
 
 Unattended tasks follow one schema per OS package: type `Unattended`

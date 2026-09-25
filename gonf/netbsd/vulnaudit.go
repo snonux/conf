@@ -90,12 +90,14 @@ func (Unattended) OptsVulnAuditCron() TaskOptions {
 // after the host's unattended pkgs/reboot window (so it audits the updated
 // packages) and before /etc/daily at 04:15. The script also takes unattended-upgrade-netbsd's
 // lock around pkg_admin audit, in case a window overruns. Only UNKNOWN
-// (broken coverage, including an unsynchronised clock) exits non-zero; the
-// script prints only err/warning lines, so cron's mail carries alerts only.
+// (broken coverage, including an unsynchronised clock) exits non-zero. The
+// err/warning lines the script prints are also in its log and syslog, and
+// root's local mailbox is never read (task 2k2), so cron mails nothing:
+// stdout is dropped and stderr appended to the log (unattendedLogRedirect).
 func (Unattended) VulnAuditCron() {
 	EachHost(func(at VulnAuditTime) {
 		Cron("netbsd-vuln-audit",
-			WithCommand(vulnAuditScript),
+			WithCommand(vulnAuditScript+unattendedLogRedirect),
 			WithMinute(at.Minute), WithHour(at.Hour))
 	})
 }
