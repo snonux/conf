@@ -1,0 +1,11 @@
+# k3s drop-in: kubelet image garbage collection on r0-r2.
+# Installed by gonf (rnodes_image_gc) as /etc/rancher/k3s/config.yaml.d/50-image-gc.yaml.
+#
+# The kubelet defaults (GC at 85% disk, down to 80%) never triggered on the
+# r-nodes' 62G root disks, which sat at 74-79% with ~200 old images each
+# until a manual `crictl rmi --prune` freed ~35G per node on 2026-09-25.
+# Collect from 70% down to 60% instead. "kubelet-arg+" appends to any
+# kubelet-arg list in config.yaml instead of replacing it.
+kubelet-arg+:
+  - image-gc-high-threshold=70
+  - image-gc-low-threshold=60

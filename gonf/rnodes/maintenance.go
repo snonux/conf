@@ -146,3 +146,19 @@ func (Maintenance) NFSMountpointGuard() {
 		OnlyIf("sh", List("-c", nfsUnderlyingCheck(
 			`! lsattr -d "$U" | cut -d' ' -f1 | grep -q i`))))
 }
+
+// DescImageGC returns the kubelet image-GC drop-in task description.
+func (Maintenance) DescImageGC() string {
+	return "Install the k3s kubelet image-GC drop-in (collect at 70% disk, down to 60%)"
+}
+
+// ImageGC installs /etc/rancher/k3s/config.yaml.d/50-image-gc.yaml. It does
+// not restart k3s: this task runs on r0-r2 in parallel, and restarting all
+// three control-plane members at once would drop etcd quorum. The r-VMs
+// reboot with the nightly f-host power-off, so the drop-in is live by the next
+// morning; restart k3s by hand, one node at a time, to apply it sooner.
+func (Maintenance) ImageGC() {
+	EnsureDir("/etc/rancher/k3s/config.yaml.d", Perm(0o755, Root))
+	InstallFile("/etc/rancher/k3s/config.yaml.d/50-image-gc.yaml",
+		paths.RNodeAsset("k3s-image-gc.yaml"), Perm(0o600, Root))
+}
