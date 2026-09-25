@@ -39,6 +39,8 @@ func Register() {
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	// The CARP helpers narrow to f0/f1 inside the bodies (WhenHostname).
 	RegisterMethods(freebsd.Carp{}, WithPrefix("freebsd_carp_"), OnCluster(cluster.NameFreeBSD))
+	// NFS + stunnel of the CARP pair; bodies narrow to f0/f1 like Carp.
+	RegisterMethods(freebsd.NFS{}, WithPrefix("freebsd_nfs_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Periodic{}, WithPrefix("freebsd_periodic_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Apcupsd{}, WithPrefix("freebsd_apcupsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Bhyve{}, WithPrefix("freebsd_bhyve_"), OnCluster(cluster.NameFreeBSD))
