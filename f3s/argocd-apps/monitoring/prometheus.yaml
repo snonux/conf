@@ -100,11 +100,15 @@ spec:
 
           prometheus:
             prometheusSpec:
+              # 2Gi/4Gi was below reality: after a restart on 2026-09-25 the
+              # head held 570k series (rollout churn) and usage passed 2.4Gi,
+              # and WAL replay after an OOM kill needs more than steady state.
+              # Retention is 10d, so "peaks" only cover the last 10 days.
               resources:
                 requests:
-                  memory: 2Gi
+                  memory: 3Gi
                 limits:
-                  memory: 4Gi
+                  memory: 6Gi
               additionalArgs:
                 - name: web.enable-remote-write-receiver
                   value: ""

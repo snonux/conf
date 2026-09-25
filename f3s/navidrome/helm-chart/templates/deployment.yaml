@@ -95,13 +95,6 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /ping
-            port: 4533
-          periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 5
         volumeMounts:
         - name: navidrome-data
           mountPath: /data

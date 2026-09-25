@@ -8,7 +8,7 @@ Full LAN path: [`../docs/lan-access-setup-guide.md`](../docs/lan-access-setup-gu
 | File | Content |
 |---|---|
 | `cert-manager.yaml` | upstream cert-manager v1.20.4, unmodified (see its header for the upgrade path) |
-| `kustomization.yaml` | how ArgoCD renders the directory: lists every manifest and patches memory requests/limits into the three Deployments (`just install`/`upgrade` apply the files without it, and ArgoCD adds the limits back) |
+| `kustomization.yaml` | how ArgoCD renders the directory: lists every manifest and patches memory requests/limits into the three Deployments (`just upgrade` applies it with `kubectl apply -k .`; `just install` bootstraps with the plain files and ArgoCD adds the patches); it also marks the CRDs `Prune=false,Delete=false` for ArgoCD |
 | `self-signed-issuer.yaml` | self-signed ClusterIssuer |
 | `ca-certificate.yaml` | CA `selfsigned-ca` (secret `selfsigned-ca-secret`), issuer `selfsigned-ca-issuer` |
 | `wildcard-certificate.yaml` | one `Certificate` `f3s-lan-wildcard` -> secret `f3s-lan-tls` per namespace |

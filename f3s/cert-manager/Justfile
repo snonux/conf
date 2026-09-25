@@ -19,12 +19,12 @@ install:
     @echo "cert-manager installation complete!"
     @echo "Run 'just export-certs' to export certificates for relayd"
 
-# Upgrade cert-manager
+# Upgrade cert-manager: apply the kustomization, not the plain files, so the
+# memory patches in kustomization.yaml stay applied (normally ArgoCD does this;
+# see README "Upgrading"). install above bootstraps with plain files because
+# the Issuers need the CRDs established first; ArgoCD adds the patches after.
 upgrade:
-    kubectl apply -f cert-manager.yaml
-    kubectl apply -f self-signed-issuer.yaml
-    kubectl apply -f ca-certificate.yaml
-    kubectl apply -f wildcard-certificate.yaml
+    kubectl apply -k .
 
 # Uninstall cert-manager
 uninstall:
