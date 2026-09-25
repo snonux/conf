@@ -18,6 +18,13 @@ redis:
       memory: 64Mi
     limits:
       memory: 256Mi
+  # The chart ships the redis probes disabled; enable them so a hung redis is
+  # restarted instead of silently breaking the controller cache (audit
+  # 2026-09-25 #20). Chart defaults for the timings (30s delay, 15s period).
+  livenessProbe:
+    enabled: true
+  readinessProbe:
+    enabled: true
 
 # Controller configuration (manages k8s resources)
 controller:
@@ -112,6 +119,15 @@ applicationSet:
       memory: 192Mi
     limits:
       memory: 512Mi
+  # The chart ships these disabled; enable its TCP probe on the health port
+  # (audit 2026-09-25 #20). The 1s chart timeout is too tight for this
+  # cluster (repo-server probes needed 5s too), so use 5s.
+  livenessProbe:
+    enabled: true
+    timeoutSeconds: 5
+  readinessProbe:
+    enabled: true
+    timeoutSeconds: 5
 
 # Notifications controller - disabled
 notifications:
