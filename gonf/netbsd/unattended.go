@@ -94,3 +94,26 @@ func (Unattended) DescNewsyslog() string {
 func (Unattended) Newsyslog() {
 	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }
+
+// fleetTimezone is the zone of the rest of the home fleet (f0-f3, r0-r2, the
+// laptop). The Pis used to run on UTC, which made their logs an off-by-three
+// puzzle next to everything else. The frontends stay on CET: they live in a
+// German data centre and are not part of the home fleet's log timeline.
+const fleetTimezone = "/usr/share/zoneinfo/Europe/Sofia"
+
+// DescTimezone returns the description for the timezone link.
+func (Unattended) DescTimezone() string {
+	return "Set /etc/localtime to Europe/Sofia (fleet timezone)"
+}
+
+// Timezone points /etc/localtime at the fleet zone and restarts cron so its
+// schedule (the per-host upgrade/reboot hours, which are now local time) and
+// syslogd's timestamps follow it.
+//
+// Note: the per-host hours in gonf/cluster (UnattendedSchedule,
+// VulnAuditTime) are interpreted in this zone from now on; they were UTC.
+func (Unattended) Timezone() {
+	tz := Link("/etc/localtime", WithSymlink(fleetTimezone))
+	Sh("/etc/rc.d/cron restart", OnChange(tz))
+	Sh("/etc/rc.d/syslogd restart", OnChange(tz))
+}

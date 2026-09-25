@@ -119,3 +119,22 @@ func (Unattended) Logrotate() {
 		paths.FrontendAsset("systemd/unattended-upgrade.logrotate"),
 		Perm(0o644, Root))
 }
+
+// fleetTimezone is the zone of the whole home fleet. r0-r2 already use it;
+// pi2/pi3 were on UTC. The relative target matches what timedatectl writes,
+// so the link is already correct on the r-nodes and only the Pis change.
+const fleetTimezone = "../usr/share/zoneinfo/Europe/Sofia"
+
+// DescTimezone returns the description for the timezone link.
+func (Unattended) DescTimezone() string {
+	return "Set /etc/localtime to Europe/Sofia (fleet timezone)"
+}
+
+// Timezone points /etc/localtime at the fleet zone. systemd picks the change
+// up for timers and the journal; crond and rsyslog are restarted so their
+// schedules and timestamps follow it. The OnCalendar times in gonf/cluster
+// (UnattendedCalendar, KernelAuditCalendar) are local time from now on.
+func (Unattended) Timezone() {
+	tz := Link("/etc/localtime", WithSymlink(fleetTimezone))
+	Sh("systemctl try-restart crond rsyslog", OnChange(tz))
+}
