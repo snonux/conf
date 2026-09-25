@@ -37,6 +37,13 @@ spec:
       containers:
       - name: anki-sync-server
         image: registry.lan.buetow.org:30001/anki-sync-server:25.07.5b
+        # Memory from the 14-day peak working set (16Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 32Mi
+          limits:
+            memory: 256Mi
         ports:
         - containerPort: 8080
         livenessProbe:
