@@ -364,15 +364,20 @@ restart_nfs_workloads_on_node() {
     fi
     # The API objects go through files, not shell variables or --argjson:
     # the ReplicaSet list alone exceeds the kernel's argument-size limit.
-    timeout 20 kubectl get pv -o json > "$d/pv.json" 2>/dev/null || return 1
-    timeout 20 kubectl get pods --all-namespaces --field-selector="spec.nodeName=$node" \
-        -o json > "$d/pods.json" 2>/dev/null || return 1
-    timeout 20 kubectl get replicasets --all-namespaces -o json > "$d/rs.json" 2>/dev/null || return 1
+    # The dumps can hold pod-spec env values: removed on every exit below.
+    local dumps=("$d/pv.json" "$d/pods.json" "$d/rs.json")
+    timeout 20 kubectl get pv -o json > "$d/pv.json" 2>/dev/null \
+        && timeout 20 kubectl get pods --all-namespaces --field-selector="spec.nodeName=$node" \
+            -o json > "$d/pods.json" 2>/dev/null \
+        && timeout 20 kubectl get replicasets --all-namespaces -o json > "$d/rs.json" 2>/dev/null \
+        || { rm -f "${dumps[@]}"; return 1; }
     claims=$(jq -c --arg mp "$MOUNT_POINT" '
         [.items[] | select((.spec.hostPath.path // "") | startswith($mp))
-         | .spec.claimRef | select(. != null) | "\(.namespace)/\(.name)"]' "$d/pv.json") || return 1
+         | .spec.claimRef | select(. != null) | "\(.namespace)/\(.name)"]' "$d/pv.json") \
+        || { rm -f "${dumps[@]}"; return 1; }
     if [ "$claims" = "[]" ]; then
         echo "restart_nfs_workloads_on_node: no NFS PVs found — refusing to guess, will retry"
+        rm -f "${dumps[@]}"
         return 1
     fi
     # One line per workload: "<kind> <namespace> <name>", deduplicated.
@@ -392,30 +397,41 @@ restart_nfs_workloads_on_node() {
               else "pod \(.metadata.namespace) \(.metadata.name)" end
           elif $o.kind == "StatefulSet" then "statefulset \(.metadata.namespace) \($o.name)"
           else "pod \(.metadata.namespace) \(.metadata.name)" end' "$d/pods.json" | sort -u > "$d/restart-list.tmp" \
-        || { rm -f "$d/restart-list.tmp"; return 1; }
-    rm -f "$d/pv.json" "$d/pods.json" "$d/rs.json"
+        || { rm -f "$d/restart-list.tmp" "${dumps[@]}"; return 1; }
+    rm -f "${dumps[@]}"
     mv "$d/restart-list.tmp" "$d/restart-list"
     restart_list_entries "$d"
 }
 
-# restart_list_entries DIR — restart every workload in DIR/restart-list and
-# keep only the entries that failed; returns non-zero while any are left.
+# restart_list_entries DIR — restart every workload in DIR/restart-list.
+# The list is rewritten after each entry (only what is still to do or has
+# failed stays), so a run killed mid-way resumes where it stopped instead of
+# restarting everything again. A workload that no longer exists (NotFound:
+# a finished Job pod, a Deployment removed by ArgoCD) counts as done, or the
+# list could never drain. Returns non-zero while entries are left.
 restart_list_entries() {
-    local d="$1" rc=0 kind ns name
-    : > "$d/restart-list.left"
-    while read -r kind ns name; do
+    local d="$1" rc=0 out i kind ns name
+    local -a todo failed=()
+    mapfile -t todo < "$d/restart-list"
+    for ((i = 0; i < ${#todo[@]}; i++)); do
+        read -r kind ns name <<<"${todo[i]}"
         [ -n "$kind" ] || continue
         if [ "$kind" = pod ]; then
             echo "Deleting NFS pod $ns/$name (no Deployment/StatefulSet owner)"
-            timeout 20 kubectl delete pod -n "$ns" "$name" --wait=false 2>&1 && continue
+            out=$(timeout 20 kubectl delete pod -n "$ns" "$name" --wait=false --ignore-not-found 2>&1)
         else
             echo "Rollout-restarting $kind $ns/$name (stale NFS handles after a repair)"
-            timeout 20 kubectl rollout restart "$kind" -n "$ns" "$name" 2>&1 && continue
+            out=$(timeout 20 kubectl rollout restart "$kind" -n "$ns" "$name" 2>&1)
         fi
-        echo "$kind $ns $name" >> "$d/restart-list.left"
-        rc=1
-    done < "$d/restart-list"
-    mv "$d/restart-list.left" "$d/restart-list"
+        if [ $? -ne 0 ] && ! grep -q "NotFound\|not found" <<<"$out"; then
+            echo "  failed: $out"
+            failed+=("${todo[i]}")
+            rc=1
+        fi
+        # Persist progress: failures so far plus everything not tried yet.
+        printf '%s\n' "${failed[@]}" "${todo[@]:i+1}" | grep -v '^$' > "$d/restart-list.tmp"
+        mv "$d/restart-list.tmp" "$d/restart-list"
+    done
     [ -s "$d/restart-list" ] && rc=1
     [ "$rc" -eq 0 ] && rm -f "$d/restart-list"
     return $rc
