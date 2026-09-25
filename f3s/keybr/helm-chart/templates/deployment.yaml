@@ -40,7 +40,8 @@ spec:
         fsGroup: 1000
       containers:
       - name: keybr
-        image: ryanrhymes/keybr:latest
+        # Upstream publishes only :latest, so pin the digest (2023-11-18 build).
+        image: ryanrhymes/keybr:latest@sha256:e3dc485a623cb04097ed5bf1ea3b7718a8b79459c6b8bcb159abbd70a4362298
         securityContext:
           allowPrivilegeEscalation: false
         ports:
