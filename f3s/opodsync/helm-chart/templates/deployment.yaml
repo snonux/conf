@@ -36,7 +36,8 @@ spec:
           readOnly: true
       containers:
       - name: opodsync
-        image: ganeshlab/opodsync
+        # Upstream versions only exist as per-arch tags; the cluster is amd64.
+        image: ganeshlab/opodsync:0.6.0-amd64
         livenessProbe:
           exec:
             command: ["test", "-f", "/var/www/server/data/.nfs-sentinel"]
