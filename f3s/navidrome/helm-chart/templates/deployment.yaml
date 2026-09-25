@@ -44,6 +44,13 @@ spec:
       containers:
       - name: navidrome
         image: deluan/navidrome:0.61.2
+        # Memory from the 14-day peak working set (67Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 128Mi
+          limits:
+            memory: 1Gi
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4533
