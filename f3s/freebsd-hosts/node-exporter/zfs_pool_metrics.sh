@@ -21,10 +21,17 @@
 #   - Pools whose names contain "-" are no longer skipped in the I/O section.
 #   - PATH is set explicitly, so zpool/zfs are found under any cron PATH.
 #
-# Known caveat: "zpool iostat -Hp" without an interval prints the AVERAGE
-# operations and bytes per second since the pool was imported, not
-# cumulative totals, so the zfs_pool_{read,write}_*_total series are not
-# real counters (rate() over them is meaningless).
+#
+# Pool I/O counters (task uk2): zfs_pool_{read,write}_{operations,bytes}_total
+# used to come from "zpool iostat -Hp", which without an interval prints the
+# AVERAGE operations and bytes per second since import, not totals, so rate()
+# over them was meaningless. They now come from the pool's cumulative kstat
+# kstat.zfs.<pool>.misc.iostats (OpenZFS 2.4 on FreeBSD 15.1): the sum of the
+# arc_* (I/O issued through the ARC) and direct_* (Direct I/O) counters. They
+# count from 0 at pool import, which rate() handles as a counter reset. Their
+# bytes track "zpool iostat" bandwidth closely (f0, 2026-09-25: 0.83 MB/s
+# written by both over 20 s); their operations are pre-aggregation requests,
+# so they read higher than the vdev operations "zpool iostat" shows.
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 export PATH
@@ -40,10 +47,34 @@ TMP_FILE=$(mktemp "$TEXTFILE_DIR/.zfs_pools.XXXXXX") || exit 1
 trap 'rm -f "$TMP_FILE"' EXIT
 trap 'exit 1' HUP INT TERM
 
+# pool_iostats: print one tab-separated line per pool in $pools: name,
+# read ops, write ops, read bytes, write bytes, each the cumulative ARC plus
+# Direct I/O count from kstat.zfs.<pool>.misc.iostats. A missing kstat or
+# counter fails the whole run (the previous file stays published) rather than
+# exporting a bogus 0 that rate() would read as a counter reset. The direct_*
+# counters are optional: OpenZFS before 2.3 has no Direct I/O.
+pool_iostats() {
+    for pool in $(printf '%s\n' "$pools" | cut -f 1); do
+        stats=$(sysctl "kstat.zfs.$pool.misc.iostats") || return 1
+        printf '%s\n' "$stats" | awk -v pool="$pool" '
+            { sub(/^.*\./, ""); split($0, kv, ": "); v[kv[1]] = kv[2] }
+            END {
+                if (!("arc_read_count" in v) || !("arc_write_count" in v) ||
+                    !("arc_read_bytes" in v) || !("arc_write_bytes" in v))
+                    exit 1
+                printf "%s\t%.0f\t%.0f\t%.0f\t%.0f\n", pool,
+                    v["arc_read_count"] + v["direct_read_count"],
+                    v["arc_write_count"] + v["direct_write_count"],
+                    v["arc_read_bytes"] + v["direct_read_bytes"],
+                    v["arc_write_bytes"] + v["direct_write_bytes"]
+            }' || return 1
+    done
+}
+
 # Collect everything first: a failing command aborts before anything is
 # published.
 pools=$(zpool list -Hp -o name,size,allocated,free,capacity,health) || exit 1
-iostat=$(zpool iostat -Hp) || exit 1
+iostat=$(pool_iostats) || exit 1
 datasets=$(zfs list -Hp -t filesystem -o name,used,available,referenced,logicalused) || exit 1
 
 # family NAME TYPE HELP: print a metric family header.
@@ -97,12 +128,12 @@ pool_health() {
     pool_metric zfs_pool_capacity_percent gauge "Capacity percentage of ZFS pool" 5 "$pools"
     pool_health
 
-    # I/O (columns: name alloc free read_ops write_ops read_bw write_bw; see
-    # the caveat in the header).
-    pool_metric zfs_pool_read_operations_total counter "Total read operations since pool creation" 4 "$iostat"
-    pool_metric zfs_pool_write_operations_total counter "Total write operations since pool creation" 5 "$iostat"
-    pool_metric zfs_pool_read_bytes_total counter "Total bytes read since pool creation" 6 "$iostat"
-    pool_metric zfs_pool_write_bytes_total counter "Total bytes written since pool creation" 7 "$iostat"
+    # I/O counters (columns of pool_iostats: name read_ops write_ops
+    # read_bytes write_bytes; see "Pool I/O counters" in the header).
+    pool_metric zfs_pool_read_operations_total counter "Read operations issued to the pool (ARC and Direct I/O) since pool import" 2 "$iostat"
+    pool_metric zfs_pool_write_operations_total counter "Write operations issued to the pool (ARC and Direct I/O) since pool import" 3 "$iostat"
+    pool_metric zfs_pool_read_bytes_total counter "Bytes read from the pool (ARC and Direct I/O) since pool import" 4 "$iostat"
+    pool_metric zfs_pool_write_bytes_total counter "Bytes written to the pool (ARC and Direct I/O) since pool import" 5 "$iostat"
 
     dataset_metric zfs_dataset_used_bytes "Used space in ZFS dataset in bytes" 2
     dataset_metric zfs_dataset_available_bytes "Available space in ZFS dataset in bytes" 3
