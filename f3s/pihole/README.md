@@ -7,7 +7,9 @@ DNS and ad blocking. Production runs on pi2 (192.168.1.127) and pi3
 
 ## On the Pis
 
-Docker Compose in `~/pihole` on each Pi, `pihole/pihole:latest`,
+Docker Compose in `~/pihole` on each Pi, `pihole/pihole:2026.04.0` (pinned
+2026-09-25; to upgrade, change the tag on pi3, `sudo docker compose pull && sudo
+docker compose up -d`, check `dig @127.0.0.1`, then repeat on pi2),
 `network_mode: host`, `TZ=Europe/Sofia`, upstreams `1.1.1.1`/`1.0.0.1`.
 `WEBPASSWORD` is in the host-local `~/pihole/.env` (same on both, not in
 git). State lives under `~/pihole`, not NFS. firewalld allows 53/udp, 53/tcp

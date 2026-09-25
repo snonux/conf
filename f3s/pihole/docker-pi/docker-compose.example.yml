@@ -2,7 +2,7 @@
 # WEBPASSWORD lives in host-local `.env` (not in git). See f3s/pihole/README.md.
 services:
   pihole:
-    image: pihole/pihole:latest
+    image: pihole/pihole:2026.04.0  # pinned; bump the tag deliberately, one Pi at a time
     network_mode: host
     env_file:
       - .env
