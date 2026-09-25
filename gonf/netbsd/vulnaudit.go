@@ -2,7 +2,6 @@ package netbsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -47,10 +46,8 @@ func (Unattended) DescVulnAuditScript() string {
 }
 
 // OptsVulnAuditScript records curl before the script that needs it.
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
 func (Unattended) OptsVulnAuditScript() TaskOptions {
-	return TaskOptions{Privileged(), Needs("vuln_audit_packages")}
+	return TaskOptions{Needs("vuln_audit_packages")}
 }
 
 // VulnAuditScript installs the ksh audit script (after its directory, which
@@ -84,10 +81,9 @@ func (Unattended) DescVulnAuditCron() string {
 }
 
 // OptsVulnAuditCron records the script and its state directory before the
-// job. Privileged() is repeated because the per-method companion replaces
-// the RequiresRoot struct default.
+// job.
 func (Unattended) OptsVulnAuditCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("vuln_audit_script", "vuln_audit_state_dir")}
+	return TaskOptions{Needs("vuln_audit_script", "vuln_audit_state_dir")}
 }
 
 // VulnAuditCron runs the audit once a day at the host's VulnAuditTime,

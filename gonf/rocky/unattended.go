@@ -7,7 +7,6 @@ package rocky
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -53,10 +52,8 @@ func (Unattended) DescScript() string {
 }
 
 // OptsScript records ksh and yum-utils before the script that uses them.
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
 func (Unattended) OptsScript() TaskOptions {
-	return TaskOptions{Privileged(), Needs("packages")}
+	return TaskOptions{Needs("packages")}
 }
 
 // Script installs the Rocky ksh wrapper (after its directory, which gonf
@@ -84,10 +81,8 @@ func (Unattended) DescUnits() string {
 }
 
 // OptsUnits records the script and the stamp directory before the timer.
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
 func (Unattended) OptsUnits() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script", "stamp_dir")}
+	return TaskOptions{Needs("script", "stamp_dir")}
 }
 
 // Units installs the oneshot+timer pair via SystemdTimer and

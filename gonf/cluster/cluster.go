@@ -72,7 +72,7 @@ func Register() {
 // rN.lan.buetow.org / fN.lan.buetow.org would time out on port 2. See
 // docs/archive/frontends/docs/unattended-upgrades-pi.plan.md §2.
 func lan(user string) HostOption {
-	return HostDefaults(WithSSHUser(user), WithSSHPort(22))
+	return HostDefaults(WithSSHUser(user), WithSSHDomain("lan.buetow.org"), WithSSHPort(22))
 }
 
 // registerFrontends registers the two OpenBSD frontend hosts and the
@@ -80,18 +80,16 @@ func lan(user string) HostOption {
 func registerFrontends() {
 	frontend := HostDefaults(
 		WithSSHUser("rex"),
+		WithSSHDomain("buetow.org"),
 		WithSSHPort(2),
 		WithPrivilege(PrivilegeDoas),
-		WithGOOS("openbsd"),
-		WithGOARCH("amd64"),
+		WithPlatform("openbsd/amd64"),
 	)
 	blowfish := Host("blowfish", frontend,
-		WithSSHHost("blowfish.buetow.org"),
 		WithData(openbsd.UnattendedSchedule{BaseHour: "6", PkgsHour: "6", AuditHour: "7"}),
 		WithData(frontends.MustServer("blowfish")),
 	)
 	fishfinger := Host("fishfinger", frontend,
-		WithSSHHost("fishfinger.buetow.org"),
 		WithData(openbsd.UnattendedSchedule{BaseHour: "22", PkgsHour: "22", AuditHour: "23"}),
 		WithData(frontends.MustServer("fishfinger")),
 	)
@@ -118,18 +116,15 @@ func registerPis() (pi2, pi3 HostRef) {
 func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 	netbsdPi := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeDoas),
-		WithGOOS("netbsd"),
-		WithGOARCH("arm64"),
+		WithPlatform("netbsd/arm64"),
 	)
 	pi0 = Host("pi0", netbsdPi,
-		WithSSHHost("pi0.lan.buetow.org"),
 		WithData(netbsd.UnattendedSchedule{PkgsHour: "2", RebootHour: "2"}),
 		// After the 02:10 pkgs / 02:50 reboot window (each with up to
 		// 20 min jitter), before /etc/daily at 04:15.
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "3"}),
 	)
 	pi1 = Host("pi1", netbsdPi,
-		WithSSHHost("pi1.lan.buetow.org"),
 		WithData(netbsd.UnattendedSchedule{PkgsHour: "22", RebootHour: "22"}),
 		// After the 22:10 pkgs / 22:50 reboot window.
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "23"}),
@@ -141,16 +136,13 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 func registerRockyPiHosts() (pi2, pi3 HostRef) {
 	rockyPi := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeSudo),
-		WithGOOS("linux"),
-		WithGOARCH("arm64"),
+		WithPlatform("linux/arm64"),
 	)
 	pi2 = Host("pi2", rockyPi,
-		WithSSHHost("pi2.lan.buetow.org"),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
 	)
 	pi3 = Host("pi3", rockyPi,
-		WithSSHHost("pi3.lan.buetow.org"),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
 	)
@@ -163,19 +155,15 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 func registerRockyK3s(pi2, pi3 HostRef) {
 	rnode := HostDefaults(lan("root"),
 		WithPrivilege(PrivilegeSudo),
-		WithGOOS("linux"),
-		WithGOARCH("amd64"),
+		WithPlatform("linux/amd64"),
 	)
 	r0 := Host("r0", rnode,
-		WithSSHHost("r0.lan.buetow.org"),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
 	r1 := Host("r1", rnode,
-		WithSSHHost("r1.lan.buetow.org"),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
 	r2 := Host("r2", rnode,
-		WithSSHHost("r2.lan.buetow.org"),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
 	)
 	// rocky-k3s = r0/r1/r2 only. rocky-all = every Rocky unattended host
@@ -191,26 +179,21 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 func registerFreeBSD() {
 	fhost := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeDoas),
-		WithGOOS("freebsd"),
-		WithGOARCH("amd64"),
+		WithPlatform("freebsd/amd64"),
 	)
 	f0 := Host("f0", fhost,
-		WithSSHHost("f0.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
 	f1 := Host("f1", fhost,
-		WithSSHHost("f1.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
 	f2 := Host("f2", fhost,
-		WithSSHHost("f2.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
 	f3 := Host("f3", fhost,
-		WithSSHHost("f3.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -222,9 +221,8 @@ func (Maintenance) DescIRCBouncer() string {
 }
 
 // OptsIRCBouncer marks the ZNC deployment as an Operational, by-name action,
-// so no pattern aggregate can pick it up. Privileged() is repeated because the
-// per-method companion replaces the RequiresRoot struct default.
-func (Maintenance) OptsIRCBouncer() TaskOptions { return TaskOptions{Privileged(), Operational()} }
+// so no pattern aggregate can pick it up.
+func (Maintenance) OptsIRCBouncer() TaskOptions { return TaskOptions{Operational()} }
 
 // IRCBouncer keeps Rex's separate service group and applies only to the host
 // with the existing runtime configuration; it does not enter the all-frontend
