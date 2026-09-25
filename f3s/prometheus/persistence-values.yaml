@@ -78,7 +78,10 @@ prometheus:
 
 grafana:
   persistence:
-    enabled: true
+    # The grafana-data PV/PVC were removed with the disabled stack (xj2,
+    # 2026-09-25); recreate them (see f3s/prometheus/README.md) before
+    # re-enabling Grafana, or it stays Pending on the missing claim.
+    enabled: false
     type: pvc
     existingClaim: "grafana-data-pvc"
 
