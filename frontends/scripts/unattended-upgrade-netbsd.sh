@@ -8,7 +8,8 @@
 # Phase 1: no base-system updates (sysupdate not in pkgin; see plan §3).
 # Cron-driven with jitter. Logs to /var/log/unattended-upgrade.log (no MTA
 # on the Pis — journal/log observation only). Companion plan:
-# frontends/docs/unattended-upgrades-pi.plan.md
+# frontends/docs/unattended-upgrades.md; "plan §N" below refers to
+# docs/archive/frontends/docs/unattended-upgrades-pi.plan.md
 #
 # Every mode is gated on the partner Pi serving the static site marker over
 # HTTP. Patching or rebooting the only healthy static-site host would take

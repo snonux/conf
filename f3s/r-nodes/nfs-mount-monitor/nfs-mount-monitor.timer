@@ -3,7 +3,7 @@
 # OnBootSec=30s gives the network and NFS client time to come up before
 # the first check fires.
 #
-# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+# Deploy via Gonf: ./gonf.sh cluster rocky-k3s rnodes_nfs_mount_monitor
 
 [Unit]
 Description=Run NFS Mount Health Monitor every 10 seconds

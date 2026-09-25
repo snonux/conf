@@ -1,14 +1,30 @@
-# Garage cluster on FreeBSD f0–f2. Run rex from repo root unless noted.
+# Garage cluster on FreeBSD f0–f2. The recipes call the repository's
+# gonf.sh wrapper, which works from any directory.
 ssh_host := "paul@f0.lan.buetow.org"
 _garage_dir := justfile_directory()
 
-# Deploy TOML (RPC secret from secrets/rpc_secret) and restart garage on all nodes
+# The RPC secret comes from gonf/secrets/garage/rpc_secret, and Garage
+# restarts only when the managed config changed. The gonf task uses the f0–f2
+# inventory with paul@…:22 + doas. It deploys configuration only: the garage
+# package, its group, /var/db/garage and the cluster layout must already
+# exist, as first-host provisioning is not a gonf task.
+# Deploy the Garage TOML to f0–f2 (configuration only, no provisioning)
 deploy:
-    cd "{{_garage_dir}}/../.." && rex garage_deploy
+    "{{_garage_dir}}/../../gonf.sh" cluster garage garage_config
 
-# Ensure secrets/rpc_secret exists (openssl rand -hex 32)
+# Ensure gonf/secrets/garage/rpc_secret exists (openssl rand -hex 32).
+# An existing Rex-era secret is copied once, preserving the live cluster's
+# shared RPC identity instead of silently rotating it during the migration.
+#
+# This file (gonf/secrets/garage/rpc_secret) is still garage_config's only
+# source for the RPC secret: no other provider is configured (see
+# gonf/secrets/README.md, "Typed provider references and cutover policy",
+# task 262). A future cutover to an external store composes it behind
+# gonf's secret.NewFallback instead of replacing it, so this recipe and the
+# file it manages stay correct either way; do not remove this target as
+# part of that later change without re-reading that README section first.
 init-secrets:
-    mkdir -p "{{_garage_dir}}/secrets" && ( test -f "{{_garage_dir}}/secrets/rpc_secret" || openssl rand -hex 32 > "{{_garage_dir}}/secrets/rpc_secret" ) && chmod 600 "{{_garage_dir}}/secrets/rpc_secret"
+    cd "{{_garage_dir}}/../.." && umask 077 && mkdir -p gonf/secrets/garage && if test ! -f gonf/secrets/garage/rpc_secret; then if test -f f3s/garage/secrets/rpc_secret; then install -m 600 f3s/garage/secrets/rpc_secret gonf/secrets/garage/rpc_secret; else openssl rand -hex 32 > gonf/secrets/garage/rpc_secret; fi; fi && chmod 600 gonf/secrets/garage/rpc_secret
 
 # garage service status on f0
 status:

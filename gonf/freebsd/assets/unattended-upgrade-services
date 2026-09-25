@@ -1,0 +1,8 @@
+# Daemons to restart after unattended package updates (one per line).
+# Names must match /etc/rc.d/<name> or /usr/local/etc/rc.d/<name>.
+# Do NOT list vm, vm_network, netif, routing, or devd.
+sshd
+node_exporter
+dserver
+wireguard
+uptimed

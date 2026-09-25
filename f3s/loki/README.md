@@ -1,26 +1,14 @@
-# Grafana Loki
+# Loki
 
-Log aggregation system for your k3s cluster.
+Log aggregation plus Grafana Alloy as a DaemonSet collecting all container
+logs. Namespace `monitoring`. The ArgoCD app `argocd-apps/monitoring/loki.yaml`
+is currently disabled (`.disabled`); `alloy.yaml` is active.
 
-Includes Grafana Alloy as a DaemonSet to collect logs from all containers in all namespaces.
+Volume: `/data/nfs/k3svolumes/loki/data`, owned 10001:10001.
 
-## Prerequisites
+Grafana datasource: type Loki, `http://loki.monitoring.svc.cluster.local:3100`.
 
-Create the data directory on your host:
-
-```bash
-sudo mkdir -p /data/nfs/k3svolumes/loki/data
-sudo chown 10001:10001 /data/nfs/k3svolumes/loki/data
+```sh
+just status | logs-loki | logs-alloy | port-forward-loki [3100]
+just sync | argocd-status | restart-loki | restart-alloy | restart
 ```
-
-## Install
-
-```bash
-just install
-```
-
-## Configure Grafana
-
-Add Loki as a data source in Grafana:
-- Type: Loki
-- URL: `http://loki.monitoring.svc.cluster.local:3100`

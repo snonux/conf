@@ -1,0 +1,37 @@
+#
+# $OpenBSD: acme-client.conf,v 1.4 2020/09/17 09:13:06 florian Exp $
+#
+authority letsencrypt {
+	api url "https://acme-v02.api.letsencrypt.org/directory"
+	account key "/etc/acme/letsencrypt-privkey.pem"
+}
+
+authority letsencrypt-staging {
+	api url "https://acme-staging-v02.api.letsencrypt.org/directory"
+	account key "/etc/acme/letsencrypt-staging-privkey.pem"
+}
+
+authority buypass {
+	api url "https://api.buypass.com/acme/directory"
+	account key "/etc/acme/buypass-privkey.pem"
+	contact "mailto:me@example.com"
+}
+
+authority buypass-test {
+	api url "https://api.test4.buypass.no/acme/directory"
+	account key "/etc/acme/buypass-test-privkey.pem"
+	contact "mailto:me@example.com"
+}
+
+{{/* One entry per acmeCertificate (frontends/acme.go), the same list
+acme.sh requests. A site entry opens a blank-line-separated group with its
+standby twin; the server FQDN has no www/standby variants. */ -}}
+{{range .Certificates}}{{if ne .Kind "standby"}}
+{{end}}{{if eq .Kind "host"}}# Current server's FQDN; no www/standby variants for server hostnames.
+{{end}}domain {{.Name}} {
+{{if .AlternativeNames}}	alternative names { {{range .AlternativeNames}}{{.}} {{end}}}
+{{end}}	domain key "/etc/ssl/private/{{.Name}}.key"
+	domain full chain certificate "/etc/ssl/{{.Name}}.fullchain.pem"
+	sign with letsencrypt
+}
+{{end -}}

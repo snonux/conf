@@ -3,7 +3,7 @@
 # Sourced by /usr/local/bin/check-nfs-mount.sh on each invocation.
 # Changes take effect on the next timer firing (within 10 seconds).
 #
-# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+# Deploy via Gonf: ./gonf.sh cluster rocky-k3s rnodes_nfs_mount_monitor
 
 # NFS_FAIL_THRESHOLD — number of consecutive fix_mount failures before the
 # node is cordoned and rebooted.  The timer fires every 10 seconds, so the

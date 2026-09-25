@@ -1,346 +1,202 @@
-# Remote NetBSD image installation on a Raspberry Pi 3B+
+# NetBSD on pi0/pi1
 
-Runbook and scripts to replace **Rocky Linux 9** with **NetBSD 11.0** on an f3s
-Raspberry Pi **3 Model B+**, entirely over SSH and **without pulling the
-microSD card**. The method was proven during the original pi0 conversion and
-is retained for rebuilding either node or provisioning a replacement.
+pi0 and pi1 (Raspberry Pi 3B+) run NetBSD 11.0 GENERIC64 evbarm/aarch64 and
+serve the static sites behind relayd. This directory holds the procedure that
+replaced Rocky with NetBSD over SSH, without pulling the SD card. Use it to
+rebuild a node or provision a replacement, never as an in-place update of a
+live NetBSD node.
 
-> **Current state:** pi0 and pi1 both run NetBSD 11.0 and passed dual-node
-> service, reboot, synchronization, and failover acceptance. See
-> [`NETBSD-11-DUAL-NODE-ACCEPTANCE.md`](NETBSD-11-DUAL-NODE-ACCEPTANCE.md).
-> Do not use this image-conversion procedure as an in-place update of either
-> live NetBSD node.
+| | pi0 | pi1 |
+|---|---|---|
+| LAN (`mue0`) | 192.168.1.125 | 192.168.1.126 |
+| WireGuard (`tun0`) | 192.168.2.203 | 192.168.2.204 |
+| Hostname | pi0.lan.buetow.org | pi1.lan.buetow.org |
+| Role | static content source of truth | pulls pi0's docroot hourly (paul crontab) |
 
-> **TL;DR of the hard-won lesson:** `kexec` is compiled out of the Rocky RPi
-> kernel and the systemd shutdown-pivot does not fire on these boxes, so the
-> only remote RAM-flasher that works is one loaded by the **Pi firmware** as an
-> `initramfs` via a one-shot `config.txt`. See [Why the obvious methods
-> fail](#why-the-obvious-methods-fail).
+Gateway/DNS 192.168.1.1. 909 MiB RAM. SD `/dev/mmcblk0` (30 GB).
 
----
+Live services: bozohttpd (vhosts `f3s.buetow.org`, `www.f3s.buetow.org`,
+`standby.f3s.buetow.org`, `snonux.foo`, `www.snonux.foo`), WireGuard, NPF
+(TCP 22/80/2222 on `mue0`, all on `tun0`, default block), uptimed,
+dserver (DTail, TCP 2222), hourly goprecords upload and dserver key-cache
+cron, unattended upgrades and vuln audit via gonf (`pis_netbsd`).
 
-## Contents
-
-- [Outcome / definition of done](#outcome--definition-of-done)
-- [Hardware & facts](#hardware--facts)
-- [Why the obvious methods fail](#why-the-obvious-methods-fail)
-- [How it works (the method that does)](#how-it-works-the-method-that-does)
-- [Prerequisites](#prerequisites)
-- [Stage A — bake the golden image (on `earth`)](#stage-a--bake-the-golden-image-on-earth)
-- [Stage B — remote in-place flash (on the Pi)](#stage-b--remote-in-place-flash-on-the-pi)
-- [Per-node identity](#per-node-identity)
-- [Verification](#verification)
-- [Rollback / recovery](#rollback--recovery)
-- [Troubleshooting & gotchas](#troubleshooting--gotchas)
-- [Cleanup](#cleanup)
-- [Current post-install services](#current-post-install-services)
-- [File manifest](#file-manifest)
-
----
-
-## Outcome / definition of done
-
-`ssh paul@<pi-ip>` lands on a **NetBSD 11.0 (GENERIC64) evbarm/aarch64** system:
-
-- login as `paul` via **SSH key** (member of `wheel`); password auth also on as a backup
-- hostname correct (`piN.lan.buetow.org`)
-- **static IP on `mue0`** (the 3B+ onboard LAN78xx NIC in NetBSD), default route + DNS working
-- root filesystem auto-resized to the whole card on first boot
-
-## Hardware & facts
-
-| Item | pi0 | pi1 |
-|------|-----|-----|
-| Board | Raspberry Pi 3 Model B+ | Raspberry Pi 3 Model B+ |
-| OS before original conversion | Rocky Linux 9.7 aarch64 | Rocky Linux 9.x aarch64 |
-| LAN IP | 192.168.1.125 | **192.168.1.126** |
-| Hostname | pi0.lan.buetow.org | **pi1.lan.buetow.org** |
-| WireGuard | 192.168.2.203 | 192.168.2.204 |
-| RAM | 909 MiB | 909 MiB |
-| SD | `/dev/mmcblk0` (30 GB): p1 `/boot` vfat, p2 swap, p3 `/` ext4 | same |
-| NIC (Linux → NetBSD) | `lan78xx` → **`mue0`** | `lan78xx` → **`mue0`** |
-| Gateway / DNS | 192.168.1.1 | 192.168.1.1 |
-
-Confirmed on the RPi Rocky kernel (`6.1.31-v8.1.el9.altarch`): `CONFIG_KEXEC`
-disabled, `CONFIG_KEXEC_FILE` unset; **boots with no initramfs** (kernel mounts
-the ext4 root directly); `ext4`, `vfat`, `nls_cp437`, `nls_ascii`, `mmc_block`,
-`sdhci`, `tmpfs` are all **built-in** (`=y`) — so a flasher initramfs needs no
-extra modules to mount `/boot`, the root, or a tmpfs.
-
-NetBSD base image used: **NetBSD 11.0 evbarm-aarch64 gzimg**
-`https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/evbarm-aarch64/binary/gzimg/arm64.img.gz`.
-The bake script pins and verifies the release image's SHA-512 before
-decompression, then runs `gzip -t`; a stale or partial cached download fails
-closed. Update the pinned digest only after independently verifying a formal
-replacement release image.
-(GPT: EFI System partition + NetBSD FFS root; boots RPi 3/4/5).
-
-## Why the obvious methods fail
-
-Three RAM-flasher mechanisms were tried on `pi0`. Only the third works here:
-
-1. **`kexec` into a RAM flasher** (what most guides assume). ❌ Impossible:
-   `kexec_load(2)` returns `ENOSYS` and `kexec_file_load(2)` is not built
-   (`CONFIG_KEXEC_FILE` unset). `kexec-tools` is installed but the syscalls are
-   not in the kernel.
-2. **systemd shutdown-pivot** (`/run/initramfs/shutdown` switch-root at reboot).
-   ❌ Does **not fire** on these boxes — proven with a 3-channel evidence probe
-   over several test reboots; `systemd-shutdown` never switch-roots into
-   `/run/initramfs` here (the box was not booted from an initrd, and
-   `dracut-shutdown` is a no-op because `.need_shutdown` is never created).
-   *Also_ a red herring along the way: mounting a **separate tmpfs** at
-   `/run/initramfs` gets unmounted during shutdown — always populate it as a
-   plain dir on `/run` if you ever revisit this.
-3. **Pi-firmware `initramfs`** (this runbook). ✅ Works. The VideoCore firmware
-   loads a small dracut initramfs right after the kernel; a dracut *pre-mount*
-   hook runs in RAM before the real root is mounted and does the flash.
-
-## How it works (the method that does)
+Package repos:
 
 ```
- EARTH (x86_64 laptop)                         piN (RPi 3B+, Rocky)
- ─────────────────────                         ─────────────────────
- Stage A: bake golden image                    Stage B: remote flash
-   qemu-system-aarch64 -M virt (TCG)             1. build flasher.img (dracut,
-     boots stock NetBSD arm64.img                   pre-mount hook)  -> /boot
-     -> configure headless (sshd,                2. arm: write /boot/config.txt
-        static mue0, user+key, pw)                    = "initramfs flasher.img
-     -> sync + poweroff                              followkernel"  + trigger
-   gzip -> netbsd-piN-golden.img.gz                  file /boot/netbsd-flash-mode
-        │                                        3. systemctl reboot
-        └── scp to piN:/home/paul/ ───────────►  ── firmware loads flasher.img ──┐
-                                                                                 ▼
-                                              dracut pre-mount hook (95netbsdflash):
-                                               - DISARM: rm /boot/config.txt + trigger
-                                                 (so any later failure self-heals to Rocky)
-                                               - mount ext4 root ro, copy golden gz -> tmpfs (RAM)
-                                               - dryrun: gunzip|wc -c  (validate, reboot to Rocky)
-                                               - real:   gunzip|dd of=/dev/mmcblk0  (reboot to NetBSD)
-                                                                                 ▼
-                                              NetBSD 11.0 boots headless, static .12x, sshd
-                                                                                 ▼
-                                              ssh paul@<ip>  ✅ ACCEPTANCE
+https://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/aarch64/11.0/All
+https://pkgrepo.f3s.buetow.org/netbsd/11.0/packages/aarch64/     # dtail, f3sctl
 ```
 
-Key safety property: the hook **removes `config.txt` before touching anything
-else**, so the flasher is strictly one-shot and any failure *after the hook
-starts* leaves a card that boots normally (Rocky, or — once flashed — NetBSD).
-The **dry-run** proves the entire boot+stage+decompress path non-destructively
-before the real `dd`.
+Build DTail for NetBSD natively on pi0 (`make dtail-netbsd` in
+`packages/`, default 11.0). `pkg_create` must match the target release: never
+build a 10.1 package on an 11.0 host.
+
+## Why the firmware initramfs
+
+- `kexec` is compiled out of the Rocky RPi kernel (`6.1.31-v8.1.el9.altarch`,
+  `kexec_load` returns `ENOSYS`, no `CONFIG_KEXEC_FILE`).
+- The systemd shutdown pivot (`/run/initramfs/shutdown`) never fires on these
+  boxes.
+- What works: the Pi firmware loads a dracut initramfs from a one-shot
+  `config.txt`; its pre-mount hook flashes the card from RAM. The Rocky
+  kernel has ext4, vfat, mmc, sdhci and tmpfs built in, so the initramfs needs
+  no modules.
+
+The hook deletes `config.txt` and the trigger file before doing anything
+else, so any failure after it starts leaves a card that boots normally.
 
 ## Prerequisites
 
-On **earth** (the flashing workstation):
-
-- `qemu-system-aarch64`, `qemu-img`, `edk2` AAVMF firmware, `expect`, passwordless `sudo`
-  (`sudo dnf install -y qemu-system-aarch64 qemu-img edk2-aarch64 expect`).
-- Note: earth is x86_64, so the aarch64 guest runs under **TCG emulation** (slow
-  but fine — a bake is a handful of minutes).
-- Your SSH public key (`~/.ssh/id_rsa.pub`) — it gets baked into the image.
-
-On the **Pi**:
-
-- Reachable over SSH as `paul` with **passwordless sudo** (the f3s default).
-- `dracut` present (it is on Rocky), `/boot` is the vfat firmware partition,
-  ~500 MB free on `/` to stage the image.
-- Its twin Pi still serving the shared role (so downtime is a non-event).
-
-## Stage A — bake the golden image (on `earth`)
-
-Scripts: [`bake/`](bake). Editing the NetBSD FFS root from Linux is unsafe, so
-we configure the image **from inside a real NetBSD** running under qemu.
-
-1. Choose `pi0` or `pi1`; the orchestrator renders that host's `HOSTNAME` and
-   `IPADDR` into [`bake/setup.sh`](bake/setup.sh) (see
-   [Per-node identity](#per-node-identity)).
-2. Run the orchestrator:
-   ```bash
-   cd f3s/pi-netbsd/bake
-   ./bake-golden.sh piN            # e.g. ./bake-golden.sh pi1
-   ```
-   It downloads `arm64.img.gz` (if absent), serves `setup.sh` over a localhost
-   HTTP server, boots the image in qemu, blind-drives the console via
-   `config.exp` to fetch+run `setup.sh`, verifies the on-disk result, then
-   `sync`+powers off and produces `netbsd-piN-golden.img.gz`.
-3. A random backup password is generated and printed (also saved to
-   `piN-cred.txt`). The **SSH key is the primary login**; change the password
-   after install.
-
-What `setup.sh` configures inside the image: `sshd=YES`, `hostname`,
-`ifconfig_mue0="inet <ip> netmask 0xffffff00"`, `defaultroute`, `dhcpcd=NO`,
-`/etc/resolv.conf`, user `paul` (+`wheel`) with your `authorized_keys` and an
-argon2id password (root too), `sshd_config` pubkey+password auth, and an
-`/etc/rc.local` fallback that puts the static IP on the first real ethernet
-interface if `mue0` is ever named differently.
-
-> **The qemu-automation gotchas** (already handled in the scripts, documented so
-> you understand them): add a **virtio-rng** device or NetBSD stalls on entropy
-> and never generates ssh host keys; run `expect` under **`LC_ALL=C`** or Tcl
-> chokes on the serial control bytes; **blind-drive** the login/commands with
-> fixed sleeps and judge success by markers written to the log rather than
-> matching the flaky console; and **`sync` then wait for a clean poweroff** —
-> killing qemu before the FFS is flushed corrupts `rc.conf`/`pwd.db`.
-
-## Stage B — remote in-place flash (on the Pi)
-
-Scripts: [`flash/`](flash). Copy this whole `pi-netbsd/` tree (or at least
-`flash/`) to the Pi first, e.g. `scp -r f3s/pi-netbsd paul@piN.lan.buetow.org:`.
-
-1. **Stage the golden image on the Pi** (on its ext4 root):
-   ```bash
-   scp netbsd-piN-golden.img.gz paul@piN.lan.buetow.org:/home/paul/
-   ```
-   The flasher hook globs for **`/home/paul/netbsd-*-golden.img.gz`** (or under
-   `/root/`), so any `netbsd-<pi>-golden.img.gz` name works — no rename needed.
-   Verify integrity: `gzip -t` and compare `sha256sum` against earth.
-2. **Build the flasher initramfs** (module name is `netbsdflash`, no numeric prefix):
-   ```bash
-   ssh paul@piN.lan.buetow.org 'sudo /home/paul/pi-netbsd/flash/build-flasher.sh'
-   ```
-   Produces `/boot/flasher.img` (~38 MB) and prints an `lsinitrd` sanity check.
-3. **Dry-run first (non-destructive):**
-   ```bash
-   ssh paul@piN.lan.buetow.org '
-     sudo rm -f /boot/flash-evidence.txt
-     printf "initramfs flasher.img followkernel\n" | sudo tee /boot/config.txt
-     printf "dryrun\n" | sudo tee /boot/netbsd-flash-mode
-     sync; sudo systemctl reboot'
-   ```
-   The Pi goes down ~90 s (staging + decompress), then returns as **Rocky**.
-   Read the proof:
-   ```bash
-   ssh paul@piN.lan.buetow.org 'sudo cat /boot/flash-evidence.txt'
-   # EXPECT:
-   #   FLASHER-RAN mode=dryrun up=...
-   #   DRYRUN-RESULT bytes=<golden-image-size> rc=0
-   ```
-   Compare `bytes=` with `gzip -l netbsd-piN-golden.img.gz` on earth. A match,
-   `rc=0`, and `config.txt` gone means the whole path works.
-   **Do not proceed to the real flash unless the dry-run shows this.**
-4. **Real flash (destructive, irreversible):**
-   ```bash
-   ssh paul@piN.lan.buetow.org '
-     sudo rm -f /boot/flash-evidence.txt
-     printf "initramfs flasher.img followkernel\n" | sudo tee /boot/config.txt
-     printf "real\n" | sudo tee /boot/netbsd-flash-mode
-     sync; sudo systemctl reboot'
-   ```
-   The Pi stages to RAM, `dd`s the 1.59 GB image onto `/dev/mmcblk0`, then
-   reboots into **NetBSD**. Allow several minutes (SD write + first boot +
-   root resize).
-
-## Per-node identity
-
-Only the rendered hostname and address differ:
+Workstation (`earth`, x86_64, runs the aarch64 guest under TCG):
 
 ```sh
-# pi0
-HOSTNAME="pi0.lan.buetow.org"
-IPADDR="192.168.1.125"
-
-# pi1
-HOSTNAME="pi1.lan.buetow.org"
-IPADDR="192.168.1.126"
+sudo dnf install -y qemu-system-aarch64 qemu-img edk2-aarch64 expect
 ```
 
-Do not edit the template: `./bake-golden.sh pi0` and
-`./bake-golden.sh pi1` substitute the correct values. Everything else is
-identical: same board, NIC (`mue0`), gateway/DNS, and flasher. Preserve each
-node's own SSH host keys and WireGuard identity when rebuilding an existing
-card; never copy identity material from its twin.
+plus passwordless sudo and `~/.ssh/id_rsa.pub` (baked into the image).
 
-> Keep pi0 (or the other twin) up while flashing pi1 so the static
-> `f3s.buetow.org` backend stays served.
+Pi: SSH as `paul` with passwordless sudo, `dracut`, vfat `/boot`, ~500 MB
+free on `/`. Keep the twin up so the static backend stays served.
 
-## Verification
+## Stage A: bake the golden image
 
-```bash
-ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null paul@192.168.1.126 '
-  uname -a                       # NetBSD piN.lan.buetow.org 11.0 ... evbarm
-  hostname                       # piN.lan.buetow.org
-  id                             # uid=1000(paul) ... groups ... wheel
-  ifconfig mue0                  # inet 192.168.1.126
-  netstat -rn -f inet | grep default   # default 192.168.1.1 ... mue0
-  host cdn.netbsd.org            # DNS resolves
-  df -h /                        # root grown to ~29G'
+```sh
+cd f3s/pi-netbsd/bake
+./bake-golden.sh pi1        # or pi0
 ```
 
-NetBSD regenerates its own SSH **host keys**, so your `known_hosts` entry for the
-Pi will change — remove the old line or use the relaxed flags above.
+Downloads `arm64.img.gz` (NetBSD-11.0 evbarm-aarch64 gzimg, SHA-512 pinned,
+then `gzip -t`; a bad cache fails closed), renders `HOSTNAME`/`IPADDR` into
+`setup.sh`, boots it in qemu, drives the console with `config.exp`, verifies,
+syncs, powers off and writes `netbsd-piN-golden.img.gz`. The random backup
+password is printed and saved to `piN-cred.txt`; the SSH key is the real
+login.
 
-## Rollback / recovery
+`setup.sh` sets `sshd=YES`, hostname, `ifconfig_mue0`, `defaultroute`,
+`dhcpcd=NO`, `resolv.conf`, user `paul` in `wheel` with key and argon2id
+password (root too), pubkey+password sshd, and an `rc.local` fallback that
+puts the static IP on the first ethernet interface if it isn't `mue0`.
 
-- **Before the real flash:** nothing is destroyed. Any failure once the hook has
-  started leaves the card booting normally (the hook removes `config.txt`
-  first). If the initramfs never runs the hook (rare — a malformed
-  `flasher.img`), the Pi boot-loops on the missing/failed initramfs until you
-  fix it physically: pull the SD, delete `config.txt`, reinsert. Mitigation is
-  the dry-run, which proves the initramfs boots.
-- **After the real flash:** the card is NetBSD. To go back to Rocky, reflash the
-  Rocky image (keep a known-good one handy) — physically or by the same method
-  in reverse. **Keep a Rocky SD image before starting** as the ultimate fallback
-  (physical access is "inconvenient but possible" for these boxes).
-- **A future in-place base upgrade:** start from the target release's formal
-  installation guidance, then incorporate the failure lessons in
-  [`NETBSD-11-PI1-UPGRADE-INCIDENT.md`](NETBSD-11-PI1-UPGRADE-INCIDENT.md).
-  In particular, run userland sets and the conditional orderly reboot in one
-  HUP-resistant root shell, and verify the active account databases plus a
-  fresh key/doas login immediately after `etcupdate`.
+Only update the pinned digest after verifying a formal replacement release.
 
-## Troubleshooting & gotchas
+Handled in the scripts, but know them: add virtio-rng or NetBSD stalls on
+entropy; run `expect` with `LC_ALL=C`; blind-drive the console and judge by
+log markers; `sync` and wait for a clean poweroff or FFS corrupts
+`rc.conf`/`pwd.db`.
 
-- **Dry-run returns fast (~20 s) with no `flash-evidence.txt`:** the initramfs
-  did not run the hook — check `/boot/config.txt` really says
-  `initramfs flasher.img followkernel`, that `/boot/flasher.img` exists, and that
-  the trigger file `/boot/netbsd-flash-mode` contains exactly `dryrun`.
-- **`dracut module 'netbsdflash' cannot be found`:** use `--add netbsdflash`
-  (module name = directory name **without** the `95` prefix).
-- **`bytes=` differs from `gzip -l` on earth or `rc!=0`:** the staged/decompressed image is
-  bad — re-check the `scp`/`sha256sum` of the golden gz on the Pi.
-- **NetBSD boots but is unreachable:** the NIC came up under a name other than
-  `mue0`; the `rc.local` fallback should still put `.12x` on the first real
-  ethernet iface — attach a console (HDMI/serial) to inspect if needed.
-- **qemu bake stalls / login never proceeds:** see the Stage A gotchas box
-  (virtio-rng, `LC_ALL=C`, blind-drive, sync-before-poweroff).
+## Stage B: flash on the Pi
 
-## Cleanup
+```sh
+scp -r f3s/pi-netbsd paul@piN.lan.buetow.org:
+scp netbsd-piN-golden.img.gz paul@piN.lan.buetow.org:/home/paul/   # gzip -t + sha256sum both sides
+ssh paul@piN.lan.buetow.org 'sudo /home/paul/pi-netbsd/flash/build-flasher.sh'   # -> /boot/flasher.img (~38 MB)
+```
 
-On the Pi (once NetBSD is confirmed, these are on the wiped card anyway for a
-real flash; relevant only if you leave a Pi on Rocky after dry-runs):
+The hook finds `/home/paul/netbsd-*-golden.img.gz` (or under `/root/`).
 
-```bash
+Dry run (non-destructive, ~90 s, comes back as Rocky):
+
+```sh
+ssh paul@piN.lan.buetow.org '
+  sudo rm -f /boot/flash-evidence.txt
+  printf "initramfs flasher.img followkernel\n" | sudo tee /boot/config.txt
+  printf "dryrun\n" | sudo tee /boot/netbsd-flash-mode
+  sync; sudo systemctl reboot'
+ssh paul@piN.lan.buetow.org 'sudo cat /boot/flash-evidence.txt'
+#   FLASHER-RAN mode=dryrun up=...
+#   DRYRUN-RESULT bytes=<size> rc=0
+```
+
+`bytes=` must equal `gzip -l` of the image on earth, `rc=0`, and
+`config.txt` gone. Don't continue otherwise.
+
+Real flash (destructive; `dd` of ~1.6 GB, then first boot and root resize):
+same command with `real` instead of `dryrun`.
+
+## Verify
+
+```sh
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null paul@192.168.1.12N '
+  uname -a; hostname; id; ifconfig mue0
+  netstat -rn -f inet | grep default
+  host cdn.netbsd.org; df -h /'
+```
+
+Host keys change after the flash.
+
+When rebuilding an existing node, restore its own SSH host keys and
+WireGuard identity; never copy the twin's. Then:
+
+1. Restore peer auth explicitly: pi1's sync key in pi0's
+   `authorized_keys`; the pull is pinned to
+   `IdentitiesOnly=yes -i /home/paul/.ssh/id_ed25519`.
+2. Check helper-script `PATH`s include `/usr/pkg/bin` (the goprecords
+   uploader needs curl from there).
+3. Run one full pull on pi1 and one manual goprecords upload.
+4. Failover gate: stop one node's bozohttpd (or reboot it) and check all five
+   vhosts return 200 through both relayd addresses (23.88.35.144,
+   46.23.94.99). `/fotos/` and `/scifi/` return 404 on snonux vhosts by
+   design.
+
+## Recovery
+
+- Before the real flash nothing is lost. A malformed `flasher.img` that never
+  runs the hook boot-loops the Pi: pull the SD and delete `config.txt`. The
+  dry run exists to rule this out.
+- After the flash, going back means reflashing Rocky. Keep a Rocky image.
+- File-level backups: `fishfinger:/home/rex/backups/pi1-20260803`,
+  `fishfinger:/home/rex/backups/pi0-20260806T0712`.
+
+Base release upgrades (`sysupgrade`) are manual. Lessons from the 11.0
+upgrade:
+
+- The firmware loads `/boot/netbsd.img`; `sysupgrade kernel` updates
+  `/netbsd`. Keep both at the same release. Don't touch `config.txt`,
+  `cmdline.txt`, don't install `bootaa64.efi`.
+- `sysupgrade sets` replaces sshd under the running daemon; new SSH logins
+  then fail until reboot. Run sets and the reboot from one HUP-proof root
+  shell in the existing session:
+
+  ```sh
+  doas sh -c 'trap "" HUP; /usr/pkg/sbin/sysupgrade sets </dev/null >/var/log/sysupgrade-11.0-sets.log 2>&1 && exec /sbin/shutdown -r now'
+  ```
+
+- After `etcupdate`, keep the root session open and check `id paul` (uid
+  1000, group `users`, in `wheel`), `/etc/group` has `wheel:*:0:root,paul`,
+  `~paul/.ssh` is 700 and `authorized_keys` 600 owned `paul:users`, then a
+  fresh `ssh -o BatchMode=yes -o IdentitiesOnly=yes ... 'id; doas -n id'`
+  from a second shell.
+
+Full records: [`docs/archive/f3s/pi-netbsd/`](../../docs/archive/f3s/pi-netbsd/).
+
+## Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| Dry run back in ~20 s, no `flash-evidence.txt` | hook didn't run: check `config.txt` line, `/boot/flasher.img`, trigger file says exactly `dryrun` |
+| `dracut module 'netbsdflash' cannot be found` | use `--add netbsdflash` (dir name without `95`) |
+| `bytes=` mismatch or `rc!=0` | bad staged image; recheck scp and checksum |
+| NetBSD up but unreachable | NIC not `mue0`; `rc.local` fallback should still set the IP; attach console |
+| qemu bake hangs | see Stage A notes |
+
+Cleanup on a Pi left on Rocky after dry runs:
+
+```sh
 sudo rm -f /boot/config.txt /boot/netbsd-flash-mode /boot/flash-evidence.txt \
            /boot/flasher.img /home/paul/netbsd-pi0-golden.img.gz \
            /home/paul/netbsd-pi1-golden.img.gz
 ```
 
-Inspect any `/boot/initramfs-*.img.orig` backup manually before restoring it;
-do not use an unqualified wildcard `mv` when multiple backups may exist.
+Inspect any `/boot/initramfs-*.img.orig` by hand before restoring it; no
+wildcard `mv`.
 
-On earth: stop any leftover `python3 -m http.server` from the bake; the
-`*.img`/`*.img.gz` work files can be deleted or kept for the next Pi.
-
-## Current post-install services
-
-The image runbook intentionally installs only the base OS, networking, and
-SSH. The live nodes additionally run bozohttpd, WireGuard, NPF, uptimed,
-DTail/dserver, hourly pi0-to-pi1 content synchronization, and goprecords
-uploads. Rebuilds must restore each node's own identity and then satisfy the
-service and failover gates in
-[`NETBSD-11-DUAL-NODE-ACCEPTANCE.md`](NETBSD-11-DUAL-NODE-ACCEPTANCE.md).
-
-## File manifest
+## Files
 
 ```
-f3s/pi-netbsd/
-├── README.md                      # this runbook
-├── bake/
-│   ├── bake-golden.sh             # earth: orchestrate the qemu bake
-│   ├── setup.sh                   # image customization (EDIT HOSTNAME/IPADDR)
-│   └── config.exp                 # earth: expect driver for the qemu console
-└── flash/
-    ├── build-flasher.sh           # Pi: build /boot/flasher.img via dracut
-    └── 95netbsdflash/             # dracut module (name: "netbsdflash")
-        ├── module-setup.sh
-        └── flash.sh               # the pre-mount flasher hook
+bake/bake-golden.sh        earth: qemu bake orchestrator
+bake/setup.sh              image customization template (rendered per node)
+bake/config.exp            expect console driver
+flash/build-flasher.sh     Pi: builds /boot/flasher.img
+flash/95netbsdflash/       dracut module "netbsdflash" (module-setup.sh, flash.sh hook)
 ```

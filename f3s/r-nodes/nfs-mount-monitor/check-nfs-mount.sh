@@ -47,7 +47,7 @@
 #   broken NFS before an auto-reboot — safe because r0/r1/r2 form an HA
 #   cluster and a Rocky Linux VM reboots in ~30s.
 #
-# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+# Deploy via Gonf: ./gonf.sh cluster rocky-k3s rnodes_nfs_mount_monitor
 
 MOUNT_POINT="/data/nfs/k3svolumes"
 LOCK_FILE="/var/run/nfs-mount-check.lock"

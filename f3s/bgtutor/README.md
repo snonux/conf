@@ -6,8 +6,8 @@ as a custom connector and fetches prepared podcast episodes paragraph by
 paragraph.
 
 - Public URL for the connector: `https://bgtutor.f3s.buetow.org/mcp`
-  (TLS on the frontends via relayd, `bgtutor.f3s.buetow.org` is in
-  `@f3s_hosts` in `frontends/Rexfile`)
+  (TLS on the frontends via relayd; `bgtutor.f3s.buetow.org` is in
+  `f3sHosts` in `gonf/frontends/data.go`)
 - LAN: `https://bgtutor.f3s.lan.buetow.org/mcp`
 - Every `/mcp` request needs the bearer token (`Authorization: Bearer <token>`
   or `?token=<token>` on the URL). `/healthz` is open for probes.
@@ -16,12 +16,12 @@ paragraph.
 
 ### 1. Storage
 
-On the current CARP storage master (check with `ifconfig | grep MASTER` on f0/f1):
+On the NFS server (per `f3s/docs/nfs-sentinel-initcontainer.md`):
 
 ```sh
-doas mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary
-doas touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel
-doas chmod 0644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel
+ssh root@f0 'mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary \
+  && touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel \
+  && chmod 644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel'
 ```
 
 The PV uses `type: Directory`, so the pod will not schedule until it exists.
@@ -52,8 +52,14 @@ kubectl apply -f ../argocd-apps/services/bgtutor.yaml
 just status
 ```
 
-Then re-run rex for the frontends so `bgtutor.f3s.buetow.org` gets its DNS
-record, certificate and relayd keypair.
+Then converge the frontends so `bgtutor.f3s.buetow.org` gets its DNS
+record, certificate and relayd route (from the repository root):
+
+```sh
+./gonf.sh cluster frontends frontends               # NSD, httpd, ACME config, Gogios
+./gonf.sh cluster frontends frontends_acme_invoke   # request the new certificate
+./gonf.sh cluster frontends frontends_relayd        # route the host with its keypair
+```
 
 ## Adding episodes
 

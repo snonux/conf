@@ -105,7 +105,7 @@ spec:
           value: "2222"
         # relayd listens on 2022 on the gateways and TCP-forwards to NodePort
         # 30222, so git+ssh works from off-LAN (see relay "forgejo_ssh4" in
-        # frontends/etc/relayd.conf.tpl). Not 22: that keeps the forge clear of
+        # gonf/frontends/assets/relayd.conf.tmpl). Not 22: that keeps the forge clear of
         # the constant scanning on the default port. Not 2222 either -- dserver
         # already holds that on the gateways.
         #

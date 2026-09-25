@@ -1,0 +1,168 @@
+#!/bin/sh
+#
+# Renew this frontend's ACME certificates (Gonf frontends_acme; run daily
+# from /etc/daily.local and on request by frontends_acme_invoke).
+#
+# Every certificate acme-client.conf declares is handled once, from the same
+# list (see the CERTIFICATES here-document at the end). Each ends as one of:
+#   skipped    another frontend serves it, DNS/httpd do not know it, or the
+#              name genuinely does not resolve (NXDOMAIN), so it is not
+#              requested here;
+#   unchanged  acme-client ran and the certificate bytes are the same;
+#   changed    the certificate bytes differ afterwards (a renewal, or a
+#              placeholder copied in so relayd can load the keypair);
+#   failed     acme-client exited with an error, or the DNS lookup itself
+#              failed (timeout, SERVFAIL or any other non-NXDOMAIN failure)
+#              rather than genuinely resolving to nothing, so a broken
+#              resolver does not silently skip renewal every day.
+# Only changed certificates reload their consumers: relayd serves every
+# certificate, smtpd only the host certificate. A failure -- acme-client, a
+# non-NXDOMAIN lookup, or a reload/restart itself -- still lets the other
+# certificates and reloads proceed, then makes the script exit 1 so the daily
+# mail and Gonf report it.
+
+MY_IP=$(ifconfig vio0 | awk '$1 == "inet" { print $2 }')
+
+reload_relayd=no
+restart_smtpd=no
+failed=no
+
+# cert_state prints the checksum and size of host's certificate chain and
+# key (nothing for a missing file); comparing it before and after a request
+# tells a real change of certificate material from a no-op.
+cert_state() {
+	host=$1
+	cksum "/etc/ssl/$host.fullchain.pem" "/etc/ssl/private/$host.key" \
+		2>/dev/null | awk '{ print $1, $2 }'
+}
+
+ensure_placeholder_cert() {
+	host=$1
+	copy_from=foo.zone
+
+	if [ ! -f "/etc/ssl/$host.crt" ]; then
+		cp -v "/etc/ssl/$copy_from.crt" "/etc/ssl/$host.crt"
+		cp -v "/etc/ssl/$copy_from.fullchain.pem" "/etc/ssl/$host.fullchain.pem"
+		cp -v "/etc/ssl/private/$copy_from.key" "/etc/ssl/private/$host.key"
+	fi
+}
+
+# prepare_standby_cert removes pre-Gonf standby certificates that were
+# symlinks to the site's files, so standby gets its own placeholder/request.
+prepare_standby_cert() {
+	host=$1
+	if [ -L "/etc/ssl/$host.fullchain.pem" ] || [ -L "/etc/ssl/private/$host.key" ]; then
+		rm -f "/etc/ssl/$host.crt" "/etc/ssl/$host.fullchain.pem" \
+			"/etc/ssl/private/$host.key"
+	fi
+}
+
+# handle_cert requests the certificate of host when this frontend serves it
+# and prints skipped, requested or failed on stdout (request_cert turns
+# requested into changed or unchanged); progress messages go to stderr.
+handle_cert() {
+	host=$1
+	host_out=$(timeout 10 host "$host" 2>&1)
+	host_status=$?
+	host_ip=$(echo "$host_out" | awk '/has address/ { print $(NF) }')
+	if [ -z "$host_ip" ]; then
+		if [ $host_status -eq 124 ]; then
+			echo "Lookup of $host timed out" >&2
+			echo failed
+			return
+		fi
+		case $host_out in
+		*"3(NXDOMAIN)"*)
+			echo "Lookup of $host: no such domain, skipping..." >&2
+			echo skipped
+			return
+			;;
+		*)
+			echo "Lookup of $host failed: $host_out" >&2
+			echo failed
+			return
+			;;
+		esac
+	fi
+
+	if ! grep -q "^server \"$host\"" /etc/httpd.conf; then
+		echo "Host $host not configured in httpd, skipping..." >&2
+		echo skipped
+		return
+	fi
+	ensure_placeholder_cert "$host" >&2
+
+	if [ "$MY_IP" != "$host_ip" ]; then
+		echo "Not serving $host, skipping..." >&2
+		echo skipped
+		return
+	fi
+
+	crt_path=/etc/ssl/$host
+	if [ -e "$crt_path.crt" ]; then
+		rm "$crt_path.crt"
+	fi
+	ln -s "$crt_path.fullchain.pem" "$crt_path.crt"
+	# acme-client(1) exits 0 after a renewal, 2 when the certificate is still
+	# valid, and 1 on failure. The byte comparison in request_cert, not the
+	# exit status, decides whether anything changed.
+	/usr/sbin/acme-client -v "$host" >&2
+	case $? in
+	0 | 2) echo requested ;;
+	*)
+		echo "acme-client failed for $host" >&2
+		echo failed
+		;;
+	esac
+}
+
+# request_cert handles one certificate of the given kind (site, standby or
+# host) and records which consumers must pick up changed material.
+request_cert() {
+	host=$1
+	kind=$2
+	before=$(cert_state "$host")
+	if [ "$kind" = standby ]; then
+		prepare_standby_cert "$host"
+	fi
+	outcome=$(handle_cert "$host")
+	after=$(cert_state "$host")
+	if [ "$outcome" = failed ]; then
+		failed=yes
+	fi
+	if [ "$before" != "$after" ]; then
+		# A failed request can still have copied a placeholder in.
+		if [ "$outcome" = failed ]; then
+			outcome="changed, request failed"
+		else
+			outcome=changed
+		fi
+		reload_relayd=yes
+		if [ "$kind" = host ]; then
+			restart_smtpd=yes
+		fi
+	elif [ "$outcome" = requested ]; then
+		outcome=unchanged
+	fi
+	echo "Certificate $host: $outcome"
+}
+
+while read -r name kind; do
+	request_cert "$name" "$kind" </dev/null
+done <<'CERTIFICATES'
+{{- range .Certificates}}
+{{.Name}} {{.Kind}}
+{{- end}}
+CERTIFICATES
+
+if [ "$reload_relayd" = yes ]; then
+	{ /usr/sbin/rcctl check relayd && /usr/sbin/rcctl reload relayd; } ||
+		/usr/sbin/rcctl restart relayd || failed=yes
+fi
+if [ "$restart_smtpd" = yes ]; then
+	/usr/sbin/rcctl restart smtpd || failed=yes
+fi
+if [ "$failed" = yes ]; then
+	echo "At least one certificate request failed" >&2
+	exit 1
+fi

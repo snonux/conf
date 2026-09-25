@@ -31,7 +31,7 @@
 # /dev/shm is tmpfs, so the flag is gone automatically on the next boot --
 # nothing here needs to clear it.
 #
-# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+# Deploy via Gonf: ./gonf.sh cluster rocky-k3s rnodes_nfs_mount_monitor
 
 [Unit]
 Description=Mark a coordinated shutdown for the NFS mount monitor

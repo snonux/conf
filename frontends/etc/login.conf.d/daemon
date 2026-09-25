@@ -1,4 +1,0 @@
-daemon:\
-	:openfiles-max=4096:\
-	:openfiles-cur=4096:\
-	:tc=default:

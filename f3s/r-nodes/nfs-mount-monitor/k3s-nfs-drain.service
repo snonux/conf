@@ -47,7 +47,7 @@
 # room for that ~45s worst case and still fits inside the 240s that f3sctl's
 # agent gives this guest.
 #
-# Deploy via Rex: rex -f f3s/r-nodes/Rexfile nfs_mount_monitor
+# Deploy via Gonf: ./gonf.sh cluster rocky-k3s rnodes_nfs_mount_monitor
 
 [Unit]
 Description=Drain kubelet NFS mounts before the stunnel transport stops

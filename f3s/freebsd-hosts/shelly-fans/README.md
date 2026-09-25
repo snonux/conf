@@ -1,6 +1,6 @@
 # f3s Rack Fans (Shelly Plug)
 
-The rack fans are powered by a **Shelly Plug M Gen 3** at `192.168.1.28`. Each
+The rack fans are powered by a Shelly Plug M Gen 3 at `192.168.1.28`. Each
 f-host (f0/f1/f2/f3) turns the plug on at boot so the fans always run while any
 host is up. Turning the plug *off* is handled centrally by `wol-f3s shutdown-all`
 (on earth / the Pis), not by the hosts.
@@ -14,7 +14,7 @@ The plug has authentication enabled (HTTP digest, user `admin`).
 - `/usr/local/etc/rc.d/shellyfans` runs the helper at boot, after networking
   and after `f3skeys` (so the `/keys` USB stick is already mounted).
 - `/keys/shelly_plug.secret` holds the plug password (first line). It lives on
-  the UFS USB key stick alongside the ZFS encryption keys — **not** in git and
+  the UFS USB key stick alongside the ZFS encryption keys, not in git and
   not on the host's own disk. `/keys` is mounted read-only at boot, so adding
   the file requires temporarily remounting read-write.
 

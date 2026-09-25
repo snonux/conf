@@ -1,36 +1,39 @@
 // Package netbsd declares NetBSD pi0/pi1 host tasks for the conf repository —
-// unattended upgrades per frontends/docs/unattended-upgrades-pi.plan.md.
+// unattended upgrades per frontends/docs/unattended-upgrades.md (plan record:
+// docs/archive/frontends/docs/unattended-upgrades-pi.plan.md).
 package netbsd
 
 import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/cluster"
 	"codeberg.org/snonux/conf/gonf/paths"
 )
 
-// unattendedServicesContent is the rc.d restart list for pi0/pi1. Service name
-// is wireguard (not wireguard-go) — matches /etc/rc.d/wireguard on the hosts.
-const unattendedServicesContent = `# Daemons to restart after unattended package updates (one per line).
-# Names must match /etc/rc.d/<name> on NetBSD pi0/pi1.
-bozohttpd
-wireguard
-npf
-uptimed
-dserver
-sshd
-`
+// unattendedServicesAsset is the operator-edited rc.d restart list for
+// pi0/pi1: a plain, native file (assets/unattended-upgrade-services), not a
+// template. Service name is wireguard (not wireguard-go) — matches
+// /etc/rc.d/wireguard on the hosts.
+func unattendedServicesAsset() string {
+	return paths.GonfAsset("netbsd", "unattended-upgrade-services")
+}
 
 // unattendedNewsyslogLine rotates /var/log/unattended-upgrade.log (NetBSD
 // newsyslog.conf format — same columns as the stock authlog/cron lines).
 const unattendedNewsyslogLine = "/var/log/unattended-upgrade.log\troot:wheel\t600  5    1024 *    Z"
 
 // Unattended carries the unattended-upgrade deployment for pi0/pi1.
-// Register with WithCluster(cluster.NameNetBSDPis). Per-host cron hours live on
-// each Host via WithValue(cluster.ValueUnattendedCron, …).
+// Register with OnCluster(cluster.NameNetBSDPis). Per-host cron hours live on
+// each Host as WithData(UnattendedSchedule{…}) and WithData(VulnAuditTime{…}).
 type Unattended struct {
 	RequiresRoot
+}
+
+// UnattendedSchedule is a Pi's per-host window (host data, see gonf/cluster):
+// the hours of the pkgs and reboot jobs.
+type UnattendedSchedule struct {
+	PkgsHour   string
+	RebootHour string
 }
 
 // DescScript returns the description for the wrapper deployment.
@@ -38,16 +41,13 @@ func (Unattended) DescScript() string {
 	return "Install /usr/local/sbin/unattended-upgrade-netbsd (0755 root:wheel)"
 }
 
-// Script installs the NetBSD ksh wrapper.
+// Script installs the NetBSD ksh wrapper. The file applies after the
+// directory without DependsOn: gonf orders a path after its parent.
 func (Unattended) Script() {
-	WhenHostname(ClusterHosts(), func() {
-		dir := EnsureDir("/usr/local/sbin",
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"))
-		InstallFile("/usr/local/sbin/unattended-upgrade-netbsd",
-			paths.Frontends+"/scripts/unattended-upgrade-netbsd.sh",
-			WithMode(0o755), WithOwner("root"), WithGroup("wheel"),
-			DependsOn(dir))
-	})
+	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	InstallFile("/usr/local/sbin/unattended-upgrade-netbsd",
+		paths.FrontendAsset("scripts/unattended-upgrade-netbsd.sh"),
+		Perm(0o755, Root))
 }
 
 // DescServices returns the description for the restart list.
@@ -57,11 +57,8 @@ func (Unattended) DescServices() string {
 
 // Services installs the rc.d restart list.
 func (Unattended) Services() {
-	WhenHostname(ClusterHosts(), func() {
-		File("/etc/unattended-upgrade-services",
-			WithContent(unattendedServicesContent),
-			WithMode(0o644), WithOwner("root"), WithGroup("wheel"))
-	})
+	InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
+		Perm(0o644, Root))
 }
 
 // DescCron returns the description for the per-host cron schedule.
@@ -69,21 +66,23 @@ func (Unattended) DescCron() string {
 	return "Root cron: unattended-upgrade-netbsd pkgs/reboot, per-host schedule"
 }
 
-// Cron installs pkgs + reboot cron jobs with per-host windows.
-func (Unattended) Cron() {
-	for _, host := range ClusterHosts() {
-		w := MustHostValue[[2]string](host, cluster.ValueUnattendedCron)
-		WhenHostname(host, func() { unattendedCronJobs(w) })
-	}
+// OptsCron records the wrapper and the restart list before the cron jobs.
+// Privileged() is repeated because the per-method companion replaces the
+// RequiresRoot struct default.
+func (Unattended) OptsCron() TaskOptions {
+	return TaskOptions{Privileged(), Needs("script", "services")}
 }
 
-func unattendedCronJobs(w [2]string) {
-	Cron("unattended-upgrade-netbsd-pkgs",
-		WithCommand("/usr/local/sbin/unattended-upgrade-netbsd pkgs"),
-		WithMinute("10"), WithHour(w[0]))
-	Cron("unattended-upgrade-netbsd-reboot",
-		WithCommand("/usr/local/sbin/unattended-upgrade-netbsd reboot"),
-		WithMinute("50"), WithHour(w[1]))
+// Cron installs pkgs + reboot cron jobs with per-host windows.
+func (Unattended) Cron() {
+	EachHost(func(s UnattendedSchedule) {
+		Cron("unattended-upgrade-netbsd-pkgs",
+			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd pkgs"),
+			WithMinute("10"), WithHour(s.PkgsHour))
+		Cron("unattended-upgrade-netbsd-reboot",
+			WithCommand("/usr/local/sbin/unattended-upgrade-netbsd reboot"),
+			WithMinute("50"), WithHour(s.RebootHour))
+	})
 }
 
 // DescNewsyslog returns the description for the rotation line.
@@ -93,7 +92,5 @@ func (Unattended) DescNewsyslog() string {
 
 // Newsyslog appends the rotation line.
 func (Unattended) Newsyslog() {
-	WhenHostname(ClusterHosts(), func() {
-		File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
-	})
+	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }

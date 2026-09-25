@@ -4,7 +4,7 @@ This chart deploys Syncthing.
 
 ## Installing the Chart
 
-To install the chart with the release name `my-release`, run the following command:
+Manual install (normally ArgoCD deploys it):
 
 ```bash
 helm install syncthing . --namespace services --create-namespace

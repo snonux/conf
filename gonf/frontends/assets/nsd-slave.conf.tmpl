@@ -1,0 +1,18 @@
+include: {{.Include}}
+
+server:
+	hide-version: yes
+	verbosity: 1
+	database: "" # disable database
+	debug-mode: no
+
+remote-control:
+	control-enable: yes
+	control-interface: /var/run/nsd.sock
+{{range .Zones}}
+zone:
+	name: {{.Name}}
+	zonefile: {{.ZoneFile}}
+	allow-notify: {{.Peer}}
+	request-xfr: AXFR {{.Peer}}
+{{end -}}

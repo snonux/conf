@@ -1,0 +1,152 @@
+# Plain HTTP for ACME and HTTPS redirect
+{{range .Port80Hosts}}server "{{.}}" {
+  listen on * port 80
+  log style forwarded
+  location "/.well-known/acme-challenge/*" {
+    root "/acme"
+    request strip 2
+  }
+  location * {
+    block return 302 "https://$HTTP_HOST$REQUEST_URI"
+  }
+}
+{{end}}
+# Current server's FQDN (e.g. for mail server ACME cert requests)
+server "{{.ServerFQDN}}" {
+  listen on * port 80
+  log style forwarded
+  location "/.well-known/acme-challenge/*" {
+    root "/acme"
+    request strip 2
+  }
+  location * {
+    block return 302 "https://{{.ServerFQDN}}"
+  }
+}
+
+server "{{.ServerFQDN}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    root "/htdocs/buetow.org/self"
+    directory auto index
+  }
+}
+
+# f3s cluster fallback page on port 8080 when cluster is down
+server "f3s.buetow.org" {
+  listen on * port 8080
+  no log
+  location * {
+    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+  }
+}
+
+server "*.f3s.buetow.org" {
+  listen on * port 8080
+  no log
+  location * {
+    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+  }
+}
+
+# Gemtexter hosts
+{{range .Gemtexter}}server "{{.Name}}" {
+  listen on * port 8080
+  log style forwarded
+  location "/.git*" {
+    block return 302 "https://{{.Name}}"
+  }
+  location * {
+{{if .IsWWW}}    block return 302 "https://{{.Host}}$REQUEST_URI"
+{{else}}    root "/htdocs/gemtexter/{{.Host}}"
+    directory auto index
+{{end}}  }
+}
+{{end -}}
+{{range .Redirects}}server "{{.BuetowOrg}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    block return 302 "https://paul.buetow.org$REQUEST_URI"
+  }
+}
+
+server "{{.BlogBuetowOrg}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    block return 302 "https://foo.zone$REQUEST_URI"
+  }
+}
+
+server "{{.SnonuxFoo}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+{{if .IsWWW}}    block return 302 "https://snonux.foo$REQUEST_URI"
+{{else}}    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+{{end}}  }
+}
+
+server "{{.PaulBuetowOrg}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    block return 302 "https://foo.zone/about$REQUEST_URI"
+  }
+}
+{{end -}}
+{{range .DtailHosts}}server "{{.}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    block return 302 "https://github.com/snonux/dtail"
+  }
+}
+{{end -}}
+{{range .RootHosts}}server "{{.Name}}" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    root "{{.Root}}"
+    directory auto index
+  }
+}
+{{end -}}
+{{range .F3SBlocks}}server "{{.}}-port80" {
+  listen on * port 80
+  log style forwarded
+  location "/.well-known/acme-challenge/*" {
+    root "/acme"
+    request strip 2
+  }
+  location * {
+    block return 302 "https://$HTTP_HOST$REQUEST_URI"
+  }
+}
+
+server "{{.}}-port8080" {
+  listen on * port 8080
+  log style forwarded
+  location * {
+    request rewrite "/index.html"
+    root "/htdocs/f3s_fallback"
+  }
+}
+{{end -}}
+# Defaults
+server "default" {
+  listen on * port 80
+  log style forwarded
+  block return 302 "https://foo.zone$REQUEST_URI"
+}
+
+server "default" {
+  listen on * port 8080
+  log style forwarded
+  block return 302 "https://foo.zone$REQUEST_URI"
+}

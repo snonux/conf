@@ -1,0 +1,8 @@
+# Daemons to restart after unattended package updates (one per line).
+# Names must match /etc/rc.d/<name> on NetBSD pi0/pi1.
+bozohttpd
+wireguard
+npf
+uptimed
+dserver
+sshd
