@@ -29,3 +29,51 @@ spec:
               To silence permanently: kubectl exec -n services deployment/goprecords --
               goprecords exclude -db=/data/stats/goprecords-auth.db
               -reason="decommissioned" {{ $labels.host }}
+
+        # Fleet freshness (task yk2): the rule above only fires after five
+        # months, so blowfish/fishfinger uploads went stale for six weeks
+        # unnoticed (task xk2). Every fleet host (f0-f3, the two OpenBSD
+        # frontends, pi0-pi3) uploads hourly, but an upload only lands while
+        # f3s (and so goprecords) is up, and this rule is only evaluated then
+        # too. The f3s night power-off (~10-13h without uploads) is therefore
+        # one gap shared by every host class, so a single 26h threshold fits
+        # them all. for: 2h absorbs the wake-up after a multi-day shutdown:
+        # every host is >26h stale then, and the next hourly upload clears it
+        # before the alert fires. Gogios shows it as "Prometheus:
+        # GoprecordsFleetUploadStale" (one check per alertname, so with
+        # several stale hosts the summary names one of them), muted by
+        # /tmp/f3s_taken_down like every Prometheus-derived check.
+        - alert: GoprecordsFleetUploadStale
+          expr: |
+            (time() - goprecords_host_records_last_update_timestamp_seconds{host=~"f[0-3]|blowfish|fishfinger|pi[0-3]"})
+            > (26 * 3600)
+          for: 2h
+          labels:
+            severity: warning
+            component: goprecords
+          annotations:
+            summary: "goprecords upload from {{ $labels.host }} is stale ({{ $value | humanizeDuration }} old, limit 26h)"
+            description: >
+              Fleet host {{ $labels.host }} last updated its uptimed records
+              {{ $value | humanizeDuration }} ago; it should upload hourly.
+            action: >
+              Check the hourly goprecords upload cron/timer and its syslog or
+              journal output on {{ $labels.host }} (token, uptimed running,
+              goprecords client installed).
+        # A fleet host whose series vanished (records file deleted, scrape
+        # broken, goprecords down) would never trip the rule above, so a
+        # short count is an alert of its own: 10 = f0-f3 + 2 frontends +
+        # pi0-pi3. Keep it in step with the host regex above.
+        - alert: GoprecordsFleetSeriesMissing
+          expr: |
+            (count(goprecords_host_records_last_update_timestamp_seconds{host=~"f[0-3]|blowfish|fishfinger|pi[0-3]"}) < 10)
+            or absent(goprecords_host_records_last_update_timestamp_seconds{host=~"f[0-3]|blowfish|fishfinger|pi[0-3]"})
+          for: 1h
+          labels:
+            severity: warning
+            component: goprecords
+          annotations:
+            summary: "goprecords exposes fewer than 10 fleet hosts (f0-f3, blowfish, fishfinger, pi0-pi3)"
+            description: >
+              goprecords_host_records_last_update_timestamp_seconds lacks at
+              least one fleet host, or the goprecords-service scrape is failing.
