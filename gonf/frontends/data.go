@@ -86,7 +86,6 @@ var f3sHosts = []string{
 	"flux.f3s.buetow.org",
 	"audiobookshelf.f3s.buetow.org",
 	"garage.f3s.buetow.org",
-	"grafana.f3s.buetow.org",
 	"radicale.f3s.buetow.org",
 	"syncthing.f3s.buetow.org",
 	"koreader.f3s.buetow.org",
@@ -117,7 +116,6 @@ var (
 		"koreader.f3s.buetow.org": "HTTP/1.1 412",
 		"pihole.f3s.buetow.org":   "HTTP/1.1 404",
 		"anki.f3s.buetow.org":     "HTTP/1.1 404",
-		"grafana.f3s.buetow.org":  "HTTP/1.1 404",
 		"pkgrepo.f3s.buetow.org":  "HTTP/1.1 404",
 		// bgtutor serves only /mcp (token required) and /healthz.
 		"bgtutor-mcp.f3s.buetow.org": "HTTP/1.1 404",
