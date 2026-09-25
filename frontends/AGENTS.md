@@ -158,3 +158,14 @@ and `stacksize-cur`. `frontends_relayd` removes `/etc/login.conf.d/daemon` and
 any `daemon.db` (`NoLoginClass("daemon")`) and restarts relayd once if it
 removed something. The `inetd` fragment stays; its `tc=daemon` resolves
 against `/etc/login.conf`.
+
+## blowfish disk layout (manual, not gonf)
+
+blowfish's `/var` is only 3.5G, and the irregular.ninja photo site outgrew it
+(74% on 2026-09-25). The empty `/usr/obj` partition (`sd0j`, 5.8G; nothing
+builds from source here) is now mounted at `/var/www/htdocs/irregular.ninja`:
+fstab line `31bfd9d9a6788844.j /var/www/htdocs/irregular.ninja ffs
+rw,nodev,nosuid,noexec 1 2`, placed after the `/var` line so `/var` mounts
+first. Backup of the old fstab: `/etc/fstab.bak-20260925`. fishfinger has a
+5G `/var` and keeps the stock layout. A reinstall of blowfish must recreate
+this mount before restoring the site.
