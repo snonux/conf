@@ -323,6 +323,32 @@ detach_all_mounts() {
     (( $(nfs_mount_count) == 0 ))
 }
 
+# restart_nfs_pods_on_node NODE — delete every pod on NODE whose volumes are
+# NFS-backed: a hostPath under the mount point, or a PVC bound to a PV whose
+# hostPath is under it. Called only after a repair that detached the mount.
+# Deletion is graceful and does not wait, so a pod stuck on a stale handle
+# cannot block this run; its controller recreates it.
+restart_nfs_pods_on_node() {
+    local node="$1" claims
+    claims=$(timeout 20 kubectl get pv -o json 2>/dev/null | jq -c --arg mp "$MOUNT_POINT" '
+        [.items[] | select((.spec.hostPath.path // "") | startswith($mp))
+         | .spec.claimRef | select(. != null) | "\(.namespace)/\(.name)"]') || return 0
+    [ -n "$claims" ] || claims='[]'
+    timeout 20 kubectl get pods --all-namespaces --field-selector="spec.nodeName=$node" \
+      -o json 2>/dev/null | jq -r --arg mp "$MOUNT_POINT" --argjson claims "$claims" '
+        .items[] | . as $p
+        | select(any(.spec.volumes[]?;
+              ((.hostPath.path // "") | startswith($mp))
+              or ((.persistentVolumeClaim.claimName // null) as $c
+                  | $c != null and ($claims | index("\($p.metadata.namespace)/\($c)")) != null)))
+        | "\(.metadata.namespace) \(.metadata.name)"' | \
+      while read -r ns pod; do
+        [ -n "$ns" ] || continue
+        echo "Restarting NFS pod $ns/$pod (stale handles after the repair)"
+        timeout 20 kubectl delete pod -n "$ns" "$pod" --wait=false 2>&1
+      done
+}
+
 fix_mount () {
     # Deadline checked between (and inside the umount loop of) the steps
     # below. A step started just before it can still run to its own bound, so
@@ -489,8 +515,20 @@ if (( $(nfs_mount_count) == 0 )); then
     echo "NFS mount $MOUNT_POINT not found"
     PROBE_FAILED=1
 elif ! timeout 2s stat "$MOUNT_POINT" >/dev/null 2>&1; then
-    echo "NFS mount $MOUNT_POINT appears to be unresponsive"
-    PROBE_FAILED=1
+    # A stat stall gets the same grace as a write stall (see
+    # WRITE_FAIL_LIMIT): on 2026-09-25 23:23 one 2s stall on r1 triggered an
+    # immediate umount -f and left every NFS pod on the node with stale
+    # handles (Forgejo's SQLite went "bad file descriptor").
+    streak=$(( $(read_write_streak) + 1 ))
+    mkdir -p "$(dirname "$WRITE_FAIL_FILE")"
+    echo "$streak" > "$WRITE_FAIL_FILE"
+    if (( streak >= WRITE_FAIL_LIMIT )); then
+        echo "NFS mount $MOUNT_POINT unresponsive ($streak consecutive runs)"
+        PROBE_FAILED=1
+    else
+        echo "NFS stat probe stalled on $MOUNT_POINT ($streak/$WRITE_FAIL_LIMIT) — waiting for the next run"
+        WRITE_PENDING=1
+    fi
 elif (( $(nfs_mount_count) > 1 )); then
     # A stacked mount left by an older version of this script: repair it so
     # the node ends up with exactly one (hard) mount.
@@ -557,6 +595,13 @@ if [ "$MOUNT_FIXED" -eq 1 ]; then
         echo "Deleting stuck pod $ns/$pod"
         timeout 20 kubectl delete pod -n "$ns" "$pod" --grace-period=0 --force 2>&1
       done
+
+    # Every pod on this node that mounts the NFS export now holds handles
+    # to the superblock the repair detached: its bind mounts are stale even
+    # though it may look Ready (Forgejo on r1, 2026-09-25: SQLite "bad file
+    # descriptor", 500s, while its HTTP health check passed). Restart them
+    # all so they re-bind the fresh mount; they may land on any node.
+    restart_nfs_pods_on_node "$NODE"
 
     # On a healthy remount, also ensure the fail counter is reset.
     write_fail_count 0
