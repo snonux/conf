@@ -4,9 +4,9 @@ metadata:
   name: xplayer-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: xplayer.f3s.buetow.org
       http:
