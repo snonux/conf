@@ -1,8 +1,9 @@
 // Package goprecords declares the uptimed upload client every gonf-managed
-// goprecords client shares: the OpenBSD frontends (frontends.Maintenance,
-// daily via /etc/daily.local) and the FreeBSD f-hosts (freebsd.Goprecords,
-// hourly via root's crontab). Only the schedule differs, so the token, the
-// script and the optional-token policy live here once.
+// goprecords client shares: the OpenBSD frontends (frontends.Maintenance)
+// and the FreeBSD f-hosts (freebsd.Goprecords), both hourly from root's
+// crontab with the output in syslog. Only the cron minute differs, so the
+// token, the script, the cron command and the optional-token policy live
+// here once.
 package goprecords
 
 import (
@@ -19,6 +20,8 @@ const (
 	// ClientScript is the installed upload client; schedules run it with
 	// GOPRECORDS_HOST=<host> in the environment.
 	ClientScript = "/usr/local/bin/goprecords-upload-client.sh"
+	// LogTag is the syslog tag of the client's output (see CronCommand).
+	LogTag = "goprecords-upload"
 )
 
 // clientAsset is the repo copy of the POSIX upload client (also mirrored in
@@ -73,9 +76,21 @@ func Client(tokenRef string) (script Resource, ok bool) {
 	return InstallFile(ClientScript, clientAsset(), Perm(0o755, Root)), true
 }
 
-// CommandLine returns the schedule's command line for host: the client with
+// CommandLine returns the bare client invocation for host: the client with
 // GOPRECORDS_HOST set, which names the host's stats on the server and must
-// match the name its token was issued for.
+// match the name its token was issued for. CronCommand wraps it; the
+// frontends also use it verbatim to remove their former /etc/daily.local
+// line.
 func CommandLine(host string) string {
 	return "GOPRECORDS_HOST=" + host + " " + ClientScript
+}
+
+// CronCommand returns the root cron command that runs the client for host
+// with its output piped into logger(1) under LogTag, so an upload failure
+// (curl's error while goprecords is unreachable, e.g. during the nightly
+// f3s power-off, when the frontends' relayd falls back to httpd and a PUT
+// gets 405) lands in /var/log/messages instead of root's mailbox. The same
+// string on FreeBSD and OpenBSD: both have /usr/bin/env and logger.
+func CronCommand(host string) string {
+	return "/usr/bin/env " + CommandLine(host) + " 2>&1 | logger -t " + LogTag
 }

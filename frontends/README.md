@@ -49,8 +49,14 @@ in this order:
 
 ## goprecords upload
 
-Uptimed stats are pushed once per day from `/etc/daily.local` by
-`/usr/local/bin/goprecords-upload-client.sh` (task `frontends_goprecords`).
+Uptimed stats are pushed hourly (`15 * * * *`, root crontab entry
+`goprecords-upload`) by `/usr/local/bin/goprecords-upload-client.sh` (task
+`frontends_goprecords`); its output goes to syslog with tag
+`goprecords-upload` (`/var/log/messages`). It used to run once a day from
+`/etc/daily.local` at 01:30, which falls into the nightly f3s power-off:
+relayd then falls back to the local httpd, the PUT gets 405, and no upload
+landed from 2026-08-15 to 2026-09-25 (task xk2). A 405 in the log therefore
+means "f3s was down at that hour", not a token problem (that is 401/403).
 The per-host bearer token is a controller secret, logical reference
 `frontends/etc/goprecords/<host>.token` (one line): for blowfish and
 fishfinger it is read from the vault entry `Infra/goprecords-token-<host>`

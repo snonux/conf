@@ -94,13 +94,31 @@ func (Maintenance) Uptimed() {
 
 // DescGoprecords returns the description shown for the optional uploader task.
 func (Maintenance) DescGoprecords() string {
-	return "Install optional daily uptimed uploads to goprecords"
+	return "Install optional hourly uptimed uploads to goprecords (root cron, output to syslog)"
 }
 
+// goprecordsSchedule runs the frontend upload hourly, a quarter past so it
+// does not pile onto the :00 newsyslog run.
+//
+// Why hourly, not /etc/daily.local (task xk2): until 2026-09-25 the upload
+// ran once a day from daily.local at 01:30 frontend time (23:30 UTC). Since
+// mid-August the f3s cluster is powered off every night by then, so relayd's
+// https relay finds its <f3s> table down and falls back to the local httpd
+// (the "f3s is down" page), which answers the PUT with 405; curl -f fails,
+// the client's set -e aborts, and no frontend upload landed after
+// 2026-08-15 while gonf showed no drift. An hourly run catches every hour
+// the cluster is up, the same as the f-hosts' freebsd_goprecords_upload.
+const goprecordsSchedule = "15 * * * *"
+
 // Goprecords installs the uploader (goprecords.Client) on every frontend
-// and runs it once a day from /etc/daily.local. A host lacking its
-// controller-side token receives no token, hook, or schedule and keeps
-// whatever it already has (the optional-token policy, see goprecords.Client).
+// and runs it hourly from root's crontab with its output in syslog
+// (goprecords.CronCommand; a 405 while f3s is down is logged, not mailed).
+// A host lacking its controller-side token receives no token or schedule
+// and keeps whatever it already has (the optional-token policy, see
+// goprecords.Client).
+//
+// The former daily.local lines (the old goprecords-upload.sh and the
+// daily client run) are removed only after the cron entry is in place.
 //
 // The token is read inside the EachHost body, so only runs that EachHost
 // narrows to a host selection skip other hosts' tokens: a single-host push
@@ -117,10 +135,12 @@ func (Maintenance) Goprecords() {
 			return
 		}
 		NoFile("/usr/local/bin/goprecords-upload.sh")
+		cron := CronAt("goprecords-upload", goprecordsSchedule,
+			goprecords.CronCommand(server.Name), DependsOn(uploader))
 		File(dailyLocal,
 			WithoutLine("/usr/local/bin/goprecords-upload.sh"),
-			WithLine(goprecords.CommandLine(server.Name)),
-			Perm(0o644, Root), DependsOn(uploader))
+			WithoutLine(goprecords.CommandLine(server.Name)),
+			Perm(0o644, Root), DependsOn(cron))
 	})
 }
 

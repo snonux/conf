@@ -34,11 +34,9 @@ type GoprecordsClient struct {
 const (
 	// goprecordsSchedule is the hand-made line's schedule, kept: hourly on
 	// the hour on all four hosts.
-	goprecordsSchedule = "0 * * * *"
-	// goprecordsLogTag keeps the client's output (curl's error while
-	// goprecords is unreachable, e.g. during the nightly power-off) in
+	// The command (goprecords.CronCommand) keeps the client's output in
 	// /var/log/messages instead of root's mailbox (task 2k2, RootMail).
-	goprecordsLogTag = "goprecords-upload"
+	goprecordsSchedule = "0 * * * *"
 	// etcCrontabGoprecordsRE matches the legacy /etc/crontab line, with or
 	// without RootMail's logger pipe. BSD sed -E and grep -E share the
 	// syntax; it contains slashes, so sed addresses it as \#...#.
@@ -77,8 +75,7 @@ func (Goprecords) Upload() {
 		if !ok {
 			return
 		}
-		cron := CronAt("goprecords-upload", goprecordsSchedule,
-			"/usr/bin/env "+goprecords.CommandLine(host)+" 2>&1 | logger -t "+goprecordsLogTag,
+		cron := CronAt("goprecords-upload", goprecordsSchedule, goprecords.CronCommand(host),
 			DependsOn(client))
 		Command("sed", List("-i", "", "-E", `\#`+etcCrontabGoprecordsRE+`#d`, "/etc/crontab"),
 			OnlyIf("grep", List("-Eq", etcCrontabGoprecordsRE, "/etc/crontab")),
