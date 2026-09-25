@@ -17,7 +17,7 @@ jobs:
     type: push
     connect:
       type: tcp
-      {{printf "%-32s" (printf "address: %q" .Address)}}# {{.Peer}} WireGuard IP
+      {{printf "%-31s" (printf "address: %q" .Address)}} # {{.Peer}} WireGuard IP
     filesystems:
 {{- range .Filesystems}}
       {{printf "%q" .}}: true
@@ -27,7 +27,7 @@ jobs:
     snapshotting:
       type: periodic
       prefix: zrepl_
-      {{printf "%-32s" (printf "interval: %s" .Interval)}}# {{.IntervalNote}}
+      {{printf "%-31s" (printf "interval: %s" .Interval)}} # {{.IntervalNote}}
     pruning:
       keep_sender:
         - type: last_n
@@ -47,9 +47,9 @@ jobs:
     type: sink
     serve:
       type: tcp
-      {{printf "%-32s" (printf "listen: %q" .Listen)}}# {{.Self}} WireGuard IP
+      {{printf "%-31s" (printf "listen: %q" .Listen)}} # {{.Self}} WireGuard IP
       clients:
-        {{printf "%-30s" (printf "%q: %q" .ClientIP .ClientName)}}# accept from {{.ClientName}}
+        {{printf "%-29s" (printf "%q: %q" .ClientIP .ClientName)}} # accept from {{.ClientName}}
     recv:
       placeholder:
         encryption: inherit
