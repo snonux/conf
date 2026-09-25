@@ -4,9 +4,9 @@ metadata:
   name: grafana-ingress
   namespace: {{ .Values.ingress.namespace }}
   annotations:
-    spec.ingressClassName: {{ index .Values.ingress.annotations "spec.ingressClassName" }}
     traefik.ingress.kubernetes.io/router.entrypoints: {{ index .Values.ingress.annotations "traefik.ingress.kubernetes.io/router.entrypoints" }}
 spec:
+  ingressClassName: traefik
   rules:
     - host: {{ .Values.ingress.host }}
       http:
@@ -25,9 +25,9 @@ metadata:
   name: grafana-ingress-lan
   namespace: {{ .Values.ingress.namespace }}
   annotations:
-    spec.ingressClassName: {{ index .Values.ingress.annotations "spec.ingressClassName" }}
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - grafana.f3s.lan.buetow.org

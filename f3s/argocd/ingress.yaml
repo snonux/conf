@@ -8,9 +8,9 @@ metadata:
   name: argocd-server-ingress
   namespace: cicd
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: argocd.f3s.buetow.org
       http:
@@ -30,9 +30,9 @@ metadata:
   name: argocd-server-ingress-lan
   namespace: cicd
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - argocd.f3s.lan.buetow.org

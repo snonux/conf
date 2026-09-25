@@ -6,9 +6,9 @@ metadata:
   name: tracing-demo-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: tracing-demo.f3s.buetow.org
       http:
@@ -28,9 +28,9 @@ metadata:
   name: tracing-demo-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - tracing-demo.f3s.lan.buetow.org

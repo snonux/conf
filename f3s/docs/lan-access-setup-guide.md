@@ -30,9 +30,9 @@ metadata:
   name: <app>-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts: [<app>.f3s.lan.buetow.org]
       secretName: f3s-lan-tls

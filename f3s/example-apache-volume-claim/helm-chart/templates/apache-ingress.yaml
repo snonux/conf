@@ -5,9 +5,9 @@ metadata:
   namespace: test
   namespace: test
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: f3s.buetow.org
       http:

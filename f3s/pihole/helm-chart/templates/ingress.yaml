@@ -15,10 +15,10 @@ metadata:
   name: pihole-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
     traefik.ingress.kubernetes.io/router.middlewares: services-pihole-redirect-admin@kubernetescrd
 spec:
+  ingressClassName: traefik
   rules:
     - host: pihole.f3s.buetow.org
       http:
@@ -38,10 +38,10 @@ metadata:
   name: pihole-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.middlewares: services-pihole-redirect-admin@kubernetescrd
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - pihole.f3s.lan.buetow.org
