@@ -46,6 +46,14 @@ spec:
                           periodSeconds: 10
                           timeoutSeconds: 10
                           failureThreshold: 3
+                    # Memory from the 14-day peak working set (50Mi), limit well
+                    # above it so a job-queue burst is never OOM-killed (audit
+                    # 2026-09-25 #19).
+                    resources:
+                      requests:
+                        memory: 64Mi
+                      limits:
+                        memory: 512Mi
             persistence:
               data:
                 enabled: true
