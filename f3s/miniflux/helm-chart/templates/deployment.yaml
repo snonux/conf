@@ -29,6 +29,13 @@ spec:
       containers:
         - name: miniflux
           image: miniflux/miniflux:2.3.3
+          # Memory from the 14-day peak working set (66Mi), limit well above
+          # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 512Mi
           ports:
             - containerPort: 8080
           env:
@@ -106,6 +113,13 @@ spec:
       containers:
         - name: miniflux-postgres
           image: postgres:17
+          # Memory from the 14-day peak working set (90Mi), limit well above
+          # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 1Gi
           ports:
             - containerPort: 5432
           env:
