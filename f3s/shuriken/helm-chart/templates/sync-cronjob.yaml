@@ -57,7 +57,7 @@ spec:
                 - blowfish.wg0.wan.buetow.org
           initContainers:
             - name: nfs-check
-              image: busybox:stable
+              image: busybox:1.36.1
               command:
                 - sh
                 - -c
