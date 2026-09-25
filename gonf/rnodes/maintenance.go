@@ -115,3 +115,34 @@ func (Maintenance) PersistentJournal() {
 	journald := Sh("systemctl restart systemd-journald", OnChange(dropIn))
 	Sh("journalctl --flush", DependsOn(tmpfiles, journald))
 }
+
+// nfsUnderlyingCheck runs its argument against the directory the NFS mount
+// covers, reached through a private bind mount of / (the mount itself hides
+// it). $U is that directory; the bind mount is removed afterwards.
+func nfsUnderlyingCheck(body string) string {
+	return `set -e; B=$(mktemp -d /run/nfsunder.XXXXXX); mount --bind / "$B"; ` +
+		`U="$B/data/nfs/k3svolumes"; trap 'umount "$B"; rmdir "$B"' EXIT; ` + body
+}
+
+// DescNFSMountpointGuard returns the mountpoint guard task description.
+func (Maintenance) DescNFSMountpointGuard() string {
+	return "Make the empty directory under the NFS mount immutable (no local writes when NFS is absent)"
+}
+
+// NFSMountpointGuard sets chattr +i on the empty directory under
+// /data/nfs/k3svolumes. Pods whose hostPath PVs point into the NFS mount used
+// to start while it was missing (boot races, repair windows) and wrote to the
+// node's root disk instead: fresh Postgres clusters, Valkey dumps, app config,
+// 94-429 MB per node, removed on 2026-09-25. With the directory immutable,
+// such a pod fails to start until NFS is back, and mounting over the
+// directory still works.
+//
+// It only acts on an empty directory: leftover content means a pod already
+// wrote locally, which needs a human to look at it, so the guard stays false
+// and the task keeps reporting a pending change.
+func (Maintenance) NFSMountpointGuard() {
+	Command("sh", List("-c", nfsUnderlyingCheck(
+		`[ -z "$(ls -A "$U")" ] && chattr +i "$U"`)),
+		OnlyIf("sh", List("-c", nfsUnderlyingCheck(
+			`! lsattr -d "$U" | cut -d' ' -f1 | grep -q i`))))
+}
