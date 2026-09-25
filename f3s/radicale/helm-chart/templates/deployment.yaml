@@ -70,7 +70,8 @@ spec:
           mountPath: /auth
       containers:
       - name: radicale
-        image: registry.lan.buetow.org:30001/radicale:latest
+        # Local image; 3.5.4 is the same manifest that was pushed as :latest.
+        image: registry.lan.buetow.org:30001/radicale:3.5.4
         ports:
         - containerPort: 8080
         livenessProbe:
