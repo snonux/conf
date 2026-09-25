@@ -5,7 +5,7 @@ metadata:
   namespace: services
 spec:
   replicas: 1
-  # SQLite DB on RWO PVC: only one writer at a time. Use Recreate so the
+  # SQLite DB on an RWO NFS PVC: only one writer at a time. Use Recreate so the
   # old pod releases the DB lock before the new pod starts; otherwise the
   # new pod blocks indefinitely on the SQLite open.
   strategy:
@@ -35,12 +35,9 @@ spec:
         - name: navidrome-music
           mountPath: /mnt
           readOnly: true
-      # Pin to r1 so the local-path PVC (which lives on r1's disk at
-      # /var/lib/rancher/k3s/storage) is always reachable. Without this, if
-      # the pod reschedules to a different node it would not find the data
-      # volume and Navidrome would start with an empty DB.
-      nodeSelector:
-        kubernetes.io/hostname: r1.lan.buetow.org
+      # No nodeSelector: /data and /music are both on the NFS export that is
+      # mounted on every r-node, so the pod can run on r0, r1 or r2. The
+      # init container above refuses to start on a node without the mount.
       containers:
       - name: navidrome
         image: deluan/navidrome:0.61.2
@@ -61,6 +58,11 @@ spec:
           value: "info"
         - name: ND_BASEURL
           value: ""
+        # Keep the image/transcoding cache off NFS (it defaults to
+        # /data/cache): node-local reads keep startup and thumbnails fast.
+        # The cache is disposable and is rebuilt on demand after a restart.
+        - name: ND_CACHEFOLDER
+          value: /cache
         startupProbe:
           httpGet:
             path: /ping
@@ -89,10 +91,18 @@ spec:
           mountPath: /data
         - name: navidrome-music
           mountPath: /music
+        - name: navidrome-cache
+          mountPath: /cache
       volumes:
       - name: navidrome-data
         persistentVolumeClaim:
-          claimName: navidrome-data-pvc
+          claimName: navidrome-data-nfs-pvc
+      # Node-local scratch for the disposable cache (see ND_CACHEFOLDER).
+      # Navidrome caps its image and transcoding caches at 100 MB each by
+      # default; the limit leaves headroom without letting it fill the disk.
+      - name: navidrome-cache
+        emptyDir:
+          sizeLimit: 1Gi
       - name: navidrome-music
         persistentVolumeClaim:
           claimName: navidrome-music-pvc

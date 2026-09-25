@@ -1,25 +1,44 @@
-# navidrome-data: local-path PVC (dynamic provisioning).
-# The SQLite DB, image cache, and artwork cache must NOT live on NFS because:
-#   1. SQLite file-lock semantics are fragile over NFS: under concurrent
-#      access (e.g. rolling restart) the new pod blocks on fcntl() until
-#      the old pod fully releases its locks.
-#   2. Every image/background cache read traverses the stunnel TLS tunnel,
-#      adding latency to every UI thumbnail and a 19 s "Image cache" init
-#      at startup.
-# The local-path storageClass provisions a directory on the node's own disk
-# (/var/lib/rancher/k3s/storage), eliminating both problems. The deployment
-# pins the pod to r1 via nodeSelector so the local PV is always reachable.
-# Trade-off: if r1 is down and the pod reschedules, it starts with a fresh
-# DB (loses play counts / scrobble queue) — acceptable for a home server.
+# navidrome-data: static hostPath PV on the NFS export (like the other apps),
+# so Navidrome can run on any r-node. It used to be a local-path PVC on r1
+# (pinned via nodeSelector), which made r1 a single point of failure for the
+# music service (audit 2026-09-25 #8).
+#
+# Only the SQLite DB (navidrome.db + WAL) and small state live here. The
+# image/transcoding cache is on a node-local emptyDir (ND_CACHEFOLDER, see
+# deployment.yaml): serving thumbnails through the stunnel TLS tunnel made
+# the "Image cache" init take ~19 s, the reason the data once left NFS.
+# SQLite-on-NFS lock fragility is contained by the Recreate strategy and a
+# single RWO claim: only one pod ever opens the DB.
+#
+# The NFS export is mounted at the same path on r0/r1/r2, so the hostPath
+# resolves identically on every node. type: Directory makes the mount fail
+# (instead of silently using an empty local dir) if the path is missing.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: navidrome-data-pv
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/nfs/k3svolumes/navidrome/data
+    type: Directory
+---
+# New claim name: a PVC's storageClassName is immutable, so the old
+# local-path claim (navidrome-data-pvc) could not be converted in place.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: navidrome-data-pvc
+  name: navidrome-data-nfs-pvc
   namespace: services
 spec:
-  # local-path is the k3s default dynamic provisioner; WaitForFirstConsumer
-  # means the PV is created on the node where the pod is first scheduled.
-  storageClassName: local-path
+  storageClassName: ""
+  # Bind explicitly so the claim can never grab another Available PV.
+  volumeName: navidrome-data-pv
   accessModes:
     - ReadWriteOnce
   resources:
