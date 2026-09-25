@@ -52,6 +52,17 @@ spec:
           periodSeconds: 30
           failureThreshold: 3
           timeoutSeconds: 5
+        # The liveness probe above only covers the NFS mount; readiness checks
+        # that PHP actually answers (GET / is 200, /gpodder is 404 by design)
+        # (audit 2026-09-25 #20).
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
         env:
         - name: GPODDER_BASE_URL
           value: "https://gpodder.f3s.buetow.org/gpodder"
@@ -73,6 +84,23 @@ spec:
             memory: 128Mi
         ports:
         - containerPort: 8081
+        # TCP only: an HTTP probe through the proxy would also fail whenever
+        # the backend is down, and restarting nginx does not fix that (audit
+        # 2026-09-25 #20).
+        livenessProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/nginx.conf
