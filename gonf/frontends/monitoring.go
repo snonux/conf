@@ -108,13 +108,17 @@ func (Monitoring) Gogios() {
 		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, Perm(0o755, Root))
 		removeStaleDNSRoleFiles()
 		gogiosUser := WithCronUser("_gogios")
-		CronAt("gogios-renotify", "0 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		// -renotify and -force run at minute 2, off the */5 grid: Gogios
+		// (1.6.0+) serialises runs with a lock in /var/run/gogios, where a
+		// plain run skips and these two wait, so the offset keeps them from
+		// waiting on (or re-running right after) a plain run.
+		CronAt("gogios-renotify", "2 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		// Checks run around the clock (audit item 23): an 08-22 window let an
 		// overnight outage go unnoticed until the morning. Gogios has no
 		// notification quiet hours, so overnight CRITICAL changes mail too;
-		// WARNING/UNKNOWN changes still wait for the 07:00 renotify.
+		// WARNING/UNKNOWN changes still wait for the 07:02 renotify.
 		CronAt("gogios-checks", "*/5 * * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
-		CronAt("gogios-force", "0 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		CronAt("gogios-force", "2 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		rcLocal := ensureRCLocal()
 		File("/etc/rc.local",
 			WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
@@ -214,6 +218,9 @@ type gogiosCheck struct {
 	RetryInterval   int      `json:"RetryInterval,omitempty"`
 	RunInterval     int      `json:"RunInterval,omitempty"`
 	DependsOn       []string `json:"DependsOn,omitempty"`
+	// Local marks a check of the frontend itself (see addSystemChecks),
+	// which Gogios 1.6.0+ also runs on the passive frontend.
+	Local bool `json:"Local,omitempty"`
 }
 
 // gogiosConfig is the typed top level of /etc/gogios.json. Its fields are
@@ -240,9 +247,12 @@ type gogiosConfig struct {
 // renderGogios renders server's Gogios configuration. Each frontend polls the
 // other one as its peer; the primary/secondary names follow the roles. They
 // only name the pair: the checker is the current DNS standby, which Gogios
-// (1.5.0+) finds by resolving DNSStandbyRecord, and the passive frontend
-// mirrors the checker's report, so gogios.buetow.org (which follows the DNS
-// master) shows the live state either way.
+// (1.5.0+) finds by resolving DNSStandbyRecord. The passive frontend mirrors
+// the checker's report as of the checker's previous run (both run from the
+// same */5 cron, so the copy lags up to one interval), which means
+// gogios.buetow.org (it follows the DNS master, normally the passive node)
+// shows the same state up to ~5 minutes late. Each frontend's own host checks
+// (Local) run on that frontend in either role, so both reports list both.
 //
 // Its one panic is a genuine programmer-bug invariant, not a recipe or input
 // error, so it stays a panic rather than a declaration error (see gonf's
@@ -383,16 +393,19 @@ func addFrontendServiceChecks(checks map[string]gogiosCheck) {
 }
 
 // addSystemChecks checks the local host's users, swap, processes, disk and
-// load. The Master frontend has little swap, hence its own thresholds.
+// load. The Master frontend has little swap, hence its own thresholds. They
+// are Local: only this host can run them, so it runs (and mails for) them
+// even while the other frontend is the elected checker; their names carry
+// the host name, which Gogios requires to tell the peers' checks apart.
 func addSystemChecks(checks map[string]gogiosCheck, server Server) {
-	checks["Check Users "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_users", Args: List("-w", "2", "-c", "3"), RandomSpread: 10, RunInterval: 600}
+	checks["Check Users "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_users", Args: List("-w", "2", "-c", "3"), RandomSpread: 10, RunInterval: 600, Local: true}
 	swap := List("-w", "95%", "-c", "90%")
 	if server.Name == Master {
 		swap = List("-w", "20%", "-c", "10%")
 	}
-	checks["Check SWAP "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_swap", Args: swap, RandomSpread: 10, RunInterval: 300}
+	checks["Check SWAP "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_swap", Args: swap, RandomSpread: 10, RunInterval: 300, Local: true}
 	for name, args := range map[string][]string{"Procs": List("-w", "100", "-c", "150"), "Disk": List("-w", "30%", "-c", "10%"), "Load": List("-w", "2,1,1", "-c", "4,3,3")} {
-		checks["Check "+name+" "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_" + strings.ToLower(name), Args: args, RandomSpread: 10, RunInterval: 300}
+		checks["Check "+name+" "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_" + strings.ToLower(name), Args: args, RandomSpread: 10, RunInterval: 300, Local: true}
 	}
 }
 
