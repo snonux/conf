@@ -4,9 +4,9 @@ metadata:
   name: ychat-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: ychat.f3s.buetow.org
       http:
@@ -25,9 +25,9 @@ metadata:
   name: ychat-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - ychat.f3s.lan.buetow.org
