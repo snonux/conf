@@ -2,4 +2,4 @@ apiVersion: v2
 name: filebrowser
 description: A Helm chart for deploying File Browser
 version: 0.1.0
-appVersion: "latest"
+appVersion: "v2.63.23"
