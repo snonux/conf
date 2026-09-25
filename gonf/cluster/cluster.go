@@ -189,6 +189,12 @@ func registerFreeBSD() {
 	// f0 has the UPS on USB and serves its status on its LAN address; f1-f3
 	// poll it there (by IP, so apcupsd never depends on name resolution).
 	const upsServer = "192.168.1.130:3551"
+	// Baseline keys that differ between the f-hosts, as found live on
+	// 2026-09-25 (task dk2). f3 is not a k3s host and lacks the 300 s
+	// rcshutdown_timeout, clear_tmp_enable and cryptodev_load; left as is.
+	f01Baseline := freebsd.BaselineHost{ClearTmp: true, ShutdownTimeout: "300", Cryptodev: true}
+	f2Baseline := freebsd.BaselineHost{ShutdownTimeout: "300", Cryptodev: true}
+	f3Baseline := freebsd.BaselineHost{}
 	fhost := HostDefaults(lan("paul"),
 		WithPrivilege(PrivilegeDoas),
 		WithPlatform("freebsd/amd64"),
@@ -198,6 +204,7 @@ func registerFreeBSD() {
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
 		WithData(f0Zrepl), WithData(f0Keys),
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.130:9100"}),
+		WithData(f01Baseline),
 		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
@@ -206,6 +213,7 @@ func registerFreeBSD() {
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
 		WithData(f1Zrepl), WithData(f1Keys),
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.131:9100"}),
+		WithData(f01Baseline),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
@@ -214,6 +222,7 @@ func registerFreeBSD() {
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
 		WithData(f2Zrepl), WithData(f2Keys),
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.132:9100"}),
+		WithData(f2Baseline),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
@@ -222,6 +231,7 @@ func registerFreeBSD() {
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
 		WithData(f3Zrepl), WithData(f3Keys),
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.133:9100"}),
+		WithData(f3Baseline),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)

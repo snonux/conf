@@ -5,16 +5,18 @@ import (
 )
 
 // Loader owns individual lines of /boot/loader.conf on the f-hosts. The file
-// itself stays hand-managed: each host keeps its own kern.geom.label.*,
-// cryptodev/zfs/carp/coretemp *_load lines, so this recipe never renders the
-// whole file. Each managed setting is a WithKeyedLine: the line starting with
-// the setting's name is replaced in place (a changed value or comment
-// converges, a duplicate is dropped), and appended when missing.
+// itself stays hand-managed: the install-time kern.geom.label.* and zfs_load
+// lines stay as they are, and carp_load belongs to the CARP task (gk2), so
+// this recipe never renders the whole file. Each managed setting is a
+// WithKeyedLine: the line starting with the setting's name is replaced in
+// place (a changed value or comment converges, a duplicate is dropped), and
+// appended when missing.
 //
 // loader.conf is read only at boot, so a change takes effect on the next
 // reboot (the nightly f3sctl power cycle); nothing is reloaded here.
 //
-// Register with OnCluster(cluster.NameFreeBSD).
+// Register with OnCluster(cluster.NameFreeBSD); every f-host carries a
+// BaselineHost (its Cryptodev field).
 type Loader struct {
 	RequiresRoot
 }
@@ -66,9 +68,18 @@ const microcodeLoadLine = `cpu_microcode_load="YES"` + "\t" +
 
 const microcodeNameLine = `cpu_microcode_name="/boot/firmware/intel-ucode.bin"`
 
+// coretempLoadLine loads coretemp(4), the per-core DTS temperatures
+// (dev.cpu.N.temperature) node_exporter scrapes; without it the only reading
+// is the constant ACPI tz0. In loader.conf on f0-f3 since 2026-05-17.
+const coretempLoadLine = `coretemp_load="YES"`
+
+// cryptodevLoadLine loads cryptodev(4) (/dev/crypto) on the hosts whose
+// BaselineHost sets Cryptodev (f0-f2, as installed; f3 never had it).
+const cryptodevLoadLine = `cryptodev_load="YES"`
+
 // DescConf returns the description for the managed loader.conf lines.
 func (Loader) DescConf() string {
-	return "loader.conf lines: msgbuf timestamps, efi 1080p, vm.pmap.pcid_enabled=0, Intel microcode early load (next boot)"
+	return "loader.conf lines: msgbuf timestamps, efi 1080p, vm.pmap.pcid_enabled=0, Intel microcode early load, coretemp/cryptodev (next boot)"
 }
 
 // OptsConf orders the loader lines after the microcode package, so
@@ -78,15 +89,24 @@ func (Loader) OptsConf() TaskOptions {
 }
 
 // Conf manages the lines in place; the rest of loader.conf is untouched.
-// The cpu_microcode_load key includes "_load=" so it cannot match the
-// hand-kept *_load lines; each key ends in "=" so no key is a prefix of
-// another.
+// Each key ends in "=" so no key is a prefix of another, and the full
+// module names keep the *_load keys apart from the hand-kept zfs_load and
+// carp_load. cryptodev_load is managed only where BaselineHost.Cryptodev is
+// set; elsewhere the line is neither added nor removed.
 func (Loader) Conf() {
-	File(loaderConf,
-		WithKeyedLine(`kern.msgbuf_show_timestamp=`, msgbufTimestampLine),
-		WithKeyedLine(`efi_max_resolution=`, efiResolutionLine),
-		WithKeyedLine(`vm.pmap.pcid_enabled=`, pcidDisabledLine),
-		WithKeyedLine(`cpu_microcode_load=`, microcodeLoadLine),
-		WithKeyedLine(`cpu_microcode_name=`, microcodeNameLine),
-		Perm(0o644, Root))
+	EachHost(func(h BaselineHost) {
+		opts := []FileOption{
+			WithKeyedLine(`kern.msgbuf_show_timestamp=`, msgbufTimestampLine),
+			WithKeyedLine(`efi_max_resolution=`, efiResolutionLine),
+			WithKeyedLine(`vm.pmap.pcid_enabled=`, pcidDisabledLine),
+			WithKeyedLine(`cpu_microcode_load=`, microcodeLoadLine),
+			WithKeyedLine(`cpu_microcode_name=`, microcodeNameLine),
+			WithKeyedLine(`coretemp_load=`, coretempLoadLine),
+			Perm(0o644, Root),
+		}
+		if h.Cryptodev {
+			opts = append(opts, WithKeyedLine(`cryptodev_load=`, cryptodevLoadLine))
+		}
+		File(loaderConf, opts...)
+	})
 }

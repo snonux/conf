@@ -51,6 +51,7 @@ func Register() {
 	RegisterMethods(freebsd.Microcode{}, WithPrefix("freebsd_microcode_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Loader{}, WithPrefix("freebsd_loader_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Base{}, WithPrefix("freebsd_base_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Baseline{}, WithPrefix("freebsd_baseline_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Monitoring{}, WithPrefix("freebsd_monitoring_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
