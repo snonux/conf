@@ -15,6 +15,13 @@ spec:
       releaseName: alloy
       valuesObject:
         alloy:
+          # Memory from the 14-day peak working set (184Mi), limit well above
+          # it so the DaemonSet is never OOM-killed (audit 2026-09-25 #19).
+          resources:
+            requests:
+              memory: 192Mi
+            limits:
+              memory: 1Gi
           # Log shipping (to Loki) and trace forwarding (to Tempo) are
           # disabled — Loki and Tempo apps are off. The DaemonSet stays
           # deployed with a no-op config so the chart can be re-enabled
