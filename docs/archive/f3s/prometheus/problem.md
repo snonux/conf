@@ -224,7 +224,7 @@ $ kubectl exec grafana-pod -- cat /etc/grafana/provisioning/datasources/datasour
 
 **Checked Grafana API:**
 ```bash
-$ curl -u test:testing123 http://localhost:3000/api/datasources
+$ curl -u test:<test-password> http://localhost:3000/api/datasources
 [
   {"name": "Alertmanager", ...},
   {"name": "loki", "uid": "ff67ithfd6j9cc", ...},  # Manual one
@@ -423,7 +423,7 @@ All files exist in correct location!
 ```bash
 kubectl exec grafana-pod -c grafana -- kill -HUP 1
 # Wait a few seconds
-curl -u test:testing123 http://localhost:3000/api/datasources
+curl -u test:<test-password> http://localhost:3000/api/datasources
 ```
 
 **Result:** ❌ No change - same 3 datasources
@@ -524,7 +524,7 @@ $ kubectl exec grafana-pod -- cat /etc/grafana/provisioning/datasources/datasour
 # Shows all 4 datasources
 
 # But API still shows only 3!
-$ curl -u test:testing123 http://localhost:3000/api/datasources
+$ curl -u test:<test-password> http://localhost:3000/api/datasources
 [
   {"name": "Alertmanager", "uid": "alertmanager", "readOnly": true},
   {"name": "loki", "uid": "ff67ithfd6j9cc", "readOnly": false},  # Manual
@@ -575,7 +575,7 @@ kubectl exec grafana-pod -c grafana -- sqlite3 /var/lib/grafana/grafana.db "SELE
 $ kubectl get secret prometheus-grafana -n monitoring -o jsonpath="{.data.admin-password}" | base64 -d
 zeodL5KXK1ib8lNSrinGyzBFwEkDxSc7IQvi5MBs
 
-$ curl -u admin:zeodL5KXK1ib8lNSrinGyzBFwEkDxSc7IQvi5MBs http://localhost:3000/api/datasources
+$ curl -u admin:<redacted> http://localhost:3000/api/datasources
 # Authentication failed (despite correct password)
 ```
 
@@ -1099,7 +1099,7 @@ kubectl exec -n monitoring <grafana-pod> -c grafana -- \
 # All four datasources present with correct YAML structure
 
 # Verified via Grafana API
-curl -u test:testing123 http://localhost:3000/api/datasources
+curl -u test:<test-password> http://localhost:3000/api/datasources
 ```
 
 ### Result
