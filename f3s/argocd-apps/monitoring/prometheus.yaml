@@ -57,6 +57,12 @@ spec:
               kubeSchedulerAlerting: false
               kubeSchedulerRecording: false
               kubeScheduler: false
+            # InfoInhibitor only feeds Alertmanager's inhibition of info
+            # alerts and fires permanently by design. Gogios reads firing
+            # alerts straight from the Prometheus API (no Alertmanager
+            # routing), so it surfaced as a constant WARNING (2026-09-26).
+            disabled:
+              InfoInhibitor: true
 
           # Enable the textfile collector in the node_exporter DaemonSet so
           # check-nfs-mount.sh can expose nfs_mount_monitor_consecutive_failures
