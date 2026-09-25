@@ -69,8 +69,8 @@ server:
   ingress:
     main:
       enabled: true
+      className: traefik
       annotations:
-        spec.ingressClassName: traefik
         traefik.ingress.kubernetes.io/router.entrypoints: web
         # Remove body size limit for file uploads
         traefik.ingress.kubernetes.io/router.middlewares: services-immich-body-size@kubernetescrd

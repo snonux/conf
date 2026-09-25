@@ -4,7 +4,6 @@ metadata:
   name: immich-server-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.middlewares: services-immich-body-size@kubernetescrd
 spec:
