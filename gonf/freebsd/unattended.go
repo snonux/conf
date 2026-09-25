@@ -8,7 +8,7 @@ import (
 	. "github.com/snonux/gonf/api"
 	. "github.com/snonux/gonf/api/options"
 
-	"codeberg.org/snonux/conf/gonf/paths"
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // unattendedServicesAsset is the operator-edited rc.d restart list for
@@ -121,4 +121,19 @@ func (Unattended) DescNewsyslog() string {
 // Newsyslog appends the rotation line.
 func (Unattended) Newsyslog() {
 	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
+}
+
+// DescRetiredPackages returns the description for the removed packages.
+func (Unattended) DescRetiredPackages() string {
+	return "Remove retired packages (python311 and its py311-* stack)"
+}
+
+// RetiredPackages keeps packages absent that nothing on the f-hosts needs any
+// more but that unattended-upgrade-freebsd would otherwise keep patching (or,
+// as with python311, keep flagging in pkg audit: it only upgrades, it never
+// removes orphans). python311 and its py311-* modules were leftovers of an
+// older py311 toolchain after awscli moved to python312; removed 2026-09-25.
+// pkg delete takes the py311-* modules that depend on python311 with it.
+func (Unattended) RetiredPackages() {
+	NoPackage("python311")
 }

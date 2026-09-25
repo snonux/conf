@@ -3,12 +3,12 @@
 package cluster
 
 import (
-	"codeberg.org/snonux/conf/gonf/freebsd"
-	"codeberg.org/snonux/conf/gonf/frontends"
-	"codeberg.org/snonux/conf/gonf/garage"
-	"codeberg.org/snonux/conf/gonf/netbsd"
-	"codeberg.org/snonux/conf/gonf/openbsd"
-	"codeberg.org/snonux/conf/gonf/rocky"
+	"github.com/snonux/conf/gonf/freebsd"
+	"github.com/snonux/conf/gonf/frontends"
+	"github.com/snonux/conf/gonf/garage"
+	"github.com/snonux/conf/gonf/netbsd"
+	"github.com/snonux/conf/gonf/openbsd"
+	"github.com/snonux/conf/gonf/rocky"
 	. "github.com/snonux/gonf/api"
 )
 
@@ -123,10 +123,17 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 	)
 	pi0 = Host("pi0", netbsdPi,
 		WithSSHHost("pi0.lan.buetow.org"),
-		WithData(netbsd.UnattendedSchedule{PkgsHour: "2", RebootHour: "2"}),
-		// After the 02:10 pkgs / 02:50 reboot window (each with up to
-		// 20 min jitter), before /etc/daily at 04:15.
-		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "3"}),
+		// Hours are local time (Europe/Sofia since 2026-09-25). The pkgs
+		// window must fall while the k3s cluster is up: the custom repo
+		// pkgrepo.f3s.buetow.org runs on it, and at the old 02:xx window the
+		// cluster is powered off every night, so dtail/f3sctl etc. were never
+		// updated ("not operational — skipping custom-repo packages"). pi1's
+		// 22:xx window is before the nightly power-off. pi0 and pi1 keep
+		// separate windows so the static site always has one live backend.
+		WithData(netbsd.UnattendedSchedule{PkgsHour: "14", RebootHour: "14"}),
+		// After the 14:10 pkgs / 14:50 reboot window (each with up to
+		// 20 min jitter).
+		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "15"}),
 	)
 	pi1 = Host("pi1", netbsdPi,
 		WithSSHHost("pi1.lan.buetow.org"),
