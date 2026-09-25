@@ -20,5 +20,22 @@ spec:
         ports:
         - containerPort: {{ .Values.service.port }}
           name: http
+        # Pushgateway's own health endpoints (audit 2026-09-25 #20).
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
