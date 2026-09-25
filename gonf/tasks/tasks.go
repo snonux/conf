@@ -59,6 +59,7 @@ func Register() {
 	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Goprecords{}, WithPrefix("freebsd_goprecords_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Monitoring{}, WithPrefix("freebsd_monitoring_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.F3sctl{}, WithPrefix("freebsd_f3sctl_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 
 	// A pattern Aggregate never picks up an Operational() task, so the

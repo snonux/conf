@@ -1,0 +1,1 @@
+from="192.168.1.125,192.168.1.126,192.168.2.203,192.168.2.204",restrict,command="/usr/local/bin/f3sctl agent" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDZoM71s/09B8g60093Uiu7qtjr7Fg14WrAD2Sppm0Hr f3sctl@pi

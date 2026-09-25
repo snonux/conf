@@ -70,7 +70,10 @@ func (Base) DescDoas() string {
 // broken file would lock gonf and paul out of root. "permit nopass :wheel"
 // keeps both working (paul is in wheel on every host; f3 even has wheel as
 // his primary group). The live "permit :wheel" line was shadowed by it
-// (doas applies the last matching rule) and is dropped.
+// (doas applies the last matching rule) and is dropped. The file also
+// carries the f3sctl agent-root rules: this is their only owner, F3sctl
+// (f3sctl.go) manages the rest of the agent account and leaves doas.conf
+// alone.
 func (Base) Doas() {
 	InstallFile(doasConf, paths.FHostAsset(baseAssetsPath+"doas.conf"),
 		Perm(0o644, Root), WithValidation(doasBin, List("-C", CandidatePath)))
