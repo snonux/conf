@@ -18,8 +18,9 @@ import (
 //   - NFS, zfskeys, zrepl, node_exporter, uptimed, apcupsd *_enable and
 //     flags: NFS, ZfsKeys, Zrepl, Monitoring, Base and Apcupsd.
 //   - vm_*: Bhyve.RcConf.
-//   - wireguard_*, relayd/pf/pflog, garage, dserver, shellyfans: hand-set
-//     role keys, out of this task's scope.
+//   - pf_enable, pflog_enable, relayd_enable: Relayd.
+//   - wireguard_*, garage, dserver, shellyfans: hand-set role keys, out of
+//     this task's scope.
 //
 // Values are the live ones of 2026-09-25. Keys that differ between hosts
 // come from BaselineHost; an unset field leaves that key unmanaged on the

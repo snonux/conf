@@ -45,6 +45,8 @@ func Register() {
 	RegisterMethods(freebsd.Carp{}, WithPrefix("freebsd_carp_"), OnCluster(cluster.NameFreeBSD))
 	// NFS + stunnel of the CARP pair; bodies narrow to f0/f1 like Carp.
 	RegisterMethods(freebsd.NFS{}, WithPrefix("freebsd_nfs_"), OnCluster(cluster.NameFreeBSD))
+	// LAN ingress (relayd + PF) of the CARP VIP; bodies narrow to f0/f1.
+	RegisterMethods(freebsd.Relayd{}, WithPrefix("freebsd_relayd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Periodic{}, WithPrefix("freebsd_periodic_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Zrepl{}, WithPrefix("freebsd_zrepl_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.ZfsKeys{}, WithPrefix("freebsd_zfskeys_"), OnCluster(cluster.NameFreeBSD))
