@@ -197,6 +197,7 @@ func registerFreeBSD() {
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
 		WithData(f0Zrepl), WithData(f0Keys),
+		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.130:9100"}),
 		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
@@ -204,6 +205,7 @@ func registerFreeBSD() {
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
 		WithData(f1Zrepl), WithData(f1Keys),
+		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.131:9100"}),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
@@ -211,6 +213,7 @@ func registerFreeBSD() {
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
 		WithData(f2Zrepl), WithData(f2Keys),
+		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.132:9100"}),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
@@ -218,6 +221,7 @@ func registerFreeBSD() {
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
 		WithData(f3Zrepl), WithData(f3Keys),
+		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.133:9100"}),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
