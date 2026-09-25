@@ -17,8 +17,9 @@ import (
 //   - ifconfig_re0_alias0 (the CARP VIP): Carp / task gk2.
 //   - NFS, zfskeys, zrepl, node_exporter, uptimed, apcupsd *_enable and
 //     flags: NFS, ZfsKeys, Zrepl, Monitoring, Base and Apcupsd.
-//   - vm_*, wireguard_*, relayd/pf/pflog, garage, dserver, shellyfans: hand-
-//     set role keys, out of this task's scope.
+//   - vm_*: Bhyve.RcConf.
+//   - wireguard_*, relayd/pf/pflog, garage, dserver, shellyfans: hand-set
+//     role keys, out of this task's scope.
 //
 // Values are the live ones of 2026-09-25. Keys that differ between hosts
 // come from BaselineHost; an unset field leaves that key unmanaged on the

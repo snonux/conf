@@ -206,6 +206,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.130:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f0"}),
 		WithData(f01Baseline),
+		WithData(k3sBhyve),
 		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
@@ -216,6 +217,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.131:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f1"}),
 		WithData(f01Baseline),
+		WithData(k3sBhyve),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
@@ -226,6 +228,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.132:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f2"}),
 		WithData(f2Baseline),
+		WithData(k3sBhyve),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
@@ -236,6 +239,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.133:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f3"}),
 		WithData(f3Baseline),
+		WithData(f3Bhyve),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
