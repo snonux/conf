@@ -1,0 +1,60 @@
+NAMESPACE := "services"
+APP_NAME := "bgtutor"
+
+build:
+	just -f docker-image/Justfile build
+
+push:
+	just -f docker-image/Justfile push
+
+build-push: build push
+
+status:
+	@echo "=== Pods ==="
+	@kubectl get pods -n {{NAMESPACE}} | grep bgtutor
+	@echo ""
+	@echo "=== Service ==="
+	@kubectl get svc -n {{NAMESPACE}} bgtutor-service
+	@echo ""
+	@echo "=== Ingress ==="
+	@kubectl get ingress -n {{NAMESPACE}} bgtutor-ingress
+	@echo ""
+	@echo "=== PVC ==="
+	@kubectl get pvc -n {{NAMESPACE}} bgtutor-data-pvc
+	@echo ""
+	@echo "=== ArgoCD Status ==="
+	@kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
+
+logs lines="100":
+	kubectl logs -n {{NAMESPACE}} -l app=bgtutor --tail={{lines}} -f
+
+port-forward port="8080":
+	@echo "Forwarding bgtutor to localhost:{{port}}"
+	kubectl port-forward -n {{NAMESPACE}} svc/bgtutor-service {{port}}:80
+
+sync:
+	@echo "Triggering ArgoCD sync..."
+	@kubectl annotate application {{APP_NAME}} -n cicd argocd.argoproj.io/refresh=normal --overwrite
+	@sleep 2
+	@kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' && echo ""
+
+argocd-status:
+	argocd app get {{APP_NAME}} --core
+
+restart:
+	@echo "Restarting bgtutor..."
+	kubectl rollout restart -n {{NAMESPACE}} deployment/bgtutor
+
+# Copy a prepared, published episode folder (see totalrecall bgtutor/PREPARE.md) into the library on
+# the NFS export. Run against the current CARP storage master (f0 or f1, check
+# with `ifconfig | grep MASTER`). The server re-scans the library on every
+# request, so no restart is needed. (kubectl cp doesn't work: the image is
+# distroless and has no tar.)
+upload-episode dir host="f0":
+	rsync -av --rsync-path="doas rsync" {{dir}}/ paul@{{host}}:/data/nfs/k3svolumes/bgtutor/data/episodes/$(basename {{dir}})/
+
+# List episodes the running server sees (needs BGTUTOR_TOKEN in the environment).
+episodes:
+	@curl -s -H "Authorization: Bearer $BGTUTOR_TOKEN" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+	  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_episodes","arguments":{}}}' \
+	  https://bgtutor.f3s.buetow.org/mcp
