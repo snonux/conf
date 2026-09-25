@@ -45,6 +45,8 @@ func Register() {
 	RegisterMethods(freebsd.Periodic{}, WithPrefix("freebsd_periodic_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Zrepl{}, WithPrefix("freebsd_zrepl_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.ZfsKeys{}, WithPrefix("freebsd_zfskeys_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.ShellyFans{}, WithPrefix("freebsd_shellyfans_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Zusb{}, WithPrefix("freebsd_zusb_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Apcupsd{}, WithPrefix("freebsd_apcupsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Bhyve{}, WithPrefix("freebsd_bhyve_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Debug{}, WithPrefix("freebsd_debug_"), OnCluster(cluster.NameFreeBSD))

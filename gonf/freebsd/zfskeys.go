@@ -4,12 +4,15 @@ import (
 	"strings"
 
 	. "github.com/snonux/gonf/api"
+
+	"github.com/snonux/conf/gonf/paths"
 )
 
 // ZfsKeys manages the boot-time loading of the ZFS encryption keys on the
-// f-hosts (f3s-storage skill, references/usb-keys.md): the rc.conf keys of
-// the f3skeys service (mounts the F3S_KEYS USB stick on /keys) and of the
-// base zfskeys service (loads the keys of zfskeys_datasets from their
+// f-hosts (f3s-storage skill, references/usb-keys.md): the key-stick helper
+// scripts and the f3skeys rc.d service from f3s/freebsd-hosts/keys, the
+// rc.conf keys of the f3skeys service (mounts the F3S_KEYS USB stick on
+// /keys) and of the base zfskeys service (loads the keys of zfskeys_datasets from their
 // file:// keylocation), and the keylocation of the replicated encrypted
 // zrepl sinks.
 //
@@ -38,9 +41,41 @@ type SinkKey struct {
 	KeyFile string // absolute path on the /keys stick
 }
 
+// Installed paths of the key-stick helpers (sources in f3s/freebsd-hosts/keys).
+// f3skeysRcScript runs at boot before the base zfskeys service; a broken copy
+// leaves the encrypted datasets locked, so gonf only installs it (0555 as
+// hand-installed since 2026-05-30) and never starts or restarts it.
+const (
+	mountKeysScript = "/usr/local/sbin/f3s-mount-keys"
+	loadKeysScript  = "/usr/local/sbin/f3s-load-zfs-keys"
+	f3skeysRcScript = "/etc/rc.d/f3skeys"
+)
+
 // staleZfskeysComment is the commented-out zfskeys_datasets f1 still carried
 // from before zroot/garage existed; the live line below it replaced it.
 const staleZfskeysComment = `#zfskeys_datasets="zdata/enc zroot/bhyve zdata/sink/f0/zdata/enc/nfsdata"`
+
+// DescScripts returns the description for the key-stick helper scripts.
+func (ZfsKeys) DescScripts() string {
+	return "Install f3s-mount-keys, f3s-load-zfs-keys and /etc/rc.d/f3skeys (0555 root:wheel; not run)"
+}
+
+// Scripts installs the key-stick helpers on every f-host. They were copied
+// by hand from the repo (f3s/freebsd-hosts/keys/README.md) and matched it
+// byte for byte on f0-f3 when gonf took them over (task ik2), so the first
+// run changes nothing. Nothing is executed here: f3skeys runs at the next
+// boot, f3s-load-zfs-keys only by hand for recovery.
+func (ZfsKeys) Scripts() {
+	InstallFile(mountKeysScript, paths.FHostAsset("keys/f3s-mount-keys"), Perm(0o555, Root))
+	InstallFile(loadKeysScript, paths.FHostAsset("keys/f3s-load-zfs-keys"), Perm(0o555, Root))
+	InstallFile(f3skeysRcScript, paths.FHostAsset("keys/f3skeys.rc"), Perm(0o555, Root))
+}
+
+// OptsRcConf records the scripts first, so f3skeys_enable never names an
+// rc.d service that is missing on the host.
+func (ZfsKeys) OptsRcConf() TaskOptions {
+	return TaskOptions{Needs("scripts")}
+}
 
 // DescRcConf returns the description for the key-loading rc.conf keys.
 func (ZfsKeys) DescRcConf() string {

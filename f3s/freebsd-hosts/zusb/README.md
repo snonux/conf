@@ -30,12 +30,19 @@ resolved at runtime.
   stop/power-off failure after export exits nonzero but the pool is already
   safe.
 
-Install on each f-host, and put the same key on every stick (copy from a stick
-that has it; never commit it):
+gonf installs both scripts to `/usr/local/bin` (0755 root:wheel) on every
+f-host (`gonf/freebsd/zusb.go`, task `freebsd_zusb_scripts`, part of the
+`freebsd` aggregate); it never runs them. Edit the repo copy, then:
 
 ```sh
-doas install -o root -g wheel -m 0755 zusb-load   /usr/local/bin/zusb-load
-doas install -o root -g wheel -m 0755 zusb-unload /usr/local/bin/zusb-unload
+./gonf.sh -n cluster freebsd-hosts freebsd_zusb_scripts
+./gonf.sh cluster freebsd-hosts freebsd_zusb_scripts
+```
+
+The key is not managed by gonf. Put the same key on every stick (copy from a
+stick that has it; never commit it):
+
+```sh
 doas mount -u -o rw /keys
 doas install -o root -g wheel -m 0400 zusb.key /keys/zusb.key
 doas mount -u -o ro /keys

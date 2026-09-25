@@ -17,15 +17,18 @@ stick is repaired and keys are loaded manually.
 
 ## Host Configuration
 
-On each f-host:
+gonf installs the three scripts (0555 root:wheel) and owns the rc.conf keys
+`f3skeys_enable`, `zfskeys_enable` and `zfskeys_datasets` on every f-host
+(`gonf/freebsd/zfskeys.go`, tasks `freebsd_zfskeys_*`):
 
 ```sh
-doas install -o root -g wheel -m 0555 f3s-mount-keys /usr/local/sbin/f3s-mount-keys
-doas install -o root -g wheel -m 0555 f3s-load-zfs-keys /usr/local/sbin/f3s-load-zfs-keys
-doas install -o root -g wheel -m 0555 f3skeys.rc /etc/rc.d/f3skeys
-doas sysrc f3skeys_enable=YES
-doas sysrc zfskeys_enable=YES
+./gonf.sh -n cluster freebsd-hosts freebsd_zfskeys_scripts freebsd_zfskeys_rc_conf
+./gonf.sh cluster freebsd-hosts freebsd_zfskeys_scripts freebsd_zfskeys_rc_conf
 ```
+
+gonf never runs `f3skeys` or the helpers; `sh -n` every script before
+committing a change, since a broken `f3skeys` leaves the datasets locked at
+the next boot. Edit the repo copy, never the host copy.
 
 Comment out any `/keys` line in `/etc/fstab`, for example:
 
@@ -37,7 +40,8 @@ If possible, label the UFS filesystem `F3S_KEYS` and let the script mount
 `/dev/ufs/F3S_KEYS`. The script still falls back to `/dev/da0` for the current
 single-stick host layout.
 
-Current boot key-load datasets:
+Current boot key-load datasets (per-host `KeyDatasets` in
+`gonf/cluster/cluster.go`; the `sysrc` form is what gonf writes):
 
 ```sh
 # f0
@@ -54,7 +58,7 @@ doas sysrc zfskeys_datasets="zroot/bhyve"
 ```
 
 Replicated encrypted sinks use file keylocations so boot can load them without
-a prompt:
+a prompt (gonf task `freebsd_zfskeys_sink_key_location`):
 
 ```sh
 # f1

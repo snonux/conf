@@ -2,8 +2,8 @@
 
 The rack fans are powered by a Shelly Plug M Gen 3 at `192.168.1.28`. Each
 f-host (f0/f1/f2/f3) turns the plug on at boot so the fans always run while any
-host is up. Turning the plug *off* is handled centrally by `wol-f3s shutdown-all`
-(on earth / the Pis), not by the hosts.
+host is up. Turning the plug *off* is handled centrally by `f3sctl power off` /
+`f3sctl fans off` (on earth / pi0 / pi1), not by the hosts.
 
 The plug has authentication enabled (HTTP digest, user `admin`).
 
@@ -20,12 +20,14 @@ The plug has authentication enabled (HTTP digest, user `admin`).
 
 ## Host Configuration
 
-On each f-host install the scripts and enable the service:
+gonf installs both scripts (0555 root:wheel) and sets
+`shellyfans_enable="YES"` on every f-host (`gonf/freebsd/shellyfans.go`,
+tasks `freebsd_shellyfans_*`). It never runs the helper or the service, so a
+deploy does not switch the plug:
 
 ```sh
-doas install -o root -g wheel -m 0555 shelly-fans-on /usr/local/sbin/shelly-fans-on
-doas install -o root -g wheel -m 0555 shellyfans.rc /usr/local/etc/rc.d/shellyfans
-doas sysrc shellyfans_enable=YES
+./gonf.sh -n cluster freebsd-hosts freebsd_shellyfans_scripts freebsd_shellyfans_rc_conf
+./gonf.sh cluster freebsd-hosts freebsd_shellyfans_scripts freebsd_shellyfans_rc_conf
 ```
 
 Put the plug password on the USB key stick (mounted read-only at `/keys`):
