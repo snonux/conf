@@ -58,6 +58,13 @@ spec:
       containers:
       - name: webdav
         image: httpd:2.4
+        # Memory from the 14-day peak working set (15Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 32Mi
+          limits:
+            memory: 256Mi
         securityContext:
           runAsUser: 65534
           runAsGroup: 65534
