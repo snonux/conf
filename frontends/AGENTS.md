@@ -169,3 +169,16 @@ rw,nodev,nosuid,noexec 1 2`, placed after the `/var` line so `/var` mounts
 first. Backup of the old fstab: `/etc/fstab.bak-20260925`. fishfinger has a
 5G `/var` and keeps the stock layout. A reinstall of blowfish must recreate
 this mount before restoring the site.
+
+## OpenBSD release upgrades (sysupgrade)
+
+`sysupgrade` fails if `/var/www` is a symlink. It used to point to
+`/home/var/www` for disk-space reasons (see the foo.zone post "One reason why I
+love OpenBSD", note to myself): undo such a symlink before the upgrade and
+restore it afterwards. As of 2026-09-25 `/var/www` is a real directory on both
+gateways; fishfinger still has the old link parked as `/var/www.DELETEME`, and
+blowfish mounts `sd0j` inside it at `/var/www/htdocs/irregular.ninja` (see the
+disk-layout section above) — unmount that for the upgrade if in doubt, and
+check `/var` and `/usr` free space first. Then `sysupgrade`, `sysmerge`,
+`pkg_add -u`, re-apply the relayd openfiles limit if `login.conf` was
+replaced, and a gonf dry-run of the frontends aggregate.
