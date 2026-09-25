@@ -42,6 +42,13 @@ spec:
       - name: keybr
         # Upstream publishes only :latest, so pin the digest (2023-11-18 build).
         image: ryanrhymes/keybr:latest@sha256:e3dc485a623cb04097ed5bf1ea3b7718a8b79459c6b8bcb159abbd70a4362298
+        # Memory from the 14-day peak working set (504Mi), limit well above
+        # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
+        resources:
+          requests:
+            memory: 512Mi
+          limits:
+            memory: 1536Mi
         securityContext:
           allowPrivilegeEscalation: false
         ports:
