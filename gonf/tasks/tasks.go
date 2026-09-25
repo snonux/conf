@@ -43,6 +43,7 @@ func Register() {
 	RegisterMethods(freebsd.Apcupsd{}, WithPrefix("freebsd_apcupsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Bhyve{}, WithPrefix("freebsd_bhyve_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Debug{}, WithPrefix("freebsd_debug_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Microcode{}, WithPrefix("freebsd_microcode_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Loader{}, WithPrefix("freebsd_loader_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 

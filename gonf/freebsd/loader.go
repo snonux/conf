@@ -12,7 +12,7 @@ import (
 // converges, a duplicate is dropped), and appended when missing.
 //
 // loader.conf is read only at boot, so a change takes effect on the next
-// reboot; nothing is reloaded here.
+// reboot (the nightly f3sctl power cycle); nothing is reloaded here.
 //
 // Register with OnCluster(cluster.NameFreeBSD).
 type Loader struct {
@@ -38,15 +38,55 @@ const msgbufTimestampLine = `kern.msgbuf_show_timestamp="1"` + "\t" +
 const efiResolutionLine = `efi_max_resolution="1080p"` + "\t" +
 	`# restore efifb 1080p HDMI console (FreeBSD 15.1 defaulted to 1x1 -> vga 640x480, broke JetKVM)`
 
+// pcidDisabledLine turns off PCID in the amd64 pmap. Panic analysis (task
+// zj2, 2026-09-25, f3s skill references/kernel-panics.md sections 5-6): f0-f2
+// panicked in ~10 % of boot/shutdown cycles, always in a ZFS taskq thread at
+// sched_ule_sswitch+0x888 (the retq of the context switch) or at IP 0/garbage,
+// only while ZFS creates or destroys taskq kthreads in bulk (zfs mount -a,
+// pool export). In several vmcores the dumped kernel stack holds a valid
+// sched_switch frame while the CPU popped garbage from it: the TLB mapped
+// the kstack VA to a different physical page than the page tables (a stale
+// global TLB entry). The N100 (Alder Lake-N/Gracemont, CPUID 0xb06e0) has
+// the INVLPG-does-not-flush-global-entries-with-PCID erratum, and Linux
+// disables PCID on it. With PTI off, PCID buys almost nothing, so this is
+// both the discriminating test and the probable fix: expect no new
+// /var/crash dumps over ~20 power cycles per host.
+const pcidDisabledLine = `vm.pmap.pcid_enabled="0"` + "\t" +
+	`# N100 INVLPG/PCID erratum: stale kstack TLB entries -> ZFS taskq panics in sched_ule_sswitch (zj2, f3s skill kernel-panics.md)`
+
+// microcodeLoadLine and microcodeNameLine make the loader apply the Intel
+// microcode update early, before the kernel starts (none was loaded before).
+// The file comes from cpu-microcode-intel (Microcode recipe); its pkg-message
+// and the FreeBSD Handbook give exactly these two lines. The third knob,
+// cpu_microcode_type="cpu_microcode", is already the default in
+// /boot/defaults/loader.conf. Same panic investigation as pcidDisabledLine;
+// microcode may carry the TLB erratum fix, PCID off works around it anyway.
+const microcodeLoadLine = `cpu_microcode_load="YES"` + "\t" +
+	`# early-load Intel microcode (cpu-microcode-intel; zj2 panic fix, f3s skill kernel-panics.md)`
+
+const microcodeNameLine = `cpu_microcode_name="/boot/firmware/intel-ucode.bin"`
+
 // DescConf returns the description for the managed loader.conf lines.
 func (Loader) DescConf() string {
-	return "loader.conf lines: kern.msgbuf_show_timestamp=1, efi_max_resolution=1080p (next boot)"
+	return "loader.conf lines: msgbuf timestamps, efi 1080p, vm.pmap.pcid_enabled=0, Intel microcode early load (next boot)"
 }
 
-// Conf manages the two lines in place; the rest of loader.conf is untouched.
+// OptsConf orders the loader lines after the microcode package, so
+// cpu_microcode_name never points at a missing file.
+func (Loader) OptsConf() TaskOptions {
+	return TaskOptions{Needs("freebsd_microcode_package")}
+}
+
+// Conf manages the lines in place; the rest of loader.conf is untouched.
+// The cpu_microcode_load key includes "_load=" so it cannot match the
+// hand-kept *_load lines; each key ends in "=" so no key is a prefix of
+// another.
 func (Loader) Conf() {
 	File(loaderConf,
 		WithKeyedLine(`kern.msgbuf_show_timestamp=`, msgbufTimestampLine),
 		WithKeyedLine(`efi_max_resolution=`, efiResolutionLine),
+		WithKeyedLine(`vm.pmap.pcid_enabled=`, pcidDisabledLine),
+		WithKeyedLine(`cpu_microcode_load=`, microcodeLoadLine),
+		WithKeyedLine(`cpu_microcode_name=`, microcodeNameLine),
 		Perm(0o644, Root))
 }
