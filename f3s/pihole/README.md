@@ -46,7 +46,8 @@ Pi-hole. Router DHCP: hand out 192.168.1.127 and 192.168.1.128.
 
 ## k3s chart (dormant)
 
-`helm-chart/` and `argocd-apps/services/pihole.yaml` are kept, with
-`syncPolicy` commented out, and the values match the Pis' wildcard. It
+`helm-chart/` and `argocd-apps/services/pihole.yaml.disabled` are kept
+(disabled: the Pis serve DNS), with `syncPolicy` commented out, and the values
+match the Pis' wildcard. Rename back to `.yaml` and apply to revive it. It
 needs secret `pihole-admin-password` (key `password`) in `services`, and
 would use `/data/nfs/k3svolumes/pihole/`. `just status | logs | sync`.
