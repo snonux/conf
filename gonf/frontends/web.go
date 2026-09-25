@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
-	"github.com/snonux/gonf/resource"
 )
 
 // webConfigData is the controller-side input to the frontend web and relay
@@ -32,10 +30,8 @@ type Web struct {
 func (Web) DescACMEInvoke() string { return "Request and renew frontend ACME certificates" }
 
 // OptsACMEInvoke marks the certificate request as an Operational action, so
-// no pattern aggregate can ever pick it up by name. The per-method companion
-// replaces the struct default, hence Privileged() is repeated here to keep
-// the RequiresRoot execution contract.
-func (Web) OptsACMEInvoke() TaskOptions { return TaskOptions{Privileged(), Operational()} }
+// no pattern aggregate can ever pick it up by name.
+func (Web) OptsACMEInvoke() TaskOptions { return TaskOptions{Operational()} }
 
 // ACMEInvoke runs the already-installed renewal script on explicit request,
 // matching Rex's separate acme_invoke task. It is not part of the aggregate
@@ -95,9 +91,8 @@ func (Web) DescRelayd() string {
 
 // OptsRelayd records the ACME setup (frontends_acme) before relayd; see
 // MailDNS.OptsSMTPD for why the Operational frontends_acme_invoke is not a
-// need. Privileged() is repeated because the per-method companion replaces
-// the RequiresRoot struct default.
-func (Web) OptsRelayd() TaskOptions { return TaskOptions{Privileged(), Needs("acme")} }
+// need.
+func (Web) OptsRelayd() TaskOptions { return TaskOptions{Needs("acme")} }
 
 // Relayd validates a candidate with `relayd -n` (core WithValidation) before
 // changing its live configuration. Its daemon login class is watched too: a
@@ -169,7 +164,7 @@ func pfAndExporter(host string) {
 		DependsOn(collector, exporter))
 	flags, err := nodeExporterFlags(host)
 	if err != nil {
-		resource.Refuse("Service", "node_exporter", err)
+		Refuse("Service", "node_exporter", err)
 		return
 	}
 	Service("node_exporter", WithFlags(flags), WithRestart, DependsOn(collector, exporter), OnChange(exporter))
@@ -251,17 +246,17 @@ func renderHTTPD(data webConfigData) (string, error) {
 }
 
 // refuseRender reports a failed controller render of the live file path as
-// a gonf declaration error through resource.Refuse (File[path] is the
+// a gonf declaration error through Refuse (File[path] is the
 // resource left undeclared), instead of panicking: gonf's contract is that
 // recipe and input errors never end the process. While a plan is recorded
-// the error fails that record with the resource.Refuse line below as its
+// the error fails that record with the Refuse line below as its
 // location (the CLI prints both and exits 1); a panic would instead bypass
 // gonf's error path and dump a raw stack trace to stderr. The caller then
 // declares none of the host's resources that depend on the rendered file,
 // so nothing is registered with empty content, while the rest of the
 // recipe keeps running and later declarations are still checked.
 func refuseRender(path string, err error) {
-	resource.Refuse("File", path, err)
+	Refuse("File", path, err)
 }
 
 // httpdTemplateData is httpd.conf.tmpl's typed root. Every field is either

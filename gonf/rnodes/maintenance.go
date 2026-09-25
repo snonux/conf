@@ -3,7 +3,6 @@ package rnodes
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )

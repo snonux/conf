@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
-	"github.com/snonux/gonf/resource"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -96,7 +94,7 @@ func (Monitoring) DescGogios() string {
 func (Monitoring) Gogios() {
 	pluginSource, err := shurikenAgePlugin()
 	if err != nil {
-		resource.Refuse("File", "/usr/local/bin/check_shuriken_age", err)
+		Refuse("File", "/usr/local/bin/check_shuriken_age", err)
 		return
 	}
 	EachHost(func(server Server) {

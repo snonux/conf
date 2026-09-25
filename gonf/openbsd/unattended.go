@@ -5,7 +5,6 @@ package openbsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -87,11 +86,10 @@ func (Unattended) DescCron() string {
 	return "Root cron: unattended-upgrade base/pkgs/audit/reboot, per-host schedule"
 }
 
-// OptsCron records the wrapper and the restart list before the cron jobs
-// that run them. Privileged() is repeated because the per-method companion
-// replaces the RequiresRoot struct default.
+// OptsCron records the wrapper and the restart list before the cron jobs that
+// run them.
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script", "services")}
+	return TaskOptions{Needs("script", "services")}
 }
 
 // Cron installs the four root cron jobs on every frontend host,

@@ -5,7 +5,6 @@ package netbsd
 
 import (
 	. "github.com/snonux/gonf/api"
-	. "github.com/snonux/gonf/api/options"
 
 	"codeberg.org/snonux/conf/gonf/paths"
 )
@@ -67,10 +66,8 @@ func (Unattended) DescCron() string {
 }
 
 // OptsCron records the wrapper and the restart list before the cron jobs.
-// Privileged() is repeated because the per-method companion replaces the
-// RequiresRoot struct default.
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Privileged(), Needs("script", "services")}
+	return TaskOptions{Needs("script", "services")}
 }
 
 // Cron installs pkgs + reboot cron jobs with per-host windows.
