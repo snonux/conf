@@ -47,7 +47,7 @@ func main() {
 // host's /etc/goprecords-upload.token, so the first apply rewrites nothing.
 // Likewise the CARP vhid 1 password of f0/f1 (freebsd-hosts/carp/vhid1.pass,
 // read by freebsd.Carp.RcConf) was imported from their rc.conf on 2026-09-25
-// (task gk2); it has no file fallback.
+// (task gk2) and rotated the same day (task 1l2); it has no file fallback.
 func setSecretProvider() error {
 	items, err := foostore.Items(map[secret.Ref]foostore.Item{
 		secret.Ref(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")): foostore.Field("Infra/nsd-tsig-key", "Password"),

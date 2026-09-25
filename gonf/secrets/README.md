@@ -16,7 +16,7 @@ from the vault; everything else comes from files below this directory.
 | `paths.GarageSecret("rpc_secret")` | `Infra/garage-rpc` | `gonf/secrets/garage/rpc_secret` |
 | `paths.FrontendSecret("etc/goprecords/<host>.token")`, blowfish and fishfinger | `Infra/goprecords-token-<host>` | `gonf/secrets/frontends/etc/goprecords/<host>.token` |
 | `paths.FHostSecret("goprecords/<host>.token")` (`freebsd.GoprecordsToken`), f0-f3 | `Infra/goprecords-token-<host>` | none (imported from the hosts' `/etc/goprecords-upload.token`, task lk2) |
-| `paths.FHostSecret("carp/vhid1.pass")` (`freebsd.CarpPassSecret`), f0/f1 | `Infra/carp-vhid1-pass` | none (imported from the hosts' `ifconfig_re0_alias0` in `/etc/rc.conf`, task gk2) |
+| `paths.FHostSecret("carp/vhid1.pass")` (`freebsd.CarpPassSecret`), f0/f1 | `Infra/carp-vhid1-pass` | none (imported from the hosts' `ifconfig_re0_alias0` in `/etc/rc.conf`, task gk2; rotated 2026-09-25, task 1l2) |
 
 A frontend added later has no vault row and reads the file. Migrating another
 secret is one more table row; recipes keep the same logical path.

@@ -27,7 +27,8 @@ import (
 // carpcontrol.sh run. rc.conf and loader.conf are read at boot, so a changed
 // alias line or carp_load takes effect on the next reboot only (changing the
 // password on a live pair needs both hosts at once, else each side drops
-// the other's advertisements and both become MASTER). The only daemon
+// the other's advertisements and both become MASTER; see the rotation
+// procedure in the f3s-storage skill, references/carp.md). The only daemon
 // touched is devd, restarted when its rule changes: devd re-reads its rules
 // on start, and a restart neither changes the CARP state nor replays a
 // transition.
@@ -111,8 +112,11 @@ const (
 )
 
 // CarpPassSecret is the logical secret reference of the vhid 1 password.
-// cmd/gonf maps it to the vault entry Infra/carp-vhid1-pass (imported from
-// the live rc.conf on 2026-09-25, so the rendered line matched).
+// cmd/gonf maps it to the vault entry Infra/carp-vhid1-pass. It was first
+// imported from the live rc.conf (task gk2), then rotated on 2026-09-25
+// (task 1l2) because the old value was published in the blog: the new key
+// was set live on both hosts in the same second with ifconfig; RcConf
+// only brought rc.conf in line for the next boot.
 func CarpPassSecret() string {
 	return paths.FHostSecret("carp/vhid1.pass")
 }
@@ -247,8 +251,10 @@ func (Carp) DescRcConf() string {
 }
 
 // RcConf owns the rc.conf line that creates the CARP VIP at boot. The
-// password is the same on both members and must be a plain word (CARP
-// takes at most 20 bytes, and it sits unquoted inside the rc.conf value).
+// password is the same on both members and must be a plain word of at most
+// 19 bytes: the kernel key is CARP_KEY_LEN (20) bytes, but ifconfig copies
+// it with strlcpy(..., CARP_KEY_LEN), silently cutting longer input to 19;
+// and it sits unquoted inside the rc.conf value.
 // gonf keeps the op carrying it off stdout. The line is never applied live:
 // see the Carp comment.
 func (Carp) RcConf() {
