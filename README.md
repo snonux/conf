@@ -196,7 +196,7 @@ Unattended upgrades across all OSes:
 Recipes use `MustSecret`/`OptionalSecret` with logical paths from
 `gonf/paths`. Mapped references come from the foostore/KeePass vault
 (`Infra/nsd-tsig-key`, `Infra/garage-rpc`,
-`Infra/goprecords-token-{blowfish,fishfinger}`, Password field); everything
+`Infra/goprecords-token-{blowfish,fishfinger,f0,f1,f2,f3}`, Password field); everything
 else falls back to files under `gonf/secrets/`. A mapped secret the vault
 can't read fails the plan, it never falls back. Prerequisites, bootstrap and
 policy: [`gonf/secrets/README.md`](gonf/secrets/README.md). Never commit or

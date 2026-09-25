@@ -73,6 +73,14 @@ func FrontendSecret(relativePath string) string {
 	return path.Join("frontends", relativePath)
 }
 
+// FHostSecret returns the logical path passed to api.MustSecret or
+// api.OptionalSecret for FreeBSD f-host controller secrets, such as
+// goprecords/f0.token (secrets/freebsd-hosts/goprecords/f0.token when it
+// falls back to a file).
+func FHostSecret(relativePath string) string {
+	return path.Join("freebsd-hosts", relativePath)
+}
+
 // GarageSecret returns the logical path passed to api.MustSecret or
 // api.OptionalSecret for Garage controller secrets.
 func GarageSecret(relativePath string) string {

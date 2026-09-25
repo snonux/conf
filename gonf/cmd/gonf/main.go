@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/snonux/conf/gonf/cluster"
+	"github.com/snonux/conf/gonf/freebsd"
 	"github.com/snonux/conf/gonf/paths"
 	"github.com/snonux/conf/gonf/tasks"
 	"github.com/snonux/gonf/api"
@@ -40,12 +41,20 @@ func main() {
 // uploader on each frontend instead of keeping the Rex-installed files
 // as-is. A frontend host added later has no entry, so its token falls back
 // to gonf/secrets/ (absent: nothing is declared for it, as before).
+//
+// The f-hosts' tokens (freebsd-hosts/goprecords/<host>.token, read by
+// freebsd.Goprecords) were imported on 2026-09-25 (task lk2) from each
+// host's /etc/goprecords-upload.token, so the first apply rewrites nothing.
 func setSecretProvider() error {
 	items, err := foostore.Items(map[secret.Ref]foostore.Item{
 		secret.Ref(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")): foostore.Field("Infra/nsd-tsig-key", "Password"),
 		secret.Ref(paths.GarageSecret("rpc_secret")):                foostore.Field("Infra/garage-rpc", "Password"),
 		secret.Ref(goprecordsToken("blowfish")):                     foostore.Field("Infra/goprecords-token-blowfish", "Password"),
 		secret.Ref(goprecordsToken("fishfinger")):                   foostore.Field("Infra/goprecords-token-fishfinger", "Password"),
+		secret.Ref(freebsd.GoprecordsToken("f0")):                   foostore.Field("Infra/goprecords-token-f0", "Password"),
+		secret.Ref(freebsd.GoprecordsToken("f1")):                   foostore.Field("Infra/goprecords-token-f1", "Password"),
+		secret.Ref(freebsd.GoprecordsToken("f2")):                   foostore.Field("Infra/goprecords-token-f2", "Password"),
+		secret.Ref(freebsd.GoprecordsToken("f3")):                   foostore.Field("Infra/goprecords-token-f3", "Password"),
 	})
 	if err != nil {
 		return err

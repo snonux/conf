@@ -37,6 +37,7 @@ func Register() {
 	RegisterMethods(rocky.KernelAudit{}, WithPrefix("rocky_kernel_audit_"), OnCluster(cluster.NameRockyPis))
 	RegisterMethods(pihole.Deployment{}, WithPrefix("pihole_"), OnCluster(cluster.NameRockyPis))
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
+	RegisterMethods(rnodes.Base{}, WithPrefix("rnodes_base_"), OnCluster(cluster.NameRockyK3s))
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	// The CARP helpers narrow to f0/f1 inside the bodies (WhenHostname).
 	RegisterMethods(freebsd.Carp{}, WithPrefix("freebsd_carp_"), OnCluster(cluster.NameFreeBSD))
@@ -53,6 +54,7 @@ func Register() {
 	RegisterMethods(freebsd.Base{}, WithPrefix("freebsd_base_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Baseline{}, WithPrefix("freebsd_baseline_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Goprecords{}, WithPrefix("freebsd_goprecords_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Monitoring{}, WithPrefix("freebsd_monitoring_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 

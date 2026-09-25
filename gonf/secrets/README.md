@@ -15,6 +15,7 @@ from the vault; everything else comes from files below this directory.
 | `paths.FrontendSecret("var/nsd/etc/nsd_key.txt")` | `Infra/nsd-tsig-key` | `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` |
 | `paths.GarageSecret("rpc_secret")` | `Infra/garage-rpc` | `gonf/secrets/garage/rpc_secret` |
 | `paths.FrontendSecret("etc/goprecords/<host>.token")`, blowfish and fishfinger | `Infra/goprecords-token-<host>` | `gonf/secrets/frontends/etc/goprecords/<host>.token` |
+| `paths.FHostSecret("goprecords/<host>.token")` (`freebsd.GoprecordsToken`), f0-f3 | `Infra/goprecords-token-<host>` | none (imported from the hosts' `/etc/goprecords-upload.token`, task lk2) |
 
 A frontend added later has no vault row and reads the file. Migrating another
 secret is one more table row; recipes keep the same logical path.
@@ -31,7 +32,8 @@ secret is one more table row; recipes keep the same logical path.
 - `OptionalSecret` skips a host only when its own file is absent below an
   existing `gonf/secrets`. For goprecords that means: no token, no uploader
   declared, existing `/etc/goprecords-upload.token` left alone (the "keep"
-  policy, see `Maintenance.Goprecords` in `gonf/frontends/maintenance.go`).
+  policy, see `goprecords.Client` in `gonf/goprecords/client.go`, shared by
+  `frontends_goprecords` and `freebsd_goprecords_upload`).
 
 ## Controller prerequisites (mapped secrets)
 
