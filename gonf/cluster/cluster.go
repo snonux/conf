@@ -8,6 +8,7 @@ import (
 	"github.com/snonux/conf/gonf/garage"
 	"github.com/snonux/conf/gonf/netbsd"
 	"github.com/snonux/conf/gonf/openbsd"
+	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
 	. "github.com/snonux/gonf/api"
 )
@@ -157,20 +158,25 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 }
 
 // registerRockyK3s registers the Rocky k3s hosts (r0–r2) and the rocky-k3s /
-// rocky-all clusters. pi2 and pi3 (from registerPis) fold into rocky-all,
-// which is every Rocky unattended host (Pis + k3s).
+// rocky-all clusters. Each r-node carries its wg0 address as rnodes.K3sNode
+// (k3s node-ip and advertise-address, rnodes_k3s_config). pi2 and pi3 (from
+// registerPis) fold into rocky-all, which is every Rocky unattended host
+// (Pis + k3s).
 func registerRockyK3s(pi2, pi3 HostRef) {
 	rnode := HostDefaults(lan("root"),
 		WithPrivilege(PrivilegeSudo),
 		WithPlatform("linux/amd64"),
 	)
 	r0 := Host("r0", rnode,
+		WithData(rnodes.K3sNode{IP: "192.168.2.120"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
 	r1 := Host("r1", rnode,
+		WithData(rnodes.K3sNode{IP: "192.168.2.121"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
 	r2 := Host("r2", rnode,
+		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
 	)
 	// rocky-k3s = r0/r1/r2 only. rocky-all = every Rocky unattended host

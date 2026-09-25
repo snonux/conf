@@ -1,0 +1,4 @@
+mirrors:
+  registry.lan.buetow.org:30001:
+    endpoint:
+      - http://localhost:30001

@@ -1,0 +1,7 @@
+etcd-expose-metrics: true
+kube-apiserver-arg:
+  - event-ttl=1h
+kube-controller-manager-arg:
+  - bind-address=0.0.0.0
+node-ip: {{.IP}}
+advertise-address: {{.IP}}

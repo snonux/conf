@@ -18,12 +18,19 @@ docker push r0.lan.buetow.org:30001/<image>
 
 Charts pull `registry.lan.buetow.org:30001/<image>`.
 
-## k3s node setup (r0, r1, r2, once)
+## k3s node setup (r0, r1, r2)
+
+Managed by gonf: `rnodes_base_hosts` maps `registry.lan.buetow.org` to
+127.0.0.1 in `/etc/hosts`, and `rnodes_k3s_registries` installs
+`/etc/rancher/k3s/registries.yaml` (mirror `registry.lan.buetow.org:30001` ->
+`http://localhost:30001`, asset `f3s/r-nodes/k3s/registries.yaml`):
 
 ```sh
-for node in r0 r1 r2; do ssh root@$node "echo '127.0.0.1 registry.lan.buetow.org' >> /etc/hosts"; done
-ssh root@<node> "printf 'mirrors:\n  \"registry.lan.buetow.org:30001\":\n    endpoint:\n      - \"http://localhost:30001\"\n' > /etc/rancher/k3s/registries.yaml && systemctl restart k3s"
+./gonf.sh cluster rocky-k3s rnodes_base_hosts rnodes_k3s_registries
 ```
+
+gonf does not restart k3s (etcd quorum); a registries.yaml change applies at
+the next boot or a manual one-node-at-a-time `systemctl restart k3s`.
 
 ```sh
 just status | logs [lines] | port-forward [5000] | sync | argocd-status | restart

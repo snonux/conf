@@ -3,11 +3,11 @@
 # pods (notably trivy-operator scan jobs) can pull/inspect images from the
 # in-cluster Docker Registry NodePort.
 #
-# The k3s registries.yaml on each node mirrors `registry.lan.buetow.org:30001`
-# to `r0.lan.buetow.org:30001`, so containerd image pulls work without DNS.
-# Pods that issue their own image-name DNS lookups (trivy) still need an
-# A record. We point them at r0's WireGuard IP, which is what NodeHosts
-# uses for r0.lan.buetow.org and what the registries.yaml mirror targets.
+# The k3s registries.yaml on each node (gonf rnodes_k3s_registries) mirrors
+# `registry.lan.buetow.org:30001` to `http://localhost:30001`, the node's own
+# NodePort, so containerd image pulls work without DNS. Pods that issue their
+# own image-name DNS lookups (trivy) still need an A record. We point them at
+# r0's WireGuard IP, which is what NodeHosts uses for r0.lan.buetow.org.
 apiVersion: v1
 kind: ConfigMap
 metadata:
