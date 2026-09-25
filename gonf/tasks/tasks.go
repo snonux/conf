@@ -42,6 +42,8 @@ func Register() {
 	RegisterMethods(freebsd.Periodic{}, WithPrefix("freebsd_periodic_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Apcupsd{}, WithPrefix("freebsd_apcupsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.Bhyve{}, WithPrefix("freebsd_bhyve_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Debug{}, WithPrefix("freebsd_debug_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.Loader{}, WithPrefix("freebsd_loader_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 
 	// A pattern Aggregate never picks up an Operational() task, so the
