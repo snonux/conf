@@ -178,13 +178,12 @@ func pfAndExporter(host string) {
 // without an inventory address is returned as an error for the caller to
 // report.
 func nodeExporterFlags(host string) (string, error) {
-	for _, peer := range WireGuardAddresses() {
-		if peer.Name == host {
-			return "--web.listen-address=" + peer.IPv4 +
-				":9100 --collector.textfile.directory=/var/node_exporter", nil
-		}
+	peer, err := wireGuardAddressFor(host)
+	if err != nil {
+		return "", err
 	}
-	return "", fmt.Errorf("no WireGuard address for frontend %q", host)
+	return "--web.listen-address=" + peer.IPv4 +
+		":9100 --collector.textfile.directory=/var/node_exporter", nil
 }
 
 // htdocs declares the httpd document roots and their static files, and

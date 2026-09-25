@@ -28,6 +28,7 @@ func Register() {
 	RegisterMethods(frontends.Monitoring{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.Web{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterMethods(frontends.MailDNS{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
+	RegisterMethods(frontends.WireGuard{}, WithPrefix("frontends_wireguard_"), OnCluster(cluster.NameFrontends))
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Periodic{}, WithPrefix("pis_netbsd_periodic_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
@@ -40,6 +41,7 @@ func Register() {
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
 	RegisterMethods(rnodes.Base{}, WithPrefix("rnodes_base_"), OnCluster(cluster.NameRockyK3s))
 	RegisterMethods(rnodes.K3s{}, WithPrefix("rnodes_k3s_"), OnCluster(cluster.NameRockyK3s))
+	RegisterMethods(rnodes.WireGuard{}, WithPrefix("rnodes_wireguard_"), OnCluster(cluster.NameRockyK3s))
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	// The CARP helpers narrow to f0/f1 inside the bodies (WhenHostname).
 	RegisterMethods(freebsd.Carp{}, WithPrefix("freebsd_carp_"), OnCluster(cluster.NameFreeBSD))

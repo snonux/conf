@@ -292,6 +292,18 @@ func WireGuardAddresses() []WireGuardAddress {
 	return append([]WireGuardAddress(nil), wireGuardAddresses...)
 }
 
+// wireGuardAddressFor returns host's row of the WireGuard inventory. A
+// frontend without a row is returned as an error for the caller to report
+// (Refuse), so the record fails before any SSH connection.
+func wireGuardAddressFor(host string) (WireGuardAddress, error) {
+	for _, peer := range wireGuardAddresses {
+		if peer.Name == host {
+			return peer, nil
+		}
+	}
+	return WireGuardAddress{}, fmt.Errorf("no WireGuard address for frontend %q", host)
+}
+
 // WireGuardHostLines returns the legacy /etc/hosts rows in their established
 // IPv4-then-IPv6 order, "IP fqdn short", for the shared peers followed by
 // extra. Consumers append these lines instead of replacing

@@ -15,7 +15,8 @@ import (
 //   - static IP (nmcli, enp0s5 manual, gw/dns 192.168.1.1) and hostnamectl:
 //     bootstrap, a wrong value cuts the node off.
 //   - the timezone: rocky_timezone.
-//   - wg0 (configs, keys, peers, wg-quick@wg0): ~/git/wireguardmeshgenerator.
+//   - wg0 configs, keys, peers: ~/git/wireguardmeshgenerator; perms,
+//     wireguard-tools and wg-quick@wg0 enablement: WireGuard (wireguard.go).
 //
 // SELinux is enforcing on r0-r2 and gonf keeps no file labels, so every task
 // that writes into /etc relabels what it changed (restorecon).

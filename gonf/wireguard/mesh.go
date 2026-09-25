@@ -1,7 +1,9 @@
 // Package wireguard lets gonf trigger ~/git/wireguardmeshgenerator, the sole
 // owner of the WireGuard mesh configuration (wg0.conf/tun0.conf, keys, PSKs,
 // peers, the NetBSD rc.d script with its routes). gonf never renders any of
-// that itself; see freebsd.WireGuard for the host-side bits gonf does own.
+// that itself; see freebsd.WireGuard, rnodes.WireGuard and
+// frontends.WireGuard for the host-side bits gonf does own, and
+// StripGroupOther (perms.go) for the permission sweep they share.
 package wireguard
 
 import (
