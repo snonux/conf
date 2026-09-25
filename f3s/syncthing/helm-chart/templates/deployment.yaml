@@ -51,7 +51,7 @@ spec:
           readOnly: true
       containers:
       - name: syncthing
-        image: lscr.io/linuxserver/syncthing:latest
+        image: lscr.io/linuxserver/syncthing:v2.1.5-ls229
         ports:
         - containerPort: 8384
         - containerPort: 22000
