@@ -16,7 +16,7 @@ import (
 //     line on f3 (heredoc accident), no LAN rows for rocky and the Pis, and
 //     a 192.168.2.138 f3s-storage-ha wg0 row for a VIP that no interface
 //     carries (CARP runs on the LAN only) and nothing in this repo uses.
-//     The t450 LAN row, present on f0 and f3 only, is now on all four.
+//     The t450 LAN row (retired 2026-09-25) is gone from all four.
 //   - doas.conf was the untouched doas.conf.sample, so its alice/bob/cindy/
 //     david example rules were live, plus the f3sctl agent rules.
 //   - f3 had no uptimed.conf, so its uptimed ran with the default of 50

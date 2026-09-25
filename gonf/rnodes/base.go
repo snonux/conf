@@ -45,7 +45,7 @@ func (Base) DescHosts() string {
 // Hosts renders the whole file from the rows the f-hosts' /etc/hosts
 // (freebsd.Base.Hosts) shares. The hand-made file listed the wg0 names twice,
 // in "IP short fqdn" and in "IP fqdn short" form, and lacked f3, rocky, the
-// Pis and t450; registry.lan.buetow.org -> 127.0.0.1 (the in-cluster
+// Pis; registry.lan.buetow.org -> 127.0.0.1 (the in-cluster
 // registry's NodePort on the node itself, f3s blog part 7) stays.
 func (Base) Hosts() {
 	hosts := InstallFile(etcHosts, paths.RNodeAsset(baseAssetsPath+"hosts.tmpl"),

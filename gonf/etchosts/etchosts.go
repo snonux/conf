@@ -25,7 +25,7 @@ type Data struct {
 }
 
 // lanHosts are the LAN rows in file order: hypervisors, the CARP storage
-// VIP, the k3s VMs and the plain rocky VM, the Pis, then the t450 laptop.
+// VIP, the k3s VMs and the plain rocky VM, then the Pis (the old t450 laptop was retired on 2026-09-25).
 var lanHosts = []lanHost{
 	{name: "f0", ip: "192.168.1.130"},
 	{name: "f1", ip: "192.168.1.131"},
@@ -40,7 +40,6 @@ var lanHosts = []lanHost{
 	{name: "pi1", ip: "192.168.1.126"},
 	{name: "pi2", ip: "192.168.1.127"},
 	{name: "pi3", ip: "192.168.1.128"},
-	{name: "t450", ip: "192.168.1.27"},
 }
 
 // wireGuardExtras are wg0 peers the f3s hosts resolve beyond the shared
