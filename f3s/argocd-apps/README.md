@@ -10,7 +10,7 @@ not applied.
 |---|---|---|
 | `cicd/` | `cicd` | argo-rollouts |
 | `infra/` | `infra` (cert-manager: `cert-manager`, traefik-config: `kube-system`) | cert-manager, pkgrepo, registry, traefik-config |
-| `monitoring/` | `monitoring` | alloy (upstream chart), prometheus (multi-source), pushgateway; disabled: grafana-ingress, loki, tempo, trivy-operator |
+| `monitoring/` | `monitoring` | prometheus (multi-source), pushgateway; disabled: alloy, grafana-ingress, loki, tempo, trivy-operator |
 | `services/` | `services` | anki-sync-server, audiobookshelf, bgtutor, beets-art, filebrowser, forgejo, goprecords, immich, ipv6test, jellyfin, keybr, kobo-sync-server, miniflux, navidrome, opodsync, player, protonbridge, radicale, shuriken, syncthing, wallabag, webdav, xplayer, ychat; disabled: apache, pihole (runs in Docker on pi2/pi3), tracing-demo |
 
 Sync policy everywhere: automated, `prune: true`, `selfHeal: true`,
@@ -18,9 +18,13 @@ Sync policy everywhere: automated, `prune: true`, `selfHeal: true`,
 reverted.
 
 `prometheus.yaml` combines the upstream kube-prometheus-stack chart with
-`f3s/prometheus/manifests` and orders them with sync waves: 0 PVs/RBAC,
-1 Secrets/ConfigMaps, 3 PrometheusRules, 4 dashboard ConfigMaps, 10 PostSync
-Grafana restart.
+`f3s/prometheus/manifests` and orders them with sync waves: 0 PV,
+1 Secrets/ConfigMaps, 3 PrometheusRules, 4 dashboard ConfigMaps.
+
+Disabling an app: rename it to `.yaml.disabled`, push, then
+`kubectl delete application <name> -n cicd`; the
+`resources-finalizer.argocd.argoproj.io` finalizer deletes its resources.
+Retained hostPath PVs keep their NFS data.
 
 ## Operate
 

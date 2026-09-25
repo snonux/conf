@@ -22,10 +22,11 @@ spec:
               memory: 192Mi
             limits:
               memory: 1Gi
-          # Log shipping (to Loki) and trace forwarding (to Tempo) are
-          # disabled — Loki and Tempo apps are off. The DaemonSet stays
-          # deployed with a no-op config so the chart can be re-enabled
-          # by restoring the discovery/loki/otelcol blocks here.
+          # Disabled with Loki and Tempo (audit 2026-09-25 #16): this
+          # no-op config shipped nothing and only sent Grafana Labs usage
+          # reports. To re-enable, rename back to alloy.yaml, restore the
+          # discovery/loki/otelcol blocks from git history and disable
+          # reporting (alloy.enableReporting: false).
           configMap:
             content: |
               logging {

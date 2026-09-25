@@ -2,7 +2,11 @@
 
 Grafana Tempo, monolithic mode, namespace `monitoring`. The ArgoCD app
 `argocd-apps/monitoring/tempo.yaml` is currently disabled (`.disabled`), and
-so is Grafana, so nothing is collecting or showing traces right now.
+so are Grafana and Alloy, so nothing is collecting or showing traces right now.
+The PV/PVC and the old local-path `storage-tempo-0` were deleted from the
+cluster (audit 2026-09-25 #16); `/data/nfs/k3svolumes/tempo/data` does not
+exist either, so create it and `kubectl apply -f persistent-volumes.yaml`
+before re-enabling.
 
 | | |
 |---|---|
