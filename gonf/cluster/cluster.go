@@ -197,21 +197,25 @@ func registerFreeBSD() {
 	f0 := Host("f0", fhost,
 		WithSSHHost("f0.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
+		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
 	f1 := Host("f1", fhost,
 		WithSSHHost("f1.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
+		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
 	f2 := Host("f2", fhost,
 		WithSSHHost("f2.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
+		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
 	f3 := Host("f3", fhost,
 		WithSSHHost("f3.lan.buetow.org"),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
+		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
 	Cluster(NameGarage, f0, f1, f2).Parallel(1)
