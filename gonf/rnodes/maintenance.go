@@ -161,3 +161,23 @@ func (Maintenance) ImageGC() {
 	InstallFile("/etc/rancher/k3s/config.yaml.d/50-image-gc.yaml",
 		paths.RNodeAsset("k3s-image-gc.yaml"), Perm(0o600, Root))
 }
+
+// DescRetiredNFSCron returns the description for the retired cron line.
+func (Maintenance) DescRetiredNFSCron() string {
+	return "Remove the legacy per-minute check-nfs-mount.sh root cron line (the timer runs it)"
+}
+
+// RetiredNFSCron removes the hand-added root crontab line that ran
+// check-nfs-mount.sh every minute on top of nfs-mount-monitor.timer (found
+// 2026-09-25): two schedulers for one repair script, with a log file
+// (/var/log/nfs-mount-check.log) that was never rotated.
+//
+// A guarded Command rather than NoCron: NoCron only removes gonf-managed
+// blocks, and WithLegacyCommand is only honoured when a Cron is adopted, not
+// when one is removed, so the unmanaged line needs an exact-match delete.
+func (Maintenance) RetiredNFSCron() {
+	const line = "* * * * * /usr/local/bin/check-nfs-mount.sh >> /var/log/nfs-mount-check.log 2>&1"
+	Command("sh", List("-c", `crontab -l | grep -vxF '`+line+`' | crontab -`),
+		OnlyIf("sh", List("-c", `crontab -l 2>/dev/null | grep -qxF '`+line+`'`)))
+	NoFile("/var/log/nfs-mount-check.log")
+}
