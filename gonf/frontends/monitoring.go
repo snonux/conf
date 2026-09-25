@@ -108,6 +108,7 @@ func (Monitoring) Gogios() {
 		runDir := Dir("/var/run/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
 		config := File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o744, Root), DependsOn(plugins, gogios, statusDir, runDir))
 		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, Perm(0o755, Root))
+		removeStaleDNSRoleFiles()
 		gogiosUser := WithCronUser("_gogios")
 		CronAt("gogios-renotify", "0 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		CronAt("gogios-checks", "*/5 8-22 * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
@@ -118,6 +119,25 @@ func (Monitoring) Gogios() {
 			WithLine("chown _gogios /var/run/gogios"),
 			Perm(0o644, Root), DependsOn(account, rcLocal))
 	})
+}
+
+// staleDNSRoleFiles are the role caches the retired dns-failover rotation kept
+// under /var/nsd/run. The DNS publisher (dns-publish.ksh) no longer writes
+// them, so they froze at the last rotation; Gogios read current_standby to
+// elect its checker and kept electing a host that was no longer the DNS
+// standby. Gogios now resolves DNSStandbyRecord instead, and nothing else
+// reads these files, so they are removed rather than left to mislead a
+// fallback or a human.
+var staleDNSRoleFiles = List(
+	"/var/nsd/run/current_master", "/var/nsd/run/current_standby",
+	"/var/nsd/run/master_a", "/var/nsd/run/master_aaaa",
+	"/var/nsd/run/standby_a", "/var/nsd/run/standby_aaaa",
+)
+
+func removeStaleDNSRoleFiles() {
+	for _, path := range staleDNSRoleFiles {
+		File(path, IsAbsent)
+	}
 }
 
 func cleanupLegacyGogios() Resource {
@@ -202,6 +222,7 @@ type gogiosConfig struct {
 	CheckConcurrency          int                    `json:"CheckConcurrency"`
 	CheckTimeoutS             int                    `json:"CheckTimeoutS"`
 	Checks                    map[string]gogiosCheck `json:"Checks"`
+	DNSStandbyRecord          string                 `json:"DNSStandbyRecord"`
 	EmailFrom                 string                 `json:"EmailFrom"`
 	EmailTo                   string                 `json:"EmailTo"`
 	HTMLStatusFile            string                 `json:"HTMLStatusFile"`
@@ -215,7 +236,11 @@ type gogiosConfig struct {
 }
 
 // renderGogios renders server's Gogios configuration. Each frontend polls the
-// other one as its peer; the primary/secondary names follow the roles.
+// other one as its peer; the primary/secondary names follow the roles. They
+// only name the pair: the checker is the current DNS standby, which Gogios
+// (1.5.0+) finds by resolving DNSStandbyRecord, and the passive frontend
+// mirrors the checker's report, so gogios.buetow.org (which follows the DNS
+// master) shows the live state either way.
 //
 // Its one panic is a genuine programmer-bug invariant, not a recipe or input
 // error, so it stays a panic rather than a declaration error (see gonf's
@@ -240,6 +265,7 @@ func renderGogios(server Server) string {
 		PeerURL:                   "https://" + peer.FQDN + "/gogios/index.json",
 		PeerPrimaryName:           MustServer(Master).FQDN,
 		PeerSecondaryName:         MustServer(Standby).FQDN,
+		DNSStandbyRecord:          "standby." + Domain,
 		PrometheusHosts:           []string{"r0.wg0:30090", "r1.wg0:30090", "r2.wg0:30090"},
 		PrometheusOnlyIfNotExists: f3sTakenDown,
 		Checks:                    gogiosChecks(server),
