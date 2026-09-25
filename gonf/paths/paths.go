@@ -17,6 +17,7 @@ var (
 	Frontends = filepath.Join(Conf, "frontends")
 	Garage    = filepath.Join(Conf, "f3s", "garage")
 	FHosts    = filepath.Join(Conf, "f3s", "freebsd-hosts")
+	Pihole    = filepath.Join(Conf, "f3s", "pihole", "docker-pi")
 	RNodes    = filepath.Join(Conf, "f3s", "r-nodes")
 )
 
@@ -50,6 +51,12 @@ func GarageAsset(relativePath string) string {
 // FreeBSD f-host asset such as carp/carp-auto-failback.sh.
 func FHostAsset(relativePath string) string {
 	return filepath.Join(FHosts, relativePath)
+}
+
+// PiholeAsset returns the controller-local path of a source-controlled
+// Pi-hole (pi2/pi3 Docker) asset such as docker-compose.yml.
+func PiholeAsset(relativePath string) string {
+	return filepath.Join(Pihole, relativePath)
 }
 
 // RNodeAsset returns the controller-local path of a source-controlled r-node

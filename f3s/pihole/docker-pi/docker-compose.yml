@@ -1,0 +1,20 @@
+# Pi-hole on pi2/pi3 (~paul/pihole/docker-compose.yml), deployed by gonf
+# (pihole_compose). TZ/WEBPASSWORD/DNS1/DNS2 come from the host-local
+# ~/pihole/.env, which is not in git. The image is pinned: bump the tag
+# here deliberately and deploy one Pi at a time (see f3s/pihole/README.md).
+services:
+  pihole:
+    image: pihole/pihole:2026.04.0
+    container_name: pihole
+    network_mode: host
+    environment:
+      TZ: ${TZ}
+      WEBPASSWORD: ${WEBPASSWORD}
+      DNS1: ${DNS1}
+      DNS2: ${DNS2}
+    volumes:
+      - ./etc-pihole:/etc/pihole
+      - ./etc-dnsmasq.d:/etc/dnsmasq.d
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN

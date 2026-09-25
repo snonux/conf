@@ -20,7 +20,8 @@ Tracked here:
 - `docker-pi/dnsmasq.d/99-f3s-lan-wildcard.conf`: `*.f3s.lan.buetow.org` ->
   CARP VIP 192.168.1.138. On the Pis it goes into `~/pihole/etc-dnsmasq.d/`
   (bind-mounted to `/etc/dnsmasq.d`), then `docker compose restart`.
-- `docker-pi/docker-compose.example.yml`: the volume snippet to merge.
+- `docker-pi/docker-compose.yml`: the live compose file, deployed with the
+  wildcard to `~/pihole` on pi2/pi3 by gonf (`./gonf.sh cluster rocky-pis pihole`).
 
 ```sh
 cd ~/pihole && docker compose ps | logs | restart
