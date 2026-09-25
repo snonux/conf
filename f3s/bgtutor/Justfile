@@ -57,4 +57,4 @@ upload-episode dir host="f0":
 episodes:
 	@curl -s -H "Authorization: Bearer $BGTUTOR_TOKEN" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
 	  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_episodes","arguments":{}}}' \
-	  https://bgtutor.f3s.buetow.org/mcp
+	  https://bgtutor-mcp.f3s.buetow.org/mcp

@@ -5,8 +5,8 @@ Bulgarian Podcast Tutor MCP server (`bgtutor serve`, a sub-project of
 as a custom connector and fetches prepared podcast episodes paragraph by
 paragraph.
 
-- Public URL for the connector: `https://bgtutor.f3s.buetow.org/mcp`
-  (TLS on the frontends via relayd; `bgtutor.f3s.buetow.org` is in
+- Public URL for the connector: `https://bgtutor-mcp.f3s.buetow.org/mcp`
+  (TLS on the frontends via relayd; `bgtutor-mcp.f3s.buetow.org` is in
   `f3sHosts` in `gonf/frontends/data.go`)
 - LAN: `https://bgtutor.f3s.lan.buetow.org/mcp`
 - Every `/mcp` request needs the bearer token (`Authorization: Bearer <token>`
@@ -52,7 +52,7 @@ kubectl apply -f ../argocd-apps/services/bgtutor.yaml
 just status
 ```
 
-Then converge the frontends so `bgtutor.f3s.buetow.org` gets its DNS
+Then converge the frontends so `bgtutor-mcp.f3s.buetow.org` gets its DNS
 record, certificate and relayd route (from the repository root):
 
 ```sh
@@ -83,5 +83,5 @@ volume.
 ## Connecting a voice AI
 
 - Claude: Settings > Connectors > Add custom connector, URL
-  `https://bgtutor.f3s.buetow.org/mcp?token=<token>`.
+  `https://bgtutor-mcp.f3s.buetow.org/mcp?token=<token>`.
 - ChatGPT: enable Developer Mode, then add a connector with the same URL.

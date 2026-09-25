@@ -94,7 +94,7 @@ var f3sHosts = []string{
 	"webdav.f3s.buetow.org",
 	"pkgrepo.f3s.buetow.org",
 	"goprecords.f3s.buetow.org",
-	"bgtutor.f3s.buetow.org",
+	"bgtutor-mcp.f3s.buetow.org",
 	"ipv6test.f3s.buetow.org",
 	"ipv4.ipv6test.f3s.buetow.org",
 	"ipv6.ipv6test.f3s.buetow.org",
@@ -120,7 +120,7 @@ var (
 		"grafana.f3s.buetow.org":  "HTTP/1.1 404",
 		"pkgrepo.f3s.buetow.org":  "HTTP/1.1 404",
 		// bgtutor serves only /mcp (token required) and /healthz.
-		"bgtutor.f3s.buetow.org": "HTTP/1.1 404",
+		"bgtutor-mcp.f3s.buetow.org": "HTTP/1.1 404",
 	}
 	// sitesWithoutHTTPSCheck are served but not HTTPS-checked (ychat speaks
 	// its own protocol behind the TLS relay).

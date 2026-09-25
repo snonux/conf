@@ -4,7 +4,7 @@
 #
 #   BGTUTOR_TOKEN=... ./smoke-test.sh [BASE_URL] [--write]
 #
-# BASE_URL defaults to https://bgtutor.f3s.buetow.org. It can also be a
+# BASE_URL defaults to https://bgtutor-mcp.f3s.buetow.org. It can also be a
 # port-forward, e.g. http://127.0.0.1:8080 (just port-forward 8080).
 # --write also tests save_vocabulary, which adds (or bumps) one entry with
 # term "smoketest-ябълка" in the real vocabulary notebook.
@@ -12,7 +12,7 @@
 # Needs curl and jq. Exits non-zero if any check fails.
 set -uo pipefail
 
-BASE_URL="https://bgtutor.f3s.buetow.org"
+BASE_URL="https://bgtutor-mcp.f3s.buetow.org"
 WRITE=0
 for arg in "$@"; do
     case "$arg" in

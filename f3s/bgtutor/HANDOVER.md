@@ -57,7 +57,7 @@ Tools: `list_episodes`, `get_paragraph`, `save_vocabulary`, `list_vocabulary`.
 | Repo | PR / branch | Contents |
 |---|---|---|
 | github.com/snonux/totalrecall | #1, `bgtutor-mcp-server` | server code (`cmd/bgtutor`, `internal/bgtutor`), `bgtutor/Dockerfile`, test episode `bgtutor/data/episodes/001-cooking-basics` |
-| github.com/snonux/conf | #1, `bgtutor-chart` | `f3s/bgtutor/` (chart, Justfiles, README, this file, `smoke-test.sh`), `f3s/argocd-apps/services/bgtutor.yaml`, `bgtutor.f3s.buetow.org` in `gonf/frontends/data.go` |
+| github.com/snonux/conf | #1, `bgtutor-chart` | `f3s/bgtutor/` (chart, Justfiles, README, this file, `smoke-test.sh`), `f3s/argocd-apps/services/bgtutor.yaml`, `bgtutor-mcp.f3s.buetow.org` in `gonf/frontends/data.go` |
 
 Merge totalrecall#1 first; the image is built from it. If Paul hasn't merged
 yet, build from the `bgtutor-mcp-server` branch and deploy from the
@@ -170,7 +170,7 @@ one entry, `smoketest-ябълка`, to the real notebook. Tell Paul, or remove 
 
 ## 6. Public HTTPS on the frontends
 
-`bgtutor.f3s.buetow.org` is in `f3sHosts` in `gonf/frontends/data.go` (with
+`bgtutor-mcp.f3s.buetow.org` is in `f3sHosts` in `gonf/frontends/data.go` (with
 expected HTTPS check status `HTTP/1.1 404`, since `/` has no page). Converge
 the frontends from the conf root, following `frontends/README.md`:
 
@@ -188,15 +188,15 @@ if unsure. Running the whole `frontends` aggregate plus `frontends_acme_invoke`
 and then `frontends_relayd` again does the same job.
 
 Checks:
-- `dig +short bgtutor.f3s.buetow.org` resolves like `goprecords.f3s.buetow.org`.
-- `curl -sv https://bgtutor.f3s.buetow.org/healthz` returns `ok` with a
-  valid Let's Encrypt certificate for `bgtutor.f3s.buetow.org` (no `-k`).
+- `dig +short bgtutor-mcp.f3s.buetow.org` resolves like `goprecords.f3s.buetow.org`.
+- `curl -sv https://bgtutor-mcp.f3s.buetow.org/healthz` returns `ok` with a
+  valid Let's Encrypt certificate for `bgtutor-mcp.f3s.buetow.org` (no `-k`).
 - Check both frontends if DNS points at both (`--resolve` with each IP).
   If it points only at blowfish (like `goprecords`), fishfinger serving a
-  `foo.zone` certificate for `bgtutor.f3s.buetow.org` is expected: `acme.sh`
+  `foo.zone` certificate for `bgtutor-mcp.f3s.buetow.org` is expected: `acme.sh`
   requests a site certificate only on the frontend the name resolves to and
   copies a placeholder in elsewhere so relayd can load the keypair.
-  `standby.bgtutor.f3s.buetow.org` gets a real certificate there (and a 404
+  `standby.bgtutor-mcp.f3s.buetow.org` gets a real certificate there (and a 404
   from traefik, same as `standby.goprecords`).
 - `frontends_gogios` always previews `pkg_add -u gogios` (the package is
   `IsLatest`); it upgrades only if pkgrepo has a newer build.
@@ -204,7 +204,7 @@ Checks:
 ## 7. Test over the internet
 
 ```sh
-./smoke-test.sh https://bgtutor.f3s.buetow.org
+./smoke-test.sh https://bgtutor-mcp.f3s.buetow.org
 ```
 
 It must end with `0 failed`. These are the authentication checks it runs;
@@ -219,7 +219,7 @@ all of them must pass through relayd and traefik, not just locally:
 | any 401 | header `WWW-Authenticate: Bearer` |
 
 Extra checks the script doesn't do:
-- `curl -s -o /dev/null -w '%{http_code}\n' http://bgtutor.f3s.buetow.org/mcp`:
+- `curl -s -o /dev/null -w '%{http_code}\n' http://bgtutor-mcp.f3s.buetow.org/mcp`:
   plain HTTP must not serve MCP with a token (expect a redirect, the frontends'
   default for port 80, or 401; never 200).
 - After the test, grep the relayd and traefik access logs for the token value.
@@ -236,7 +236,7 @@ Extra checks the script doesn't do:
 ## 8. Real session with a voice AI
 
 - Claude: Settings > Connectors > Add custom connector, URL
-  `https://bgtutor.f3s.buetow.org/mcp?token=<token>` (Paul adds it; the
+  `https://bgtutor-mcp.f3s.buetow.org/mcp?token=<token>` (Paul adds it; the
   token stays with him).
 - ChatGPT: turn on Developer mode (in Settings, under the apps/connectors
   advanced options; needs a paid plan), then add a connector with the same URL.
