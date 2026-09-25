@@ -359,6 +359,17 @@ restart_nfs_workloads_on_node() {
     # A list left by an earlier, partly failed attempt is resumed as is:
     # only the workloads that were not restarted yet are retried.
     if [ -s "$d/restart-list" ]; then
+        # Give up on entries that kept failing for an hour (paused
+        # Deployment, RBAC denial...): log them and drop the list rather
+        # than retrying every minute until the next repair. The age comes
+        # from the restart-pending marker (set once per repair); the list
+        # itself is rewritten on every attempt.
+        if [ -e "$d/restart-pending" ] \
+            && (( $(date +%s) - $(stat -c %Y "$d/restart-pending") > 3600 )); then
+            echo "NFS workload restart: giving up on entries failing for >1h:" $(cat "$d/restart-list")
+            rm -f "$d/restart-list"
+            return 0
+        fi
         restart_list_entries "$d"
         return
     fi
@@ -423,7 +434,7 @@ restart_list_entries() {
             echo "Rollout-restarting $kind $ns/$name (stale NFS handles after a repair)"
             out=$(timeout 20 kubectl rollout restart "$kind" -n "$ns" "$name" 2>&1)
         fi
-        if [ $? -ne 0 ] && ! grep -q "NotFound\|not found" <<<"$out"; then
+        if [ $? -ne 0 ] && ! grep -q "Error from server (NotFound)" <<<"$out"; then
             echo "  failed: $out"
             failed+=("${todo[i]}")
             rc=1
