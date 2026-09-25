@@ -93,7 +93,7 @@ REAP_INTERVAL=30
 # SIGKILL'd before its EXIT trap could clean up (e.g. systemd kills the
 # process after its own timeout, bypassing the trap).  Remove the stale lock
 # and continue rather than silently skipping all health checks forever.
-MAX_LOCK_AGE_SECS=90
+MAX_LOCK_AGE_SECS=180  # above the unit's TimeoutStartSec=150 (worst-case run)
 if [ -f "$LOCK_FILE" ]; then
     lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK_FILE") ))
     if (( lock_age < MAX_LOCK_AGE_SECS )); then
@@ -413,6 +413,12 @@ escalate_reboot() {
 
     # systemd-journald flushes on SIGTERM, which systemctl reboot sends to
     # all services before the node goes down — the message above will survive.
+    # Reset the counter first: it lives in /var/lib and survives the reboot,
+    # and a count still at the threshold would make the first failing probe
+    # after boot escalate again without a single repair attempt -- r0-r2
+    # rebooting in a loop (and dropping etcd quorum) through a long storage
+    # outage.
+    write_fail_count 0
     echo "Initiating systemctl reboot to recover broken NFS mount"
     systemctl reboot
 }
@@ -428,8 +434,9 @@ run_fix_mount_with_counter() {
     local pre
     pre=$(read_fail_count)
     if (( pre >= NFS_FAIL_THRESHOLD )); then
-        # Earlier attempts already used up the budget without escalating,
-        # which only happens when they were killed mid-repair (wedged).
+        # Earlier attempts in this boot already used up the budget without
+        # escalating, which only happens when they were killed mid-repair
+        # (wedged): escalate_reboot resets the counter before rebooting.
         escalate_reboot
         return
     fi
