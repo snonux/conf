@@ -3,12 +3,13 @@
 # (pinned via nodeSelector), which made r1 a single point of failure for the
 # music service (audit 2026-09-25 #8).
 #
-# Only the SQLite DB (navidrome.db + WAL) and small state live here. The
-# image/transcoding cache is on a node-local emptyDir (ND_CACHEFOLDER, see
-# deployment.yaml): serving thumbnails through the stunnel TLS tunnel made
-# the "Image cache" init take ~19 s, the reason the data once left NFS.
-# SQLite-on-NFS lock fragility is contained by the Recreate strategy and a
-# single RWO claim: only one pod ever opens the DB.
+# Holds the SQLite DB (navidrome.db + WAL) and Navidrome's image/transcoding
+# cache (default /data/cache). Nothing is node-local: node pinning and
+# node-bound volumes are not allowed in this cluster. The cache over NFS
+# costs some startup/thumbnail latency (the reason /data once left NFS);
+# that is accepted in exchange for running on any node. SQLite-on-NFS lock
+# fragility is contained by the Recreate strategy and a single RWO claim:
+# only one pod ever opens the DB.
 #
 # The NFS export is mounted at the same path on r0/r1/r2, so the hostPath
 # resolves identically on every node. type: Directory makes the mount fail

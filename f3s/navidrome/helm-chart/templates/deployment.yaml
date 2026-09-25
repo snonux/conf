@@ -35,9 +35,10 @@ spec:
         - name: navidrome-music
           mountPath: /mnt
           readOnly: true
-      # No nodeSelector: /data and /music are both on the NFS export that is
-      # mounted on every r-node, so the pod can run on r0, r1 or r2. The
-      # init container above refuses to start on a node without the mount.
+      # No node pinning and no node-local storage (house rule): /data (DB and
+      # cache) and /music are both on the NFS export mounted on every r-node,
+      # so the pod can run on r0, r1 or r2. The init container above refuses
+      # to start on a node without the mount.
       containers:
       - name: navidrome
         image: deluan/navidrome:0.61.2
@@ -58,11 +59,6 @@ spec:
           value: "info"
         - name: ND_BASEURL
           value: ""
-        # Keep the image/transcoding cache off NFS (it defaults to
-        # /data/cache): node-local reads keep startup and thumbnails fast.
-        # The cache is disposable and is rebuilt on demand after a restart.
-        - name: ND_CACHEFOLDER
-          value: /cache
         startupProbe:
           httpGet:
             path: /ping
@@ -91,18 +87,10 @@ spec:
           mountPath: /data
         - name: navidrome-music
           mountPath: /music
-        - name: navidrome-cache
-          mountPath: /cache
       volumes:
       - name: navidrome-data
         persistentVolumeClaim:
           claimName: navidrome-data-nfs-pvc
-      # Node-local scratch for the disposable cache (see ND_CACHEFOLDER).
-      # Navidrome caps its image and transcoding caches at 100 MB each by
-      # default; the limit leaves headroom without letting it fill the disk.
-      - name: navidrome-cache
-        emptyDir:
-          sizeLimit: 1Gi
       - name: navidrome-music
         persistentVolumeClaim:
           claimName: navidrome-music-pvc
