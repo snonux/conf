@@ -16,6 +16,7 @@ var (
 	Conf      = checkoutRoot("GONF_CONF_ROOT", "conf")
 	Frontends = filepath.Join(Conf, "frontends")
 	Garage    = filepath.Join(Conf, "f3s", "garage")
+	FHosts    = filepath.Join(Conf, "f3s", "freebsd-hosts")
 	RNodes    = filepath.Join(Conf, "f3s", "r-nodes")
 )
 
@@ -43,6 +44,12 @@ func GonfAsset(pkg, name string) string {
 // asset such as etc/garage.toml.tmpl.
 func GarageAsset(relativePath string) string {
 	return filepath.Join(Garage, relativePath)
+}
+
+// FHostAsset returns the controller-local path of a source-controlled
+// FreeBSD f-host asset such as carp/carp-auto-failback.sh.
+func FHostAsset(relativePath string) string {
+	return filepath.Join(FHosts, relativePath)
 }
 
 // RNodeAsset returns the controller-local path of a source-controlled r-node

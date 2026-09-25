@@ -1,0 +1,113 @@
+#!/bin/sh
+# CARP state management script
+# Usage: carp [state|master|backup|auto-failback enable|auto-failback disable]
+# Without arguments: shows current state
+# "state" prints only the bare state (MASTER, BACKUP, INIT) for scripts.
+
+# Find the interface with CARP configured. A plain for loop rather than
+# "ifconfig -l | xargs -n1 | while ... break": breaking out of that pipeline
+# killed xargs with SIGPIPE, and the resulting "xargs: /bin/echo: terminated
+# with signal 13" on stderr made cron mail root every minute (120 MB of
+# /var/mail/root on f0 by 2026-09-25).
+CARP_IF=""
+for if in $(ifconfig -l); do
+    if ifconfig "$if" 2>/dev/null | grep -q "carp:"; then
+        CARP_IF="$if"
+        break
+    fi
+done
+
+if [ -z "$CARP_IF" ]; then
+    echo "Error: No CARP interface found" >&2
+    exit 1
+fi
+
+# Get CARP VHID
+VHID=$(ifconfig "$CARP_IF" | grep "carp:" | sed -n 's/.*vhid \([0-9]*\).*/\1/p')
+
+if [ -z "$VHID" ]; then
+    echo "Error: Could not determine CARP VHID" >&2
+    exit 1
+fi
+
+# Function to get current state
+get_state() {
+    ifconfig "$CARP_IF" | grep "carp:" | awk '{print $2}'
+}
+
+# Check for auto-failback block file
+BLOCK_FILE="/data/nfs/nfs.NO_AUTO_FAILBACK"
+check_auto_failback() {
+    if [ -f "$BLOCK_FILE" ]; then
+        echo "WARNING: Auto-failback is DISABLED (file exists: $BLOCK_FILE)"
+    fi
+}
+
+# Main logic
+case "$1" in
+    state)
+        # Bare state for scripts (carp-auto-failback.sh): no prose, no
+        # WARNING line, so callers need not parse human-readable output.
+        get_state
+        ;;
+    "")
+        # No argument - show current state
+        STATE=$(get_state)
+        echo "CARP state on $CARP_IF (vhid $VHID): $STATE"
+        check_auto_failback
+        ;;
+    master)
+        # Force to MASTER state
+        echo "Setting CARP to MASTER state..."
+        ifconfig "$CARP_IF" vhid "$VHID" state master
+        sleep 1
+        STATE=$(get_state)
+        echo "CARP state on $CARP_IF (vhid $VHID): $STATE"
+        check_auto_failback
+        ;;
+    backup)
+        # Force to BACKUP state
+        echo "Setting CARP to BACKUP state..."
+        ifconfig "$CARP_IF" vhid "$VHID" state backup
+        sleep 1
+        STATE=$(get_state)
+        echo "CARP state on $CARP_IF (vhid $VHID): $STATE"
+        check_auto_failback
+        ;;
+    auto-failback)
+        case "$2" in
+            enable)
+                if [ -f "$BLOCK_FILE" ]; then
+                    rm "$BLOCK_FILE"
+                    echo "Auto-failback ENABLED (removed $BLOCK_FILE)"
+                else
+                    echo "Auto-failback was already enabled"
+                fi
+                ;;
+            disable)
+                if [ ! -f "$BLOCK_FILE" ]; then
+                    touch "$BLOCK_FILE"
+                    echo "Auto-failback DISABLED (created $BLOCK_FILE)"
+                else
+                    echo "Auto-failback was already disabled"
+                fi
+                ;;
+            *)
+                echo "Usage: $0 auto-failback [enable|disable]"
+                echo "  enable:  Remove block file to allow automatic failback"
+                echo "  disable: Create block file to prevent automatic failback"
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        echo "Usage: $0 [state|master|backup|auto-failback enable|auto-failback disable]"
+        echo "  Without arguments: show current CARP state"
+        echo "  state:  print only the state (MASTER, BACKUP, INIT)"
+        echo "  master: force this node to become CARP MASTER"
+        echo "  backup: force this node to become CARP BACKUP"
+        echo "  auto-failback enable:  allow automatic failback to f0"
+        echo "  auto-failback disable: prevent automatic failback to f0"
+        exit 1
+        ;;
+esac
