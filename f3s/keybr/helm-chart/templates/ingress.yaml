@@ -4,9 +4,9 @@ metadata:
   name: keybr-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: keybr.f3s.buetow.org
       http:
@@ -25,9 +25,9 @@ metadata:
   name: keybr-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - keybr.f3s.lan.buetow.org
