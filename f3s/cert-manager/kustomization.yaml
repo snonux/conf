@@ -1,0 +1,49 @@
+# ArgoCD renders this directory with kustomize because of this file, so the
+# vendored upstream cert-manager.yaml can stay byte-for-byte unmodified while
+# the patches below add the memory requests/limits upstream does not set
+# (audit 2026-09-25 #19). Every manifest in this directory must be listed in
+# resources, or ArgoCD stops managing (and prunes) it.
+#
+# Memory is sized from the 14-day peak working set with a limit well above it:
+# cainjector 119Mi, controller 88Mi, webhook 54Mi.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager.yaml
+  - self-signed-issuer.yaml
+  - ca-certificate.yaml
+  - wildcard-certificate.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: cert-manager-cainjector
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+  - target:
+      kind: Deployment
+      name: cert-manager
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+  - target:
+      kind: Deployment
+      name: cert-manager-webhook
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 256Mi
