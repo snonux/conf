@@ -1,5 +1,8 @@
 # Handover: deploy and verify bgtutor on f3s
 
+> bgtutor is currently disabled; see the status note at the top of README.md
+> for what is kept and how to bring it back before running these steps.
+
 For an agent (or person) with access to Paul's workstation: the `~/git`
 checkouts, Docker, `kubectl`/`argocd` for the f3s cluster, SSH to the NFS
 server (`paul@f0` with `doas`; the f-hosts take no root logins) and the gonf

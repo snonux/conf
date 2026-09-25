@@ -11,7 +11,7 @@ not applied.
 | `cicd/` | `cicd` | argo-rollouts |
 | `infra/` | `infra` (cert-manager: `cert-manager`, traefik-config: `kube-system`) | cert-manager, pkgrepo, registry, traefik-config |
 | `monitoring/` | `monitoring` | alloy (upstream chart), prometheus (multi-source), pushgateway; disabled: grafana-ingress, loki, tempo, trivy-operator |
-| `services/` | `services` | anki-sync-server, audiobookshelf, bgtutor, beets-art, filebrowser, forgejo, goprecords, immich, ipv6test, jellyfin, keybr, kobo-sync-server, miniflux, navidrome, opodsync, pihole, player, protonbridge, radicale, shuriken, syncthing, wallabag, webdav, xplayer, ychat; disabled: apache, tracing-demo |
+| `services/` | `services` | anki-sync-server, audiobookshelf, beets-art, filebrowser, forgejo, goprecords, immich, ipv6test, jellyfin, keybr, kobo-sync-server, miniflux, navidrome, opodsync, pihole, player, protonbridge, radicale, shuriken, syncthing, wallabag, webdav, xplayer, ychat; disabled: apache, bgtutor, tracing-demo |
 
 Sync policy everywhere: automated, `prune: true`, `selfHeal: true`,
 `CreateNamespace=false`, retry 3x with backoff. Manual cluster edits get

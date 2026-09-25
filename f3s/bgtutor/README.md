@@ -1,5 +1,16 @@
 # bgtutor on f3s
 
+> **Status: disabled since 2026-09-25.** It was deployed and worked, but the
+> ChatGPT plan in use offers no custom MCP connectors, so it was taken
+> offline: the ArgoCD app is `argocd-apps/services/bgtutor.yaml.disabled`,
+> the token secret is deleted, and `bgtutor-mcp.f3s.buetow.org` is no longer
+> in `f3sHosts` (no DNS, relayd route, certificate request or gogios check).
+> The chart, the NFS data under `/data/nfs/k3svolumes/bgtutor/data` on the
+> NFS server and the registry image `bgtutor:0.1.0` are kept. To bring it
+> back: rename the manifest back to `bgtutor.yaml`, re-add the host to
+> `f3sHosts` and `siteHTTPSStatus` (`"HTTP/1.1 404"`), then follow
+> HANDOVER.md from step 2 (new token secret, ArgoCD, frontends).
+
 Bulgarian Podcast Tutor MCP server (`bgtutor serve`, a sub-project of
 `github.com/snonux/totalrecall`). A voice AI (Claude or ChatGPT) connects to it
 as a custom connector and fetches prepared podcast episodes paragraph by
