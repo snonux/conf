@@ -8,9 +8,9 @@ metadata:
   name: bgtutor-ingress
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
     - host: bgtutor-mcp.f3s.buetow.org
       http:
@@ -29,9 +29,9 @@ metadata:
   name: bgtutor-ingress-lan
   namespace: services
   annotations:
-    spec.ingressClassName: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  ingressClassName: traefik
   tls:
     - hosts:
         - bgtutor.f3s.lan.buetow.org
