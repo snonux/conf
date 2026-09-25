@@ -6,8 +6,8 @@ import (
 
 // Loader owns individual lines of /boot/loader.conf on the f-hosts. The file
 // itself stays hand-managed: the install-time kern.geom.label.* and zfs_load
-// lines stay as they are, and carp_load belongs to the CARP task (gk2), so
-// this recipe never renders the whole file. Each managed setting is a
+// lines stay as they are, and carp_load belongs to Carp.LoaderConf (f0/f1
+// only), so this recipe never renders the whole file. Each managed setting is a
 // WithKeyedLine: the line starting with the setting's name is replaced in
 // place (a changed value or comment converges, a duplicate is dropped), and
 // appended when missing.
@@ -91,7 +91,7 @@ func (Loader) OptsConf() TaskOptions {
 // Conf manages the lines in place; the rest of loader.conf is untouched.
 // Each key ends in "=" so no key is a prefix of another, and the full
 // module names keep the *_load keys apart from the hand-kept zfs_load and
-// carp_load. cryptodev_load is managed only where BaselineHost.Cryptodev is
+// Carp's carp_load. cryptodev_load is managed only where BaselineHost.Cryptodev is
 // set; elsewhere the line is neither added nor removed.
 func (Loader) Conf() {
 	EachHost(func(h BaselineHost) {

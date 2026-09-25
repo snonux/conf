@@ -45,6 +45,9 @@ func main() {
 // The f-hosts' tokens (freebsd-hosts/goprecords/<host>.token, read by
 // freebsd.Goprecords) were imported on 2026-09-25 (task lk2) from each
 // host's /etc/goprecords-upload.token, so the first apply rewrites nothing.
+// Likewise the CARP vhid 1 password of f0/f1 (freebsd-hosts/carp/vhid1.pass,
+// read by freebsd.Carp.RcConf) was imported from their rc.conf on 2026-09-25
+// (task gk2); it has no file fallback.
 func setSecretProvider() error {
 	items, err := foostore.Items(map[secret.Ref]foostore.Item{
 		secret.Ref(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")): foostore.Field("Infra/nsd-tsig-key", "Password"),
@@ -55,6 +58,7 @@ func setSecretProvider() error {
 		secret.Ref(freebsd.GoprecordsToken("f1")):                   foostore.Field("Infra/goprecords-token-f1", "Password"),
 		secret.Ref(freebsd.GoprecordsToken("f2")):                   foostore.Field("Infra/goprecords-token-f2", "Password"),
 		secret.Ref(freebsd.GoprecordsToken("f3")):                   foostore.Field("Infra/goprecords-token-f3", "Password"),
+		secret.Ref(freebsd.CarpPassSecret()):                        foostore.Field("Infra/carp-vhid1-pass", "Password"),
 	})
 	if err != nil {
 		return err

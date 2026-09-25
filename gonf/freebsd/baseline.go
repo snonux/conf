@@ -14,7 +14,7 @@ import (
 // Deliberately NOT managed here:
 //   - hostname, ifconfig_re0*, defaultrouter: network identity, set at
 //     install time; a wrong value would cut the host off the LAN.
-//   - ifconfig_re0_alias0 (the CARP VIP): Carp / task gk2.
+//   - ifconfig_re0_alias0 (the CARP VIP): Carp.RcConf.
 //   - NFS, zfskeys, zrepl, node_exporter, uptimed, apcupsd *_enable and
 //     flags: NFS, ZfsKeys, Zrepl, Monitoring, Base and Apcupsd.
 //   - vm_*: Bhyve.RcConf.

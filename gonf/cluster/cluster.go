@@ -212,6 +212,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.130:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f0"}),
 		WithData(f01Baseline),
+		WithData(freebsd.CarpNode{}), // CARP MASTER by default (advskew 0)
 		WithData(k3sBhyve),
 		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
@@ -223,6 +224,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.131:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f1"}),
 		WithData(f01Baseline),
+		WithData(freebsd.CarpNode{AdvSkew: 100}), // CARP standby, loses to f0
 		WithData(k3sBhyve),
 		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
