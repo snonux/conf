@@ -51,10 +51,10 @@ func (WireGuard) DescPerms() string {
 // nested: each When fragment is its own recipe scope.
 func (WireGuard) Perms() {
 	WhenPathExists(wireguardDir, func() {
-		Dir(wireguardDir, Perm(0o700, Root))
+		Dir(wireguardDir, RootPrivate)
 	})
 	WhenPathExists(wireguardConf, func() {
-		EnsureFile(wireguardConf, Perm(0o600, Root))
+		EnsureFile(wireguardConf, RootPrivate)
 	})
 	WhenPathExists(wireguardDir, func() {
 		wireguard.StripGroupOther(wireguardDir)

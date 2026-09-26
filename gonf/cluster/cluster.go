@@ -214,7 +214,7 @@ func registerFreeBSD() {
 		WithData(f01Baseline),
 		WithData(freebsd.CarpNode{}), // CARP MASTER by default (advskew 0)
 		WithData(k3sBhyve),
-		WithData(freebsd.UPS{NISIP: "192.168.1.130"}),
+		WithData(freebsd.UPSServer{NISIP: "192.168.1.130"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
 	)
 	f1 := Host("f1", fhost,
@@ -226,7 +226,7 @@ func registerFreeBSD() {
 		WithData(f01Baseline),
 		WithData(freebsd.CarpNode{AdvSkew: 100}), // CARP standby, loses to f0
 		WithData(k3sBhyve),
-		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
+		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
 	)
 	f2 := Host("f2", fhost,
@@ -237,7 +237,7 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f2"}),
 		WithData(f2Baseline),
 		WithData(k3sBhyve),
-		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
+		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
 	)
 	f3 := Host("f3", fhost,
@@ -248,7 +248,7 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f3"}),
 		WithData(f3Baseline),
 		WithData(f3Bhyve),
-		WithData(freebsd.UPS{Server: upsServer, NISIP: "127.0.0.1"}),
+		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
 	Cluster(NameGarage, f0, f1, f2).Parallel(1)

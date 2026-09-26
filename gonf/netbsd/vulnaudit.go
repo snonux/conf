@@ -28,14 +28,7 @@ type VulnAuditTime struct {
 	Hour   string
 }
 
-// DescVulnAuditPackages returns the description for the audit's tools.
-func (Unattended) DescVulnAuditPackages() string {
-	return "Install curl for netbsd-vuln-audit"
-}
-
-// VulnAuditPackages installs curl (pkgsrc), which the audit uses for its
-// conditional HTTPS downloads. gzip, awk, pkg_admin and ntpq (the
-// clock gate) are in base.
+// VulnAuditPackages installs curl for netbsd-vuln-audit.
 func (Unattended) VulnAuditPackages() {
 	Package("curl")
 }
@@ -47,16 +40,16 @@ func (Unattended) DescVulnAuditScript() string {
 
 // OptsVulnAuditScript records curl before the script that needs it.
 func (Unattended) OptsVulnAuditScript() TaskOptions {
-	return TaskOptions{Needs("vuln_audit_packages")}
+	return TaskOptions{Needs(Unattended.VulnAuditPackages)}
 }
 
 // VulnAuditScript installs the ksh audit script (after its directory, which
 // gonf orders as the parent).
 func (Unattended) VulnAuditScript() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned)
 	InstallFile(vulnAuditScript,
 		paths.FrontendAsset("scripts/netbsd-vuln-audit.sh"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
 // DescVulnAuditStateDir returns the description for the state directory.
@@ -72,7 +65,7 @@ func (Unattended) DescVulnAuditStateDir() string {
 // installed in PKGVULNDIR (/usr/pkg/pkgdb), where interactive
 // `pkg_admin audit` and the daily /etc/security check read it.
 func (Unattended) VulnAuditStateDir() {
-	EnsureDir(vulnAuditStateDir, Perm(0o700, Root))
+	EnsureDir(vulnAuditStateDir, RootPrivate)
 }
 
 // DescVulnAuditCron returns the description for the daily cron job.
@@ -83,7 +76,7 @@ func (Unattended) DescVulnAuditCron() string {
 // OptsVulnAuditCron records the script and its state directory before the
 // job.
 func (Unattended) OptsVulnAuditCron() TaskOptions {
-	return TaskOptions{Needs("vuln_audit_script", "vuln_audit_state_dir")}
+	return TaskOptions{Needs(Unattended.VulnAuditScript, Unattended.VulnAuditStateDir)}
 }
 
 // VulnAuditCron runs the audit once a day at the host's VulnAuditTime,

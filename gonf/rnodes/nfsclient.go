@@ -39,27 +39,19 @@ connect = 192.168.1.138:2323
 `
 )
 
-// DescNFSClientPackages returns the NFS client packages task description.
-func (Maintenance) DescNFSClientPackages() string {
-	return "Install the NFS client packages (stunnel, nfs-utils)"
-}
-
-// NFSClientPackages installs stunnel (the TLS tunnel to the storage VIP) and
-// nfs-utils (mount.nfs4, nfsidmap, rpcbind dependency).
+// NFSClientPackages installs the NFS client packages (stunnel, nfs-utils).
 func (Maintenance) NFSClientPackages() {
 	Packages("stunnel", "nfs-utils")
 }
 
-// DescNFSClientStunnel returns the stunnel client task description.
-func (Maintenance) DescNFSClientStunnel() string {
-	return "Manage the stunnel NFS client config and key permissions (no restart; next boot)"
-}
-
 // OptsNFSClientStunnel orders the config after the stunnel package.
 func (Maintenance) OptsNFSClientStunnel() TaskOptions {
-	return TaskOptions{Needs("rnodes_nfs_client_packages")}
+	return TaskOptions{Needs(Maintenance.NFSClientPackages)}
 }
 
+// NFSClientStunnel manages the stunnel NFS client config and key permissions
+// (no restart; next boot).
+//
 // NFSClientStunnel renders /etc/stunnel/stunnel.conf per host and keeps the
 // distro stunnel.service enabled and running.
 //
@@ -78,19 +70,16 @@ func (Maintenance) NFSClientStunnel() {
 		WhenHostname(host, func() {
 			File("/etc/stunnel/stunnel.conf",
 				WithContent(fmt.Sprintf(stunnelConfFormat, host)),
-				Perm(0o644, Root))
-			EnsureFile("/etc/stunnel/"+host+"-stunnel.pem", Perm(0o600, Root))
+				RootOwned)
+			EnsureFile("/etc/stunnel/"+host+"-stunnel.pem", RootPrivate)
 		})
 	}
 	NoFile("/etc/stunnel/stunnel.pem")
 	Service("stunnel")
 }
 
-// DescNFSClientIdmapd returns the NFSv4 idmapd domain task description.
-func (Maintenance) DescNFSClientIdmapd() string {
-	return "Set the NFSv4 id-mapping Domain in /etc/idmapd.conf"
-}
-
+// NFSClientIdmapd sets the NFSv4 id-mapping Domain in /etc/idmapd.conf.
+//
 // NFSClientIdmapd owns the Domain line of /etc/idmapd.conf; it must match
 // the f-hosts' nfsuserd_flags="-domain lan.buetow.org", or file owners map
 // to nobody. The keyed line
@@ -99,14 +88,11 @@ func (Maintenance) DescNFSClientIdmapd() string {
 func (Maintenance) NFSClientIdmapd() {
 	File("/etc/idmapd.conf",
 		WithKeyedLine("Domain =", "Domain = lan.buetow.org"),
-		Perm(0o644, Root))
+		RootOwned)
 }
 
-// DescNFSClientSysctl returns the inotify sysctl task description.
-func (Maintenance) DescNFSClientSysctl() string {
-	return "Raise fs.inotify.max_user_instances to 512 on r-nodes"
-}
-
+// NFSClientSysctl raises fs.inotify.max_user_instances to 512 on r-nodes.
+//
 // NFSClientSysctl raises the inotify instance limit (default 128): without
 // it nfs-idmapd could fail to start with "Too many open files" (blog part 6),
 // the k3s pods' file watchers taking the default budget. A changed file is
@@ -115,33 +101,24 @@ func (Maintenance) NFSClientSysctl() {
 	const path = "/etc/sysctl.d/99-inotify.conf"
 	conf := File(path,
 		WithContent("fs.inotify.max_user_instances = 512\n"),
-		Perm(0o644, Root))
+		RootOwned)
 	Sh("sysctl --load "+path, OnChange(conf))
-}
-
-// DescNFSClientUnits returns the NFS client units task description.
-func (Maintenance) DescNFSClientUnits() string {
-	return "Enable and start rpcbind and nfs-client.target"
 }
 
 // OptsNFSClientUnits orders the units after nfs-utils.
 func (Maintenance) OptsNFSClientUnits() TaskOptions {
-	return TaskOptions{Needs("rnodes_nfs_client_packages")}
+	return TaskOptions{Needs(Maintenance.NFSClientPackages)}
 }
 
-// NFSClientUnits keeps rpcbind and nfs-client.target enabled. nfs-idmapd is
-// static and inactive on a client (NFSv4 client id mapping uses nfsidmap
-// upcalls), so it is not managed here.
+// NFSClientUnits enables and starts rpcbind and nfs-client.target.
 func (Maintenance) NFSClientUnits() {
 	Service("rpcbind")
 	Service("nfs-client.target")
 }
 
-// DescNFSClientFstab returns the NFS fstab line task description.
-func (Maintenance) DescNFSClientFstab() string {
-	return "Manage the /etc/fstab line of the k3s NFS volume mount (no remount)"
-}
-
+// NFSClientFstab manages the /etc/fstab line of the k3s NFS volume mount (no
+// remount).
+//
 // NFSClientFstab owns the one fstab line of /data/nfs/k3svolumes; the rest
 // of fstab stays hand-managed. A changed line only reloads systemd so the
 // generated data-nfs-k3svolumes.mount matches; the live mount is left alone
@@ -149,6 +126,6 @@ func (Maintenance) DescNFSClientFstab() string {
 func (Maintenance) NFSClientFstab() {
 	fstab := File("/etc/fstab",
 		WithKeyedLine(nfsFstabKey, nfsFstabLine),
-		Perm(0o644, Root))
+		RootOwned)
 	DaemonReload(OnChange(fstab))
 }

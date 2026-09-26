@@ -96,7 +96,7 @@ func (Loader) DescConf() string {
 // OptsConf orders the loader lines after the microcode package, so
 // cpu_microcode_name never points at a missing file.
 func (Loader) OptsConf() TaskOptions {
-	return TaskOptions{Needs("freebsd_microcode_package")}
+	return TaskOptions{Needs(Microcode.Package)}
 }
 
 // Conf manages the lines in place; the rest of loader.conf is untouched.
@@ -114,7 +114,7 @@ func (Loader) Conf() {
 			WithKeyedLine(`cpu_microcode_name=`, microcodeNameLine),
 			WithKeyedLine(`coretemp_load=`, coretempLoadLine),
 			WithKeyedLine(`hw.usb.quirk.0=`, jetkvmMassStorageIgnoreLine),
-			Perm(0o644, Root),
+			RootOwned,
 		}
 		if h.Cryptodev {
 			opts = append(opts, WithKeyedLine(`cryptodev_load=`, cryptodevLoadLine))

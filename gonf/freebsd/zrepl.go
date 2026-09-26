@@ -136,12 +136,7 @@ func renderZrepl(host string, jobs ZreplJobs) (string, error) {
 	return rendered, nil
 }
 
-// DescPackage returns the description for the zrepl package.
-func (Zrepl) DescPackage() string {
-	return "Install zrepl on the f-hosts"
-}
-
-// Package installs zrepl (its rc.d script and config directory).
+// Package installs zrepl on the f-hosts.
 func (Zrepl) Package() {
 	Packages("zrepl")
 }
@@ -153,7 +148,7 @@ func (Zrepl) DescConfig() string {
 
 // OptsConfig records the package (and /usr/local/etc/zrepl) first.
 func (Zrepl) OptsConfig() TaskOptions {
-	return TaskOptions{Needs("package")}
+	return TaskOptions{Needs(Zrepl.Package)}
 }
 
 // Config installs the rendered zrepl.yml and keeps zrepl enabled and
@@ -162,14 +157,9 @@ func (Zrepl) OptsConfig() TaskOptions {
 // check keeps the live file and fires no restart.
 func (Zrepl) Config() {
 	EachHostNamed(func(host string, jobs ZreplJobs) {
-		text, err := renderZrepl(host, jobs)
-		if err != nil {
-			Refuse("File", zreplConf, err)
-			return
-		}
-		conf := File(zreplConf, WithContent(text),
+		conf := File(zreplConf, WithContentFrom(renderZrepl(host, jobs)),
 			WithValidation("zrepl", List("configcheck", "--config", CandidatePath)),
-			Perm(0o644, Root))
+			RootOwned)
 		Service("zrepl", WithRestart, OnChange(conf))
 	})
 }

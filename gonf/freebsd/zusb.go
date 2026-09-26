@@ -30,13 +30,9 @@ const (
 	zusbUnloadScript = "/usr/local/bin/zusb-unload"
 )
 
-// DescScripts returns the description for the zusb scripts.
-func (Zusb) DescScripts() string {
-	return "Install zusb-load and zusb-unload to /usr/local/bin (0755 root:wheel; not run)"
-}
-
-// Scripts installs both scripts with the live mode (0755 root:wheel).
+// Scripts installs zusb-load and zusb-unload to /usr/local/bin (0755
+// root:wheel; not run).
 func (Zusb) Scripts() {
-	InstallFile(zusbLoadScript, paths.FHostAsset("zusb/zusb-load"), Perm(0o755, Root))
-	InstallFile(zusbUnloadScript, paths.FHostAsset("zusb/zusb-unload"), Perm(0o755, Root))
+	InstallFile(zusbLoadScript, paths.FHostAsset("zusb/zusb-load"), RootExec)
+	InstallFile(zusbUnloadScript, paths.FHostAsset("zusb/zusb-unload"), RootExec)
 }

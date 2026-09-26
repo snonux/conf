@@ -54,10 +54,10 @@ func (WireGuard) DescPerms() string {
 // own recipe scope.
 func (WireGuard) Perms() {
 	WhenPathExists(wireguardDir, func() {
-		Dir(wireguardDir, Perm(0o700, Root))
+		Dir(wireguardDir, RootPrivate)
 	})
 	WhenPathExists(wireguardConf, func() {
-		EnsureFile(wireguardConf, Perm(0o600, Root))
+		EnsureFile(wireguardConf, RootPrivate)
 	})
 	WhenPathExists(wireguardDir, func() {
 		wireguard.StripGroupOther(wireguardDir)
@@ -80,13 +80,8 @@ func (WireGuard) DescService() string {
 func (WireGuard) Service() {
 	Package("wireguard-tools")
 	EachHost(func(server Server) {
-		content, err := hostnameWg0Content(server.Name)
-		if err != nil {
-			Refuse("File", hostnameWg0, err)
-			return
-		}
 		WhenPathExists(wireguardConf, func() {
-			File(hostnameWg0, WithContent(content), Perm(0o640, Root))
+			File(hostnameWg0, WithContentFrom(hostnameWg0Content(server.Name)), Perm(0o640, Root))
 		})
 	})
 }

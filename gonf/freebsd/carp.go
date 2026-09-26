@@ -126,11 +126,12 @@ func (Carp) DescScript() string {
 	return "Install " + carpScript + " on the CARP members f0/f1 (0755 root:wheel)"
 }
 
+// WhenScript narrows the task to the CARP members.
+func (Carp) WhenScript() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // Script installs the carp state/management CLI on f0 and f1.
 func (Carp) Script() {
-	WhenHostname(carpMembers, func() {
-		InstallFile(carpScript, paths.FHostAsset("carp/carp"), Perm(0o755, Root))
-	})
+	InstallFile(carpScript, paths.FHostAsset("carp/carp"), RootExec)
 }
 
 // DescFailbackScript returns the description for the failback script.
@@ -141,15 +142,16 @@ func (Carp) DescFailbackScript() string {
 // OptsFailbackScript records the carp CLI first: the failback script calls
 // "carp state" and "carp master".
 func (Carp) OptsFailbackScript() TaskOptions {
-	return TaskOptions{Needs("script")}
+	return TaskOptions{Needs(Carp.Script)}
 }
+
+// WhenFailbackScript narrows the task to the failback host.
+func (Carp) WhenFailbackScript() TaskOption { return WhenHostnameIn(carpFailbackHost) }
 
 // FailbackScript installs the failback script on f0.
 func (Carp) FailbackScript() {
-	WhenHostname(carpFailbackHost, func() {
-		InstallFile(carpFailbackScript,
-			paths.FHostAsset("carp/carp-auto-failback.sh"), Perm(0o755, Root))
-	})
+	InstallFile(carpFailbackScript,
+		paths.FHostAsset("carp/carp-auto-failback.sh"), RootExec)
 }
 
 // DescFailbackCron returns the description for the failback cron job.
@@ -159,30 +161,27 @@ func (Carp) DescFailbackCron() string {
 
 // OptsFailbackCron records the script before the job.
 func (Carp) OptsFailbackCron() TaskOptions {
-	return TaskOptions{Needs("failback_script")}
+	return TaskOptions{Needs(Carp.FailbackScript)}
 }
 
-// DescFailbackNewsyslog returns the description for the log rotation line.
-func (Carp) DescFailbackNewsyslog() string {
-	return "Rotate /var/log/carp-auto-failback.log on f0 via /etc/newsyslog.conf"
-}
+// WhenFailbackNewsyslog narrows the task to the failback host.
+func (Carp) WhenFailbackNewsyslog() TaskOption { return WhenHostnameIn(carpFailbackHost) }
 
-// FailbackNewsyslog rotates the failback log: while f0 sits in INIT or is
-// blocked from failing back, the script appends a SKIP line every minute.
+// FailbackNewsyslog rotates /var/log/carp-auto-failback.log on f0 via
+// /etc/newsyslog.conf.
 func (Carp) FailbackNewsyslog() {
-	WhenHostname(carpFailbackHost, func() {
-		File("/etc/newsyslog.conf", WithLine(carpFailbackNewsyslogLine), WithMode(0o644))
-	})
+	File("/etc/newsyslog.conf", WithLine(carpFailbackNewsyslogLine), WithMode(0o644))
 }
+
+// WhenFailbackCron narrows the task to the failback host.
+func (Carp) WhenFailbackCron() TaskOption { return WhenHostnameIn(carpFailbackHost) }
 
 // FailbackCron runs the failback check every minute on f0. The first deploy
 // on 2026-09-25 did NOT adopt the identical hand-added line (gonf bug, tracked
 // as its own task) and the job ran twice until the unmanaged line was removed
 // by hand; on a freshly built f0 there is no such line to collide with.
 func (Carp) FailbackCron() {
-	WhenHostname(carpFailbackHost, func() {
-		CronAt("carp-auto-failback", "* * * * *", carpFailbackScript)
-	})
+	CronAt("carp-auto-failback", "* * * * *", carpFailbackScript)
 }
 
 // DescControl returns the description for carpcontrol.sh.
@@ -190,16 +189,17 @@ func (Carp) DescControl() string {
 	return "Install " + carpControlScript + " (the devd CARP hook) on f0/f1 (0555 root:wheel); remove the old hand-made copies"
 }
 
+// WhenControl narrows the task to the CARP members.
+func (Carp) WhenControl() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // Control installs carpcontrol.sh with the live mode 0555 and removes the
 // two stale copies beside it. The script only runs on a CARP transition
 // (devd), so replacing it never runs it.
 func (Carp) Control() {
-	WhenHostname(carpMembers, func() {
-		InstallFile(carpControlScript, paths.FHostAsset("carp/carpcontrol.sh"), Perm(0o555, Root))
-		for _, old := range carpControlOldCopies {
-			NoFile(old)
-		}
-	})
+	InstallFile(carpControlScript, paths.FHostAsset("carp/carpcontrol.sh"), Perm(0o555, Root))
+	for _, old := range carpControlOldCopies {
+		NoFile(old)
+	}
 }
 
 // DescDevdHook returns the description for the devd CARP rule.
@@ -209,8 +209,11 @@ func (Carp) DescDevdHook() string {
 
 // OptsDevdHook records carpcontrol.sh first: the rule runs it.
 func (Carp) OptsDevdHook() TaskOptions {
-	return TaskOptions{Privileged(), Needs("control")}
+	return TaskOptions{Privileged(), Needs(Carp.Control)}
 }
+
+// WhenDevdHook narrows the task to the CARP members.
+func (Carp) WhenDevdHook() TaskOption { return WhenHostnameIn(carpMembers...) }
 
 // DevdHook moves the CARP rule from the end of /etc/devd.conf (appended by
 // hand, blog part 6) into the drop-in carp.conf in /usr/local/etc/devd, a
@@ -220,14 +223,12 @@ func (Carp) OptsDevdHook() TaskOptions {
 // missing from a running devd. Keeping /etc/devd.conf stock also keeps
 // etcupdate merges clean.
 func (Carp) DevdHook() {
-	WhenHostname(carpMembers, func() {
-		EnsureDir(carpDevdDir, Perm(0o755, Root))
-		hook := InstallFile(carpDevdHook, paths.FHostAsset("carp/devd-carp.conf"), Perm(0o644, Root))
-		strip := Command("sh", List("-c", devdStripCarpBlock),
-			OnlyIf("grep", List("-qF", carpControlScript, devdConf)),
-			DependsOn(hook), WithName("devd-conf-strip-carp"))
-		Sh("service devd restart", OnChange(hook, strip))
-	})
+	EnsureDir(carpDevdDir, RootOwned)
+	hook := InstallFile(carpDevdHook, paths.FHostAsset("carp/devd-carp.conf"), RootOwned)
+	strip := Command("sh", List("-c", devdStripCarpBlock),
+		OnlyIf("grep", List("-qF", carpControlScript, devdConf)),
+		DependsOn(hook), WithName("devd-conf-strip-carp"))
+	Sh("service devd restart", OnChange(hook, strip))
 }
 
 // DescLoaderConf returns the description for carp_load.
@@ -235,14 +236,15 @@ func (Carp) DescLoaderConf() string {
 	return `loader.conf carp_load="YES" on f0/f1 (next boot)`
 }
 
+// WhenLoaderConf narrows the task to the CARP members.
+func (Carp) WhenLoaderConf() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // LoaderConf owns the carp_load line of /boot/loader.conf on the CARP
 // members; Loader owns the other lines of the file. The module is already
 // loaded on the running hosts, so nothing is kldloaded here.
 func (Carp) LoaderConf() {
-	WhenHostname(carpMembers, func() {
-		File(loaderConf, WithKeyedLine(`carp_load=`, `carp_load="YES"`),
-			Perm(0o644, Root), WithName("loader-conf-carp"))
-	})
+	File(loaderConf, WithShellVar("carp_load", "YES"),
+		RootOwned, WithName("loader-conf-carp"))
 }
 
 // DescRcConf returns the description for the CARP alias line.
@@ -259,12 +261,10 @@ func (Carp) DescRcConf() string {
 // see the Carp comment.
 func (Carp) RcConf() {
 	pass := MustSecret(CarpPassSecret())
-	for _, host := range carpMembers {
-		WhenHostname(host, func() {
-			File(rcConf, WithKeyedLine(`ifconfig_re0_alias0=`, carpAliasLine(HostData[CarpNode](host), pass)),
-				Perm(0o644, Root), WithName("rc-conf-carp"))
-		})
-	}
+	EachHostWith(func(n CarpNode) {
+		File(rcConf, WithKeyedLine(`ifconfig_re0_alias0=`, carpAliasLine(n, pass)),
+			RootOwned, WithName("rc-conf-carp"))
+	})
 }
 
 // carpAliasLine renders ifconfig_re0_alias0 in the live spelling:

@@ -45,11 +45,9 @@ const (
 // them.
 var basePackages = List("bash", "doas", "git", "helix", "jq", "ksh", "rsync", "tmux")
 
-// DescHosts returns the description for /etc/hosts.
-func (Base) DescHosts() string {
-	return "Render /etc/hosts (stock header, LAN and wg0 mesh rows from the shared etchosts inventory)"
-}
-
+// Hosts renders /etc/hosts (stock header, LAN and wg0 mesh rows from the
+// shared etchosts inventory).
+//
 // Hosts renders the whole file: the rows were hand-appended and had to be
 // de-duplicated anyway, so a line edit would leave the junk in place. The
 // LAN and wg0 rows come from gonf/etchosts, the inventory the r-nodes'
@@ -57,14 +55,12 @@ func (Base) DescHosts() string {
 // stock header.
 func (Base) Hosts() {
 	InstallFile(etcHosts, paths.FHostAsset(baseAssetsPath+"hosts.tmpl"),
-		Perm(0o644, Root), WithTemplateData(etchosts.TemplateData()))
+		RootOwned, WithTemplateData(etchosts.TemplateData()))
 }
 
-// DescDoas returns the description for doas.conf.
-func (Base) DescDoas() string {
-	return "Install doas.conf (nopass :wheel + f3sctl agent rules), validated with doas -C first"
-}
-
+// Doas installs doas.conf (nopass :wheel + f3sctl agent rules), validated
+// with doas -C first.
+//
 // Doas replaces the sample-derived doas.conf. The candidate must parse with
 // "doas -C" before it goes live: gonf elevates through doas itself, so a
 // broken file would lock gonf and paul out of root. "permit nopass :wheel"
@@ -76,31 +72,21 @@ func (Base) DescDoas() string {
 // alone.
 func (Base) Doas() {
 	InstallFile(doasConf, paths.FHostAsset(baseAssetsPath+"doas.conf"),
-		Perm(0o644, Root), WithValidation(doasBin, List("-C", CandidatePath)))
+		RootOwned, WithValidation(doasBin, List("-C", CandidatePath)))
 }
 
-// DescPackages returns the description for the base packages.
-func (Base) DescPackages() string {
-	return "Install the interactive base packages (bash doas git helix jq ksh rsync tmux)"
-}
-
-// Packages installs basePackages.
+// Packages installs the interactive base packages (bash doas git helix jq
+// ksh rsync tmux).
 func (Base) Packages() {
 	Packages(basePackages...)
 }
 
-// DescUptimed returns the description for uptimed.
-func (Base) DescUptimed() string {
-	return "Install uptimed, its config (LOG_MAXIMUM_ENTRIES=0), enable and run it; restart on config change"
-}
-
-// Uptimed installs the package and f0-f2's config (identical on the three;
-// it is the package sample with LOG_MAXIMUM_ENTRIES=0, keeping every record
-// for goprecords) and restarts the daemon only when the config changed.
+// Uptimed installs uptimed, its config (LOG_MAXIMUM_ENTRIES=0), enables and
+// runs it; restarts on config change.
 func (Base) Uptimed() {
 	pkg := Package("uptimed")
 	conf := InstallFile(uptimedConf, paths.FHostAsset(baseAssetsPath+"uptimed.conf"),
-		Perm(0o644, Root), DependsOn(pkg))
+		RootOwned, DependsOn(pkg))
 	Service("uptimed", WithRestart, OnChange(conf))
 }
 
@@ -112,6 +98,6 @@ func (Base) DescPkgRepo() string {
 // PkgRepo installs the client config of the homelab repository (f3s-pkgrepo
 // skill). It carries no secret: the repo is unsigned and served over HTTPS.
 func (Base) PkgRepo() {
-	EnsureDir(pkgReposDir, Perm(0o755, Root))
-	InstallFile(pkgRepoCustom, paths.FHostAsset(baseAssetsPath+"pkg-custom.conf"), Perm(0o644, Root))
+	EnsureDir(pkgReposDir, RootOwned)
+	InstallFile(pkgRepoCustom, paths.FHostAsset(baseAssetsPath+"pkg-custom.conf"), RootOwned)
 }

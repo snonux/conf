@@ -24,44 +24,26 @@ type KernelAuditCalendar struct {
 	OnCalendar string
 }
 
-// DescPackages returns the description for the audit's tool dependencies.
-func (KernelAudit) DescPackages() string {
-	return "Install ksh, unzip, jq and curl for rocky-kernel-audit"
-}
-
-// Packages installs the script's interpreter and feed tooling: ksh runs it
-// (a fresh host without rocky_packages would otherwise fail 203/EXEC), curl
-// downloads the OSV export, unzip streams its records, jq evaluates the
-// version ranges. ksh is also declared by Unattended.Packages; the duplicate
-// declaration is idempotent.
+// Packages installs ksh, unzip, jq and curl for rocky-kernel-audit.
 func (KernelAudit) Packages() {
 	Packages("ksh", "unzip", "jq", "curl")
 }
 
-// DescScript returns the description for the audit script deployment.
-func (KernelAudit) DescScript() string {
-	return "Install /usr/local/sbin/rocky-kernel-audit (0755 root:root)"
-}
-
 // OptsScript records the audit's tools before the script.
 func (KernelAudit) OptsScript() TaskOptions {
-	return TaskOptions{Needs("packages")}
+	return TaskOptions{Needs(KernelAudit.Packages)}
 }
 
-// Script installs the ksh audit script (after its directory, which gonf
-// orders as the parent).
+// Script installs /usr/local/sbin/rocky-kernel-audit (0755 root:root).
 func (KernelAudit) Script() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned)
 	InstallFile("/usr/local/sbin/rocky-kernel-audit",
 		paths.FrontendAsset("scripts/rocky-kernel-audit.sh"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
-// DescStateDir returns the description for the audit state directory.
-func (KernelAudit) DescStateDir() string {
-	return "Ensure /var/lib/rocky-kernel-audit (feed cache + status)"
-}
-
+// StateDir ensures /var/lib/rocky-kernel-audit (feed cache + status).
+//
 // StateDir creates the directory holding the run lock, the cached feed, the
 // status record, the affected-CVE baseline (affected-cves) with its record
 // count (baseline-cve-records), a pending record-count drop
@@ -71,19 +53,16 @@ func (KernelAudit) DescStateDir() string {
 // baseline-cve-records accepts a lower feed record count at once; deleting
 // affected-cves re-baselines (every affected CVE is reported as new once).
 func (KernelAudit) StateDir() {
-	EnsureDir("/var/lib/rocky-kernel-audit", Perm(0o700, Root))
-}
-
-// DescUnits returns the description for the audit timer.
-func (KernelAudit) DescUnits() string {
-	return "Install rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
+	EnsureDir("/var/lib/rocky-kernel-audit", RootPrivate)
 }
 
 // OptsUnits records the script and the state directory before the timer.
 func (KernelAudit) OptsUnits() TaskOptions {
-	return TaskOptions{Needs("script", "state_dir")}
+	return TaskOptions{Needs(KernelAudit.Script, KernelAudit.StateDir)}
 }
 
+// Units installs rocky-kernel-audit SystemdTimer (daily, per-host calendar).
+//
 // Units installs the daily oneshot+timer pair. Persistent catches a run
 // missed while the Pi was down. Only UNKNOWN (broken coverage) exits
 // non-zero, so a failed service means the audit itself needs attention;

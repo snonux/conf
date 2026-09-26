@@ -55,11 +55,9 @@ type Deployment struct {
 	RequiresRoot
 }
 
-// DescConfig returns the description for the Garage configuration deployment.
-func (Deployment) DescConfig() string {
-	return "Render and install Garage TOML on f0, f1, and f2 (config only; Garage must already be installed and provisioned)"
-}
-
+// Config renders and installs Garage TOML on f0, f1, and f2 (config only;
+// Garage must already be installed and provisioned).
+//
 // Config installs each node's Garage configuration and only restarts Garage
 // when its managed configuration changed. Service still converges to enabled
 // and running on every apply.

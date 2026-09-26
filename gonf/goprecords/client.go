@@ -72,8 +72,8 @@ func Client(tokenRef string) (script Resource, ok bool) {
 	if token == "" {
 		return nil, false
 	}
-	File(TokenFile, WithContent(token+"\n"), Perm(0o600, Root))
-	return InstallFile(ClientScript, clientAsset(), Perm(0o755, Root)), true
+	File(TokenFile, WithContent(token+"\n"), RootPrivate)
+	return InstallFile(ClientScript, clientAsset(), RootExec), true
 }
 
 // CommandLine returns the bare client invocation for host: the client with

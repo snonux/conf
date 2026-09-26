@@ -94,17 +94,18 @@ func (NFS) DescRcConf() string {
 	return "rc.conf NFS/stunnel keys on f0/f1 (mountd -p 2050, *_enable YES for carpcontrol); applies on next CARP transition"
 }
 
+// WhenRcConf narrows the task to the CARP members.
+func (NFS) WhenRcConf() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // RcConf owns one line per key via WithKeyedLine (replaced in place, appended
 // when missing); the rest of rc.conf stays hand-managed. Each key ends in "="
 // so no key is a prefix of another (nfsd_flags vs nfsuserd_flags).
 func (NFS) RcConf() {
-	WhenHostname(carpMembers, func() {
-		opts := []FileOption{WithoutLine(deadRcConfLine), Perm(0o644, Root)}
-		for _, kv := range nfsRcConfKeys {
-			opts = append(opts, WithKeyedLine(kv.key+"=", kv.key+`="`+kv.value+`"`))
-		}
-		File(rcConf, opts...)
-	})
+	opts := []FileOption{WithoutLine(deadRcConfLine), RootOwned}
+	for _, kv := range nfsRcConfKeys {
+		opts = append(opts, WithShellVar(kv.key, kv.value))
+	}
+	File(rcConf, opts...)
 }
 
 // DescSysctl returns the description for the NFS sysctls.
@@ -112,22 +113,23 @@ func (NFS) DescSysctl() string {
 	return "sysctl.conf + live: kern TLS, nfs_privport=0, NFSv4 uid<->string on f0/f1"
 }
 
+// WhenSysctl narrows the task to the CARP members.
+func (NFS) WhenSysctl() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // Sysctl writes the settings to sysctl.conf (read at boot) and sets each live
 // value that differs. Setting them is safe while the NFS server runs: they
 // only steer the owner-string mapping and port check of new requests, and on
 // the BACKUP no nfsd runs at all.
 func (NFS) Sysctl() {
-	WhenHostname(carpMembers, func() {
-		opts := []FileOption{Perm(0o644, Root)}
-		for _, s := range nfsSysctls {
-			opts = append(opts, WithKeyedLine(s.name+"=", s.name+"="+s.value))
-		}
-		File(sysctlConf, opts...)
-		for _, s := range nfsSysctls {
-			Command("sysctl", List(s.name+"="+s.value),
-				OnlyIf("sh", List("-c", `[ "$(sysctl -n `+s.name+`)" != "`+s.value+`" ]`)))
-		}
-	})
+	opts := []FileOption{RootOwned}
+	for _, s := range nfsSysctls {
+		opts = append(opts, WithKeyedLine(s.name+"=", s.name+"="+s.value))
+	}
+	File(sysctlConf, opts...)
+	for _, s := range nfsSysctls {
+		Command("sysctl", List(s.name+"="+s.value),
+			OnlyIf("sh", List("-c", `[ "$(sysctl -n `+s.name+`)" != "`+s.value+`" ]`)))
+	}
 }
 
 // DescExports returns the description for /etc/exports.
@@ -135,29 +137,26 @@ func (NFS) DescExports() string {
 	return "/etc/exports on f0/f1 (/data/nfs to the stunnel loopback); mountd reload on change where it runs"
 }
 
+// WhenExports narrows the task to the CARP members.
+func (NFS) WhenExports() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // Exports installs /etc/exports (stunnel clients arrive from 127.0.0.1) and,
 // on change, sends mountd its SIGHUP reload, which re-reads the exports
 // without dropping clients. The status guard limits that to the host where
 // carpcontrol.sh started mountd (the MASTER); the BACKUP picks the file up on
 // its next start.
 func (NFS) Exports() {
-	WhenHostname(carpMembers, func() {
-		exports := InstallFile(nfsExports, paths.FHostAsset("nfs/exports"), Perm(0o644, Root))
-		Command("sh", List("-c", "if service mountd status >/dev/null 2>&1; then service mountd reload; fi"),
-			OnChange(exports))
-	})
+	exports := InstallFile(nfsExports, paths.FHostAsset("nfs/exports"), RootOwned)
+	Command("sh", List("-c", "if service mountd status >/dev/null 2>&1; then service mountd reload; fi"),
+		OnChange(exports))
 }
 
-// DescStunnelPackage returns the description for the stunnel package.
-func (NFS) DescStunnelPackage() string {
-	return "Install stunnel on f0/f1"
-}
+// WhenStunnelPackage narrows the task to the CARP members.
+func (NFS) WhenStunnelPackage() TaskOption { return WhenHostnameIn(carpMembers...) }
 
-// StunnelPackage installs stunnel, which fronts NFS with mutual TLS.
+// StunnelPackage installs stunnel on f0/f1.
 func (NFS) StunnelPackage() {
-	WhenHostname(carpMembers, func() {
-		Packages("stunnel")
-	})
+	Packages("stunnel")
 }
 
 // DescStunnelConf returns the description for stunnel.conf.
@@ -167,17 +166,18 @@ func (NFS) DescStunnelConf() string {
 
 // OptsStunnelConf records the package (and its config dir) first.
 func (NFS) OptsStunnelConf() TaskOptions {
-	return TaskOptions{Needs("stunnel_package")}
+	return TaskOptions{Needs(NFS.StunnelPackage)}
 }
+
+// WhenStunnelConf narrows the task to the CARP members.
+func (NFS) WhenStunnelConf() TaskOption { return WhenHostnameIn(carpMembers...) }
 
 // StunnelConf installs the server config. The asset is the live file byte
 // for byte (it has no trailing newline). stunnel is not restarted: on the
 // MASTER that would cut every NFS mount of the k3s nodes; carpcontrol.sh
 // restarts it on the next MASTER transition.
 func (NFS) StunnelConf() {
-	WhenHostname(carpMembers, func() {
-		InstallFile(stunnelConf, paths.FHostAsset("nfs/stunnel.conf"), Perm(0o644, Root))
-	})
+	InstallFile(stunnelConf, paths.FHostAsset("nfs/stunnel.conf"), RootOwned)
 }
 
 // DescLiveCheckCron returns the description for the zrepl canary job.
@@ -185,9 +185,10 @@ func (NFS) DescLiveCheckCron() string {
 	return "Root cron on f0: write the epoch to /data/nfs/nfs.LIVE_CHECK every 10 min (zrepl canary)"
 }
 
+// WhenLiveCheckCron narrows the task to the failback host.
+func (NFS) WhenLiveCheckCron() TaskOption { return WhenHostnameIn(carpFailbackHost) }
+
 // LiveCheckCron adopts f0's canary job (see liveCheckCommand).
 func (NFS) LiveCheckCron() {
-	WhenHostname(carpFailbackHost, func() {
-		CronAt("nfs-live-check", "*/10 * * * *", liveCheckCommand)
-	})
+	CronAt("nfs-live-check", "*/10 * * * *", liveCheckCommand)
 }

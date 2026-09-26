@@ -26,10 +26,10 @@ func (Unattended) DescWireguardWatchdogScript() string {
 // WireguardWatchdogScript installs the watchdog (after its directory, which
 // gonf orders as the parent).
 func (Unattended) WireguardWatchdogScript() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned)
 	InstallFile(wireguardWatchdogScript,
 		paths.GonfAsset("netbsd", "wireguard-watchdog"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
 // DescWireguardWatchdogCron returns the description for the cron job.
@@ -39,7 +39,7 @@ func (Unattended) DescWireguardWatchdogCron() string {
 
 // OptsWireguardWatchdogCron records the script before the job.
 func (Unattended) OptsWireguardWatchdogCron() TaskOptions {
-	return TaskOptions{Needs("wireguard_watchdog_script")}
+	return TaskOptions{Needs(Unattended.WireguardWatchdogScript)}
 }
 
 // WireguardWatchdogCron checks the link every five minutes: a dead link is

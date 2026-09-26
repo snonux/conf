@@ -36,54 +36,34 @@ type UnattendedSchedule struct {
 	Minute string
 }
 
-// DescPackages returns the description for required packages.
-func (Unattended) DescPackages() string {
-	return "Install ksh (ksh93) for unattended-upgrade-freebsd"
-}
-
-// Packages installs ksh (script interpreter, house rule).
+// Packages installs ksh (ksh93) for unattended-upgrade-freebsd.
 func (Unattended) Packages() {
 	Package("ksh")
 }
 
-// DescScript returns the description for the wrapper deployment.
-func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-freebsd (0755 root:wheel)"
-}
-
 // OptsScript records ksh, the script's interpreter, before the script.
 func (Unattended) OptsScript() TaskOptions {
-	return TaskOptions{Needs("packages")}
+	return TaskOptions{Needs(Unattended.Packages)}
 }
 
-// Script installs the FreeBSD ksh wrapper (after its directory, which gonf
-// orders as the parent).
+// Script installs /usr/local/sbin/unattended-upgrade-freebsd (0755
+// root:wheel).
 func (Unattended) Script() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned)
 	InstallFile("/usr/local/sbin/unattended-upgrade-freebsd",
 		paths.FrontendAsset("scripts/unattended-upgrade-freebsd.sh"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
-// DescServices returns the description for the restart list.
-func (Unattended) DescServices() string {
-	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
-}
-
-// Services installs the rc.d restart list.
+// Services installs /etc/unattended-upgrade-services (0644 root:wheel).
 func (Unattended) Services() {
 	InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
-		Perm(0o644, Root))
+		RootOwned)
 }
 
-// DescStampDir returns the description for the stamp directory.
-func (Unattended) DescStampDir() string {
-	return "Ensure /var/lib/unattended-upgrade stamp directory"
-}
-
-// StampDir creates the persistent stamp directory.
+// StampDir ensures /var/lib/unattended-upgrade stamp directory.
 func (Unattended) StampDir() {
-	EnsureDir("/var/lib/unattended-upgrade", Perm(0o700, Root))
+	EnsureDir("/var/lib/unattended-upgrade", RootPrivate)
 }
 
 // DescCron returns the description for the hourly cron.
@@ -94,7 +74,7 @@ func (Unattended) DescCron() string {
 // OptsCron records the script, the restart list and the stamp directory
 // before the job.
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Needs("script", "services", "stamp_dir")}
+	return TaskOptions{Needs(Unattended.Script, Unattended.Services, Unattended.StampDir)}
 }
 
 // Cron installs the hourly daily-mode job (stamp-gated in-script).
@@ -114,27 +94,13 @@ func (Unattended) Cron() {
 	})
 }
 
-// DescNewsyslog returns the description for the rotation line.
-func (Unattended) DescNewsyslog() string {
-	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
-}
-
-// Newsyslog appends the rotation line.
+// Newsyslog appends unattended-upgrade log rotation to /etc/newsyslog.conf.
 func (Unattended) Newsyslog() {
 	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }
 
-// DescRetiredPackages returns the description for the removed packages.
-func (Unattended) DescRetiredPackages() string {
-	return "Remove retired packages (python311 and its py311-* stack)"
-}
-
-// RetiredPackages keeps packages absent that nothing on the f-hosts needs any
-// more but that unattended-upgrade-freebsd would otherwise keep patching (or,
-// as with python311, keep flagging in pkg audit: it only upgrades, it never
-// removes orphans). python311 and its py311-* modules were leftovers of an
-// older py311 toolchain after awscli moved to python312; removed 2026-09-25.
-// pkg delete takes the py311-* modules that depend on python311 with it.
+// RetiredPackages removes retired packages (python311 and its py311-*
+// stack).
 func (Unattended) RetiredPackages() {
 	NoPackage("python311")
 }

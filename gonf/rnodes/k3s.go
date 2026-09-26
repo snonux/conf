@@ -48,11 +48,9 @@ const (
 	k3sAssetsPath = "k3s/"
 )
 
-// DescConfig returns the description for /etc/rancher/k3s/config.yaml.
-func (K3s) DescConfig() string {
-	return "Render /etc/rancher/k3s/config.yaml (etcd metrics, event-ttl, controller-manager bind, wg0 node-ip/advertise-address); no k3s restart"
-}
-
+// Config renders /etc/rancher/k3s/config.yaml (etcd metrics, event-ttl,
+// controller-manager bind, wg0 node-ip/advertise-address); no k3s restart.
+//
 // Config renders config.yaml from f3s/r-nodes/k3s/config.yaml.tmpl, byte for
 // byte the hand-made files of 2026-09-25 (f3s blog parts 7 and 8):
 //   - etcd-expose-metrics and kube-controller-manager bind-address=0.0.0.0
@@ -63,24 +61,22 @@ func (K3s) DescConfig() string {
 // The file carries no header comment on purpose, so the live files adopt
 // without a change. Mode 0644 as found (no secrets in it).
 func (K3s) Config() {
-	EnsureDir(k3sConfigDir, Perm(0o755, Root))
+	EnsureDir(k3sConfigDir, RootOwned)
 	EachHost(func(n K3sNode) {
 		InstallFile(k3sConfig, paths.RNodeAsset(k3sAssetsPath+"config.yaml.tmpl"),
-			WithTemplateData(n), Perm(0o644, Root))
+			WithTemplateData(n), RootOwned)
 	})
 }
 
-// DescRegistries returns the description for /etc/rancher/k3s/registries.yaml.
-func (K3s) DescRegistries() string {
-	return "Install /etc/rancher/k3s/registries.yaml (registry.lan.buetow.org:30001 -> http://localhost:30001); no k3s restart"
-}
-
+// Registries installs /etc/rancher/k3s/registries.yaml
+// (registry.lan.buetow.org:30001 -> http://localhost:30001); no k3s restart.
+//
 // Registries installs the containerd mirror for the in-cluster registry
 // (f3s/registry): images are named registry.lan.buetow.org:30001/..., and
 // every node dials its own NodePort over plain HTTP at localhost:30001, so
 // pulls need neither DNS nor TLS. Identical on r0-r2.
 func (K3s) Registries() {
-	EnsureDir(k3sConfigDir, Perm(0o755, Root))
+	EnsureDir(k3sConfigDir, RootOwned)
 	InstallFile(k3sRegistries, paths.RNodeAsset(k3sAssetsPath+"registries.yaml"),
-		Perm(0o644, Root))
+		RootOwned)
 }
