@@ -100,7 +100,7 @@ var f3sHosts = []string{
 	"ipv6.ipv6test.f3s.buetow.org",
 }
 
-var garageBuckets = []string{"taskwarrior", "quicklog", "comicredr"}
+var garageBuckets = []string{"taskwarrior", "quicklog", "comicredr", "comicredr-test"}
 
 // Per-site exceptions to the default site policy (see SiteFor). A site
 // without an entry is served over HTTPS on 443 by relayd's generic routing,
