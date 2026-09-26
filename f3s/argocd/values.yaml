@@ -92,10 +92,13 @@ repoServer:
   env:
     - name: XDG_CACHE_HOME
       value: /home/argocd/repo-cache
-  # Resource limits
+  # Resource limits. No CPU limit: manifest generation (helm template for ~30
+  # apps after each forgejo poll) is short multi-threaded bursts, and a 500m
+  # limit throttled ~18% of CFS periods and kept CPUThrottlingHigh pending/
+  # firing although average use is ~0.05 cores (audit 2026-09-26). The CPU
+  # request still reserves its scheduling share; memory stays capped.
   resources:
     limits:
-      cpu: 500m
       memory: 512Mi
     requests:
       cpu: 250m

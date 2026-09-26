@@ -51,7 +51,11 @@ spec:
           # (on the passively-cooled f1) with a CPU limit of 2.
           containers:
             - name: beets
-              image: lscr.io/linuxserver/beets:latest
+              # Pinned version tag (linuxserver <beets>-ls<build>): :latest
+              # re-pulled from ghcr whenever the image had been garbage-
+              # collected from the node and failed the run on a ghcr 429
+              # (audit 2026-09-26). Bump deliberately.
+              image: lscr.io/linuxserver/beets:2.14.1-ls354
               imagePullPolicy: IfNotPresent
               env:
                 # BEETSDIR must be writable: beets stores its incremental

@@ -34,6 +34,9 @@ spec:
   renewBefore: 360h # 15 days
 ---
 # services namespace: all *-ingress-lan ingresses of the applications.
+# A wildcard covers one label only, so ipv6test's ipv4./ipv6. sub-hosts
+# (ipv4.ipv6test.f3s.lan.buetow.org) need their own wildcard SAN; without it
+# those two LAN hosts failed TLS verification (audit 2026-09-26).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -49,6 +52,7 @@ spec:
   dnsNames:
     - "*.f3s.lan.buetow.org"
     - "f3s.lan.buetow.org"
+    - "*.ipv6test.f3s.lan.buetow.org"
   privateKey:
     algorithm: RSA
     size: 2048

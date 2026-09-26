@@ -61,8 +61,10 @@ argocd-status:
 # Open a transient interactive beets shell in a pod that mounts the same
 # music + state volumes. Handy for debugging (e.g. `beet ls`,
 # `beet fetchart -- album:Foo`, `beet embedart -f cover.jpg -- album:Foo`).
+# Not pinned to a node: both volumes are NFS (RWX), so any r-node works.
+# Same pinned image as the CronJob.
 shell:
     kubectl run beets-art-shell -n {{NAMESPACE}} \
         --rm -it --restart=Never \
-        --image=lscr.io/linuxserver/beets:latest \
-        --overrides='{"spec":{"nodeSelector":{"kubernetes.io/hostname":"r1.lan.buetow.org"},"containers":[{"name":"beets","image":"lscr.io/linuxserver/beets:latest","stdin":true,"tty":true,"command":["/bin/sh"],"env":[{"name":"BEETSDIR","value":"/etc/beets"}],"volumeMounts":[{"name":"music","mountPath":"/music"},{"name":"state","mountPath":"/state"},{"name":"config","mountPath":"/etc/beets","readOnly":true}]}],"volumes":[{"name":"music","persistentVolumeClaim":{"claimName":"navidrome-music-pvc"}},{"name":"state","persistentVolumeClaim":{"claimName":"beets-art-state-pvc"}},{"name":"config","configMap":{"name":"beets-art-config"}}]}}'
+        --image=lscr.io/linuxserver/beets:2.14.1-ls354 \
+        --overrides='{"spec":{"containers":[{"name":"beets","image":"lscr.io/linuxserver/beets:2.14.1-ls354","stdin":true,"tty":true,"command":["/bin/sh"],"env":[{"name":"BEETSDIR","value":"/etc/beets"}],"volumeMounts":[{"name":"music","mountPath":"/music"},{"name":"state","mountPath":"/state"},{"name":"config","mountPath":"/etc/beets","readOnly":true}]}],"volumes":[{"name":"music","persistentVolumeClaim":{"claimName":"navidrome-music-pvc"}},{"name":"state","persistentVolumeClaim":{"claimName":"beets-art-state-pvc"}},{"name":"config","configMap":{"name":"beets-art-config"}}]}}'
