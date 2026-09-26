@@ -220,7 +220,8 @@ cert.pem and X11 files, `login.conf` unchanged on both. `/var/gemini` and
 paths and did not disturb sysupgrade. dtail-4.3.2-ng (rebuilt from the same
 dtail commit as the 7.8 package, e76e0e6) and gogios-1.7.1 were rebuilt into
 `openbsd/7.9/` and both gateways reinstalled from it; the `openbsd/7.8/`
-tree is unused since then.
+tree was deleted on 2026-09-26, together with `/home/pre79-backup` on both
+gateways and the 7.8 build-VM disk.
 
 Expect Gogios HTTPS criticals for a check run that lands in the first
 minutes after boot: on 2026-09-26 the first cron run after fishfinger's
