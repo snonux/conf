@@ -10,7 +10,8 @@ set -e
 
 VMDIR="$(cd "$(dirname "$0")" && pwd)"
 SSH_PORT=2222
-SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $SSH_PORT"
+# ssh takes the port as -p, scp as -P: keep the port out of the shared options.
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 # First boot the VM
 echo "Starting build VM..."
@@ -19,14 +20,14 @@ echo "Starting build VM..."
 # Set up SSH key — use sshpass if available, fall back to manual prompt
 echo "Setting up SSH key access..."
 if command -v sshpass &>/dev/null; then
-    sshpass -p build123 ssh-copy-id $SSH_OPTS pbuild@localhost 2>/dev/null
+    sshpass -p build123 ssh-copy-id $SSH_OPTS -p $SSH_PORT pbuild@localhost 2>/dev/null
 else
     echo "sshpass not found. Enter the build user password (build123) when prompted:"
-    ssh-copy-id $SSH_OPTS pbuild@localhost
+    ssh-copy-id $SSH_OPTS -p $SSH_PORT pbuild@localhost
 fi
 
-SSH="ssh $SSH_OPTS pbuild@localhost"
-SCP="scp $SSH_OPTS"
+SSH="ssh $SSH_OPTS -p $SSH_PORT pbuild@localhost"
+SCP="scp $SSH_OPTS -P $SSH_PORT"
 
 # Configure doas for passwordless access (may already be set by setup.sh)
 echo "Configuring doas..."

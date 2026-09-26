@@ -149,8 +149,12 @@ replaces `/etc/login.conf`, then:
 
 ```sh
 doas rm /etc/login.conf.db && doas cap_mkdb /etc/login.conf && doas rcctl restart relayd
-doas relayd -dvv 2>&1 | grep socket_rlimit | head -1    # max open files 4096
+doas su -c daemon -s /bin/sh root -c "ulimit -n"    # 4096
 ```
+
+Do not check with `relayd -dvv | grep socket_rlimit`: that starts a second,
+foreground relayd next to the running one and keeps it alive after grep
+exits (it happened on blowfish on 2026-09-26 and had to be killed).
 
 Never ship `/etc/login.conf.d/daemon`: OpenBSD uses a fragment instead of
 the whole class, so relayd would lose `ignorenologin`, `datasize`, `maxproc`
@@ -176,23 +180,52 @@ this mount before restoring the site.
 `/home/var/www` for disk-space reasons (see the foo.zone post "One reason why I
 love OpenBSD", note to myself): undo such a symlink before the upgrade and
 restore it afterwards. As of 2026-09-25 `/var/www` is a real directory on both
-gateways; fishfinger still has the old link parked as `/var/www.DELETEME`, and
-blowfish mounts `sd0j` inside it at `/var/www/htdocs/irregular.ninja` (see the
-disk-layout section above) — unmount that for the upgrade if in doubt, and
-check `/var` and `/usr` free space first. Then `sysupgrade`, `sysmerge`,
-`pkg_add -u`, re-apply the relayd openfiles limit if `login.conf` was
-replaced, and a gonf dry-run of the frontends aggregate.
+gateways; fishfinger still has the old link parked as `/var/www.DELETEME`.
+blowfish's `sd0j` mount inside it (`/var/www/htdocs/irregular.ninja`, see the
+disk-layout section above) can stay mounted: the upgrade kernel mounts the
+fstab filesystems in order and the base sets never touch that path (7.9
+upgrade, 2026-09-26). Check `/`, `/usr` (>= 1.1G) and `/home` (the sets land
+in `/home/_sysupgrade`) free space first.
 
-7.8 -> 7.9 status: fishfinger upgraded 2026-09-26 (sysupgrade, 21 syspatches,
-`pkg_add -u`, `sysmerge -b` touched only cert.pem and X11 files, `login.conf`
-unchanged); blowfish still on 7.8 pending the user's go. `/var/gemini` and
-`/var/www.DELETEME` (symlinks into /home) are not base-set paths and did not
-disturb sysupgrade. Expect Gogios HTTPS criticals for a check run that lands
-in the first minutes after boot: on 2026-09-26 the first cron run after
-fishfinger's reboot (09:20) loaded the 1G host, relayd's `check http "/"` on
-`<localhost>` failed briefly (09:20:50-59), and requests routed there ended as
-"session failed" (znc.buetow.org HTTPS IPv4/IPv6 "No data received"). The
-HTTPS checks rerun every 300 s and cleared on their own; the hourly TLS
-checks keep a failure up to an hour. The custom pkgrepo only has an
-`openbsd/7.8/` tree; fishfinger keeps using it until both frontends are on
-7.9.
+Procedure (one gateway at a time; blowfish is the nsd primary, fishfinger
+keeps serving while it reboots):
+
+1. Back up `/etc`, `/var/nsd/{etc,zones}`, `/var/www/conf` to
+   `/home/pre<rel>-backup` (0700: `etc.tgz` holds secrets).
+2. `doas sysupgrade -n`, then `doas shutdown -r now`; SSH is back after
+   5-7 minutes.
+3. `doas syspatch` until `syspatch -c` is empty, reboot for a kernel patch.
+4. `doas pkg_add -u` without `PKG_PATH`: a set `PKG_PATH` replaces
+   `/etc/installurl`, so nothing but the fleet repo would be searched.
+5. `doas sysmerge -b`, `doas fw_update`; re-apply the relayd openfiles limit
+   if `login.conf` was replaced.
+6. Build the fleet packages into a new `openbsd/<rel>/` pkgrepo tree
+   (`packages/Makefile` `OPENBSD_VERSION`, build VM on the new release),
+   bump `customOpenBSDPackages` in `../gonf/frontends/monitoring.go` and
+   apply `frontends_pkg_repo`. The unattended-upgrade audit builds the fleet
+   URL from `uname -r`, so it misses the fleet packages until that tree
+   exists. dtail's package has no pkgpath, so `pkg_add -u` never replaces
+   it: `pkg_delete dtail`, `pkg_add dtail` from the new tree, `rcctl
+   restart dserver` (host key in `/var/db/dserver` survives); gogios takes
+   `pkg_add -u -D installed gogios`.
+7. Verify services, `relayd -n`/`httpd -n`/`nsd-checkconf`, the SOA serial
+   on both, wg handshakes, a gonf dry-run of the frontends aggregate, and a
+   green Gogios run.
+
+7.8 -> 7.9 (2026-09-26): both gateways upgraded (fishfinger 08:49-09:16,
+blowfish 10:13-10:21 CEST), 21 syspatches each; `sysmerge -b` touched only
+cert.pem and X11 files, `login.conf` unchanged on both. `/var/gemini` and
+`/var/www.DELETEME` (symlinks into /home on fishfinger) are not base-set
+paths and did not disturb sysupgrade. dtail-4.3.2-ng (rebuilt from the same
+dtail commit as the 7.8 package, e76e0e6) and gogios-1.7.1 were rebuilt into
+`openbsd/7.9/` and both gateways reinstalled from it; the `openbsd/7.8/`
+tree is unused since then.
+
+Expect Gogios HTTPS criticals for a check run that lands in the first
+minutes after boot: on 2026-09-26 the first cron run after fishfinger's
+reboot (09:20) loaded the 1G host, relayd's `check http "/"` on
+`<localhost>` failed briefly (09:20:50-59), and requests routed there ended
+as "session failed" (znc.buetow.org HTTPS IPv4/IPv6 "No data received").
+After blowfish's reboot the 10:26 run had every HTTPS IPv6 check critical
+(the AAAA records point at blowfish). The HTTPS checks rerun every 300 s and
+cleared on their own; the hourly TLS checks keep a failure up to an hour.

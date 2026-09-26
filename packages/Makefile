@@ -68,7 +68,9 @@ BUILDVM_DIR  := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))buildvm
 # NFS-backed PV on f0
 PV_BASE         := /data/nfs/k3svolumes/pkgrepo
 FREEBSD_REPO    := freebsd/FreeBSD:15:amd64/latest
-OPENBSD_VERSION := 7.8
+# Must match the frontends' release and customOpenBSDPackages in
+# gonf/frontends/monitoring.go (the build VM runs the same release).
+OPENBSD_VERSION := 7.9
 OPENBSD_REPO    := openbsd/$(OPENBSD_VERSION)/packages/amd64
 NETBSD_VERSION  := 11.0
 NETBSD_REPO     = netbsd/$(NETBSD_VERSION)/packages/aarch64
