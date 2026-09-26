@@ -324,14 +324,18 @@ func addPingCheck(checks map[string]gogiosCheck, host string, proto int, address
 }
 
 // addPingChecks pings the master/standby service names and every WireGuard
-// mesh peer except the roaming clients and the rocky VM.
+// mesh peer except the roaming clients and the rocky VM. The standalone
+// peers (f3) are pinged by address too, although the frontends' /etc/hosts
+// does not list them; like every non-frontend peer they pause while
+// /tmp/f3s_taken_down exists (`f3sctl power all off` sets it and powers f3
+// off with the rest).
 func addPingChecks(checks map[string]gogiosCheck) {
 	for _, role := range []string{"master", "standby"} {
 		for _, proto := range []int{4, 6} {
 			addPingCheck(checks, role+".buetow.org", proto, role+".buetow.org", 3, false)
 		}
 	}
-	for _, peer := range WireGuardAddresses() {
+	for _, peer := range append(WireGuardAddresses(), StandaloneWireGuardAddresses()...) {
 		if peer.Name == "earth" || peer.Name == "pixel7pro" || peer.Name == "rocky" {
 			continue
 		}

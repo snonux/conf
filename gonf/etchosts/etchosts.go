@@ -42,14 +42,6 @@ var lanHosts = []lanHost{
 	{name: "pi3", ip: "192.168.1.128"},
 }
 
-// wireGuardExtras are wg0 peers the f3s hosts resolve beyond the shared
-// frontends inventory. f3 is a mesh member (wireguardmeshgenerator.yaml) but
-// is kept out of frontends.WireGuardAddresses on purpose: that list also
-// drives the frontends' Gogios ping checks.
-var wireGuardExtras = []frontends.WireGuardAddress{
-	{Name: "f3", IPv4: "192.168.2.133", IPv6: "fd42:beef:cafe:2::133"},
-}
-
 // TemplateData returns fresh LAN and wg0 rows for a hosts template.
 func TemplateData() Data {
 	return Data{LAN: LANLines(), WireGuard: WireGuardLines()}
@@ -65,7 +57,10 @@ func LANLines() []string {
 }
 
 // WireGuardLines returns the wg0 rows, all IPv4 then all IPv6, for the
-// shared frontends peers plus wireGuardExtras.
+// shared frontends peers plus the standalone ones (f3). f3 is a mesh member
+// the f3s hosts resolve, but it stays out of frontends.WireGuardAddresses so
+// the frontends' own /etc/hosts does not list it; its row lives in
+// frontends.StandaloneWireGuardAddresses, which the frontends also ping.
 func WireGuardLines() []string {
-	return frontends.WireGuardHostLines(wireGuardExtras...)
+	return frontends.WireGuardHostLines(frontends.StandaloneWireGuardAddresses()...)
 }

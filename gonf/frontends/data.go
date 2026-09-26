@@ -170,6 +170,17 @@ var wireGuardAddresses = []WireGuardAddress{
 	{Name: "pixel7pro", IPv4: "192.168.2.201", IPv6: "fd42:beef:cafe:2::201"},
 }
 
+// standaloneWireGuardAddresses are mesh peers (wireguardmeshgenerator.yaml)
+// kept out of wireGuardAddresses on purpose, so they stay out of the
+// frontends' own /etc/hosts (Maintenance.WireGuardHosts). f3 is the
+// standalone bhyve host (not a k3s node): the f3s hosts resolve it via
+// gonf/etchosts, and the frontends only ping it by address (addPingChecks)
+// so a broken f3<->gateway tunnel cannot go unnoticed again. This is the one
+// place f3's wg0 addresses are written down.
+var standaloneWireGuardAddresses = []WireGuardAddress{
+	{Name: "f3", IPv4: "192.168.2.133", IPv6: "fd42:beef:cafe:2::133"},
+}
+
 // Site is one public name of the topology together with the policy every
 // consumer derives from it: certificates (acme.go), relayd routing (web.go),
 // DNS records (maildns.go) and Gogios checks (monitoring.go). Adding a site,
@@ -292,6 +303,13 @@ func WireGuardAddresses() []WireGuardAddress {
 	return append([]WireGuardAddress(nil), wireGuardAddresses...)
 }
 
+// StandaloneWireGuardAddresses returns independent rows for the mesh peers
+// kept out of WireGuardAddresses (see standaloneWireGuardAddresses): pinged
+// by the frontends, resolved only by the f3s hosts.
+func StandaloneWireGuardAddresses() []WireGuardAddress {
+	return append([]WireGuardAddress(nil), standaloneWireGuardAddresses...)
+}
+
 // wireGuardAddressFor returns host's row of the WireGuard inventory. A
 // frontend without a row is returned as an error for the caller to report
 // (Refuse), so the record fails before any SSH connection.
@@ -308,7 +326,8 @@ func wireGuardAddressFor(host string) (WireGuardAddress, error) {
 // IPv4-then-IPv6 order, "IP fqdn short", for the shared peers followed by
 // extra. Consumers append these lines instead of replacing
 // administrator-owned host entries. extra is for hosts that resolve peers
-// kept out of wireGuardAddresses (see gonf/etchosts); it is the one
+// kept out of wireGuardAddresses (StandaloneWireGuardAddresses, passed by
+// gonf/etchosts); it is the one
 // implementation of the row format.
 func WireGuardHostLines(extra ...WireGuardAddress) []string {
 	peers := append(WireGuardAddresses(), extra...)
