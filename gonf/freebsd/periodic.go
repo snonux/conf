@@ -74,13 +74,8 @@ func periodicRewrite(hour string) (sed, guard string) {
 	return sed + " /etc/crontab", guard
 }
 
-// DescTimes returns the description for the crontab rewrite.
-func (Periodic) DescTimes() string {
-	return "Run periodic daily/weekly/monthly in each host's afternoon hour (hosts are off at night)"
-}
-
-// Times sets the hour of the periodic lines in /etc/crontab. cron(8)
-// re-reads /etc/crontab on change, so no restart is needed.
+// Times runs periodic daily/weekly/monthly in each host's afternoon hour
+// (hosts are off at night).
 func (Periodic) Times() {
 	EachHost(func(s PeriodicSchedule) {
 		sed, guard := periodicRewrite(s.Hour)

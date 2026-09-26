@@ -55,11 +55,9 @@ const (
 // from before zroot/garage existed; the live line below it replaced it.
 const staleZfskeysComment = `#zfskeys_datasets="zdata/enc zroot/bhyve zdata/sink/f0/zdata/enc/nfsdata"`
 
-// DescScripts returns the description for the key-stick helper scripts.
-func (ZfsKeys) DescScripts() string {
-	return "Install f3s-mount-keys, f3s-load-zfs-keys and /etc/rc.d/f3skeys (0555 root:wheel; not run)"
-}
-
+// Scripts installs f3s-mount-keys, f3s-load-zfs-keys and /etc/rc.d/f3skeys
+// (0555 root:wheel; not run).
+//
 // Scripts installs the key-stick helpers on every f-host. They were copied
 // by hand from the repo (f3s/freebsd-hosts/keys/README.md) and matched it
 // byte for byte on f0-f3 when gonf took them over (task ik2), so the first
@@ -74,7 +72,7 @@ func (ZfsKeys) Scripts() {
 // OptsRcConf records the scripts first, so f3skeys_enable never names an
 // rc.d service that is missing on the host.
 func (ZfsKeys) OptsRcConf() TaskOptions {
-	return TaskOptions{Needs("scripts")}
+	return TaskOptions{Needs(ZfsKeys.Scripts)}
 }
 
 // DescRcConf returns the description for the key-loading rc.conf keys.
@@ -91,10 +89,10 @@ func (ZfsKeys) RcConf() {
 	EachHost(func(k KeyDatasets) {
 		File(rcConf,
 			WithoutLine(staleZfskeysComment),
-			WithKeyedLine("f3skeys_enable=", `f3skeys_enable="YES"`),
-			WithKeyedLine("zfskeys_enable=", `zfskeys_enable="YES"`),
-			WithKeyedLine("zfskeys_datasets=", `zfskeys_datasets="`+strings.Join(k.Datasets, " ")+`"`),
-			Perm(0o644, Root),
+			WithShellVar("f3skeys_enable", "YES"),
+			WithShellVar("zfskeys_enable", "YES"),
+			WithShellVar("zfskeys_datasets", strings.Join(k.Datasets, " ")),
+			RootOwned,
 			WithName("rc-conf-zfskeys"))
 	})
 }

@@ -21,12 +21,7 @@ type Debug struct {
 	RequiresRoot
 }
 
-// DescGdb returns the description for the gdb package.
-func (Debug) DescGdb() string {
-	return "Install gdb (kgdb for /var/crash/vmcore.N)"
-}
-
-// Gdb installs the gdb package.
+// Gdb installs gdb (kgdb for /var/crash/vmcore.N).
 func (Debug) Gdb() {
 	Packages("gdb")
 }

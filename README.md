@@ -47,15 +47,21 @@ Recipe style (conventions in [`AGENTS.md`](AGENTS.md)):
 ```go
 // gonf/tasks/tasks.go: bind the group to a cluster, guard every task to it
 RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
+RegisterOnCluster(cluster.NameFreeBSD, freebsd.Carp{}, freebsd.Zrepl{}) // default prefixes freebsd_carp_, freebsd_zrepl_
 
 // gonf/cluster/cluster.go: typed per-host data
 Host("f0", fhost, WithData(freebsd.UnattendedSchedule{Minute: "5"})) // fhost: WithSSHDomain("lan.buetow.org"), WithPlatform("freebsd/amd64")
 
 // a task: prerequisites, ownership, per-host data, cron
-func (Unattended) OptsCron() TaskOptions { return TaskOptions{Needs("script", "services", "stamp_dir")} }
+func (Unattended) OptsCron() TaskOptions {
+	return TaskOptions{Needs(Unattended.Script, Unattended.Services, Unattended.StampDir)}
+}
+
+// Script installs the unattended-upgrade-freebsd wrapper. (The first
+// sentence is the -list description, via go generate.)
 func (Unattended) Script() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root)) // Root: root:wheel on BSD, root:root on Rocky
-	InstallFile("/usr/local/sbin/unattended-upgrade-freebsd", src, Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned) // root:wheel on BSD, root:root on Rocky
+	InstallFile("/usr/local/sbin/unattended-upgrade-freebsd", src, RootExec)
 }
 func (Unattended) Cron() {
 	EachHost(func(s UnattendedSchedule) {

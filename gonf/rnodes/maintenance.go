@@ -14,11 +14,8 @@ type Maintenance struct {
 	RequiresRoot
 }
 
-// DescNFSMountMonitor returns the NFS mount monitor task description.
-func (Maintenance) DescNFSMountMonitor() string {
-	return "Install and enable the r-node NFS mount monitor"
-}
-
+// NFSMountMonitor installs and enables the r-node NFS mount monitor.
+//
 // NFSMountMonitor installs the health check, its systemd units, and the
 // shutdown ordering helpers. Every changed managed input reloads systemd once
 // and restarts the timer once; the marker and drain services still converge to
@@ -34,15 +31,15 @@ func (Maintenance) NFSMountMonitor() {
 // collector, and systemd drop-in directories the monitor's files land in.
 func ensureNFSMountMonitorDirs() {
 	EnsureDir("/var/lib/nfs-mount-monitor",
-		Perm(0o700, Root))
+		RootPrivate)
 	EnsureDir("/var/lib/node_exporter",
-		Perm(0o755, Root))
+		RootOwned)
 	EnsureDir("/var/lib/node_exporter/textfile_collector",
-		Perm(0o755, Root))
+		RootOwned)
 	EnsureDir("/etc/systemd/system/data-nfs-k3svolumes.mount.d",
-		Perm(0o755, Root))
+		RootOwned)
 	EnsureDir("/etc/systemd/system/k3s.service.d",
-		Perm(0o755, Root))
+		RootOwned)
 }
 
 // installNFSMountMonitorFiles installs the monitor script, its systemd
@@ -54,32 +51,32 @@ func installNFSMountMonitorFiles(monitorDir string) []Resource {
 	return []Resource{
 		InstallFile("/usr/local/bin/check-nfs-mount.sh",
 			paths.RNodeAsset(monitorDir+"/check-nfs-mount.sh"),
-			Perm(0o755, Root)),
+			RootExec),
 		InstallFile("/etc/default/nfs-mount-monitor",
 			paths.RNodeAsset(monitorDir+"/nfs-mount-monitor.default"),
-			Perm(0o644, Root)),
+			RootOwned),
 		InstallFile("/etc/systemd/system/nfs-mount-monitor.service",
 			paths.RNodeAsset(monitorDir+"/nfs-mount-monitor.service"),
-			Perm(0o644, Root)),
+			RootOwned),
 		InstallFile("/etc/systemd/system/nfs-mount-monitor.timer",
 			paths.RNodeAsset(monitorDir+"/nfs-mount-monitor.timer"),
-			Perm(0o644, Root)),
+			RootOwned),
 		InstallFile("/etc/systemd/system/nfs-shutdown-marker.service",
 			paths.RNodeAsset(monitorDir+"/nfs-shutdown-marker.service"),
-			Perm(0o644, Root)),
+			RootOwned),
 		InstallFile("/usr/local/bin/k3s-nfs-drain.sh",
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-drain.sh"),
-			Perm(0o755, Root)),
+			RootExec),
 		InstallFile("/etc/systemd/system/k3s-nfs-drain.service",
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-drain.service"),
-			Perm(0o644, Root)),
+			RootOwned),
 		InstallFile(
 			"/etc/systemd/system/data-nfs-k3svolumes.mount.d/10-stunnel-ordering.conf",
 			paths.RNodeAsset(monitorDir+"/nfs-stunnel-ordering.conf"),
-			Perm(0o644, Root)),
+			RootOwned),
 		InstallFile("/etc/systemd/system/k3s.service.d/10-nfs-ordering.conf",
 			paths.RNodeAsset(monitorDir+"/k3s-nfs-ordering.conf"),
-			Perm(0o644, Root)),
+			RootOwned),
 	}
 }
 
@@ -95,21 +92,18 @@ func activateNFSMountMonitorUnits(inputs []Resource) {
 	)
 }
 
-// DescPersistentJournal returns the persistent journal task description.
-func (Maintenance) DescPersistentJournal() string {
-	return "Enable bounded persistent systemd journals on r-nodes"
-}
-
+// PersistentJournal enables bounded persistent systemd journals on r-nodes.
+//
 // PersistentJournal creates persistent journal storage and installs its
 // journald drop-in. A changed drop-in creates journal state and restarts
 // journald before the unconditional journal flush.
 func (Maintenance) PersistentJournal() {
-	EnsureDir("/etc/systemd/journald.conf.d", Perm(0o755, Root))
+	EnsureDir("/etc/systemd/journald.conf.d", RootOwned)
 	EnsureDir("/var/log/journal", Perm(0o2755, "root:systemd-journal"))
 
 	dropIn := InstallFile("/etc/systemd/journald.conf.d/10-persistent.conf",
 		paths.RNodeAsset("journald-persistent.conf"),
-		Perm(0o644, Root))
+		RootOwned)
 	tmpfiles := Sh("systemd-tmpfiles --create --prefix /var/log/journal", OnChange(dropIn))
 	journald := Sh("systemctl restart systemd-journald", OnChange(dropIn))
 	Sh("journalctl --flush", DependsOn(tmpfiles, journald))
@@ -123,11 +117,9 @@ func nfsUnderlyingCheck(body string) string {
 		`U="$B/data/nfs/k3svolumes"; trap 'umount "$B"; rmdir "$B"' EXIT; ` + body
 }
 
-// DescNFSMountpointGuard returns the mountpoint guard task description.
-func (Maintenance) DescNFSMountpointGuard() string {
-	return "Make the empty directory under the NFS mount immutable (no local writes when NFS is absent)"
-}
-
+// NFSMountpointGuard makes the empty directory under the NFS mount immutable
+// (no local writes when NFS is absent).
+//
 // NFSMountpointGuard sets chattr +i on the empty directory under
 // /data/nfs/k3svolumes. Pods whose hostPath PVs point into the NFS mount used
 // to start while it was missing (boot races, repair windows) and wrote to the
@@ -146,27 +138,23 @@ func (Maintenance) NFSMountpointGuard() {
 			`! lsattr -d "$U" | cut -d' ' -f1 | grep -q i`))))
 }
 
-// DescImageGC returns the kubelet image-GC drop-in task description.
-func (Maintenance) DescImageGC() string {
-	return "Install the k3s kubelet image-GC drop-in (collect at 70% disk, down to 60%)"
-}
-
+// ImageGC installs the k3s kubelet image-GC drop-in (collect at 70% disk,
+// down to 60%).
+//
 // ImageGC installs /etc/rancher/k3s/config.yaml.d/50-image-gc.yaml. It does
 // not restart k3s: this task runs on r0-r2 in parallel, and restarting all
 // three control-plane members at once would drop etcd quorum. The r-VMs
 // reboot with the nightly f-host power-off, so the drop-in is live by the next
 // morning; restart k3s by hand, one node at a time, to apply it sooner.
 func (Maintenance) ImageGC() {
-	EnsureDir("/etc/rancher/k3s/config.yaml.d", Perm(0o755, Root))
+	EnsureDir("/etc/rancher/k3s/config.yaml.d", RootOwned)
 	InstallFile("/etc/rancher/k3s/config.yaml.d/50-image-gc.yaml",
-		paths.RNodeAsset("k3s-image-gc.yaml"), Perm(0o600, Root))
+		paths.RNodeAsset("k3s-image-gc.yaml"), RootPrivate)
 }
 
-// DescRetiredNFSCron returns the description for the retired cron line.
-func (Maintenance) DescRetiredNFSCron() string {
-	return "Remove the legacy per-minute check-nfs-mount.sh root cron line (the timer runs it)"
-}
-
+// RetiredNFSCron removes the legacy per-minute check-nfs-mount.sh root cron
+// line (the timer runs it).
+//
 // RetiredNFSCron removes the hand-added root crontab line that ran
 // check-nfs-mount.sh every minute on top of nfs-mount-monitor.timer (found
 // 2026-09-25): two schedulers for one repair script, with a log file

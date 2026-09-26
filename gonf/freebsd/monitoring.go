@@ -46,11 +46,6 @@ const (
 	zfsMetricsCommand = zfsMetricsScript + " >/dev/null 2>&1"
 )
 
-// DescPackage returns the description for the node_exporter package.
-func (Monitoring) DescPackage() string {
-	return "Install node_exporter"
-}
-
 // Package installs node_exporter.
 func (Monitoring) Package() {
 	Packages("node_exporter")
@@ -63,7 +58,7 @@ func (Monitoring) DescNodeExporter() string {
 
 // OptsNodeExporter records the package (and its rc.d script) first.
 func (Monitoring) OptsNodeExporter() TaskOptions {
-	return TaskOptions{Needs("package")}
+	return TaskOptions{Needs(Monitoring.Package)}
 }
 
 // NodeExporter owns the node_exporter_* rc.conf lines via WithKeyedLine
@@ -73,10 +68,10 @@ func (Monitoring) OptsNodeExporter() TaskOptions {
 // its rc.conf lines changed.
 func (Monitoring) NodeExporter() {
 	EachHost(func(h NodeExporterHost) {
-		conf := File(rcConf, WithName("rc.conf node_exporter"), Perm(0o644, Root),
-			WithKeyedLine("node_exporter_listen_address=", `node_exporter_listen_address="`+h.ListenAddress+`"`),
-			WithKeyedLine("node_exporter_textfile_dir=", `node_exporter_textfile_dir="`+nodeExporterTextfileDir+`"`),
-			WithKeyedLine("node_exporter_args=", `node_exporter_args=""`))
+		conf := File(rcConf, WithName("rc.conf node_exporter"), RootOwned,
+			WithShellVar("node_exporter_listen_address", h.ListenAddress),
+			WithShellVar("node_exporter_textfile_dir", nodeExporterTextfileDir),
+			WithShellVar("node_exporter_args", ""))
 		EnsureDir(nodeExporterTextfileDir, Perm(0o1755, "nobody:nobody"))
 		Service("node_exporter", WithRestart, OnChange(conf))
 	})
@@ -89,7 +84,7 @@ func (Monitoring) DescZFSMetrics() string {
 
 // OptsZFSMetrics records the textfile directory first.
 func (Monitoring) OptsZFSMetrics() TaskOptions {
-	return TaskOptions{Needs("node_exporter")}
+	return TaskOptions{Needs(Monitoring.NodeExporter)}
 }
 
 // ZFSMetrics installs the script root-owned (it runs as root from cron) and
@@ -97,6 +92,6 @@ func (Monitoring) OptsZFSMetrics() TaskOptions {
 // textfile directory, where node_exporter reads it on each scrape.
 func (Monitoring) ZFSMetrics() {
 	script := InstallFile(zfsMetricsScript, paths.FHostAsset("node-exporter/zfs_pool_metrics.sh"),
-		Perm(0o755, Root))
+		RootExec)
 	CronAt("zfs-pool-metrics", "* * * * *", zfsMetricsCommand, DependsOn(script))
 }

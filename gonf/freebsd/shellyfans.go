@@ -31,12 +31,8 @@ const (
 	shellyFansRcScript = "/usr/local/etc/rc.d/shellyfans"
 )
 
-// DescScripts returns the description for the fan helper and rc.d script.
-func (ShellyFans) DescScripts() string {
-	return "Install shelly-fans-on and /usr/local/etc/rc.d/shellyfans (0555 root:wheel; not run)"
-}
-
-// Scripts installs the helper and the rc.d service (0555, as hand-installed).
+// Scripts installs shelly-fans-on and /usr/local/etc/rc.d/shellyfans (0555
+// root:wheel; not run).
 func (ShellyFans) Scripts() {
 	InstallFile(shellyFansScript, paths.FHostAsset("shelly-fans/shelly-fans-on"), Perm(0o555, Root))
 	InstallFile(shellyFansRcScript, paths.FHostAsset("shelly-fans/shellyfans.rc"), Perm(0o555, Root))
@@ -50,7 +46,7 @@ func (ShellyFans) DescRcConf() string {
 // OptsRcConf records the scripts first, so shellyfans_enable never names a
 // missing rc.d service.
 func (ShellyFans) OptsRcConf() TaskOptions {
-	return TaskOptions{Needs("scripts")}
+	return TaskOptions{Needs(ShellyFans.Scripts)}
 }
 
 // RcConf owns the single shellyfans_enable line in place; the rest of
@@ -58,7 +54,7 @@ func (ShellyFans) OptsRcConf() TaskOptions {
 // The value is the one sysrc wrote on every host, so nothing changes.
 func (ShellyFans) RcConf() {
 	File(rcConf,
-		WithKeyedLine("shellyfans_enable=", `shellyfans_enable="YES"`),
-		Perm(0o644, Root),
+		WithShellVar("shellyfans_enable", "YES"),
+		RootOwned,
 		WithName("rc-conf-shellyfans"))
 }

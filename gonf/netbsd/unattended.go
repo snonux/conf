@@ -35,29 +35,22 @@ type UnattendedSchedule struct {
 	RebootHour string
 }
 
-// DescScript returns the description for the wrapper deployment.
-func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-netbsd (0755 root:wheel)"
-}
-
+// Script installs /usr/local/sbin/unattended-upgrade-netbsd (0755
+// root:wheel).
+//
 // Script installs the NetBSD ksh wrapper. The file applies after the
 // directory without DependsOn: gonf orders a path after its parent.
 func (Unattended) Script() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned)
 	InstallFile("/usr/local/sbin/unattended-upgrade-netbsd",
 		paths.FrontendAsset("scripts/unattended-upgrade-netbsd.sh"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
-// DescServices returns the description for the restart list.
-func (Unattended) DescServices() string {
-	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
-}
-
-// Services installs the rc.d restart list.
+// Services installs /etc/unattended-upgrade-services (0644 root:wheel).
 func (Unattended) Services() {
 	InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
-		Perm(0o644, Root))
+		RootOwned)
 }
 
 // DescCron returns the description for the per-host cron schedule.
@@ -67,7 +60,7 @@ func (Unattended) DescCron() string {
 
 // OptsCron records the wrapper and the restart list before the cron jobs.
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Needs("script", "services")}
+	return TaskOptions{Needs(Unattended.Script, Unattended.Services)}
 }
 
 // unattendedLogRedirect drops a cron job's stdout, which the scripts
@@ -89,12 +82,7 @@ func (Unattended) Cron() {
 	})
 }
 
-// DescNewsyslog returns the description for the rotation line.
-func (Unattended) DescNewsyslog() string {
-	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
-}
-
-// Newsyslog appends the rotation line.
+// Newsyslog appends unattended-upgrade log rotation to /etc/newsyslog.conf.
 func (Unattended) Newsyslog() {
 	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }
@@ -105,11 +93,8 @@ func (Unattended) Newsyslog() {
 // German data centre and are not part of the home fleet's log timeline.
 const fleetTimezone = "/usr/share/zoneinfo/Europe/Sofia"
 
-// DescTimezone returns the description for the timezone link.
-func (Unattended) DescTimezone() string {
-	return "Set /etc/localtime to Europe/Sofia (fleet timezone)"
-}
-
+// Timezone sets /etc/localtime to Europe/Sofia (fleet timezone).
+//
 // Timezone points /etc/localtime at the fleet zone and restarts cron so its
 // schedule (the per-host upgrade/reboot hours, which are now local time) and
 // syslogd's timestamps follow it.
@@ -117,7 +102,7 @@ func (Unattended) DescTimezone() string {
 // Note: the per-host hours in gonf/cluster (UnattendedSchedule,
 // VulnAuditTime) are interpreted in this zone from now on; they were UTC.
 func (Unattended) Timezone() {
-	tz := Link("/etc/localtime", WithSymlink(fleetTimezone))
+	tz := Symlink("/etc/localtime", fleetTimezone)
 	Sh("/etc/rc.d/cron restart", OnChange(tz))
 	Sh("/etc/rc.d/syslogd restart", OnChange(tz))
 }

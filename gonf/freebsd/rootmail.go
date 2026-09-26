@@ -23,11 +23,9 @@ type RootMail struct {
 	RequiresRoot
 }
 
-// DescArchive returns the description for the mailbox archive.
-func (RootMail) DescArchive() string {
-	return "Archive /var/mail/root to a dated .gz and empty it when above 1 MiB"
-}
-
+// Archive archives /var/mail/root to a dated .gz and empties it when above 1
+// MiB.
+//
 // Archive gzips /var/mail/root into a dated archive and empties it while it
 // is larger than mailbox.ArchiveThreshold (see package mailbox). DMA locks
 // the mailbox with flock(2) for delivery, so the script runs under

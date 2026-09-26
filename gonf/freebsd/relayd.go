@@ -69,16 +69,17 @@ func (Relayd) DescRcConf() string {
 	return "rc.conf pf_enable/pflog_enable=YES on f0/f1 (PF for the LAN relayd; read at boot, nothing restarted)"
 }
 
+// WhenRcConf narrows the task to the CARP members.
+func (Relayd) WhenRcConf() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // RcConf owns pf_enable and pflog_enable. rc.conf is read at boot; PF and
 // pflog already run on both hosts, and nothing here starts or stops them.
 func (Relayd) RcConf() {
-	WhenHostname(carpMembers, func() {
-		opts := []FileOption{Perm(0o644, Root), WithName("rc-conf-relayd")}
-		for _, kv := range relaydRcConfKeys {
-			opts = append(opts, rcConfKeyedLine(kv.key, kv.value))
-		}
-		File(rcConf, opts...)
-	})
+	opts := []FileOption{RootOwned, WithName("rc-conf-relayd")}
+	for _, kv := range relaydRcConfKeys {
+		opts = append(opts, WithShellVar(kv.key, kv.value))
+	}
+	File(rcConf, opts...)
 }
 
 // DescPf returns the description for the PF ruleset.
@@ -86,17 +87,18 @@ func (Relayd) DescPf() string {
 	return "/etc/pf.conf on f0/f1 (pass-all for relayd), validated with pfctl -nf; pfctl -f only when it changed"
 }
 
+// WhenPf narrows the task to the CARP members.
+func (Relayd) WhenPf() TaskOption { return WhenHostnameIn(carpMembers...) }
+
 // Pf installs the ruleset after a pfctl -nf check of the candidate and
 // loads it with pfctl -f only when the content changed. pfctl -f replaces
 // the rules atomically and keeps PF enabled and its states; a parse error
 // would leave the old rules in place, and the candidate check keeps it from
 // getting that far.
 func (Relayd) Pf() {
-	WhenHostname(carpMembers, func() {
-		conf := InstallFile(pfConf, paths.FHostAsset("relayd/pf.conf"), Perm(0o644, Root),
-			WithValidation("pfctl", List("-nf", CandidatePath)))
-		Sh("pfctl -f "+pfConf, OnChange(conf))
-	})
+	conf := InstallFile(pfConf, paths.FHostAsset("relayd/pf.conf"), RootOwned,
+		WithValidation("pfctl", List("-nf", CandidatePath)))
+	Sh("pfctl -f "+pfConf, OnChange(conf))
 }
 
 // DescDaemon returns the description for relayd.
@@ -106,18 +108,19 @@ func (Relayd) DescDaemon() string {
 
 // OptsDaemon records PF first: relayd depends on PF being enabled.
 func (Relayd) OptsDaemon() TaskOptions {
-	return TaskOptions{Privileged(), Needs("pf")}
+	return TaskOptions{Privileged(), Needs(Relayd.Pf)}
 }
+
+// WhenDaemon narrows the task to the CARP members.
+func (Relayd) WhenDaemon() TaskOption { return WhenHostnameIn(carpMembers...) }
 
 // Daemon installs relayd and its config after a relayd -n check of the
 // candidate, keeps the service enabled (relayd_enable="YES") and running,
 // and restarts it only when relayd.conf changed (see the Relayd comment for
 // why restart and not reload).
 func (Relayd) Daemon() {
-	WhenHostname(carpMembers, func() {
-		pkg := Package("relayd")
-		conf := InstallFile(relaydConf, paths.FHostAsset("relayd/relayd.conf"), Perm(0o644, Root),
-			WithValidation("relayd", List("-n", "-f", CandidatePath)), DependsOn(pkg))
-		Service("relayd", WithRestart, OnChange(conf))
-	})
+	pkg := Package("relayd")
+	conf := InstallFile(relaydConf, paths.FHostAsset("relayd/relayd.conf"), RootOwned,
+		WithValidation("relayd", List("-n", "-f", CandidatePath)), DependsOn(pkg))
+	Service("relayd", WithRestart, OnChange(conf))
 }

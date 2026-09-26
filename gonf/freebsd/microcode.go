@@ -24,12 +24,8 @@ type Microcode struct {
 	RequiresRoot
 }
 
-// DescPackage returns the description for the microcode package.
-func (Microcode) DescPackage() string {
-	return "Install cpu-microcode-intel (/boot/firmware/intel-ucode.bin for early loading)"
-}
-
-// Package installs cpu-microcode-intel.
+// Package installs cpu-microcode-intel (/boot/firmware/intel-ucode.bin for
+// early loading).
 func (Microcode) Package() {
 	Packages("cpu-microcode-intel")
 }

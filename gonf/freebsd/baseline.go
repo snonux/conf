@@ -84,15 +84,15 @@ func (Baseline) DescRcConf() string {
 // zfskeys_enable=).
 func (Baseline) RcConf() {
 	EachHost(func(h BaselineHost) {
-		opts := []FileOption{Perm(0o644, Root), WithName("rc-conf-baseline")}
+		opts := []FileOption{RootOwned, WithName("rc-conf-baseline")}
 		for _, kv := range baselineRcConfKeys {
-			opts = append(opts, rcConfKeyedLine(kv.key, kv.value))
+			opts = append(opts, WithShellVar(kv.key, kv.value))
 		}
 		if h.ClearTmp {
-			opts = append(opts, rcConfKeyedLine("clear_tmp_enable", "YES"))
+			opts = append(opts, WithShellVar("clear_tmp_enable", "YES"))
 		}
 		if h.ShutdownTimeout != "" {
-			opts = append(opts, rcConfKeyedLine("rcshutdown_timeout", h.ShutdownTimeout))
+			opts = append(opts, WithShellVar("rcshutdown_timeout", h.ShutdownTimeout))
 		}
 		File(rcConf, opts...)
 	})
@@ -107,7 +107,7 @@ func (Baseline) DescSysctl() string {
 // min_auto_ashift only affects vdevs added later, so setting it live is
 // harmless.
 func (Baseline) Sysctl() {
-	opts := []FileOption{Perm(0o644, Root), WithName("sysctl-conf-baseline")}
+	opts := []FileOption{RootOwned, WithName("sysctl-conf-baseline")}
 	for _, s := range baselineSysctls {
 		opts = append(opts, WithKeyedLine(s.name+"=", s.name+"="+s.value))
 	}
@@ -117,9 +117,4 @@ func (Baseline) Sysctl() {
 			OnlyIf("sh", List("-c", `[ "$(sysctl -n `+s.name+`)" != "`+s.value+`" ]`)),
 			WithName("sysctl-live-"+s.name))
 	}
-}
-
-// rcConfKeyedLine owns the rc.conf line key="value".
-func rcConfKeyedLine(key, value string) FileOption {
-	return WithKeyedLine(key+"=", key+`="`+value+`"`)
 }

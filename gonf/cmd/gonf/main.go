@@ -21,7 +21,7 @@ func main() {
 	}
 	cluster.Register()
 	tasks.Register()
-	os.Exit(cli.CLI())
+	cli.Main()
 }
 
 // setSecretProvider wires the staged foostore/KeePass cutover (task ze2).

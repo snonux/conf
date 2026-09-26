@@ -48,7 +48,17 @@ and `OnCluster`. Name methods for the action (`Script`, `Cron`, …), not
 
 ```go
 RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
+// structs whose task prefix is gonf's default (package_type_):
+RegisterOnCluster(cluster.NameFreeBSD, freebsd.Carp{}, freebsd.NFS{}, freebsd.Zrepl{})
 ```
+
+Task descriptions come from the task method's doc comment: its first
+sentence, without the method name ("// Script installs /usr/local/sbin/x."
+lists as "Installs /usr/local/sbin/x"). Each recipe package's
+`generate.go` runs `gonf-desc`; after adding or changing a task's doc
+comment run `go generate ./...` in `gonf/` and commit the `desc_gen.go`
+files. A hand-written `DescX` wins, for descriptions that do not read as a
+sentence about the method or use constants.
 
 ### Hosts and per-host values
 
@@ -70,15 +80,19 @@ marks it `Operational()`.
 
 - `OnCluster(name)` on `RegisterMethods` binds the tasks to the cluster and
   guards each task to the cluster's hosts. Bodies need no
-  `WhenHostname(ClusterHosts(), ...)` wrapper; keep `WhenHostname(Master,
-  ...)` and other per-host guards.
+  `WhenHostname(ClusterHosts(), ...)` wrapper. A task for part of the
+  cluster narrows in a `WhenX` companion (`return
+  WhenHostnameIn(carpMembers...)`), not with a body wrapper; keep
+  `WhenHostname(Master, ...)` for a fragment inside a larger body.
 - Per-host data is a small struct in the recipe package
   (`openbsd.UnattendedSchedule`, `rocky.UnattendedCalendar`,
   `garage.Node`, `frontends.Server`, ...), attached with `WithData(...)` in
   `cluster.Register()` and read with `EachHost(func(v T) {…})`
   (`EachHostNamed` when the host name matters, `HostData[T](host)` outside a
   loop). Every cluster member must carry the type; a missing one fails the
-  record before any SSH connection. `EachHost` wraps each body in a
+  record before any SSH connection. For data only some hosts carry
+  (`freebsd.UPSClient`, `freebsd.CarpNode`) use `EachHostWith`, which skips
+  the others. `EachHost` wraps each body in a
   destination-side hostname guard and, on single-host pushes, skips other
   hosts, so read host-specific secrets inside the body.
 - Shared host options go in a `HostDefaults(...)` bundle per group. LAN
@@ -89,7 +103,7 @@ marks it `Operational()`.
 
 ```go
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Needs("script", "services")}
+	return TaskOptions{Needs(Unattended.Script, Unattended.Services)}
 }
 
 func (Unattended) Cron() {
@@ -100,17 +114,21 @@ func (Unattended) Cron() {
 	})
 }
 
-EnsureDir("/usr/local/sbin", Perm(0o755, Root))
-InstallFile("/usr/local/sbin/x", src, Perm(0o755, Root)) // ordered after its parent dir
+EnsureDir("/usr/local/sbin", RootOwned)
+InstallFile("/usr/local/sbin/x", src, RootExec) // ordered after its parent dir
+File(rcConf, WithShellVar("vm_enable", "YES"), RootOwned, WithName("rc-conf-bhyve"))
+File("/etc/httpd.conf", WithContentFrom(renderHTTPD(data)), RootOwned)
 CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh", DependsOn(script))
 Sh("systemctl restart systemd-journald", OnChange(dropIn))
 Service("httpd", WithFlags(""), WithRestart, OnChange(config))
 ```
 
-- `Perm(mode, Root)` for root plus the OS root group (wheel / root);
-  spell other groups out (`"root:bin"`, `"_gogios:_gogios"`).
-- `Needs(...)` in `OptsX` for task prerequisites, not prose in the
-  description. `OptsX` adds to the `RequiresRoot` default, so do not
+- `RootOwned` (0644 file, 0755 dir), `RootExec` (0755) and `RootPrivate`
+  (0600 file, 0700 dir) for root plus the OS root group (wheel / root);
+  `Perm(mode, Root)` for other modes; spell other groups out (`"root:bin"`,
+  `"_gogios:_gogios"`).
+- `Needs(T.Method)` in `OptsX` for task prerequisites (method expressions,
+  so the editor jumps to them), not prose in the description. `OptsX` adds to the `RequiresRoot` default, so do not
   repeat `Privileged()`; `Unprivileged()` opts one method out (see
   `frontends_ping`). Never need an `Operational()` task: the dependent would
   drop out of its aggregate.
