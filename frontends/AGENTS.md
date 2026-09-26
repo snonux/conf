@@ -182,3 +182,12 @@ disk-layout section above) — unmount that for the upgrade if in doubt, and
 check `/var` and `/usr` free space first. Then `sysupgrade`, `sysmerge`,
 `pkg_add -u`, re-apply the relayd openfiles limit if `login.conf` was
 replaced, and a gonf dry-run of the frontends aggregate.
+
+7.8 -> 7.9 status: fishfinger upgraded 2026-09-26 (sysupgrade, 21 syspatches,
+`pkg_add -u`, `sysmerge -b` touched only cert.pem and X11 files, `login.conf`
+unchanged); blowfish still on 7.8 pending the user's go. `/var/gemini` and
+`/var/www.DELETEME` (symlinks into /home) are not base-set paths and did not
+disturb sysupgrade. Expect Gogios HTTPS criticals for a check run that lands
+in the first minutes after boot (hourly RunInterval keeps them until the next
+run). The custom pkgrepo only has an `openbsd/7.8/` tree; fishfinger keeps
+using it until both frontends are on 7.9.

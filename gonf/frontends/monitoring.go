@@ -12,6 +12,10 @@ import (
 	"github.com/snonux/conf/gonf/paths"
 )
 
+// customOpenBSDPackages is shared by both frontends. The repo holds only a
+// 7.8 tree; fishfinger (7.9 since 2026-09-26) keeps using it because the
+// 7.8-built dtail/gogios run fine on 7.9. Switch to 7.9 once blowfish is
+// upgraded too and the packages are rebuilt for 7.9.
 const (
 	customOpenBSDPackages = "https://pkgrepo.f3s.buetow.org/openbsd/7.8/packages/amd64/"
 	gogiosPluginDir       = "/usr/local/libexec/nagios"
