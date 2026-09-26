@@ -77,6 +77,17 @@ const coretempLoadLine = `coretemp_load="YES"`
 // BaselineHost sets Cryptodev (f0-f2, as installed; f3 never had it).
 const cryptodevLoadLine = `cryptodev_load="YES"`
 
+// jetkvmMassStorageIgnoreLine makes usb(4) skip the mass-storage function of
+// the JetKVM (USB 0x1d6b:0x0104, "JetKVM USB Emulation Device") on every
+// f-host. Its virtual drive never answers the CAM probe, so the kernel sat at
+// "Root mount waiting for: CAM" for ~6 minutes on every boot (measured with
+// msgbuf timestamps on f3, 2026-09-25: root mounted at 371s). Only the
+// mass-storage interface is ignored: the JetKVM keyboard/mouse keep working,
+// and the /keys USB sticks (Alcor 058f:6387, SanDisk) have other IDs. Cost:
+// no installing from an ISO attached as JetKVM virtual media while this is set
+// (user decision 2026-09-26). Takes effect at the next boot.
+const jetkvmMassStorageIgnoreLine = `hw.usb.quirk.0="0x1d6b 0x0104 0x0000 0xffff UQ_MSC_IGNORE"`
+
 // DescConf returns the description for the managed loader.conf lines.
 func (Loader) DescConf() string {
 	return "loader.conf lines: msgbuf timestamps, efi 1080p, vm.pmap.pcid_enabled=0, Intel microcode early load, coretemp/cryptodev (next boot)"
@@ -102,6 +113,7 @@ func (Loader) Conf() {
 			WithKeyedLine(`cpu_microcode_load=`, microcodeLoadLine),
 			WithKeyedLine(`cpu_microcode_name=`, microcodeNameLine),
 			WithKeyedLine(`coretemp_load=`, coretempLoadLine),
+			WithKeyedLine(`hw.usb.quirk.0=`, jetkvmMassStorageIgnoreLine),
 			Perm(0o644, Root),
 		}
 		if h.Cryptodev {
