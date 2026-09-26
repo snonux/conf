@@ -176,6 +176,12 @@ func (NFS) WhenStunnelConf() TaskOption { return WhenHostnameIn(carpMembers...) 
 // for byte (it has no trailing newline). stunnel is not restarted: on the
 // MASTER that would cut every NFS mount of the k3s nodes; carpcontrol.sh
 // restarts it on the next MASTER transition.
+//
+// The config sets "pid = /var/run/stunnel/stunnel.pid", the rc.d script's
+// stunnel_pidfile: stunnel 5 writes no pid file by default, so until
+// 2026-09-26 "service stunnel status/stop/restart" never saw the running
+// daemon -- carpcontrol.sh's BACKUP "service stunnel stop" left stunnel
+// running on f1, and its MASTER "restart" could not replace the old one.
 func (NFS) StunnelConf() {
 	InstallFile(stunnelConf, paths.FHostAsset("nfs/stunnel.conf"), RootOwned)
 }
