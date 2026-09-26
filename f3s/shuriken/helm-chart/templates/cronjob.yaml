@@ -1,4 +1,4 @@
-# shuriken: nightly regeneration of the irregular.ninja and alt.irregular.ninja
+# shuriken: daily regeneration of the irregular.ninja and alt.irregular.ninja
 # static photo albums. The container entrypoint runs `shuriken --generate
 # --config <conf>` once per /configs/*.conf (alphabetical), writing each site
 # into /data/shuriken.sh/<site>/dist on the shared NFS export.
@@ -7,8 +7,8 @@
 #   - concurrencyPolicy: Forbid -- a long generate run (large photo library,
 #     single image job) must not stack a second worker on top of it; shuriken's
 #     staging directories would race and the NFS write load would double.
-#   - backoffLimit: 0 -- a failed nightly run surfaces in the Job history and
-#     gets retried by the next night's schedule; spamming retries would just
+#   - backoffLimit: 0 -- a failed daily run surfaces in the Job history and
+#     gets retried by the next day's schedule; spamming retries would just
 #     re-burn ImageMagick CPU on a persistent failure (e.g. NFS down).
 #   - activeDeadlineSeconds: 6h -- caps a runaway first-run backfill of a large
 #     library; steady state is far shorter.
@@ -23,9 +23,13 @@ metadata:
   name: shuriken
   namespace: services
 spec:
-  # 04:00 local daily -- off-peak, and doesn't collide with the beets-art
-  # noon sweep. timeZone is GA in k8s 1.27+; k3s 1.32 supports it.
-  schedule: "0 4 * * *"
+  # 13:00 local daily. It used to run at 04:00 (off-peak), but the cluster is
+  # powered off every night (up roughly 10:00-01:00 local), so the 04:00 slot
+  # never fired: last scheduled run 2026-08-16 (audit 2026-09-26). 13:00 is
+  # after the beets-art noon sweep (~30 min) and before the 18:00
+  # shuriken-sync publish; the flock mutex serialises any overlap with sync.
+  # timeZone is GA in k8s 1.27+.
+  schedule: "0 13 * * *"
   timeZone: Europe/Sofia
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

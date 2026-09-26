@@ -26,11 +26,13 @@ metadata:
   name: shuriken-sync
   namespace: services
 spec:
-  # Twice a day, during daytime hours, well clear of the 04:00 generation
-  # run (avoids the flock race the two CronJobs used to hit when a tick
-  # landed on top of a still-running generation). Each tick is a cheap
-  # per-site status.json comparison; only sites that actually changed
-  # since the last publish get rsynced.
+  # Twice a day, during daytime hours, clear of the 13:00 generation run
+  # (avoids the flock race the two CronJobs used to hit when a tick landed
+  # on top of a still-running generation; the 18:00 tick publishes that
+  # day's generation). The 10:00 tick can miss on mornings the cluster
+  # powers on late (startingDeadlineSeconds); 18:00 then catches up.
+  # Each tick is a cheap per-site status.json comparison; only sites that
+  # actually changed since the last publish get rsynced.
   schedule: "0 10,18 * * *"
   timeZone: Europe/Sofia
   concurrencyPolicy: Forbid

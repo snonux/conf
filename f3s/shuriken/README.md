@@ -7,7 +7,7 @@ ArgoCD app `shuriken` (`f3s/shuriken/helm-chart`).
 
 | CronJob | When (Europe/Sofia) | What |
 |---|---|---|
-| `shuriken` | 04:00 | `shuriken --generate --config` for each `/configs/*.conf`, sequentially, `--image-jobs 1` (`SHURIKEN_IMAGE_JOBS`) |
+| `shuriken` | 13:00 (the cluster is powered off at night) | `shuriken --generate --config` for each `/configs/*.conf`, sequentially, `--image-jobs 1` (`SHURIKEN_IMAGE_JOBS`) |
 | `shuriken-sync` | 10:00, 18:00 | rsync each changed `dist/` to fishfinger and blowfish |
 
 ## Image
