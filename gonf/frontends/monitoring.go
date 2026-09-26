@@ -401,16 +401,17 @@ func addFrontendServiceChecks(checks map[string]gogiosCheck) {
 }
 
 // addSystemChecks checks the local host's users, swap, processes, disk and
-// load. The Master frontend has little swap, hence its own thresholds. They
+// load. Swap thresholds are free-space percentages and the same on both
+// frontends: OpenBSD pages idle memory out over a long uptime, so a few
+// hundred MB of used swap with plenty of free RAM is normal. The old
+// non-Master "-w 95% -c 90%" went CRITICAL at 10% used (blowfish, 2026-09-26,
+// 11% used after 10 days, 1.1G RAM free, no paging). They
 // are Local: only this host can run them, so it runs (and mails for) them
 // even while the other frontend is the elected checker; their names carry
 // the host name, which Gogios requires to tell the peers' checks apart.
 func addSystemChecks(checks map[string]gogiosCheck, server Server) {
 	checks["Check Users "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_users", Args: List("-w", "2", "-c", "3"), RandomSpread: 10, RunInterval: 600, Local: true}
-	swap := List("-w", "95%", "-c", "90%")
-	if server.Name == Master {
-		swap = List("-w", "20%", "-c", "10%")
-	}
+	swap := List("-w", "20%", "-c", "10%")
 	checks["Check SWAP "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_swap", Args: swap, RandomSpread: 10, RunInterval: 300, Local: true}
 	for name, args := range map[string][]string{"Procs": List("-w", "100", "-c", "150"), "Disk": List("-w", "30%", "-c", "10%"), "Load": List("-w", "2,1,1", "-c", "4,3,3")} {
 		checks["Check "+name+" "+server.Name] = gogiosCheck{Plugin: gogiosPluginDir + "/check_" + strings.ToLower(name), Args: args, RandomSpread: 10, RunInterval: 300, Local: true}
