@@ -188,6 +188,11 @@ replaced, and a gonf dry-run of the frontends aggregate.
 unchanged); blowfish still on 7.8 pending the user's go. `/var/gemini` and
 `/var/www.DELETEME` (symlinks into /home) are not base-set paths and did not
 disturb sysupgrade. Expect Gogios HTTPS criticals for a check run that lands
-in the first minutes after boot (hourly RunInterval keeps them until the next
-run). The custom pkgrepo only has an `openbsd/7.8/` tree; fishfinger keeps
-using it until both frontends are on 7.9.
+in the first minutes after boot: on 2026-09-26 the first cron run after
+fishfinger's reboot (09:20) loaded the 1G host, relayd's `check http "/"` on
+`<localhost>` failed briefly (09:20:50-59), and requests routed there ended as
+"session failed" (znc.buetow.org HTTPS IPv4/IPv6 "No data received"). The
+HTTPS checks rerun every 300 s and cleared on their own; the hourly TLS
+checks keep a failure up to an hour. The custom pkgrepo only has an
+`openbsd/7.8/` tree; fishfinger keeps using it until both frontends are on
+7.9.
