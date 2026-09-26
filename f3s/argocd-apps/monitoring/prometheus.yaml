@@ -61,8 +61,34 @@ spec:
             # alerts and fires permanently by design. Gogios reads firing
             # alerts straight from the Prometheus API (no Alertmanager
             # routing), so it surfaced as a constant WARNING (2026-09-26).
+            # CPUThrottlingHigh is replaced by the copy in
+            # additionalPrometheusRulesMap below, which skips the beets-art
+            # CronJob: its CPU limit of 1 is deliberate (keeps the N100s
+            # cool during the CPU-bound art fetch), so it always throttles
+            # and showed as a Gogios WARNING for every run (2026-09-26).
             disabled:
               InfoInhibitor: true
+              CPUThrottlingHigh: true
+
+          additionalPrometheusRulesMap:
+            cpu-throttling:
+              groups:
+                - name: kubernetes-resources-f3s
+                  rules:
+                    # Upstream rule (chart 55.5.0) plus pod!~"beets-art-.*".
+                    - alert: CPUThrottlingHigh
+                      annotations:
+                        description: '{{ $value | humanizePercentage }} throttling of CPU in namespace {{ $labels.namespace }} for container {{ $labels.container }} in pod {{ $labels.pod }}.'
+                        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/cputhrottlinghigh
+                        summary: Processes experience elevated CPU throttling.
+                      expr: |-
+                        sum(increase(container_cpu_cfs_throttled_periods_total{container!="", pod!~"beets-art-.*"}[5m])) by (cluster, container, pod, namespace)
+                          /
+                        sum(increase(container_cpu_cfs_periods_total{pod!~"beets-art-.*"}[5m])) by (cluster, container, pod, namespace)
+                          > ( 25 / 100 )
+                      for: 15m
+                      labels:
+                        severity: info
 
           # Enable the textfile collector in the node_exporter DaemonSet so
           # check-nfs-mount.sh can expose nfs_mount_monitor_consecutive_failures
