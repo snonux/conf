@@ -64,7 +64,7 @@ jobs:
     snapshotting:
       type: cron
       prefix: zrepl_local_
-      cron: "0 3 * * *"
+      cron: "0 12 * * *"              # noon: f-hosts are powered off most nights
     pruning:
       keep:
         - type: regex

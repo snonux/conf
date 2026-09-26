@@ -18,8 +18,12 @@ import (
 //   - f3 pushes the freebsd and rocky VM datasets to f2 every 10 minutes
 //     (f3_to_f2_freebsd; the name predates the rocky VM);
 //   - f2 is that sink (zroot/sink: f2 has no second disk);
-//   - every host runs the local_zfs_snapshots snap job (daily at 03:00),
-//     excluding the datasets a push job or sink already snapshots.
+//   - every host runs the local_zfs_snapshots snap job (daily at 12:00),
+//     excluding the datasets a push job or sink already snapshots. It ran at
+//     03:00 until 2026-09-26, but f0-f3 are powered off most nights (see
+//     Periodic) and zrepl's cron snapshotter does not catch up a missed
+//     run: f1's newest zroot snapshot was from 2026-08-20. Noon is after
+//     the ~10:00 wake-up and before the afternoon periodic/scrub hours.
 //
 // The file is rendered on the controller from the host's ZreplJobs and the
 // template f3s/freebsd-hosts/zrepl/zrepl.yml.tmpl, validated on the host
