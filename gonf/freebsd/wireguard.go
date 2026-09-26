@@ -60,11 +60,11 @@ func (WireGuard) DescPerms() string {
 // scope.
 func (WireGuard) Perms() {
 	WhenPathExists(wireguardDir, func() {
-		Dir(wireguardDir, Perm(0o700, Root))
+		Dir(wireguardDir, RootPrivate)
 	})
 	for _, path := range wireguardSecretFiles {
 		WhenPathExists(path, func() {
-			EnsureFile(path, Perm(0o600, Root))
+			EnsureFile(path, RootPrivate)
 		})
 	}
 }
@@ -87,8 +87,8 @@ func (WireGuard) DescService() string {
 func (WireGuard) Service() {
 	Package("wireguard-tools")
 	WhenPathExists(wireguardConf, func() {
-		rc := File(rcConf, rcConfKeyedLine("wireguard_interfaces", "wg0"),
-			Perm(0o644, Root), WithName("rc-conf-wireguard"))
+		rc := File(rcConf, WithShellVar("wireguard_interfaces", "wg0"),
+			RootOwned, WithName("rc-conf-wireguard"))
 		Service("wireguard", DependsOn(rc))
 	})
 }

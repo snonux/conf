@@ -108,7 +108,7 @@ func (Bhyve) DescRcConf() string {
 // OptsRcConf orders the keys after the packages, so vm_enable never names a
 // missing rc script.
 func (Bhyve) OptsRcConf() TaskOptions {
-	return TaskOptions{Needs("freebsd_bhyve_packages")}
+	return TaskOptions{Needs(Bhyve.Packages)}
 }
 
 // RcConf owns the four vm_* lines via WithKeyedLine (replaced in place,
@@ -117,11 +117,11 @@ func (Bhyve) OptsRcConf() TaskOptions {
 func (Bhyve) RcConf() {
 	EachHost(func(h BhyveHost) {
 		File(rcConf,
-			rcConfKeyedLine("vm_enable", "YES"),
-			rcConfKeyedLine("vm_dir", "zfs:zroot/bhyve"),
-			rcConfKeyedLine("vm_list", strings.Join(h.autostart(), " ")),
-			rcConfKeyedLine("vm_delay", bhyveVMDelay),
-			Perm(0o644, Root),
+			WithShellVar("vm_enable", "YES"),
+			WithShellVar("vm_dir", "zfs:zroot/bhyve"),
+			WithShellVar("vm_list", strings.Join(h.autostart(), " ")),
+			WithShellVar("vm_delay", bhyveVMDelay),
+			RootOwned,
 			WithName("rc-conf-bhyve"))
 	})
 }
@@ -141,7 +141,7 @@ func (Bhyve) Guests() {
 		for _, g := range h.Guests {
 			conf := bhyveGuestConf(g.Name)
 			WhenPathExists(conf, func() {
-				File(conf, append(g.keyedLines(), Perm(0o644, Root))...)
+				File(conf, append(g.keyedLines(), RootOwned)...)
 			})
 		}
 	})
@@ -155,7 +155,7 @@ func (Bhyve) DescVNCListen() string {
 // OptsVNCListen runs the binding after Guests, so the sed rewrite and the
 // keyed-line file never interleave on the same <vm>.conf.
 func (Bhyve) OptsVNCListen() TaskOptions {
-	return TaskOptions{Needs("freebsd_bhyve_guests")}
+	return TaskOptions{Needs(Bhyve.Guests)}
 }
 
 // VNCListen sets graphics_listen in every graphical guest's config, managed
@@ -196,7 +196,7 @@ func (g BhyveGuest) keyedLines() []FileOption {
 		WithKeyedLine("cpu=", "cpu="+g.CPU),
 		WithKeyedLine("memory=", "memory="+g.Memory))
 	if g.GraphicsWait != "" {
-		opts = append(opts, WithKeyedLine("graphics_wait=", `graphics_wait="`+g.GraphicsWait+`"`))
+		opts = append(opts, WithShellVar("graphics_wait", g.GraphicsWait))
 	}
 	return opts
 }

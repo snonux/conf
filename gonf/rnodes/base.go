@@ -37,11 +37,9 @@ const (
 	wireGuardDomain = "wireguard_t"
 )
 
-// DescHosts returns the description for /etc/hosts.
-func (Base) DescHosts() string {
-	return "Render /etc/hosts (stock header, registry.lan -> 127.0.0.1, LAN and wg0 rows from the shared etchosts inventory)"
-}
-
+// Hosts renders /etc/hosts (stock header, registry.lan -> 127.0.0.1, LAN and
+// wg0 rows from the shared etchosts inventory).
+//
 // Hosts renders the whole file from the rows the f-hosts' /etc/hosts
 // (freebsd.Base.Hosts) shares. The hand-made file listed the wg0 names twice,
 // in "IP short fqdn" and in "IP fqdn short" form, and lacked f3, rocky, the
@@ -49,15 +47,13 @@ func (Base) DescHosts() string {
 // registry's NodePort on the node itself, f3s blog part 7) stays.
 func (Base) Hosts() {
 	hosts := InstallFile(etcHosts, paths.RNodeAsset(baseAssetsPath+"hosts.tmpl"),
-		Perm(0o644, Root), WithTemplateData(etchosts.TemplateData()))
+		RootOwned, WithTemplateData(etchosts.TemplateData()))
 	relabel(etcHosts, hosts)
 }
 
-// DescSSHD returns the description for the sshd auth drop-in.
-func (Base) DescSSHD() string {
-	return "Install the sshd auth drop-in (root by key, no passwords), validated with sshd -t; reload sshd on change"
-}
-
+// SSHD installs the sshd auth drop-in (root by key, no passwords), validated
+// with sshd -t; reloads sshd on change.
+//
 // SSHD owns the login policy in a drop-in that sorts before every other one
 // (sshd keeps the first value per keyword). It keeps the live policy:
 // PermitRootLogin yes (gonf and ops log in as root with a key),
@@ -69,18 +65,16 @@ func (Base) DescSSHD() string {
 // yes) is shadowed by the drop-in and removed.
 func (Base) SSHD() {
 	dropIn := InstallFile(sshdDropIn, paths.RNodeAsset(baseAssetsPath+"sshd-00-auth.conf"),
-		Perm(0o600, Root), WithValidation("/usr/sbin/sshd", List("-t", "-f", CandidatePath)))
+		RootPrivate, WithValidation("/usr/sbin/sshd", List("-t", "-f", CandidatePath)))
 	anaconda := NoFile(sshdAnacondaIn, DependsOn(dropIn))
 	relabeled := relabel(sshdDropIn, dropIn)
 	Command("sh", List("-c", "/usr/sbin/sshd -t && systemctl reload sshd"),
 		OnChange(dropIn, anaconda), DependsOn(relabeled))
 }
 
-// DescNvme returns the description for the NVMe boot prerequisites.
-func (Base) DescNvme() string {
-	return "Keep the NVMe initramfs drivers (dracut, rebuilt only on change, no reboot) and lvm.conf use_devicesfile = 0"
-}
-
+// Nvme keeps the NVMe initramfs drivers (dracut, rebuilt only on change, no
+// reboot) and lvm.conf use_devicesfile = 0.
+//
 // Nvme keeps the two prerequisites of the NVMe-emulated bhyve disk (f3s
 // blog part 4): the nvme drivers in every initramfs, and LVM scanning all
 // devices, since the PV moved from /dev/vda to /dev/nvme0n1.
@@ -97,22 +91,20 @@ func (Base) DescNvme() string {
 // line. The keyed line is written unindented; lvm.conf does not care.
 func (Base) Nvme() {
 	conf := InstallFile(dracutNVMe, paths.RNodeAsset(baseAssetsPath+"dracut-nvme.conf"),
-		Perm(0o644, Root))
+		RootOwned)
 	dup := NoFile(dracutNVMeDup)
 	relabel(dracutNVMe, conf)
 	Sh("dracut -f --regenerate-all", OnChange(conf, dup))
 
 	lvm := File(lvmConf,
 		WithKeyedLine("use_devicesfile =", "use_devicesfile = 0"),
-		Perm(0o644, Root))
+		RootOwned)
 	relabel(lvmConf, lvm)
 }
 
-// DescSelinuxWireguard returns the description for the wireguard_t domain.
-func (Base) DescSelinuxWireguard() string {
-	return "Keep SELinux enforcing with only wireguard_t permissive (semanage permissive -a)"
-}
-
+// SelinuxWireguard keeps SELinux enforcing with only wireguard_t permissive
+// (semanage permissive -a).
+//
 // SelinuxWireguard marks the wireguard_t domain permissive, the one local
 // SELinux customization found on r0-r2 (set by hand with the WireGuard setup).
 // semanage comes with policycoreutils-python-utils. The command only runs
@@ -124,11 +116,9 @@ func (Base) SelinuxWireguard() {
 		DependsOn(pkg))
 }
 
-// DescFirewalldOff returns the description for firewalld.
-func (Base) DescFirewalldOff() string {
-	return "Keep firewalld stopped and disabled (decided in task tj2, f3s-k3s install.md)"
-}
-
+// FirewalldOff keeps firewalld stopped and disabled (decided in task tj2,
+// f3s-k3s install.md).
+//
 // FirewalldOff keeps firewalld stopped and disabled, the decision of task
 // tj2 (f3s-k3s skill, install.md "Host firewall on r0/r1/r2"): its nftables
 // rules fight kube-proxy and flannel, and the nodes sit on the LAN and the

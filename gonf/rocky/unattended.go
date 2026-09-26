@@ -24,67 +24,46 @@ type UnattendedCalendar struct {
 	OnCalendar string
 }
 
-// DescGonfLink returns the description for the sudo PATH link.
-func (Unattended) DescGonfLink() string {
-	return "Symlink /usr/bin/gonf → /usr/local/bin/gonf (sudo secure_path)"
-}
-
+// GonfLink symlinks /usr/bin/gonf → /usr/local/bin/gonf (sudo secure_path).
+//
 // GonfLink puts gonf on sudo's secure_path so privileged push
 // works (sudo -n gonf …). The bootstrap installs to /usr/local/bin.
 func (Unattended) GonfLink() {
-	Link("/usr/bin/gonf", WithSymlink("/usr/local/bin/gonf"))
+	Symlink("/usr/bin/gonf", "/usr/local/bin/gonf")
 }
 
-// DescPackages returns the description for required packages.
-func (Unattended) DescPackages() string {
-	return "Install ksh + yum-utils (needs-restarting) for unattended-upgrade"
-}
-
-// Packages installs ksh (script interpreter) and yum-utils
-// (needs-restarting -s/-r).
+// Packages installs ksh + yum-utils (needs-restarting) for
+// unattended-upgrade.
 func (Unattended) Packages() {
 	Packages("ksh", "yum-utils")
 }
 
-// DescScript returns the description for the wrapper deployment.
-func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade-rocky (0755 root:root)"
-}
-
 // OptsScript records ksh and yum-utils before the script that uses them.
 func (Unattended) OptsScript() TaskOptions {
-	return TaskOptions{Needs("packages")}
+	return TaskOptions{Needs(Unattended.Packages)}
 }
 
-// Script installs the Rocky ksh wrapper (after its directory, which gonf
-// orders as the parent).
+// Script installs /usr/local/sbin/unattended-upgrade-rocky (0755 root:root).
 func (Unattended) Script() {
-	EnsureDir("/usr/local/sbin", Perm(0o755, Root))
+	EnsureDir("/usr/local/sbin", RootOwned)
 	InstallFile("/usr/local/sbin/unattended-upgrade-rocky",
 		paths.FrontendAsset("scripts/unattended-upgrade-rocky.sh"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
-// DescStampDir returns the description for the stamp directory.
-func (Unattended) DescStampDir() string {
-	return "Ensure /var/lib/unattended-upgrade stamp directory"
-}
-
-// StampDir creates the persistent stamp directory.
+// StampDir ensures /var/lib/unattended-upgrade stamp directory.
 func (Unattended) StampDir() {
-	EnsureDir("/var/lib/unattended-upgrade", Perm(0o700, Root))
-}
-
-// DescUnits returns the description for systemd timer install.
-func (Unattended) DescUnits() string {
-	return "Install unattended-upgrade-rocky SystemdTimer (oneshot + per-host calendar)"
+	EnsureDir("/var/lib/unattended-upgrade", RootPrivate)
 }
 
 // OptsUnits records the script and the stamp directory before the timer.
 func (Unattended) OptsUnits() TaskOptions {
-	return TaskOptions{Needs("script", "stamp_dir")}
+	return TaskOptions{Needs(Unattended.Script, Unattended.StampDir)}
 }
 
+// Units installs unattended-upgrade-rocky SystemdTimer (oneshot + per-host
+// calendar).
+//
 // Units installs the oneshot+timer pair via SystemdTimer and
 // enables the timer. EachHost supplies each host's OnCalendar under its
 // hostname guard.
@@ -103,16 +82,11 @@ func (Unattended) Units() {
 	})
 }
 
-// DescLogrotate returns the description for logrotate.
-func (Unattended) DescLogrotate() string {
-	return "Install /etc/logrotate.d/unattended-upgrade"
-}
-
-// Logrotate installs the logrotate snippet.
+// Logrotate installs /etc/logrotate.d/unattended-upgrade.
 func (Unattended) Logrotate() {
 	InstallFile("/etc/logrotate.d/unattended-upgrade",
 		paths.FrontendAsset("systemd/unattended-upgrade.logrotate"),
-		Perm(0o644, Root))
+		RootOwned)
 }
 
 // fleetTimezone is the zone of the whole home fleet. r0-r2 already use it;
@@ -120,16 +94,13 @@ func (Unattended) Logrotate() {
 // so the link is already correct on the r-nodes and only the Pis change.
 const fleetTimezone = "../usr/share/zoneinfo/Europe/Sofia"
 
-// DescTimezone returns the description for the timezone link.
-func (Unattended) DescTimezone() string {
-	return "Set /etc/localtime to Europe/Sofia (fleet timezone)"
-}
-
+// Timezone sets /etc/localtime to Europe/Sofia (fleet timezone).
+//
 // Timezone points /etc/localtime at the fleet zone. systemd picks the change
 // up for timers and the journal; crond and rsyslog are restarted so their
 // schedules and timestamps follow it. The OnCalendar times in gonf/cluster
 // (UnattendedCalendar, KernelAuditCalendar) are local time from now on.
 func (Unattended) Timezone() {
-	tz := Link("/etc/localtime", WithSymlink(fleetTimezone))
+	tz := Symlink("/etc/localtime", fleetTimezone)
 	Sh("systemctl try-restart crond rsyslog", OnChange(tz))
 }

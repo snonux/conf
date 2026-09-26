@@ -43,7 +43,7 @@ func (MailDNS) DescSMTPD() string {
 // certificates themselves come from the explicit, Operational
 // frontends_acme_invoke, which Needs must not name (a task needing
 // Operational work would drop out of the frontends aggregate).
-func (MailDNS) OptsSMTPD() TaskOptions { return TaskOptions{Needs("acme")} }
+func (MailDNS) OptsSMTPD() TaskOptions { return TaskOptions{Needs(Maintenance.ACME)} }
 
 // SMTPD publishes every lookup table plus the host-specific configuration as
 // one Gonf ConfigSet: the complete set is staged privately under /etc/mail and
@@ -94,11 +94,8 @@ func (MailDNS) NSD() {
 	WhenHostname(Master, func() { nsdSecondary(data, key) })
 }
 
-// DescDNSFailover returns the description for the DNS high-availability job.
-func (MailDNS) DescDNSFailover() string {
-	return "Install the frontend DNS failover script and root cron entry"
-}
-
+// DNSFailover installs the frontend DNS failover script and root cron entry.
+//
 // DNSFailover installs the health decision client. It never writes an effective
 // zone: successful role changes are handed to dns-publish.ksh, which shares the
 // same lock and transaction as ordinary Gonf publication.
@@ -211,11 +208,11 @@ func renderPublisherFiles(data Data, key string) (publisherFiles, bool) {
 // without DependsOn: gonf orders a path after the Dir that contains it.
 func dnsPublisherInputs(zones []string, files publisherFiles) []Dependency {
 	inputs := []Dependency{
-		Dir(dnsPublisherDir, Perm(0o700, Root)),
-		Dir(dnsPublisherZones, Perm(0o700, Root)),
+		Dir(dnsPublisherDir, RootPrivate),
+		Dir(dnsPublisherZones, RootPrivate),
 	}
 	input := func(path, content string) {
-		inputs = append(inputs, File(path, WithContent(content), Perm(0o600, Root)))
+		inputs = append(inputs, File(path, WithContent(content), RootPrivate))
 	}
 	for i, zone := range zones {
 		input(publisherZonePath(zone), files.zones[i])
@@ -234,11 +231,11 @@ func smtpdConfigSet(smtpdConf string) []ConfigSetOption {
 	opts := make([]ConfigSetOption, 0, len(mailTableNames)+2)
 	for _, name := range mailTableNames {
 		opts = append(opts, ConfigFile(name, filepath.Join("/etc/mail", name), WithSource(legacyFrontendAsset(filepath.Join("etc/mail", name))),
-			Perm(0o644, Root)))
+			RootOwned))
 	}
 	return append(opts,
 		ConfigFile("smtpd.conf", "/etc/mail/smtpd.conf", WithContent(smtpdConf),
-			Perm(0o644, Root)),
+			RootOwned),
 		WithSetValidation("smtpd", List("-n", "-f", MemberPath("smtpd.conf"))))
 }
 

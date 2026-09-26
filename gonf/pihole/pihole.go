@@ -20,11 +20,9 @@ type Deployment struct {
 
 const piholeDir = "/home/paul/pihole"
 
-// DescCompose returns the description for the compose deployment.
-func (Deployment) DescCompose() string {
-	return "Install ~paul/pihole/docker-compose.yml and the LAN wildcard, recreate on change"
-}
-
+// Compose installs ~paul/pihole/docker-compose.yml and the LAN wildcard,
+// recreates on change.
+//
 // Compose installs the compose file and the dnsmasq wildcard
 // (*.f3s.lan.buetow.org -> the storage VIP), and runs `docker compose up -d`
 // when either changes. DNS on the LAN depends on these two Pis, so deploy
@@ -33,7 +31,7 @@ func (Deployment) Compose() {
 	compose := InstallFile(piholeDir+"/docker-compose.yml",
 		paths.PiholeAsset("docker-compose.yml"), Perm(0o644, "paul:paul"))
 	wildcard := InstallFile(piholeDir+"/etc-dnsmasq.d/99-f3s-lan-wildcard.conf",
-		paths.PiholeAsset("dnsmasq.d/99-f3s-lan-wildcard.conf"), Perm(0o644, Root))
+		paths.PiholeAsset("dnsmasq.d/99-f3s-lan-wildcard.conf"), RootOwned)
 	Command("sh", List("-c", "cd "+piholeDir+" && docker compose up -d"),
 		OnChange(compose, wildcard))
 }

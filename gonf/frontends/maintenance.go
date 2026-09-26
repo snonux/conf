@@ -24,22 +24,13 @@ type serviceAccount struct {
 	LoginClass string
 }
 
-// DescServiceAccounts retains the disabled Gorum identity as a separately
-// applicable account-only task. DTail and Gogios declare their own accounts
-// with their respective services so either task is independently usable.
-func (Maintenance) DescServiceAccounts() string {
-	return "Create the disabled Gorum service account"
-}
-
+// ServiceAccounts creates the disabled Gorum service account.
 func (Maintenance) ServiceAccounts() {
 	frontendAccount(serviceAccount{Name: "_gorum", Home: "/var/run/gorum", LoginClass: "nologin"})
 }
 
-// DescBase returns the description shown for the frontend base task.
-func (Maintenance) DescBase() string {
-	return "Install frontend base packages and local administration helpers"
-}
-
+// Base installs frontend base packages and local administration helpers.
+//
 // Base installs the common operator packages and the small rc files owned by
 // the Rex base task. DTail, uptimed, ZNC and node_exporter are merely named in
 // pkg_scripts here (see pkgScriptsLine); their packages and services are owned
@@ -52,25 +43,16 @@ func (Maintenance) Base() {
 	})
 }
 
-// DescMyname returns the description shown for the frontend hostname task.
-func (Maintenance) DescMyname() string {
-	return "Set each frontend's OpenBSD hostname"
-}
-
-// Myname writes the stable FQDN from inventory rather than rendering the Rex
-// closure-based template on the destination.
+// Myname sets each frontend's OpenBSD hostname.
 func (Maintenance) Myname() {
 	EachHost(func(server Server) {
 		File("/etc/myname", WithContent(server.FQDN+"\n"),
-			Perm(0o644, Root))
+			RootOwned)
 	})
 }
 
-// DescWireGuardHosts returns the description shown for the hosts task.
-func (Maintenance) DescWireGuardHosts() string {
-	return "Append WireGuard mesh IPv4 and IPv6 host entries"
-}
-
+// WireGuardHosts appends WireGuard mesh IPv4 and IPv6 host entries.
+//
 // WireGuardHosts appends the source-controlled mesh rows without replacing
 // administrator-owned /etc/hosts content. The mode and ownership are explicit
 // (0644 root:wheel, as on both frontends): a line edit without WithMode
@@ -78,23 +60,13 @@ func (Maintenance) DescWireGuardHosts() string {
 // an unreadable /etc/hosts breaks wg0 name resolution for every non-root
 // daemon (Gogios checks run as _gogios).
 func (Maintenance) WireGuardHosts() {
-	File("/etc/hosts", WithLines(WireGuardHostLines()...), Perm(0o644, Root))
+	File("/etc/hosts", WithLines(WireGuardHostLines()...), RootOwned)
 }
 
-// DescUptimed returns the description shown for the uptime recorder task.
-func (Maintenance) DescUptimed() string {
-	return "Install and enable the uptimed service"
-}
-
-// Uptimed installs the recorder and converges it to enabled/running.
+// Uptimed installs and enables the uptimed service.
 func (Maintenance) Uptimed() {
 	uptimed := Package("uptimed")
 	Service("uptimed", DependsOn(uptimed))
-}
-
-// DescGoprecords returns the description shown for the optional uploader task.
-func (Maintenance) DescGoprecords() string {
-	return "Install optional hourly uptimed uploads to goprecords (root cron, output to syslog)"
 }
 
 // goprecordsSchedule runs the frontend upload hourly, a quarter past so it
@@ -110,6 +82,9 @@ func (Maintenance) DescGoprecords() string {
 // the cluster is up, the same as the f-hosts' freebsd_goprecords_upload.
 const goprecordsSchedule = "15 * * * *"
 
+// Goprecords installs optional hourly uptimed uploads to goprecords (root
+// cron, output to syslog).
+//
 // Goprecords installs the uploader (goprecords.Client) on every frontend
 // and runs it hourly from root's crontab with its output in syslog
 // (goprecords.CronCommand; a 405 while f3s is down is logged, not mailed).
@@ -140,44 +115,34 @@ func (Maintenance) Goprecords() {
 		File(dailyLocal,
 			WithoutLine("/usr/local/bin/goprecords-upload.sh"),
 			WithoutLine(goprecords.CommandLine(server.Name)),
-			Perm(0o644, Root), DependsOn(cron))
+			RootOwned, DependsOn(cron))
 	})
 }
 
-// DescRsync returns the description shown for the frontend rsync task.
-func (Maintenance) DescRsync() string {
-	return "Install frontend rsync service configuration and synchronization cron"
-}
-
+// Rsync installs frontend rsync service configuration and synchronization
+// cron.
+//
 // Rsync installs the common daemon configuration and the root cron entry
 // (which adopted the former Rex line). The command intentionally retains
 // Rex's leading -ns argument.
 func (Maintenance) Rsync() {
 	rsync := Package("rsync")
-	InstallFile("/etc/rsyncd.conf", frontendAsset("rsyncd.conf"), Perm(0o644, Root))
+	InstallFile("/etc/rsyncd.conf", frontendAsset("rsyncd.conf"), RootOwned)
 	script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
-		Perm(0o755, Root))
+		RootExec)
 	CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh", DependsOn(rsync, script))
 }
 
-// DescGemtexter returns the description shown for the static-site task.
-func (Maintenance) DescGemtexter() string {
-	return "Install the daily Gemtexter content updater"
-}
-
-// Gemtexter installs the source-controlled updater and appends it to the
-// existing daily.local file without replacing other maintenance hooks.
+// Gemtexter installs the daily Gemtexter content updater.
 func (Maintenance) Gemtexter() {
 	script := InstallFile("/usr/local/bin/gemtexter.sh", legacyFrontendAsset("scripts/gemtexter.sh.tpl"),
 		Perm(0o744, Root))
-	File(dailyLocal, WithLine("/usr/local/bin/gemtexter.sh"), Perm(0o644, Root), DependsOn(script))
+	File(dailyLocal, WithLine("/usr/local/bin/gemtexter.sh"), RootOwned, DependsOn(script))
 }
 
-// DescACME returns the description shown for the certificate setup task.
-func (Maintenance) DescACME() string {
-	return "Install per-frontend ACME client configuration and daily renewal hook"
-}
-
+// ACME installs per-frontend ACME client configuration and daily renewal
+// hook.
+//
 // ACME installs Go-native equivalents of the former Perl templates, both
 // rendered from one certificate list (acmeData, see acme.go). The actual
 // invocation remains a separate network-service task so a setup plan cannot
@@ -186,27 +151,19 @@ func (Maintenance) ACME() {
 	EachHost(func(server Server) {
 		data := acmeData(server)
 		config := InstallFile("/etc/acme-client.conf", frontendAsset("acme-client.conf.tmpl"),
-			WithTemplateData(data), Perm(0o644, Root))
+			WithTemplateData(data), RootOwned)
 		script := InstallFile("/usr/local/bin/acme.sh", frontendAsset("acme.sh.tmpl"),
 			WithTemplateData(data), Perm(0o744, Root))
 		File(dailyLocal, WithLine("/usr/local/bin/acme.sh"),
-			Perm(0o644, Root), DependsOn(config, script))
+			RootOwned, DependsOn(config, script))
 	})
-}
-
-// DescIRCBouncer returns the description shown for the fishfinger-only ZNC
-// service task.
-func (Maintenance) DescIRCBouncer() string {
-	return "Install and enable the fishfinger IRC bouncer"
 }
 
 // OptsIRCBouncer marks the ZNC deployment as an Operational, by-name action,
 // so no pattern aggregate can pick it up.
 func (Maintenance) OptsIRCBouncer() TaskOptions { return TaskOptions{Operational()} }
 
-// IRCBouncer keeps Rex's separate service group and applies only to the host
-// with the existing runtime configuration; it does not enter the all-frontend
-// aggregate.
+// IRCBouncer installs and enables the fishfinger IRC bouncer.
 func (Maintenance) IRCBouncer() {
 	WhenHostname(Master, func() {
 		znc := Package("znc")
@@ -219,7 +176,7 @@ func (Maintenance) IRCBouncer() {
 // declaration and line edit of the file must agree: a line edit without a
 // mode would chmod it to gonf's 0640 default on every apply.
 func ensureRCLocal() Resource {
-	return EnsureFile("/etc/rc.local", Perm(0o644, Root))
+	return EnsureFile("/etc/rc.local", RootOwned)
 }
 
 // rcConfLocalLine declares one line of /etc/rc.conf.local under name: the
@@ -229,7 +186,7 @@ func ensureRCLocal() Resource {
 // both frontends): a line edit without a mode defaults to 0640, which would
 // chmod the file back and forth on every apply.
 func rcConfLocalLine(line, name string) Resource {
-	return File("/etc/rc.conf.local", WithLine(line), Perm(0o644, Root), WithName(name))
+	return File("/etc/rc.conf.local", WithLine(line), RootOwned, WithName(name))
 }
 
 // pkgScriptsLine renders the rc.conf.local pkg_scripts line exactly as

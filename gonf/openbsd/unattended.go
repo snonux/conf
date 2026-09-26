@@ -48,38 +48,23 @@ type UnattendedSchedule struct {
 // frontends setup aggregate (pattern aggregates skip Operational tasks).
 func (Unattended) OptsPing() TaskOptions { return TaskOptions{Unprivileged(), Operational()} }
 
-// DescPing returns the description shown for the frontends_ping task.
-func (Unattended) DescPing() string {
-	return "Verify the gonf push pipeline to this host"
-}
-
-// Ping is a minimal no-op task used to verify the gonf push pipeline to the
-// OpenBSD frontends: Noop runs nothing and always reports ok.
+// Ping verifies the gonf push pipeline to this host.
 func (Unattended) Ping() {
 	Noop("ping")
 }
 
-// DescScript returns the description for the wrapper deployment.
-func (Unattended) DescScript() string {
-	return "Install /usr/local/sbin/unattended-upgrade wrapper (0755 root:wheel)"
-}
-
-// Script installs the hardened ksh wrapper script.
+// Script installs /usr/local/sbin/unattended-upgrade wrapper (0755
+// root:wheel).
 func (Unattended) Script() {
 	InstallFile("/usr/local/sbin/unattended-upgrade",
 		paths.FrontendAsset("scripts/unattended-upgrade.sh"),
-		Perm(0o755, Root))
+		RootExec)
 }
 
-// DescServices returns the description for the restart list.
-func (Unattended) DescServices() string {
-	return "Install /etc/unattended-upgrade-services (0644 root:wheel)"
-}
-
-// Services installs the daemon restart list.
+// Services installs /etc/unattended-upgrade-services (0644 root:wheel).
 func (Unattended) Services() {
 	InstallFile("/etc/unattended-upgrade-services", unattendedServicesAsset(),
-		Perm(0o644, Root))
+		RootOwned)
 }
 
 // DescCron returns the description for the per-host cron schedule.
@@ -90,7 +75,7 @@ func (Unattended) DescCron() string {
 // OptsCron records the wrapper and the restart list before the cron jobs that
 // run them.
 func (Unattended) OptsCron() TaskOptions {
-	return TaskOptions{Needs("script", "services")}
+	return TaskOptions{Needs(Unattended.Script, Unattended.Services)}
 }
 
 // Cron installs the four root cron jobs on every frontend host,
@@ -120,13 +105,7 @@ func unattendedCronJobs(s UnattendedSchedule) {
 		WithMinute("35"), WithHour(s.AuditHour))
 }
 
-// DescNewsyslog returns the description for the rotation line.
-func (Unattended) DescNewsyslog() string {
-	return "Append unattended-upgrade log rotation to /etc/newsyslog.conf"
-}
-
-// Newsyslog appends the rotation line; the explicit mode matches
-// the deployed file (0644) so no attribute churn happens on apply.
+// Newsyslog appends unattended-upgrade log rotation to /etc/newsyslog.conf.
 func (Unattended) Newsyslog() {
 	File("/etc/newsyslog.conf", WithLine(unattendedNewsyslogLine), WithMode(0o644))
 }

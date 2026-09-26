@@ -25,10 +25,9 @@ const (
 // Monitoring owns frontend monitoring and custom-package configuration.
 type Monitoring struct{ RequiresRoot }
 
-func (Monitoring) DescPkgRepo() string {
-	return "Configure the signed frontend package repository for interactive pkg_add"
-}
-
+// PkgRepo configures the signed frontend package repository for interactive
+// pkg_add.
+//
 // PkgRepo preserves Rex's root-shell convenience setting. Custom package
 // resources below also set PKG_PATH directly, so non-login applies are safe.
 // WithKeyedLine owns the one PKG_PATH export in the profile: an older,
@@ -41,13 +40,11 @@ func (Monitoring) DescPkgRepo() string {
 // is already present.
 func (Monitoring) PkgRepo() {
 	File("/root/.profile", WithKeyedLine("export PKG_PATH=", `export PKG_PATH="`+customOpenBSDPackages+`"`),
-		Perm(0o644, Root))
+		RootOwned)
 }
 
-func (Monitoring) DescDTail() string {
-	return "Install DTail from the signed fleet repository and enable dserver"
-}
-
+// DTail installs DTail from the signed fleet repository and enables dserver.
+//
 // DTail preserves the former cleanup, account, retention, key-cache, and
 // daemon behavior. Cleanup only removes an old unpackaged installation.
 //
@@ -67,7 +64,7 @@ func (Monitoring) DTail() {
 	File(dailyLocal,
 		WithLine("/usr/local/bin/dserver-update-key-cache.sh"),
 		WithLine("find /var/log/dserver -name \"*.log\" -mtime +7 -delete"),
-		Perm(0o644, Root), DependsOn(pkg, account))
+		RootOwned, DependsOn(pkg, account))
 	config := InstallFile("/etc/dserver/dtail.json", frontendAsset("dtail.json"),
 		Perm(0o644, "root:bin"), DependsOn(pkg))
 	Service("dserver", WithRestart, DependsOn(pkg, account), OnChange(config))
@@ -85,10 +82,9 @@ done`),
 		WithName("cleanup-unpackaged-dtail"))
 }
 
-func (Monitoring) DescGogios() string {
-	return "Install Gogios monitoring, checks, schedules, and status publishing"
-}
-
+// Gogios installs Gogios monitoring, checks, schedules, and status
+// publishing.
+//
 // Gogios renders the old embedded-Perl configuration from the shared Go
 // topology, retaining stable check names because peer state keys use them.
 // A missing check_shuriken_age plugin source (shurikenAgePlugin) is reported
@@ -109,7 +105,7 @@ func (Monitoring) Gogios() {
 		statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
 		runDir := Dir("/var/run/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
 		config := File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o744, Root), DependsOn(plugins, gogios, statusDir, runDir))
-		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, Perm(0o755, Root))
+		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, RootExec)
 		removeStaleDNSRoleFiles()
 		gogiosUser := WithCronUser("_gogios")
 		// -renotify and -force run at minute 2, off the */5 grid: Gogios
@@ -127,7 +123,7 @@ func (Monitoring) Gogios() {
 		File("/etc/rc.local",
 			WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
 			WithLine("chown _gogios /var/run/gogios"),
-			Perm(0o644, Root), DependsOn(account, rcLocal))
+			RootOwned, DependsOn(account, rcLocal))
 	})
 }
 
@@ -159,18 +155,16 @@ pkg_info -e "gogios-*" >/dev/null 2>&1 || rm -f -- "$path"`),
 		WithName("cleanup-unpackaged-gogios"))
 }
 
-func (Monitoring) DescFoostats() string {
-	return "Install Foostats reporting, dependencies, daily hook, and log rotation"
-}
-
+// Foostats installs Foostats reporting, dependencies, daily hook, and logs
+// rotation.
 func (Monitoring) Foostats() {
 	deps := Packages("p5-Digest-SHA3", "p5-PerlIO-gzip", "p5-JSON", "p5-String-Util", "p5-LWP-Protocol-https")
 	script := InstallFile("/usr/local/bin/foostats.pl", foostatsSource("foostats.pl"), Perm(0o500, Root), DependsOn(deps))
 	data := InstallFile("/var/www/htdocs/buetow.org/self/foostats/fooodds.txt", foostatsSource("fooodds.txt"), Perm(0o440, Root))
-	Dir("/var/www/htdocs/gemtexter/stats.foo.zone", Perm(0o755, Root))
-	Dir("/var/gemini/stats.foo.zone", Perm(0o755, Root))
-	File(dailyLocal, WithLine("perl /usr/local/bin/foostats.pl --parse-logs --replicate --report"), Perm(0o644, Root), DependsOn(script, data))
-	InstallFile("/etc/newsyslog.conf", legacyFrontendAsset("etc/newsyslog.conf"), Perm(0o644, Root))
+	Dir("/var/www/htdocs/gemtexter/stats.foo.zone", RootOwned)
+	Dir("/var/gemini/stats.foo.zone", RootOwned)
+	File(dailyLocal, WithLine("perl /usr/local/bin/foostats.pl --parse-logs --replicate --report"), RootOwned, DependsOn(script, data))
+	InstallFile("/etc/newsyslog.conf", legacyFrontendAsset("etc/newsyslog.conf"), RootOwned)
 }
 
 // shurikenAgePlugin is the Gogios album-age plugin in the controller's

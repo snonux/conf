@@ -49,16 +49,14 @@ func GoprecordsToken(host string) string {
 	return paths.FHostSecret("goprecords/" + host + ".token")
 }
 
-// DescUpload returns the description for the uploader.
-func (Goprecords) DescUpload() string {
-	return "Install the goprecords upload client, token and hourly root cron (output to syslog)"
-}
-
 // OptsUpload records uptimed first: the client uploads its records file.
 func (Goprecords) OptsUpload() TaskOptions {
-	return TaskOptions{Needs("freebsd_base_uptimed")}
+	return TaskOptions{Needs(Base.Uptimed)}
 }
 
+// Upload installs the goprecords upload client, token and hourly root cron
+// (output to syslog).
+//
 // Upload installs goprecords.Client and schedules it hourly in root's
 // crontab. A host without a token gets nothing beyond curl and keeps its
 // hand-made setup (the optional-token policy, see goprecords.Client).

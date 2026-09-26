@@ -25,14 +25,12 @@ type Web struct {
 	RequiresRoot
 }
 
-// DescACMEInvoke returns the description for the explicit certificate request
-// task. Certificate requests intentionally remain separate from setup.
-func (Web) DescACMEInvoke() string { return "Request and renew frontend ACME certificates" }
-
 // OptsACMEInvoke marks the certificate request as an Operational action, so
 // no pattern aggregate can ever pick it up by name.
 func (Web) OptsACMEInvoke() TaskOptions { return TaskOptions{Operational()} }
 
+// ACMEInvoke requests and renews frontend ACME certificates.
+//
 // ACMEInvoke runs the already-installed renewal script on explicit request,
 // matching Rex's separate acme_invoke task. It is not part of the aggregate
 // setup path, so adding configuration never unexpectedly contacts an ACME CA.
@@ -48,27 +46,21 @@ func (Web) DescHTTPD() string { return "Render, validate, and converge frontend 
 // before every non-dry-run live reconciliation, while OnChange limits a
 // restart to a changed live config; a changed rc flag (WithFlags("") keeps
 // the httpd_flags= line rcctl writes) restarts it too. A render failure
-// refuses the host's httpd declarations (see refuseRender) instead of
-// declaring a File with empty content.
+// refuses the File (WithContentFrom) instead of declaring it with empty
+// content, which fails the record.
 func (Web) HTTPD() {
 	EachHost(func(server Server) {
-		content, err := renderHTTPD(webData(server))
-		if err != nil {
-			refuseRender("/etc/httpd.conf", err)
-			return
-		}
 		NoFile(legacyCandidate("/etc/httpd.conf"))
-		config := File("/etc/httpd.conf", WithContent(content),
-			Perm(0o644, Root),
+		config := File("/etc/httpd.conf", WithContentFrom(renderHTTPD(webData(server))),
+			RootOwned,
 			WithValidation("httpd", List("-n", "-f", CandidatePath)))
 		fallbackIndex := htdocs(server)
 		Service("httpd", WithFlags(""), WithRestart, DependsOn(fallbackIndex), OnChange(config))
 	})
 }
 
-// DescInetd returns the description for the inetd recipe.
-func (Web) DescInetd() string { return "Install and converge frontend inetd" }
-
+// Inetd installs and converges frontend inetd.
+//
 // Inetd renders no host-specific content, but still treats its login class as
 // a change input because the daemon must re-exec to receive revised limits.
 // WithFlags("") keeps the inetd_flags= line that enables it.
@@ -80,7 +72,7 @@ func (Web) DescInetd() string { return "Install and converge frontend inetd" }
 // it builds on the full stock daemon class and is kept as is.
 func (Web) Inetd() {
 	class := LoginClass("inetd", legacyFrontendAsset("etc/login.conf.d/inetd"))
-	config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"), Perm(0o644, Root))
+	config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"), RootOwned)
 	Service("inetd", WithFlags(""), WithRestart, OnChange(class, config))
 }
 
@@ -92,7 +84,7 @@ func (Web) DescRelayd() string {
 // OptsRelayd records the ACME setup (frontends_acme) before relayd; see
 // MailDNS.OptsSMTPD for why the Operational frontends_acme_invoke is not a
 // need.
-func (Web) OptsRelayd() TaskOptions { return TaskOptions{Needs("acme")} }
+func (Web) OptsRelayd() TaskOptions { return TaskOptions{Needs(Maintenance.ACME)} }
 
 // Relayd validates a candidate with `relayd -n` (core WithValidation) before
 // changing its live configuration. Its daemon login class is watched too: a
@@ -113,28 +105,22 @@ func (Web) OptsRelayd() TaskOptions { return TaskOptions{Needs("acme")} }
 // removal does not touch /etc/login.conf or /etc/login.conf.db.
 //
 // As in HTTPD, WithFlags("") keeps the relayd_flags= line, and a render
-// failure refuses the host's relayd declarations.
+// failure refuses the File.
 func (Web) Relayd() {
 	EachHost(func(server Server) {
-		content, err := renderRelayd(webData(server))
-		if err != nil {
-			refuseRender("/etc/relayd.conf", err)
-			return
-		}
 		class := NoLoginClass("daemon")
 		NoFile(legacyCandidate("/etc/relayd.conf"))
-		config := File("/etc/relayd.conf", WithContent(content),
-			Perm(0o600, Root),
+		config := File("/etc/relayd.conf", WithContentFrom(renderRelayd(webData(server))),
+			RootPrivate,
 			WithValidation("relayd", List("-n", "-f", CandidatePath)))
 		Service("relayd", WithFlags(""), WithRestart, OnChange(class, config))
 		File(dailyLocal, WithLine("/usr/sbin/rcctl start relayd"),
-			Perm(0o644, Root))
+			RootOwned)
 	})
 }
 
-// DescPF returns the description for the frontend PF and exporter recipe.
-func (Web) DescPF() string { return "Validate and reload frontend PF plus its node_exporter metrics" }
-
+// PF validates and reloads frontend PF plus its node_exporter metrics.
+//
 // PF validates a new ruleset with `pfctl -n` against a private candidate
 // (core WithValidation) before it replaces /etc/pf.conf, so an invalid
 // ruleset never becomes the live file and pf-reload never loads it. The
@@ -153,10 +139,10 @@ func (Web) PF() {
 // need the address, are still declared and checked.
 func pfAndExporter(host string) {
 	config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
-		Perm(0o600, Root), WithValidation("pfctl", List("-n", "-f", CandidatePath)))
+		RootPrivate, WithValidation("pfctl", List("-n", "-f", CandidatePath)))
 	Sh("pfctl -f /etc/pf.conf", OnChange(config), WithName("pf-reload"))
 
-	collector := Dir("/var/node_exporter", Perm(0o755, Root))
+	collector := Dir("/var/node_exporter", RootOwned)
 	exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
 		Perm(0o500, Root))
 	// pfctl needs root, so the exporter runs from root's crontab.
@@ -202,7 +188,7 @@ func htdocs(server Server) Resource {
 	Dir("/var/www/htdocs/f3s_fallback", Perm(0o755, "root:daemon"))
 	fallbackIndex := InstallFile("/var/www/htdocs/f3s_fallback/index.html",
 		legacyFrontendAsset("var/www/htdocs/f3s_fallback/index.html"),
-		Perm(0o644, Root))
+		RootOwned)
 	File("/var/www/htdocs/buetow.org/self/index.txt", WithContent("Welcome to "+server.FQDN+"!\n"),
 		Perm(0o644, "rex:wheel"))
 	return fallbackIndex

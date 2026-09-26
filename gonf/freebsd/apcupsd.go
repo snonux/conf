@@ -28,19 +28,27 @@ import (
 //   - The clients reached f0 by name; the name comes from /etc/hosts, but the
 //     IP removes the resolver from the path entirely.
 //
-// Register with OnCluster(cluster.NameFreeBSD); every f-host carries a UPS.
+// Register with OnCluster(cluster.NameFreeBSD); every f-host carries a
+// UPSServer or a UPSClient.
 type Apcupsd struct {
 	RequiresRoot
 }
 
-// UPS is a FreeBSD host's apcupsd role (host data, see gonf/cluster).
-type UPS struct {
-	// Server is the NIS server ("ip:port") a network client polls for the UPS
-	// status. It is empty on the host the UPS is wired to over USB.
+// UPSServer is the apcupsd role of the host the UPS is wired to over USB
+// (host data, see gonf/cluster).
+type UPSServer struct {
+	// NISIP is the address its NIS server binds: the LAN address, which the
+	// clients poll.
+	NISIP string
+}
+
+// UPSClient is the apcupsd role of a network client (host data).
+type UPSClient struct {
+	// Server is the NIS server ("ip:port") the client polls for the UPS
+	// status.
 	Server string
-	// NISIP is the address this host's own NIS server binds: the LAN address
-	// on the USB host (the clients poll it), loopback on a client (only its
-	// local apcaccess reads it).
+	// NISIP is the address the client's own NIS server binds: loopback, only
+	// its local apcaccess reads it.
 	NISIP string
 }
 
@@ -70,18 +78,19 @@ type apcupsdConfData struct {
 	Minutes      string
 }
 
-// confData maps a host's UPS role onto the template fields: an empty Server
-// is the USB host (DEVICE empty = autodetect the USB UPS), anything else is a
-// network client of that server.
-func confData(u UPS) apcupsdConfData {
-	if u.Server == "" {
-		return apcupsdConfData{
-			Cable: "usb", Type: "usb", Device: "", NISIP: u.NISIP,
-			BatteryLevel: strconv.Itoa(usbBatteryLevel), Minutes: strconv.Itoa(usbMinutes),
-		}
-	}
+// serverConfData maps the USB host's role onto the template fields (DEVICE
+// empty = autodetect the USB UPS).
+func serverConfData(s UPSServer) apcupsdConfData {
 	return apcupsdConfData{
-		Cable: "ether", Type: "net", Device: u.Server, NISIP: u.NISIP,
+		Cable: "usb", Type: "usb", Device: "", NISIP: s.NISIP,
+		BatteryLevel: strconv.Itoa(usbBatteryLevel), Minutes: strconv.Itoa(usbMinutes),
+	}
+}
+
+// clientConfData maps a network client's role onto the template fields.
+func clientConfData(c UPSClient) apcupsdConfData {
+	return apcupsdConfData{
+		Cable: "ether", Type: "net", Device: c.Server, NISIP: c.NISIP,
 		BatteryLevel: strconv.Itoa(netBatteryLevel), Minutes: strconv.Itoa(netMinutes),
 	}
 }
@@ -95,10 +104,7 @@ func (Apcupsd) DescClientEvents() string {
 // script that exits 99 (no mail, no wall); see the asset's header for why.
 // The USB host keeps the stock scripts: there a lost link is a real fault.
 func (Apcupsd) ClientEvents() {
-	EachHost(func(u UPS) {
-		if u.Server == "" {
-			return
-		}
+	EachHostWith(func(UPSClient) {
 		src := paths.FHostAsset("apcupsd/net-client-event")
 		InstallFile(apcupsdDir+"/commfailure", src, Perm(0o744, Root))
 		InstallFile(apcupsdDir+"/commok", src, Perm(0o744, Root))
@@ -113,17 +119,22 @@ func (Apcupsd) DescConfig() string {
 // OptsConfig installs the quiet client scripts first, so the restart of a
 // client (which briefly loses f0) does not mail.
 func (Apcupsd) OptsConfig() TaskOptions {
-	return TaskOptions{Needs("client_events")}
+	return TaskOptions{Needs(Apcupsd.ClientEvents)}
 }
 
 // Config installs the package, renders each host's apcupsd.conf and restarts
 // apcupsd only when the file changed; the service converges to enabled and
 // running on every apply.
 func (Apcupsd) Config() {
-	EachHost(func(u UPS) {
-		pkg := Package("apcupsd")
-		config := InstallFile(apcupsdConf, paths.FHostAsset("apcupsd/apcupsd.conf.tmpl"),
-			Perm(0o644, Root), WithTemplateData(confData(u)), DependsOn(pkg))
-		Service("apcupsd", WithRestart, OnChange(config))
-	})
+	EachHostWith(func(s UPSServer) { apcupsdConfig(serverConfData(s)) })
+	EachHostWith(func(c UPSClient) { apcupsdConfig(clientConfData(c)) })
+}
+
+// apcupsdConfig installs the package, renders apcupsd.conf from data and
+// restarts apcupsd when it changed.
+func apcupsdConfig(data apcupsdConfData) {
+	pkg := Package("apcupsd")
+	config := InstallFile(apcupsdConf, paths.FHostAsset("apcupsd/apcupsd.conf.tmpl"),
+		RootOwned, WithTemplateData(data), DependsOn(pkg))
+	Service("apcupsd", WithRestart, OnChange(config))
 }

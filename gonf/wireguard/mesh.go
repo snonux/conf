@@ -29,16 +29,14 @@ const generatorScript = "wireguardmeshgenerator.rb"
 // keys the generator uses.
 type Mesh struct{}
 
-// DescInstall returns the description for the generator invocation.
-func (Mesh) DescInstall() string {
-	return "Run wireguardmeshgenerator --generate --install for the whole mesh (controller-local, explicit only)"
-}
-
 // OptsInstall marks the invocation Operational, like frontends_acme_invoke:
 // no pattern aggregate ever picks it up, so a routine deploy never rewrites
 // or reloads a tunnel. Without Privileged() it runs as the invoking user.
 func (Mesh) OptsInstall() TaskOptions { return TaskOptions{Operational()} }
 
+// Install runs wireguardmeshgenerator --generate --install for the whole
+// mesh (controller-local, explicit only).
+//
 // Install regenerates every host's config under the checkout's dist/ (keys
 // and PSKs under keys/ are only created when missing) and installs it on
 // every host with an ssh section, full mesh at once: the generator's

@@ -41,19 +41,11 @@ func (Periodic) DescConf() string {
 // run's output into its own output (the log) instead of mailing it to root
 // with mail(1) ("daily insecurity output").
 func (Periodic) Conf() {
-	File("/etc/daily.conf", WithLine("separate_security_email=NO"), Perm(0o644, Root))
+	File("/etc/daily.conf", WithLine("separate_security_email=NO"), RootOwned)
 }
 
-// DescLogs returns the description for the log files and their rotation.
-func (Periodic) DescLogs() string {
-	return "Create /var/log/daily.log and weekly.log (0640) and rotate them with newsyslog"
-}
-
-// Logs creates the two logs 0640 root:wheel -- the redirection in the
-// crontab would create them world-readable under cron's umask, and they
-// carry the security output -- adds their newsyslog lines, and removes the
-// stock daily.out/weekly.out, which only held the last mailed run and are
-// no longer written.
+// Logs creates /var/log/daily.log and weekly.log (0640) and rotates them
+// with newsyslog.
 func (Periodic) Logs() {
 	EnsureFile("/var/log/daily.log", Perm(0o640, Root))
 	EnsureFile("/var/log/weekly.log", Perm(0o640, Root))
@@ -71,7 +63,7 @@ func (Periodic) DescCron() string {
 // OptsCron creates the logs (with their mode) and the daily.conf override
 // before the jobs write to them.
 func (Periodic) OptsCron() TaskOptions {
-	return TaskOptions{Needs("conf", "logs")}
+	return TaskOptions{Needs(Periodic.Conf, Periodic.Logs)}
 }
 
 // Cron adopts the stock daily and weekly lines (same times: 04:15 daily,
@@ -89,14 +81,8 @@ func (Periodic) Cron() {
 		WithLegacyCommand("/bin/sh /etc/weekly 2>&1 | tee /var/log/weekly.out | sendmail -t"))
 }
 
-// DescArchive returns the description for the mailbox archive.
-func (Periodic) DescArchive() string {
-	return "Archive /var/mail/root to a dated .gz and empty it when above 1 MiB"
-}
-
-// Archive gzips /var/mail/root into a dated archive and empties it while it
-// is larger than mailbox.ArchiveThreshold (see package mailbox), under the
-// dot-lock postfix's local delivery honours.
+// Archive archives /var/mail/root to a dated .gz and empties it when above 1
+// MiB.
 func (Periodic) Archive() {
 	Command("sh", List("-c", mailbox.Dotlocked(mailbox.ArchiveScript())),
 		OnlyIf("sh", List("-c", mailbox.Guard())),

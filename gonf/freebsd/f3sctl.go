@@ -41,17 +41,13 @@ const (
 	f3sctlAssetsPath = "f3sctl/"
 )
 
-// DescPackage returns the description for the f3sctl package.
-func (F3sctl) DescPackage() string {
-	return "Install the f3sctl package (the agent binary /usr/local/bin/f3sctl) from the custom pkg repo"
-}
-
 // OptsPackage needs the custom repository: f3sctl is only published there.
 func (F3sctl) OptsPackage() TaskOptions {
-	return TaskOptions{Privileged(), Needs("freebsd_base_pkg_repo")}
+	return TaskOptions{Privileged(), Needs(Base.PkgRepo)}
 }
 
-// Package installs f3sctl; pkg upgrades it with the rest of the system.
+// Package installs the f3sctl package (the agent binary
+// /usr/local/bin/f3sctl) from the custom pkg repo.
 func (F3sctl) Package() {
 	Package("f3sctl")
 }
@@ -82,21 +78,19 @@ func (F3sctl) DescKey() string {
 // there plus a deploy. The file and its directory stay root-owned and
 // world-readable, as sshd's StrictModes requires.
 func (F3sctl) Key() {
-	EnsureDir(authorizedKeysD, Perm(0o755, Root))
+	EnsureDir(authorizedKeysD, RootOwned)
 	InstallFile(f3sctlKeyFile, paths.FHostAsset(f3sctlAssetsPath+"authorized_keys"),
-		Perm(0o644, Root))
-}
-
-// DescSSHD returns the description for sshd_config.
-func (F3sctl) DescSSHD() string {
-	return "Install sshd_config (stock + Match User f3sctl block), validated with sshd -t; reload sshd on change"
+		RootOwned)
 }
 
 // OptsSSHD orders the Match block after the key file and account it names.
 func (F3sctl) OptsSSHD() TaskOptions {
-	return TaskOptions{Privileged(), Needs("account", "key")}
+	return TaskOptions{Privileged(), Needs(F3sctl.Account, F3sctl.Key)}
 }
 
+// SSHD installs sshd_config (stock + Match User f3sctl block), validated
+// with sshd -t; reloads sshd on change.
+//
 // SSHD owns the whole sshd_config: the FreeBSD 15.1 stock file plus the
 // Match User f3sctl block, byte for byte as on f1-f3 (f0 had lost one
 // comment line in an earlier etc merge). The whole file rather than line
@@ -110,6 +104,6 @@ func (F3sctl) OptsSSHD() TaskOptions {
 // from a host (keeping the Match block last) or gonf reverts the merge.
 func (F3sctl) SSHD() {
 	conf := InstallFile(sshdConfig, paths.FHostAsset(f3sctlAssetsPath+"sshd_config"),
-		Perm(0o644, Root), WithValidation(sshdBin, List("-t", "-f", CandidatePath)))
+		RootOwned, WithValidation(sshdBin, List("-t", "-f", CandidatePath)))
 	Command("sh", List("-c", sshdBin+" -t && service sshd reload"), OnChange(conf))
 }
