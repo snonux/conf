@@ -97,7 +97,13 @@ VERSION = $(shell grep -m1 '^const Version' $(SRC)/internal/version.go | sed 's/
 
 # DTail settings
 DTAIL_SRC      := /home/paul/git/dtail
-DTAIL_VERSION   = $(shell grep 'Version string' $(DTAIL_SRC)/internal/version/version.go | sed 's/.*"\(.*\)"/\1/')
+# DTAIL_REF selects the dtail commit the OpenBSD build archives (default HEAD).
+# The version is read from that same commit, not the working tree, so a
+# rebuild of an older release (e.g. make dtail-openbsd DTAIL_REF=e76e0e6, the
+# source of the published 4.3.2-ng) gets its matching version string.
+# Only dtail-openbsd honors it; the cross-compiled targets build the checkout.
+DTAIL_REF      ?= HEAD
+DTAIL_VERSION   = $(shell git -C $(DTAIL_SRC) show $(DTAIL_REF):internal/version/version.go 2>/dev/null | grep 'Version string' | sed 's/.*"\(.*\)"/\1/')
 DTAIL_BINARIES := dserver dcat dgrep dmap dtail dtailhealth
 # NetBSD package versions must not contain dashes (dash separates name from
 # version in pkg naming), so 4.3.2-ng becomes 4.3.2ng
@@ -239,7 +245,7 @@ check-dtail-version:
 	@mkdir -p /tmp/dtail-binaries
 	@# Sync source to VM via git archive (excludes build artifacts, saves space)
 	$(BUILDVM_SSH) $(BUILDVM_HOST) "rm -rf /tmp/dtail-src"
-	cd $(DTAIL_SRC) && git archive HEAD | $(BUILDVM_SSH) $(BUILDVM_HOST) "mkdir -p /tmp/dtail-src && tar -C /tmp/dtail-src -xf -"
+	cd $(DTAIL_SRC) && git archive $(DTAIL_REF) | $(BUILDVM_SSH) $(BUILDVM_HOST) "mkdir -p /tmp/dtail-src && tar -C /tmp/dtail-src -xf -"
 	@# Build all binaries natively on OpenBSD
 	$(BUILDVM_SSH) $(BUILDVM_HOST) "cd /tmp/dtail-src && for bin in $(DTAIL_BINARIES); do \
 		echo \"  Building \$$bin...\"; \

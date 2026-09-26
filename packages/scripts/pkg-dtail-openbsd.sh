@@ -60,9 +60,17 @@ PLIST
 # Description file
 printf '%s\n' "$DESC" > "$WORKDIR/desc"
 
-# Build the package
+# Build the package. FULLPKGPATH makes pkg_create emit
+# "@comment pkgpath=local/dtail ftp=no". pkg_add -u only treats a repo
+# package as an update candidate when its pkgpath matches the installed
+# one's; with an empty pkgpath (every dtail package before 2026-09-26)
+# pkg_add -u logs "Skipping dtail-... pkgpaths:" and the update needs
+# pkg_delete + pkg_add. Same local/<name> scheme as pkg-openbsd.sh (gogios):
+# the local/ category can never collide with an official ports pkgpath, so
+# installpath (installurl) packages never replace this build or vice versa.
 doas pkg_create \
     -D COMMENT="$COMMENT" \
+    -D FULLPKGPATH="local/${NAME}" \
     -d "$WORKDIR/desc" \
     -f "$WORKDIR/plist" \
     -B "$WORKDIR/stage" \

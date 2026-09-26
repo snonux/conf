@@ -195,8 +195,9 @@ keeps serving while it reboots):
 2. `doas sysupgrade -n`, then `doas shutdown -r now`; SSH is back after
    5-7 minutes.
 3. `doas syspatch` until `syspatch -c` is empty, reboot for a kernel patch.
-4. `doas pkg_add -u` without `PKG_PATH`: a set `PKG_PATH` replaces
-   `/etc/installurl`, so nothing but the fleet repo would be searched.
+4. `doas pkg_add -u`. `PKG_PATH` must be unset or start with `installpath`
+   (root's and rex's managed `.profile` use `installpath:<fleet repo>`): a
+   custom-only value replaces `/etc/installurl`.
 5. `doas sysmerge -b`, `doas fw_update`; re-apply the relayd openfiles limit
    if `login.conf` was replaced.
 6. Build the fleet packages into a new `openbsd/<rel>/` pkgrepo tree
@@ -204,10 +205,10 @@ keeps serving while it reboots):
    bump `customOpenBSDPackages` in `../gonf/frontends/monitoring.go` and
    apply `frontends_pkg_repo`. The unattended-upgrade audit builds the fleet
    URL from `uname -r`, so it misses the fleet packages until that tree
-   exists. dtail's package has no pkgpath, so `pkg_add -u` never replaces
-   it: `pkg_delete dtail`, `pkg_add dtail` from the new tree, `rcctl
-   restart dserver` (host key in `/var/db/dserver` survives); gogios takes
-   `pkg_add -u -D installed gogios`.
+   exists. Reinstall the same versions from the new tree with `pkg_add -u
+   -D installed dtail gogios`, then `rcctl restart dserver` (host key in
+   `/var/db/dserver` survives). Both packages carry `pkgpath=local/<name>`
+   (dtail since 2026-09-26, task 7l2), so pkg_add -u matches them.
 7. Verify services, `relayd -n`/`httpd -n`/`nsd-checkconf`, the SOA serial
    on both, wg handshakes, a gonf dry-run of the frontends aggregate, and a
    green Gogios run.

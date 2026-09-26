@@ -29,8 +29,16 @@ type Monitoring struct{ RequiresRoot }
 // PkgRepo configures the signed frontend package repository for interactive
 // pkg_add.
 //
-// PkgRepo preserves Rex's root-shell convenience setting. Custom package
-// resources below also set PKG_PATH directly, so non-login applies are safe.
+// PkgRepo preserves Rex's root-shell convenience setting and sets the same
+// PKG_PATH for rex himself: doas.conf has keepenv, so rex's `doas pkg_add -u`
+// sees rex's environment, not root's profile. Custom package resources below
+// also set PKG_PATH directly, so non-login applies are safe.
+// The value is "installpath:<custom>", like unattended-upgrade.sh's: a set
+// PKG_PATH replaces installurl(5), so the former custom-only value made a
+// root-shell `pkg_add -u` miss every official update, while an unset one
+// (rex's `doas pkg_add -u` until 2026-09-26) misses dtail and gogios
+// ("Couldn't find updates for ..."). installpath resolves installurl, so
+// both trees are searched.
 // WithKeyedLine owns the one PKG_PATH export in the profile: an older,
 // unquoted, or otherwise differently-formed legacy assignment is replaced in
 // place instead of staying beside the current line as a duplicate, so this
@@ -40,8 +48,9 @@ type Monitoring struct{ RequiresRoot }
 // line edit without WithMode applies gonf's 0640 default even when the line
 // is already present.
 func (Monitoring) PkgRepo() {
-	File("/root/.profile", WithKeyedLine("export PKG_PATH=", `export PKG_PATH="`+customOpenBSDPackages+`"`),
-		RootOwned)
+	line := WithKeyedLine("export PKG_PATH=", `export PKG_PATH="installpath:`+customOpenBSDPackages+`"`)
+	File("/root/.profile", line, RootOwned)
+	File("/home/rex/.profile", line, Perm(0o644, "rex:rex"))
 }
 
 // DTail installs DTail from the signed fleet repository and enables dserver.

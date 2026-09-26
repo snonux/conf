@@ -35,6 +35,8 @@ printf '%s\n' "$DESC" > "$WORKDIR/desc"
 # recognize different versions of this package as update candidates of
 # each other — without it, pkg_add treats them as unrelated look-alikes
 # and silently skips the upgrade (seen with gogios 1.4.3 -> 1.4.4).
+# pkg-dtail-openbsd.sh uses the same local/<name> scheme; local/ never
+# collides with an official ports pkgpath.
 doas pkg_create \
     -D COMMENT="$COMMENT" \
     -D FULLPKGPATH="local/${NAME}" \
