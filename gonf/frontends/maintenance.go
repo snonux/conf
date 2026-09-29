@@ -64,6 +64,9 @@ func (Maintenance) WireGuardHosts() {
 }
 
 // Uptimed installs and enables the uptimed service.
+//
+// Uptimed is the daemon half of the goprecords pair on the frontends;
+// Goprecords Needs it so an upload apply always converges the daemon too.
 func (Maintenance) Uptimed() {
 	uptimed := Package("uptimed")
 	Service("uptimed", DependsOn(uptimed))
@@ -82,6 +85,11 @@ func (Maintenance) Uptimed() {
 // the cluster is up, the same as the f-hosts' freebsd_goprecords_upload.
 const goprecordsSchedule = "15 * * * *"
 
+// OptsGoprecords records uptimed first: the client uploads its records file.
+func (Maintenance) OptsGoprecords() TaskOptions {
+	return TaskOptions{Needs(Maintenance.Uptimed)}
+}
+
 // Goprecords installs optional hourly uptimed uploads to goprecords (root
 // cron, output to syslog).
 //
@@ -90,7 +98,7 @@ const goprecordsSchedule = "15 * * * *"
 // (goprecords.CronCommand; a 405 while f3s is down is logged, not mailed).
 // A host lacking its controller-side token receives no token or schedule
 // and keeps whatever it already has (the optional-token policy, see
-// goprecords.Client).
+// goprecords.Client). Needs Uptimed so daemon and upload stay one apply.
 //
 // The former daily.local lines (the old goprecords-upload.sh and the
 // daily client run) are removed only after the cron entry is in place.

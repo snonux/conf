@@ -8,11 +8,13 @@ import (
 )
 
 // Goprecords manages the hourly uptimed upload to goprecords on f0-f3 (task
-// lk2), the f-host counterpart of frontends_goprecords. Until 2026-09-25 it
-// was hand-made (f3s blog part 2): the client script was an older copy (the
-// goprecords repo's, without the /usr/pkg PATH entries the repo copy gained
-// for the NetBSD Pis; harmless on FreeBSD), the token a hand-copied file and
-// the schedule a hand-added /etc/crontab line that RootMail.Goprecords later
+// lk2), the f-host counterpart of frontends_goprecords. Upload Needs
+// Base.Uptimed so applying the upload always converges the daemon too
+// (uptimed + upload as one pair). Until 2026-09-25 the upload was hand-made
+// (f3s blog part 2): the client script was an older copy (the goprecords
+// repo's, without the /usr/pkg PATH entries the repo copy gained for the
+// NetBSD Pis; harmless on FreeBSD), the token a hand-copied file and the
+// schedule a hand-added /etc/crontab line that RootMail.Goprecords later
 // piped into logger. Goprecords now owns all of it: the schedule moved to
 // root's crontab (gonf's Cron), with the same minute and the same logger
 // pipe, and the /etc/crontab line is removed.

@@ -2,6 +2,14 @@
 
 package rocky
 
+func (Goprecords) DescUpload() string {
+	return "Installs the goprecords upload client, token, env file and hourly system timer (oneshot + timer), replacing the hand-made units of the same name when present"
+}
+
+func (Goprecords) DescUptimed() string {
+	return "Installs the uptimed package, conf (LOG_MAXIMUM_ENTRIES=0), the chronyc waitsync drop-in (no RTC on these Pis), and enables the daemon"
+}
+
 func (KernelAudit) DescPackages() string {
 	return "Installs ksh, unzip, jq and curl for rocky-kernel-audit"
 }

@@ -2,6 +2,14 @@
 
 package netbsd
 
+func (Goprecords) DescUpload() string {
+	return "Installs the goprecords upload client, token and hourly root cron (output to syslog)"
+}
+
+func (Goprecords) DescUptimed() string {
+	return "Installs /etc/uptimed.conf (LOG_MAXIMUM_ENTRIES=0), the custom rc.d script, and enables the daemon"
+}
+
 func (Periodic) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
 }

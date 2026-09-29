@@ -1,9 +1,11 @@
 // Package goprecords declares the uptimed upload client every gonf-managed
-// goprecords client shares: the OpenBSD frontends (frontends.Maintenance)
-// and the FreeBSD f-hosts (freebsd.Goprecords), both hourly from root's
-// crontab with the output in syslog. Only the cron minute differs, so the
-// token, the script, the cron command and the optional-token policy live
-// here once.
+// goprecords client shares, and the shared Linux/NetBSD uptimed.conf asset
+// (LOG_MAXIMUM_ENTRIES=0). Upload recipes Needs the matching uptimed task so
+// daemon and upload stay one apply: OpenBSD frontends (frontends.Maintenance),
+// FreeBSD f-hosts (freebsd.Goprecords → Base.Uptimed), NetBSD/Rocky Pis
+// (netbsd/rocky.Goprecords.Uptimed), and earth/zen (dotfiles home → system).
+// Only the cron/timer minute differs per OS, so the token, the script, the
+// cron command and the optional-token policy live here once.
 package goprecords
 
 import (

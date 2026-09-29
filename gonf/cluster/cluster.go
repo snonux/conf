@@ -6,6 +6,7 @@ import (
 	"github.com/snonux/conf/gonf/freebsd"
 	"github.com/snonux/conf/gonf/frontends"
 	"github.com/snonux/conf/gonf/garage"
+	"github.com/snonux/conf/gonf/goprecords"
 	"github.com/snonux/conf/gonf/netbsd"
 	"github.com/snonux/conf/gonf/openbsd"
 	"github.com/snonux/conf/gonf/rnodes"
@@ -131,11 +132,13 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		// After the 14:10 pkgs / 14:50 reboot window (each with up to
 		// 20 min jitter).
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "15"}),
+		WithData(goprecords.ClientHost{Host: "pi0"}),
 	)
 	pi1 = Host("pi1", netbsdPi,
 		WithData(netbsd.UnattendedSchedule{PkgsHour: "22", RebootHour: "22"}),
 		// After the 22:10 pkgs / 22:50 reboot window.
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "23"}),
+		WithData(goprecords.ClientHost{Host: "pi1"}),
 	)
 	return pi0, pi1
 }
@@ -149,10 +152,12 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 	pi2 = Host("pi2", rockyPi,
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
+		WithData(goprecords.ClientHost{Host: "pi2"}),
 	)
 	pi3 = Host("pi3", rockyPi,
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
+		WithData(goprecords.ClientHost{Host: "pi3"}),
 	)
 	return pi2, pi3
 }

@@ -81,6 +81,13 @@ func FHostSecret(relativePath string) string {
 	return path.Join("freebsd-hosts", relativePath)
 }
 
+// PiSecret returns the logical path passed to api.MustSecret or
+// api.OptionalSecret for Raspberry Pi controller secrets, such as
+// goprecords/pi0.token (secrets/pis/goprecords/pi0.token).
+func PiSecret(relativePath string) string {
+	return path.Join("pis", relativePath)
+}
+
 // GarageSecret returns the logical path passed to api.MustSecret or
 // api.OptionalSecret for Garage controller secrets.
 func GarageSecret(relativePath string) string {

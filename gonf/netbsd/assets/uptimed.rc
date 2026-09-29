@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# PROVIDE: uptimed
+# REQUIRE: NETWORKING ntpdate
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="uptimed"
+rcvar=$name
+command="/usr/pkg/sbin/uptimed"
+pidfile="/var/run/${name}.pid"
+command_args="-p ${pidfile}"
+
+load_rc_config $name
+run_rc_command "$1"

@@ -35,13 +35,14 @@ func Register() {
 
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Periodic{}, WithPrefix("pis_netbsd_periodic_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterOnCluster(cluster.NameNetBSDPis, netbsd.Goprecords{})
 
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;
 	// rocky_kernel_audit_packages installs its own ksh interpreter, so it
 	// also deploys on its own.
-	RegisterOnCluster(cluster.NameRockyPis, rocky.KernelAudit{})
+	RegisterOnCluster(cluster.NameRockyPis, rocky.KernelAudit{}, rocky.Goprecords{})
 	RegisterMethods(pihole.Deployment{}, WithPrefix("pihole_"), OnCluster(cluster.NameRockyPis))
 
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
