@@ -41,8 +41,8 @@ cd /home/paul/git/conf/f3s/bgtutor
 just build-push   # builds /home/paul/git/totalrecall/bgtutor/Dockerfile
 ```
 
-Pushed as `r0.lan.buetow.org:30001/bgtutor:0.1.1`, pulled as
-`registry.lan.buetow.org:30001/bgtutor:0.1.1`. Bump the tag in
+Pushed as `r0.lan.buetow.org:30001/bgtutor:0.1.2`, pulled as
+`registry.lan.buetow.org:30001/bgtutor:0.1.2`. Bump the tag in
 `docker-image/Justfile` and `helm-chart/templates/deployment.yaml` together.
 
 ### 4. Deploy
@@ -79,6 +79,15 @@ BGTUTOR_TOKEN=... just episodes
 The server re-scans the library on every request, so no restart is needed.
 The learner's vocabulary notebook lives at `vocabulary/saved.json` on the same
 volume.
+
+Access logs for every request, including `/healthz`, appear in the pod logs:
+
+```sh
+kubectl logs -n services -l app=bgtutor -c bgtutor -f
+```
+
+The logs include method, path, status, duration, and response size; they omit
+query strings, headers, and bodies to keep tokens and lesson content private.
 
 ## Connecting a voice AI
 
