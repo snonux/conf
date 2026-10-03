@@ -7,7 +7,7 @@ spec:
   replicas: 1
   # Recreate so the old pod fully terminates before the new one starts —
   # avoids NFS-lock races on the hostPath-backed PVC during rolling updates,
-  # and keeps a single writer for vocabulary/saved.json.
+  # and keeps a single writer for vocabulary and citizenship progress.
   strategy:
     type: Recreate
   selector:
@@ -35,13 +35,24 @@ spec:
         - name: bgtutor-data
           mountPath: /mnt
           readOnly: true
+      # Fail before serving if uploaded citizenship assets are incomplete.
+      - name: validate-citizenship
+        image: registry.lan.buetow.org:30001/bgtutor:0.30.0
+        command: ["/usr/local/bin/bgtutor", "validate"]
+        args: ["--mode", "citizenship", "--data-dir", "/data"]
+        volumeMounts:
+        - name: bgtutor-data
+          mountPath: /data
+          readOnly: true
       containers:
       - name: bgtutor
-        image: registry.lan.buetow.org:30001/bgtutor:0.1.2
+        image: registry.lan.buetow.org:30001/bgtutor:0.30.0
         imagePullPolicy: Always
         # The image entrypoint is "bgtutor serve"; BGTUTOR_DATA_DIR and
         # BGTUTOR_ADDR are set here explicitly so the chart documents them.
         env:
+        - name: BGTUTOR_MODE
+          value: citizenship
         - name: BGTUTOR_DATA_DIR
           value: /data
         - name: BGTUTOR_ADDR
@@ -79,7 +90,7 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
-          # root so it can write vocabulary/ on the NFS export, same as
+          # root so it can write vocabulary/ and citizenship-progress/ on the NFS export, same as
           # goprecords; the binary itself needs no privileges.
           runAsUser: 0
           runAsGroup: 0

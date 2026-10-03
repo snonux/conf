@@ -10,7 +10,7 @@ spec:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   hostPath:
-    # Holds episodes/ (one folder per prepared episode) and vocabulary/.
+    # Holds prepared episodes/citizenship-test and personal vocabulary/progress.
     path: /data/nfs/k3svolumes/bgtutor/data
     type: Directory
 ---

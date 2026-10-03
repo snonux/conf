@@ -1,14 +1,15 @@
-REGISTRY := "r0.lan.buetow.org:30001"
+ENGINE := env_var_or_default("CONTAINER_ENGINE", "podman")
+REGISTRY := env_var_or_default("BGTUTOR_REGISTRY", "r0.lan.buetow.org:30001")
 IMAGE := "bgtutor"
-TAG := "0.1.2"
-# bgtutor is a sub-project of totalrecall; its Dockerfile builds from the repo root.
-SRC := "/home/paul/git/totalrecall"
+TAG := "0.30.0"
+# Standalone source checkout; override BGTUTOR_SRC when it lives elsewhere.
+SRC := env_var_or_default("BGTUTOR_SRC", "/home/paul/git/bgtutor-mcp")
 
 build:
-	docker build -f {{SRC}}/bgtutor/Dockerfile -t {{IMAGE}}:{{TAG}} {{SRC}}
+    {{ENGINE}} build -f {{SRC}}/Dockerfile -t {{IMAGE}}:{{TAG}} {{SRC}}
 
 push:
-	docker tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
-	docker push {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+    {{ENGINE}} tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+    {{ENGINE}} push --tls-verify=false {{REGISTRY}}/{{IMAGE}}:{{TAG}}
 
 all: build push

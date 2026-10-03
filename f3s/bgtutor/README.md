@@ -1,96 +1,80 @@
 # bgtutor on f3s
 
-Bulgarian Podcast Tutor MCP server (`bgtutor serve`, a sub-project of
-`github.com/snonux/totalrecall`). A voice AI (Claude or ChatGPT) connects to it
-as a custom connector and fetches prepared podcast episodes paragraph by
-paragraph.
+The standalone [bgtutor-mcp](https://github.com/snonux/bgtutor-mcp) server runs
+in citizenship mode at `https://bgtutor-mcp.f3s.buetow.org/mcp`.
+Release: **0.30.0**. Prepared content comes from
+[bgtutor-assets](https://github.com/snonux/bgtutor-assets), `citizenship-test/`.
 
-- Public URL for the connector: `https://bgtutor-mcp.f3s.buetow.org/mcp`
-  (TLS on the frontends via relayd; `bgtutor-mcp.f3s.buetow.org` is in
-  `f3sHosts` in `gonf/frontends/data.go`)
-- LAN: `https://bgtutor.f3s.lan.buetow.org/mcp`
-- Every `/mcp` request needs the bearer token (`Authorization: Bearer <token>`
-  or `?token=<token>` on the URL). `/healthz` is open for probes.
+The connected AI teaches interactive classes using 36 grammar chapters,
+reading/listening practice and interview preparation. Six complete practice
+and official sample exams have separate answer-key grading. See the server's
+`CITIZENSHIP.md` for the teaching plan and all eleven tools. Podcast mode remains
+available by starting a separate server with `BGTUTOR_MODE=podcast`.
 
-## Initial setup
+## Runtime
 
-### 1. Storage
+- Namespace `services`, Deployment `bgtutor`, Service `bgtutor-service`.
+- Image `registry.lan.buetow.org:30001/bgtutor:0.30.0`.
+- Secret `bgtutor-secret`, key `BGTUTOR_TOKEN`; retain it when updating.
+- NFS volume `/data/nfs/k3svolumes/bgtutor/data`, mounted at `/data`.
+- Prepared content is in `citizenship-test/`; personal files are
+  `vocabulary/saved.json` and `citizenship-progress/saved.json`.
+- A sentinel init container checks NFS, followed by `validate-citizenship`,
+  which validates prepared tests before the app starts.
+- One replica with `Recreate` prevents concurrent personal-data writers.
+- ArgoCD app `bgtutor` in `cicd` follows conf `master` on Forgejo.
 
-On the NFS server (per `f3s/docs/nfs-sentinel-initcontainer.md`):
+Requests to `/mcp` require `Authorization: Bearer <token>` or
+`?token=<token>`. `/healthz` is public. TLS ends at the f3s frontends;
+LAN ingress is `https://bgtutor.f3s.lan.buetow.org/mcp`.
+Access logs omit headers, query strings and request bodies.
 
-```sh
-ssh paul@f0 'doas mkdir -p /data/nfs/k3svolumes/bgtutor/data/episodes /data/nfs/k3svolumes/bgtutor/data/vocabulary \
-  && doas touch /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel \
-  && doas chmod 644 /data/nfs/k3svolumes/bgtutor/data/.nfs-sentinel'
-```
+## Update image and content
 
-The PV uses `type: Directory`, so the pod will not schedule until it exists.
-
-### 2. Token secret
-
-```sh
-kubectl create secret generic bgtutor-secret -n services \
-  --from-literal=BGTUTOR_TOKEN="$(openssl rand -hex 32)"
-kubectl get secret bgtutor-secret -n services -o jsonpath='{.data.BGTUTOR_TOKEN}' | base64 -d
-```
-
-### 3. Image
-
-```sh
-cd /home/paul/git/conf/f3s/bgtutor
-just build-push   # builds /home/paul/git/totalrecall/bgtutor/Dockerfile
-```
-
-Pushed as `r0.lan.buetow.org:30001/bgtutor:0.1.2`, pulled as
-`registry.lan.buetow.org:30001/bgtutor:0.1.2`. Bump the tag in
-`docker-image/Justfile` and `helm-chart/templates/deployment.yaml` together.
-
-### 4. Deploy
+Validate the assets with the new binary first. Confirm the CARP master on
+f0/f1 before uploading. The commands below assume roaming over WireGuard,
+with f0 master; use LAN names and your LAN kubeconfig when on the LAN.
 
 ```sh
-kubectl apply -f ../argocd-apps/services/bgtutor.yaml
-just status
+cd ~/git/bgtutor-mcp
+go test -race ./...
+go run ./cmd/bgtutor validate --mode citizenship --data-dir ../bgtutor-assets
+cd ~/git/conf/f3s/bgtutor
+BGTUTOR_REGISTRY=r0.wg0.wan.buetow.org:30001 just build-push
+just upload-citizenship /home/paul/git/bgtutor-assets/citizenship-test f0.wg0
 ```
 
-Then converge the frontends so `bgtutor-mcp.f3s.buetow.org` gets its DNS
-record, certificate and relayd route (from the repository root):
+Builds use rootless Podman and the standalone source checkout. Override
+`CONTAINER_ENGINE`, `BGTUTOR_SRC` or `BGTUTOR_REGISTRY` if needed. The upload
+copies only prepared content and leaves learner progress, vocabulary and the
+NFS sentinel intact. All PDFs, prepared JSON and video/subtitle assets travel
+with the folder. Content is reloaded on requests, so content-only updates need
+no restart. Uploading without `--delete` also retains existing files: remove
+retired prepared files explicitly when needed.
+
+For a new release, change the image tag in `docker-image/Justfile`, both images
+in `helm-chart/templates/deployment.yaml`, and `helm-chart/Chart.yaml` together.
+Validate with `helm lint`, `helm template` and a Kubernetes server dry run.
+Commit only the workload files and push conf master to Forgejo; ArgoCD deploys
+it automatically. See `HANDOVER.md` for verification and rollback.
+
+## Verify
 
 ```sh
-./gonf.sh cluster frontends frontends               # NSD, httpd, ACME config, Gogios
-./gonf.sh cluster frontends frontends_acme_invoke   # request the new certificate
-./gonf.sh cluster frontends frontends_relayd        # route the host with its keypair
+kubectl --context=wg0 -n cicd annotate application bgtutor argocd.argoproj.io/refresh=hard --overwrite
+kubectl --context=wg0 -n services rollout status deployment/bgtutor --timeout=120s
+kubectl --context=wg0 -n services logs -l app=bgtutor -c validate-citizenship
+export BGTUTOR_TOKEN="$(kubectl --context=wg0 -n services get secret bgtutor-secret -o jsonpath='{.data.BGTUTOR_TOKEN}' | base64 -d)"
+python3 smoke-test-citizenship.py https://bgtutor-mcp.f3s.buetow.org --write
+unset BGTUTOR_TOKEN
 ```
 
-## Adding episodes
+The smoke test checks authentication, mode/version, all tools, every grammar
+chapter, listening assets, all exams, question feedback, incomplete-submission
+rejection and the coverage plan. `--write` saves then deletes a unique temporary
+vocabulary item. It does not record fake mastery or mock scores. The older
+`smoke-test.sh` targets podcast mode and is not appropriate for this deployment.
 
-Prepare an episode in the totalrecall checkout with a coding agent (Claude
-Code, Codex, or a Claude cloud session) following `bgtutor/PREPARE.md`; no API
-key is needed. Then check it, publish it and copy it into the library:
-
-```sh
-cd /home/paul/git/totalrecall
-go run ./cmd/bgtutor validate 002-morning-news
-go run ./cmd/bgtutor publish 002-morning-news
-cd /home/paul/git/conf/f3s/bgtutor
-just upload-episode /home/paul/git/totalrecall/bgtutor/data/episodes/002-morning-news
-BGTUTOR_TOKEN=... just episodes
-```
-
-The server re-scans the library on every request, so no restart is needed.
-The learner's vocabulary notebook lives at `vocabulary/saved.json` on the same
-volume.
-
-Access logs for every request, including `/healthz`, appear in the pod logs:
-
-```sh
-kubectl logs -n services -l app=bgtutor -c bgtutor -f
-```
-
-The logs include method, path, status, duration, and response size; they omit
-query strings, headers, and bodies to keep tokens and lesson content private.
-
-## Connecting a voice AI
-
-- Claude: Settings > Connectors > Add custom connector, URL
-  `https://bgtutor-mcp.f3s.buetow.org/mcp?token=<token>`.
-- ChatGPT: enable Developer Mode, then add a connector with the same URL.
+Refresh the connector's discovered tools after updating from podcast mode.
+Keep the existing token; ask the connected AI to start Bulgarian citizenship
+preparation. The server's initialization instructions direct its live teaching.
