@@ -1,7 +1,7 @@
 # Per-site shuriken.conf files, mounted read-only at /configs inside the
 # CronJob container. The image entrypoint runs `shuriken --generate --config
 # <conf>` once per *.conf here (alphabetical), so both albums are regenerated
-# sequentially in a single daily run.
+# sequentially in a single run.
 #
 # Notes:
 #   - INCOMING_DIR uses `readlink -f` on the symlink under /data/shuriken.sh/

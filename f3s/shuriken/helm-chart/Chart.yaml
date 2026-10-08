@@ -1,5 +1,6 @@
 apiVersion: v2
 name: shuriken
-description: Nightly shuriken photo-album generation CronJob for irregular.ninja and alt.irregular.ninja.
-version: 0.1.0
+description: Hourly, marker-gated shuriken photo-album generation CronJob for irregular.ninja and alt.irregular.ninja (generates at most once per 24h).
+version: 0.1.1
+
 appVersion: "0.14.1"

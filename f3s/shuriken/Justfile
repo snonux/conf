@@ -24,13 +24,16 @@ status:
 	@kubectl get application {{APP_NAME}} -n cicd -o jsonpath='Sync: {.status.sync.status}, Health: {.status.health.status}' 2>/dev/null && echo "" || echo "Not found"
 
 logs lines="100":
-	kubectl logs -n {{NAMESPACE}} -l job-name=shuriken --tail={{lines}} -f 2>/dev/null || \
-		kubectl logs -n {{NAMESPACE}} -l cronjob=shuriken --tail={{lines}} -f 2>/dev/null || \
-		echo "No running shuriken job pods; trigger one with: kubectl create job --from=cronjob/shuriken -n services shuriken-manual"
+	kubectl logs -n {{NAMESPACE}} -l cronjob=shuriken --tail={{lines}} -f 2>/dev/null || \
+		echo "No running shuriken job pods; trigger one with: just run"
 
-# Trigger an immediate manual run (outside the daily schedule) and follow logs.
-run:
-	kubectl create job --from=cronjob/shuriken -n {{NAMESPACE}} shuriken-manual
+# Trigger a manual run. It goes through the same marker gate as the
+# hourly ticks: if the last successful run is < 24h ago (or the last
+# attempt failed < 4h ago) it just skips. To force a regeneration,
+# delete the markers first on any r-node (root):
+#   rm /data/nfs/k3svolumes/shuriken.sh/.last-generate-{run,fail}
+run name="shuriken-manual-$(date +%s)":
+	kubectl create job --from=cronjob/shuriken -n {{NAMESPACE}} {{name}}
 	@sleep 3
 	just logs
 

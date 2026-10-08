@@ -1,15 +1,38 @@
-# shuriken: daily regeneration of the irregular.ninja and alt.irregular.ninja
-# static photo albums. The container entrypoint runs `shuriken --generate
-# --config <conf>` once per /configs/*.conf (alphabetical), writing each site
-# into /data/shuriken.sh/<site>/dist on the shared NFS export.
+# shuriken: regeneration of the irregular.ninja and alt.irregular.ninja
+# static photo albums, roughly once a day. The container entrypoint runs
+# `shuriken --generate --config <conf>` once per /configs/*.conf
+# (alphabetical), writing each site into /data/shuriken.sh/<site>/dist on
+# the shared NFS export.
+#
+# Scheduling: the CronJob ticks hourly (except 12:00, the beets-art slot)
+# and each tick first checks marker files on the persistent volume:
+#   - /data/shuriken.sh/.last-generate-run -- the HOUR-QUANTIZED epoch of the
+#     last fully successful multi-site run; a tick aborts early (exit 0)
+#     unless that is >= 24h ago. Quantizing to the gate-pass hour (not the
+#     completion time) keeps the run pinned to one stable hour: comparing a
+#     completion timestamp against hour-quantized ticks would creep the run
+#     one hour later every day, because the run duration always rounds up
+#     to the next tick. A missing or malformed marker means "never ran".
+#   - /data/shuriken.sh/.last-generate-fail -- epoch of the last attempt,
+#     stamped BEFORE the run and removed on success, so kill-path failures
+#     (activeDeadlineSeconds expiry, the nightly power-off, OOM of the
+#     shell) are covered too; a surviving marker backs the next retry off
+#     for 4h so a persistent failure doesn't re-burn a multi-hour CPU run
+#     on every hourly tick.
+# A fixed daily slot silently no-ops whenever the cluster is powered down
+# at that hour (the nodes are off at night); the hourly tick instead
+# catches the first hour the cluster is back up and then stays there
+# (within one DST season: each spring-forward transition shifts the run
+# one local hour later, where it re-pins).
 #
 # Design:
 #   - concurrencyPolicy: Forbid -- a long generate run (large photo library,
 #     single image job) must not stack a second worker on top of it; shuriken's
 #     staging directories would race and the NFS write load would double.
-#   - backoffLimit: 0 -- a failed daily run surfaces in the Job history and
-#     gets retried by the next day's schedule; spamming retries would just
-#     re-burn ImageMagick CPU on a persistent failure (e.g. NFS down).
+#   - backoffLimit: 0 -- a failed run surfaces in the Job history; the
+#     schedule-level retry is the .last-generate-fail marker (4h backoff,
+#     see the gate script), and spamming in-pod retries would just re-burn
+#     ImageMagick CPU on a persistent failure (e.g. NFS down).
 #   - activeDeadlineSeconds: 6h -- caps a runaway first-run backfill of a large
 #     library; steady state is far shorter.
 #   - runAsUser: 0 -- the syncthing source tree is mode 750 root:wheel on the
@@ -23,13 +46,21 @@ metadata:
   name: shuriken
   namespace: services
 spec:
-  # 13:00 local daily. It used to run at 04:00 (off-peak), but the cluster is
-  # powered off every night (up roughly 10:00-01:00 local), so the 04:00 slot
-  # never fired: last scheduled run 2026-08-16 (audit 2026-09-26). 13:00 is
-  # after the beets-art noon sweep (~30 min) and before the 18:00
-  # shuriken-sync publish; the flock mutex serialises any overlap with sync.
-  # timeZone is GA in k8s 1.27+.
-  schedule: "0 13 * * *"
+  # Hourly at minute 0, EXCEPT 12:00. The marker gate in the container
+  # script turns this into "at most once per 24h, at the first eligible hour
+  # the cluster is up", and the hour-quantized marker keeps that hour stable.
+  # History: the 04:00 slot never fired because the cluster is powered off
+  # at night (up roughly 10:00-01:00 local); the later 13:00 slot missed
+  # again whenever the nodes were down (or NFS unhealthy) at 13:00 sharp,
+  # with no retry until the next day. The 12:00 tick is excluded because
+  # beets-art starts daily at 12:00 on the same passively-cooled N100
+  # nodes (thermal history in its chart; its own backfills may run for
+  # hours). The exclusion keeps a generation from STARTING on top of the
+  # beets sweep; it cannot prevent overlap with a multi-hour beets
+  # backfill. Minute 0 is otherwise clear of shuriken-sync (10:30/18:30);
+  # the flock mutex serialises any overlap with sync anyway. timeZone is
+  # GA in k8s 1.27+.
+  schedule: "0 0-11,13-23 * * *"
   timeZone: Europe/Sofia
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -40,6 +71,13 @@ spec:
       backoffLimit: 0
       activeDeadlineSeconds: 21600
       template:
+        metadata:
+          labels:
+            # Stable pod label for `just logs` (kubectl logs -l
+            # cronjob=shuriken): the auto-generated job-name label is
+            # job-name=shuriken-<timestamp>, which no fixed selector
+            # matches.
+            cronjob: shuriken
         spec:
           restartPolicy: Never
           initContainers:
@@ -69,16 +107,98 @@ spec:
                   set -e
                   # Hold the generation/sync mutex for the WHOLE multi-site run
                   # so the shuriken-sync CronJob can't publish mid-generation
-                  # (and vice versa). The lock is held on fd 9, which the exec'd
-                  # entrypoint inherits, so flock auto-releases when the pod dies
-                  # (a crash never leaves a stale lock). Blocking acquire: if a
-                  # sync is mid-publish, wait for it (it's short) then generate.
+                  # (and vice versa). The lock is held on fd 9, which the
+                  # entrypoint child inherits, so flock auto-releases when the
+                  # pod dies (a crash never leaves a stale lock). Blocking
+                  # acquire: if a sync is mid-publish, wait for it (it's short)
+                  # then generate.
                   # NB: busybox's `flock FILE PROG` form returns "Bad file
                   # descriptor" on NFS, so use the fd form (matching
                   # sync-cronjob.yaml) instead.
                   exec 9>/data/shuriken.sh/.lock
                   flock 9
-                  exec shuriken-entrypoint
+
+                  # Marker gate (checked while HOLDING the lock, so a manual
+                  # `just run` job and the hourly tick serialise here instead
+                  # of both passing the check. NFS attribute caching can
+                  # still serve a just-stale marker within its ~60s window;
+                  # the worst case is a duplicate -- wasted -- generation,
+                  # never corruption, since the lock keeps them sequential.)
+                  #
+                  # .last-generate-run: HOUR-QUANTIZED epoch of the last
+                  # successful multi-site run; generate only when it is
+                  # >= 24h ago. Quantizing to the gate-pass hour (not the
+                  # completion time) keeps the run on one stable hour:
+                  # completion-time stamps drift an hour later per day
+                  # because the run duration rounds up to the next tick.
+                  # .last-generate-fail: epoch of the current attempt,
+                  # stamped BEFORE the run and removed on success, so
+                  # kill-path failures (deadline expiry, the nightly
+                  # power-off, OOM) are backed off as well: 4h until the
+                  # next retry.
+                  #
+                  # A marker only counts if it is a plain 9-10 digit epoch
+                  # (1973-2286): anything else -- missing, truncated,
+                  # zero-padded (octal trap in shell arithmetic), future-
+                  # dated (negative age, clock skew) -- is treated as
+                  # corrupt/never-ran and the gate passes.
+                  D=/data/shuriken.sh
+                  MARKER="$D/.last-generate-run"
+                  FAILMARKER="$D/.last-generate-fail"
+                  # head -n1: a marker holding two valid epochs (restore,
+                  # manual merge) must not wedge the arithmetic below.
+                  valid_epoch() { grep -oE '^[1-9][0-9]{8,9}$' "$1" 2>/dev/null | head -n1 || true; }
+                  run_epoch=$(date +%s)
+                  run_hour=$(( run_epoch - run_epoch % 3600 ))
+
+                  last=$(valid_epoch "$MARKER")
+                  if [ -n "$last" ]; then
+                      age=$(( run_epoch - last ))
+                      if [ "$age" -ge 0 ] && [ "$age" -lt 86400 ]; then
+                          echo "shuriken: last successful run ${age}s ago (< 24h); skipping"
+                          exit 0
+                      fi
+                  fi
+
+                  fail_last=$(valid_epoch "$FAILMARKER")
+                  if [ -n "$fail_last" ]; then
+                      fail_age=$(( run_epoch - fail_last ))
+                      if [ "$fail_age" -ge 0 ] && [ "$fail_age" -lt 14400 ]; then
+                          echo "shuriken: last attempt failed ${fail_age}s ago (< 4h backoff); skipping"
+                          exit 0
+                      fi
+                  fi
+
+                  # Not exec'd (as it used to be) so the markers can be
+                  # stamped after the run; the fd-9 lock stays held until
+                  # this script exits. Trade-off: the shell is now PID 1
+                  # and busybox ash does not forward SIGTERM to the child,
+                  # so on activeDeadlineSeconds expiry the cgroup SIGKILL
+                  # reaps ImageMagick instead of a forwarded signal.
+                  # Stamp the fail marker BEFORE the run: kill-path
+                  # failures (deadline expiry, nightly power-off, OOM)
+                  # never reach an else branch, so a marker written only
+                  # on clean failure would miss exactly the retries that
+                  # burn the most CPU. Success removes it again below.
+                  echo "$run_epoch" > "$FAILMARKER.tmp"
+                  mv "$FAILMARKER.tmp" "$FAILMARKER"
+
+                  if shuriken-entrypoint; then
+                      rm -f "$FAILMARKER"
+                      # Stamp only after a fully successful multi-site
+                      # run. Atomic tmp+rename in the same directory
+                      # (rename is a single RPC on NFS, cf. shuriken's
+                      # staging swap), so a crash can't leave a truncated
+                      # marker a later tick would misread; a leftover .tmp
+                      # is simply overwritten by the next successful run.
+                      echo "$run_hour" > "$MARKER.tmp"
+                      mv "$MARKER.tmp" "$MARKER"
+                      echo "shuriken: stamped $MARKER ($run_hour)"
+                  else
+                      status=$?
+                      echo "shuriken: generation failed; $FAILMARKER stays (4h backoff)"
+                      exit "$status"
+                  fi
               env:
                 # Default 1 image job (single-threaded); override here if a
                 # faster one-off run is acceptable. The entrypoint passes this

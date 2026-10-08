@@ -7,8 +7,26 @@ ArgoCD app `shuriken` (`f3s/shuriken/helm-chart`).
 
 | CronJob | When (Europe/Sofia) | What |
 |---|---|---|
-| `shuriken` | 13:00 (the cluster is powered off at night) | `shuriken --generate --config` for each `/configs/*.conf`, sequentially, `--image-jobs 1` (`SHURIKEN_IMAGE_JOBS`) |
-| `shuriken-sync` | 10:00, 18:00 | rsync each changed `dist/` to fishfinger and blowfish |
+| `shuriken` | hourly (12:00 excluded, beets-art slot); marker-gated: a tick generates only when the last successful run is >= 24h ago | `shuriken --generate --config` for each `/configs/*.conf`, sequentially, `--image-jobs 1` (`SHURIKEN_IMAGE_JOBS`) |
+| `shuriken-sync` | 10:30, 18:30 | rsync each changed `dist/` to fishfinger and blowfish |
+
+The `shuriken` CronJob ticks hourly but keeps marker files on the PV:
+`/data/shuriken.sh/.last-generate-run` is the **hour-quantized** epoch of
+the last fully successful multi-site run — a tick aborts early unless
+that run is >= 24h ago, a missing or malformed marker means "never ran"
+and generates immediately, and quantizing to the gate-pass hour keeps
+the run pinned to one stable hour (a completion-time stamp would drift
+an hour later every day, because the run duration rounds up to the next
+tick; within one DST season the hour is stable — each spring-forward
+transition shifts it one local hour later, where it re-pins).
+`/data/shuriken.sh/.last-generate-fail` is stamped before every attempt
+and removed on success, so it also covers runs killed by the nightly
+power-off or the 6h deadline; a surviving marker backs the next retry
+off for 4h. This self-heals missed
+schedules — the cluster is powered off at night, so a fixed daily slot
+silently no-ops whenever the nodes are down at that hour, while the
+hourly tick just catches the first hour the cluster is back up (12:00
+is skipped so a run doesn't start on top of the daily beets-art sweep).
 
 ## Image
 
@@ -33,11 +51,18 @@ only go to `/data/shuriken.sh/<site>/dist`. Sentinel:
 ```
 /data/nfs/k3svolumes/shuriken.sh/
   .nfs-sentinel
+  .last-generate-run    # hour-quantized epoch of last successful generate (24h gate)
+  .last-generate-fail   # epoch of last attempt, removed on success (4h retry backoff)
+  .lock                 # flock shared with shuriken-sync (fd form, see cronjob.yaml)
   incoming/irregular.ninja      -> ../../syncthing/.../irregular.ninja
   incoming/alt.irregular.ninja  -> ../../syncthing/.../alt.irregular.ninja
   irregular.ninja/dist/
   alt.irregular.ninja/dist/
 ```
+
+(The markers are written atomically via a same-directory `.<name>.tmp` +
+rename; a leftover `.tmp` after a crash is harmless and overwritten by the
+next run.)
 
 Per-site `shuriken.conf` in `helm-chart/templates/configmap.yaml`, mounted at
 `/configs`: `INCOMING_DIR` = the resolved syncthing path, `DIST_DIR` =
@@ -72,3 +97,9 @@ just status          # CronJobs, PVC, ArgoCD
 just run             # manual generate run, tails logs
 just sync | argocd-status
 ```
+
+`just run` goes through the same marker gate as the hourly ticks: if the
+last successful run is < 24h ago (or the last attempt failed < 4h ago),
+the manual run skips too. To force a regeneration, delete the markers
+first (root on any r-node):
+`rm /data/nfs/k3svolumes/shuriken.sh/.last-generate-{run,fail}`.
