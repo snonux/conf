@@ -2,7 +2,7 @@ module github.com/snonux/conf/gonf
 
 go 1.26.4
 
-require github.com/snonux/gonf v0.24.0
+require github.com/snonux/gonf v0.24.2
 
 require (
 	filippo.io/age v1.3.2 // indirect
