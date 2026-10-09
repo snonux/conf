@@ -57,7 +57,7 @@ spec:
               readOnly: true
       containers:
         - name: player
-          image: registry.lan.buetow.org:30001/player:80dc0f3
+          image: registry.lan.buetow.org:30001/player:68da951
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -100,7 +100,9 @@ spec:
               memory: 128Mi
               cpu: 100m
             limits:
-              memory: 512Mi
+              # One ffmpeg transcode (legacy formats, TRANSCODE_MAX_JOBS=1)
+              # needs about 400 MB next to the server itself.
+              memory: 1Gi
               cpu: "1"
           volumeMounts:
             - name: player-data
