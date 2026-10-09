@@ -59,7 +59,7 @@ doas /usr/local/bin/zusb-unload   # then unplug
 
 The backup's S3 leg needs the AWS CLI on the hosting f-host and
 `/root/.aws/credentials` symlinked to `/opt/snonux/secrets/aws.credentials`
-(on the pool; `f3s-storage` skill, `references/backups.md`). Without it the
+(on the pool; `f3s` skill, `references/storage/backups.md`). Without it the
 snapshot/export part still works.
 
 The pool can also be unloaded remotely through `f3sctl` (`zusb-status`,

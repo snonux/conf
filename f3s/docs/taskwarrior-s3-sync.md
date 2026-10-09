@@ -62,6 +62,6 @@ conflict copy can't be merged. The old 2.x files are in `~/.task/v2-archive/`
 - Fallback if the vhost route ever has to go: the custom build with
   `force_path_style` at `https://code.f3s.buetow.org/snonux/temp-taskwarrior`.
 
-Related: `f3s-workloads` skill `references/garage.md`,
+Related: `f3s` skill `references/workloads/garage.md`,
 `dotfiles:fish/conf.d/tasksync.fish`. Investigation record:
 [`docs/archive/f3s/docs/taskwarrior-s3-sync.md`](../../docs/archive/f3s/docs/taskwarrior-s3-sync.md).
