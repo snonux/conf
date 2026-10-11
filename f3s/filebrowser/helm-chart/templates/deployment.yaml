@@ -75,8 +75,8 @@ spec:
         # Own build of the snonux/filebrowser fork from the f3s registry, not
         # the upstream image: upstream was archived on 2026-09-01 with
         # published advisories left unpatched, and the fork carries the fixes.
-        # The tag is the fork's git commit; see ../../README.md to rebuild.
-        image: registry.lan.buetow.org:30001/filebrowser:2d3e3363-static
+        # The tag is the fork's server release; see ../../README.md to rebuild.
+        image: registry.lan.buetow.org:30001/filebrowser:v2.63.24
         # Memory from the 14-day peak working set (41Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:
