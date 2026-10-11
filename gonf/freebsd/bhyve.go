@@ -117,10 +117,11 @@ func (Bhyve) OptsRcConf() TaskOptions {
 func (Bhyve) RcConf() {
 	EachHost(func(h BhyveHost) {
 		File(rcConf,
-			WithShellVar("vm_enable", "YES"),
-			WithShellVar("vm_dir", "zfs:zroot/bhyve"),
-			WithShellVar("vm_list", strings.Join(h.autostart(), " ")),
-			WithShellVar("vm_delay", bhyveVMDelay),
+			WithShellVars(
+				"vm_enable", "YES",
+				"vm_dir", "zfs:zroot/bhyve",
+				"vm_list", strings.Join(h.autostart(), " "),
+				"vm_delay", bhyveVMDelay),
 			RootOwned,
 			WithName("rc-conf-bhyve"))
 	})

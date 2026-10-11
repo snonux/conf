@@ -69,9 +69,10 @@ func (Monitoring) OptsNodeExporter() TaskOptions {
 func (Monitoring) NodeExporter() {
 	EachHost(func(h NodeExporterHost) {
 		conf := File(rcConf, WithName("rc.conf node_exporter"), RootOwned,
-			WithShellVar("node_exporter_listen_address", h.ListenAddress),
-			WithShellVar("node_exporter_textfile_dir", nodeExporterTextfileDir),
-			WithShellVar("node_exporter_args", ""))
+			WithShellVars(
+				"node_exporter_listen_address", h.ListenAddress,
+				"node_exporter_textfile_dir", nodeExporterTextfileDir,
+				"node_exporter_args", ""))
 		EnsureDir(nodeExporterTextfileDir, Perm(0o1755, "nobody:nobody"))
 		Service("node_exporter", WithRestart, OnChange(conf))
 	})

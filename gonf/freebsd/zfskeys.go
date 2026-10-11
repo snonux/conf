@@ -89,9 +89,10 @@ func (ZfsKeys) RcConf() {
 	EachHost(func(k KeyDatasets) {
 		File(rcConf,
 			WithoutLine(staleZfskeysComment),
-			WithShellVar("f3skeys_enable", "YES"),
-			WithShellVar("zfskeys_enable", "YES"),
-			WithShellVar("zfskeys_datasets", strings.Join(k.Datasets, " ")),
+			WithShellVars(
+				"f3skeys_enable", "YES",
+				"zfskeys_enable", "YES",
+				"zfskeys_datasets", strings.Join(k.Datasets, " ")),
 			RootOwned,
 			WithName("rc-conf-zfskeys"))
 	})

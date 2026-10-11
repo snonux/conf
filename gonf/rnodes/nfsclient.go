@@ -66,14 +66,12 @@ func (Maintenance) OptsNFSClientStunnel() TaskOptions {
 // /etc/stunnel/stunnel.pem on r0 was an unused self-signed "nfs-stunnel"
 // certificate from the first setup (2025-07); no config referenced it.
 func (Maintenance) NFSClientStunnel() {
-	for _, host := range ClusterHosts() {
-		WhenHostname(host, func() {
-			File("/etc/stunnel/stunnel.conf",
-				WithContent(fmt.Sprintf(stunnelConfFormat, host)),
-				RootOwned)
-			EnsureFile("/etc/stunnel/"+host+"-stunnel.pem", RootPrivate)
-		})
-	}
+	EachHostNamed(func(host string, _ K3sNode) {
+		File("/etc/stunnel/stunnel.conf",
+			WithContent(fmt.Sprintf(stunnelConfFormat, host)),
+			RootOwned)
+		EnsureFile("/etc/stunnel/"+host+"-stunnel.pem", RootPrivate)
+	})
 	NoFile("/etc/stunnel/stunnel.pem")
 	Service("stunnel")
 }

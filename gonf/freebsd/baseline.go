@@ -57,22 +57,22 @@ type BaselineHost struct {
 // spelling. ntpd_sync_on_start="NO" is the 2026-08-09 fix: with YES, rc
 // blocked ~14 min on ntpd -q before sshd started. dumpdev="AUTO" keeps the
 // crash dumps the kernel panic investigation depends on.
-var baselineRcConfKeys = []struct{ key, value string }{
-	{"sshd_enable", "YES"},
-	{"ntpd_enable", "YES"},
-	{"ntpd_sync_on_start", "NO"},
-	{"powerd_enable", "YES"},
-	{"moused_nondefault_enable", "NO"},
-	{"dumpdev", "AUTO"},
-	{"zfs_enable", "YES"},
-}
+var baselineRcConfKeys = List(
+	"sshd_enable", "YES",
+	"ntpd_enable", "YES",
+	"ntpd_sync_on_start", "NO",
+	"powerd_enable", "YES",
+	"moused_nondefault_enable", "NO",
+	"dumpdev", "AUTO",
+	"zfs_enable", "YES",
+)
 
 // baselineSysctls are the /etc/sysctl.conf settings of every f-host.
 // vfs.zfs.vdev.min_auto_ashift=12 (4K sectors for new vdevs) is the 15.1
 // name of vfs.zfs.min_auto_ashift. The NFS sysctls belong to NFS.Sysctl.
-var baselineSysctls = []struct{ name, value string }{
-	{"vfs.zfs.vdev.min_auto_ashift", "12"},
-}
+var baselineSysctls = List(
+	"vfs.zfs.vdev.min_auto_ashift", "12",
+)
 
 // DescRcConf returns the description for the baseline rc.conf keys.
 func (Baseline) DescRcConf() string {
@@ -85,9 +85,7 @@ func (Baseline) DescRcConf() string {
 func (Baseline) RcConf() {
 	EachHost(func(h BaselineHost) {
 		opts := []FileOption{RootOwned, WithName("rc-conf-baseline")}
-		for _, kv := range baselineRcConfKeys {
-			opts = append(opts, WithShellVar(kv.key, kv.value))
-		}
+		opts = append(opts, WithShellVars(baselineRcConfKeys...))
 		if h.ClearTmp {
 			opts = append(opts, WithShellVar("clear_tmp_enable", "YES"))
 		}
@@ -107,14 +105,5 @@ func (Baseline) DescSysctl() string {
 // min_auto_ashift only affects vdevs added later, so setting it live is
 // harmless.
 func (Baseline) Sysctl() {
-	opts := []FileOption{RootOwned, WithName("sysctl-conf-baseline")}
-	for _, s := range baselineSysctls {
-		opts = append(opts, WithKeyedLine(s.name+"=", s.name+"="+s.value))
-	}
-	File(sysctlConf, opts...)
-	for _, s := range baselineSysctls {
-		Command("sysctl", List(s.name+"="+s.value),
-			OnlyIf("sh", List("-c", `[ "$(sysctl -n `+s.name+`)" != "`+s.value+`" ]`)),
-			WithName("sysctl-live-"+s.name))
-	}
+	sysctlsPreservingIDs(baselineSysctls, func(key string) string { return "sysctl-live-" + key }, RootOwned, WithName("sysctl-conf-baseline"))
 }

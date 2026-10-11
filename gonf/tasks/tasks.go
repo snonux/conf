@@ -26,11 +26,10 @@ import (
 // (package_type_) is their task prefix; RegisterMethods with WithPrefix
 // keeps the prefixes that differ from it.
 func Register() {
-	RegisterMethods(openbsd.Unattended{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
-	RegisterMethods(frontends.Maintenance{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
-	RegisterMethods(frontends.Monitoring{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
-	RegisterMethods(frontends.Web{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
-	RegisterMethods(frontends.MailDNS{}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
+	RegisterGroup([]any{
+		openbsd.Unattended{}, frontends.Maintenance{}, frontends.Monitoring{},
+		frontends.Web{}, frontends.MailDNS{},
+	}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterOnCluster(cluster.NameFrontends, frontends.WireGuard{})
 
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), OnCluster(cluster.NameNetBSDPis))

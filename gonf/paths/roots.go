@@ -49,21 +49,3 @@ func checkoutRoot(env, name string) string {
 	}
 	return filepath.Clean(root)
 }
-
-// RequireFile returns path when it is a regular file on the controller and
-// otherwise an error with an actionable message: what needs the file, where
-// it was looked for, and how to provide it (hint). Like other code below the
-// DSL it returns the error instead of reporting it: the recipe calling it
-// inside the task body that uses the file reports it (Refuse) and
-// skips the resources that need it, which fails that recording, so a
-// missing optional checkout only fails the tasks that need it.
-func RequireFile(path, purpose, hint string) (string, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return "", fmt.Errorf("%s needs %s: %w; %s", purpose, path, err, hint)
-	}
-	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%s needs %s to be a regular file; %s", purpose, path, hint)
-	}
-	return path, nil
-}

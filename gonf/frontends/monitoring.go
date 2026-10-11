@@ -102,9 +102,8 @@ done`),
 // recording with its actionable message; the Gogios resources, whose
 // schedules depend on the plugin, are then not declared at all.
 func (Monitoring) Gogios() {
-	pluginSource, err := shurikenAgePlugin()
-	if err != nil {
-		Refuse("File", "/usr/local/bin/check_shuriken_age", err)
+	pluginSource := shurikenAgePlugin()
+	if pluginSource == "" {
 		return
 	}
 	EachHost(func(server Server) {
@@ -180,10 +179,10 @@ func (Monitoring) Foostats() {
 // shurikenAgePlugin is the Gogios album-age plugin in the controller's
 // shuriken.sh checkout (paths.Shuriken, ~/git/shuriken.sh by default), its
 // one source of truth as in Rex; there is no in-repo copy to fall back to,
-// so a missing checkout is returned as an error saying how to fix it, which
-// Gogios reports to fail its recording.
-func shurikenAgePlugin() (string, error) {
-	return paths.RequireFile(filepath.Join(paths.Shuriken, "contrib", "check_shuriken_age"),
+// so RequireControllerFile reports a missing or unreadable source with a
+// hint and refuses the recording; Gogios skips the dependent declarations.
+func shurikenAgePlugin() string {
+	return RequireControllerFile(filepath.Join(paths.Shuriken, "contrib", "check_shuriken_age"),
 		"frontends_gogios (check_shuriken_age plugin)",
 		"clone shuriken.sh to ~/git/shuriken.sh or set GONF_SHURIKEN_ROOT to its checkout")
 }

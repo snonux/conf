@@ -59,10 +59,10 @@ const (
 // live spelling. relayd_enable is not here: Service("relayd") owns it (the
 // FreeBSD service backend enables through rc.conf), so there is one owner
 // per key.
-var relaydRcConfKeys = []struct{ key, value string }{
-	{"pf_enable", "YES"},
-	{"pflog_enable", "YES"},
-}
+var relaydRcConfKeys = List(
+	"pf_enable", "YES",
+	"pflog_enable", "YES",
+)
 
 // DescRcConf returns the description for the PF rc.conf keys.
 func (Relayd) DescRcConf() string {
@@ -76,9 +76,7 @@ func (Relayd) WhenRcConf() TaskOption { return WhenHostnameIn(carpMembers...) }
 // pflog already run on both hosts, and nothing here starts or stops them.
 func (Relayd) RcConf() {
 	opts := []FileOption{RootOwned, WithName("rc-conf-relayd")}
-	for _, kv := range relaydRcConfKeys {
-		opts = append(opts, WithShellVar(kv.key, kv.value))
-	}
+	opts = append(opts, WithShellVars(relaydRcConfKeys...))
 	File(rcConf, opts...)
 }
 

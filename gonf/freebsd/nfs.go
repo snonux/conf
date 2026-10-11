@@ -27,7 +27,9 @@ import (
 // start" for rpcbind/mountd/nfsd/nfsuserd and "service stunnel restart" on
 // MASTER and stops them on BACKUP. That is why every *_enable key stays
 // "YES" on both hosts: "service X start" refuses a service whose rcvar is
-// off. A changed rc.conf flag or stunnel.conf therefore takes effect on the
+// off. Boot-only Service declarations manage the ordinary enable keys;
+// nfs_server_enable and nfsv4_server_enable retain their special names.
+// A changed rc.conf flag or stunnel.conf therefore takes effect on the
 // next CARP transition or reboot of that host; restart by hand on the MASTER
 // only when that must happen sooner. The one exception is /etc/exports:
 // mountd re-reads it on SIGHUP without dropping clients, so a change is
@@ -49,24 +51,20 @@ const (
 	stunnelConf = "/usr/local/etc/stunnel/stunnel.conf"
 )
 
-// nfsRcConfKeys are the NFS/stunnel keys of /etc/rc.conf, in f0's live
+// nfsRcConfKeys are the special NFS keys and flags of /etc/rc.conf, in f0's live
 // order and spelling (the values f0 has served with since 2025).
 // nfs_reserved_port_only="NO" matters: FreeBSD 15 defaults it to YES and
 // rc.d/nfsd then sets vfs.nfsd.nfs_privport=1, which locks out the stunnel
 // clients connecting from unprivileged ports.
-var nfsRcConfKeys = []struct{ key, value string }{
-	{"nfs_server_enable", "YES"},
-	{"nfsv4_server_enable", "YES"},
-	{"nfsuserd_enable", "YES"},
-	{"nfsuserd_flags", "-domain lan.buetow.org"},
-	{"mountd_enable", "YES"},
-	{"rpcbind_enable", "YES"},
-	{"nfsd_flags", ""},
-	{"tlsservd_enable", "NO"},
-	{"mountd_flags", "-p 2050"},
-	{"stunnel_enable", "YES"},
-	{"nfs_reserved_port_only", "NO"},
-}
+var nfsRcConfKeys = List(
+	"nfs_server_enable", "YES",
+	"nfsv4_server_enable", "YES",
+	"nfsuserd_flags", "-domain lan.buetow.org",
+	"nfsd_flags", "",
+	"tlsservd_enable", "NO",
+	"mountd_flags", "-p 2050",
+	"nfs_reserved_port_only", "NO",
+)
 
 // deadRcConfLine is f0's no-op rc.conf line (see the NFS type comment).
 const deadRcConfLine = `rpc_tlsservd_enable="YES"`
@@ -74,12 +72,12 @@ const deadRcConfLine = `rpc_tlsservd_enable="YES"`
 // nfsSysctls are the /etc/sysctl.conf settings of the NFS server: kernel TLS
 // on, unprivileged client ports allowed (stunnel), and numeric uid/gid
 // strings accepted in both directions for the NFSv4 owner mapping.
-var nfsSysctls = []struct{ name, value string }{
-	{"kern.ipc.tls.enable", "1"},
-	{"vfs.nfsd.nfs_privport", "0"},
-	{"vfs.nfs.enable_uidtostring", "1"},
-	{"vfs.nfsd.enable_stringtouid", "1"},
-}
+var nfsSysctls = List(
+	"kern.ipc.tls.enable", "1",
+	"vfs.nfsd.nfs_privport", "0",
+	"vfs.nfs.enable_uidtostring", "1",
+	"vfs.nfsd.enable_stringtouid", "1",
+)
 
 // liveCheckCommand is f0's zrepl replication canary (f3s-storage skill,
 // references/zrepl.md): every 10 minutes it writes the epoch into
@@ -102,10 +100,12 @@ func (NFS) WhenRcConf() TaskOption { return WhenHostnameIn(carpMembers...) }
 // so no key is a prefix of another (nfsd_flags vs nfsuserd_flags).
 func (NFS) RcConf() {
 	opts := []FileOption{WithoutLine(deadRcConfLine), RootOwned}
-	for _, kv := range nfsRcConfKeys {
-		opts = append(opts, WithShellVar(kv.key, kv.value))
-	}
+	opts = append(opts, WithShellVars(nfsRcConfKeys...))
 	File(rcConf, opts...)
+	// CARP owns runtime; these declarations only reconcile rc.conf enablement.
+	for _, name := range List("nfsuserd", "mountd", "rpcbind", "stunnel") {
+		Service(name, WithEnableOnly)
+	}
 }
 
 // DescSysctl returns the description for the NFS sysctls.
@@ -121,15 +121,7 @@ func (NFS) WhenSysctl() TaskOption { return WhenHostnameIn(carpMembers...) }
 // only steer the owner-string mapping and port check of new requests, and on
 // the BACKUP no nfsd runs at all.
 func (NFS) Sysctl() {
-	opts := []FileOption{RootOwned}
-	for _, s := range nfsSysctls {
-		opts = append(opts, WithKeyedLine(s.name+"=", s.name+"="+s.value))
-	}
-	File(sysctlConf, opts...)
-	for _, s := range nfsSysctls {
-		Command("sysctl", List(s.name+"="+s.value),
-			OnlyIf("sh", List("-c", `[ "$(sysctl -n `+s.name+`)" != "`+s.value+`" ]`)))
-	}
+	sysctlsPreservingIDs(nfsSysctls, nil, RootOwned)
 }
 
 // DescExports returns the description for /etc/exports.

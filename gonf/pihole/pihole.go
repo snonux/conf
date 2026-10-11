@@ -32,6 +32,7 @@ func (Deployment) Compose() {
 		paths.PiholeAsset("docker-compose.yml"), Perm(0o644, "paul:paul"))
 	wildcard := InstallFile(piholeDir+"/etc-dnsmasq.d/99-f3s-lan-wildcard.conf",
 		paths.PiholeAsset("dnsmasq.d/99-f3s-lan-wildcard.conf"), RootOwned)
-	Command("sh", List("-c", "cd "+piholeDir+" && docker compose up -d"),
+	Command("docker", List("compose", "up", "-d"), WithDir(piholeDir),
+		WithName("sh -c cd "+piholeDir+" && docker compose up -d"),
 		OnChange(compose, wildcard))
 }

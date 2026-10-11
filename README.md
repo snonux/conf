@@ -72,6 +72,48 @@ CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh")
 Service("httpd", WithFlags(""), WithRestart, OnChange(config))
 ```
 
+### DRY recipe helpers
+
+The individual forms above remain valid. The frontend registration now shares
+its options with `RegisterGroup`:
+
+```go
+RegisterGroup([]any{openbsd.Unattended{}, frontends.Maintenance{},
+    frontends.Monitoring{}, frontends.Web{}, frontends.MailDNS{}},
+    WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
+```
+
+`WithShellVars("vm_enable", "YES", "vm_dir", "zfs:zroot/bhyve")` is the
+ordered batch form of repeated `WithShellVar` options. Baseline, NFS and PF
+keys, vm-bhyve, ZFS keys and node-exporter use it without changing their
+shell quoting, ownership or per-host values. FreeBSD's private
+`sysctlsPreservingIDs` adapter shares the persistent/live plumbing while
+retaining the existing command IDs and probes: the public `Sysctls` helper
+uses `sysctl.<key>` command names, so adopting it here would rename resources.
+Live values are still checked on every apply, including when the file matches.
+
+NFS on f0/f1 declares `Service(name, WithEnableOnly)` for `nfsuserd`, `mountd`,
+`rpcbind` and `stunnel`. These add `Service[<name>]` resources and own their
+ordinary `*_enable` lines. CARP continues to own runtime start/stop/restart;
+there is no service runtime probe or action in boot-only convergence. The
+special `nfs_server_enable` / `nfsv4_server_enable` keys and all flags stay
+in the existing rc.conf File. Exports still reload only on the active mountd,
+and config changes still wait for the next CARP transition or reboot.
+
+The Pi-hole change action runs `Command("docker", List("compose", "up", "-d"),
+WithDir(piholeDir), OnChange(compose, wildcard))`, retaining its previous
+resource ID explicitly. Its compose and wildcard files, local unmanaged `.env`,
+image pin and one-Pi-at-a-time rollout policy are unchanged. The r-node NFS
+client uses `EachHostNamed` with existing `K3sNode` inventory data to choose its
+certificate name; it still never restarts stunnel or remounts NFS.
+
+`RequireControllerFile` checks Gogios' shuriken plugin on the controller while
+recording and supplies the existing clone/override hint on failure. A missing,
+unreadable or non-regular source refuses the record and skips the dependent
+Gogios declarations. Foostats retains its per-file checkout-to-repository
+fallback; a whole-directory check would change that policy. Secret references,
+optional missing-token behavior and cron schedules retain their existing policy.
+
 ### Hosts and clusters
 
 Inventory: [`gonf/cluster/cluster.go`](gonf/cluster/cluster.go) (SSH target,
