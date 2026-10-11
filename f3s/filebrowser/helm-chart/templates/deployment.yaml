@@ -76,7 +76,7 @@ spec:
         # the upstream image: upstream was archived on 2026-09-01 with
         # published advisories left unpatched, and the fork carries the fixes.
         # The tag is the fork's git commit; see ../../README.md to rebuild.
-        image: registry.lan.buetow.org:30001/filebrowser:05b1d807
+        image: registry.lan.buetow.org:30001/filebrowser:1226db58
         # Memory from the 14-day peak working set (41Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:
