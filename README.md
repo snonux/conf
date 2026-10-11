@@ -22,6 +22,8 @@ Helm charts, host scripts.
 
 The library is `github.com/snonux/gonf` (`~/git/gonf`, its
 [reference](https://github.com/snonux/gonf/blob/main/docs/reference.md)).
+The recipes pin gonf v0.25.0 in `gonf/go.mod`, supporting plan schemas
+through 31 for the migrated DSL helpers and destination policies.
 This repo only holds recipes: `gonf/cmd/gonf/main.go` (secret provider),
 `gonf/cluster/` (inventory), `gonf/tasks/tasks.go` (task registration and
 aggregates), one package per host group.
