@@ -54,6 +54,41 @@ spec:
     requests:
       storage: 10Gi
 ---
+# Generated thumbnails (THUMBNAIL_CACHE_DIR). They get a volume of their own
+# because the library sets below are read-only: Player cannot keep
+# thumbnails next to those media files, and must not write into them.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: xplayer-thumbnails-pv
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    namespace: services
+    name: xplayer-thumbnails-pvc
+  hostPath:
+    path: /data/nfs/k3svolumes/xplayer/thumbnails
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: xplayer-thumbnails-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  volumeName: xplayer-thumbnails-pv
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
 # Shared libraries of other services, mounted read-only as media sets.
 #
 # Each PV points at the directory another chart already uses as a PV root
