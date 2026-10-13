@@ -53,3 +53,155 @@ spec:
   resources:
     requests:
       storage: 10Gi
+---
+# Shared libraries of other services, mounted read-only as media sets.
+#
+# Each PV points at the directory another chart already uses as a PV root
+# (Navidrome, Audiobookshelf, Jellyfin, Syncthing), because that is where the
+# .nfs-sentinel file lives (see docs/nfs-sentinel-initcontainer.md). The
+# deployment mounts the wanted subdirectory with subPath, so nothing is
+# copied, moved or created inside those libraries.
+#
+# Navidrome music library (set "Music")
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: player-music-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
+  # share a hostPath with another chart's PV, so neither side may be left to
+  # the binder's capacity matching.
+  claimRef:
+    namespace: services
+    name: player-music-pvc
+  hostPath:
+    path: /data/nfs/k3svolumes/navidrome/music
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: player-music-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  volumeName: player-music-pv
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Gi
+---
+# Audiobookshelf library; its default/ subdirectory is the set "Audiobooks"
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: player-audiobooks-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
+  # share a hostPath with another chart's PV, so neither side may be left to
+  # the binder's capacity matching.
+  claimRef:
+    namespace: services
+    name: player-audiobooks-pvc
+  hostPath:
+    path: /data/nfs/k3svolumes/audiobookshelf/audiobooks
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: player-audiobooks-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  volumeName: player-audiobooks-pv
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Gi
+---
+# Jellyfin libraries; musicvideos/ and yoga/ are the sets "Music Videos" and "Yoga"
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: player-libraries-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
+  # share a hostPath with another chart's PV, so neither side may be left to
+  # the binder's capacity matching.
+  claimRef:
+    namespace: services
+    name: player-libraries-pvc
+  hostPath:
+    path: /data/nfs/k3svolumes/jellyfin/libraries
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: player-libraries-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  volumeName: player-libraries-pv
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Gi
+---
+# Syncthing data; the phone's DCIM/Irregular Ninja folder is the set "Irregular Ninja"
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: player-syncthing-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
+  # share a hostPath with another chart's PV, so neither side may be left to
+  # the binder's capacity matching.
+  claimRef:
+    namespace: services
+    name: player-syncthing-pvc
+  hostPath:
+    path: /data/nfs/k3svolumes/syncthing/data
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: player-syncthing-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  volumeName: player-syncthing-pv
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Gi

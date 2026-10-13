@@ -55,6 +55,73 @@ spec:
             - name: player-media
               mountPath: /mnt
               readOnly: true
+        # The library volumes below belong to other services. Their sentinel
+        # sits at the PV root, which is checked here; the container mounts a
+        # subdirectory of it.
+        - name: nfs-check-music
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: player-music
+              mountPath: /mnt
+              readOnly: true
+        - name: nfs-check-audiobooks
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: player-audiobooks
+              mountPath: /mnt
+              readOnly: true
+        - name: nfs-check-libraries
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: player-libraries
+              mountPath: /mnt
+              readOnly: true
+        - name: nfs-check-syncthing
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: player-syncthing
+              mountPath: /mnt
+              readOnly: true
       containers:
         - name: player
           image: registry.lan.buetow.org:30001/player:e925c25
@@ -109,6 +176,31 @@ spec:
               mountPath: /data
             - name: player-media
               mountPath: /media
+            # Libraries of other services as media sets: the directory name
+            # under /media is the set name. Read-only, so Player can neither
+            # write .thumbnails directories into them nor delete a file when
+            # an item is removed in the UI (videos there get no generated
+            # thumbnail). The mount point directories exist in the media
+            # volume on NFS.
+            - name: player-music
+              mountPath: /media/Music
+              readOnly: true
+            - name: player-audiobooks
+              mountPath: /media/Audiobooks
+              subPath: default
+              readOnly: true
+            - name: player-libraries
+              mountPath: "/media/Music Videos"
+              subPath: musicvideos
+              readOnly: true
+            - name: player-libraries
+              mountPath: /media/Yoga
+              subPath: yoga
+              readOnly: true
+            - name: player-syncthing
+              mountPath: "/media/Irregular Ninja"
+              subPath: "paul/Pixel7Pro/DCIM/Irregular Ninja"
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -118,5 +210,21 @@ spec:
         - name: player-media
           persistentVolumeClaim:
             claimName: player-media-pvc
+        - name: player-music
+          persistentVolumeClaim:
+            claimName: player-music-pvc
+            readOnly: true
+        - name: player-audiobooks
+          persistentVolumeClaim:
+            claimName: player-audiobooks-pvc
+            readOnly: true
+        - name: player-libraries
+          persistentVolumeClaim:
+            claimName: player-libraries-pvc
+            readOnly: true
+        - name: player-syncthing
+          persistentVolumeClaim:
+            claimName: player-syncthing-pvc
+            readOnly: true
         - name: tmp
           emptyDir: {}

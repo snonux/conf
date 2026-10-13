@@ -50,6 +50,25 @@ spec:
             - name: xplayer-media
               mountPath: /mnt
               readOnly: true
+        # The library volumes below belong to other services. Their sentinel
+        # sits at the PV root, which is checked here; the container mounts a
+        # subdirectory of it.
+        - name: nfs-check-libraries
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              test -f /mnt/.nfs-sentinel || (
+                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
+                echo "refusing to start; node likely has NFS unmounted"
+                echo "pod would otherwise bind-mount the local-XFS shadow"
+                exit 1
+              )
+          volumeMounts:
+            - name: xplayer-libraries
+              mountPath: /mnt
+              readOnly: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
@@ -109,6 +128,24 @@ spec:
               mountPath: /data
             - name: xplayer-media
               mountPath: /media
+            # Libraries of other services as media sets: the directory name
+            # under /media is the set name. Read-only, so Player can neither
+            # write .thumbnails directories into them nor delete a file when
+            # an item is removed in the UI (videos there get no generated
+            # thumbnail). The mount point directories exist in the media
+            # volume on NFS.
+            - name: xplayer-libraries
+              mountPath: /media/AI
+              subPath: xman/ai
+              readOnly: true
+            - name: xplayer-libraries
+              mountPath: /media/Pictures
+              subPath: xman/pictures
+              readOnly: true
+            - name: xplayer-libraries
+              mountPath: /media/Videos
+              subPath: xman/videos
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -118,5 +155,9 @@ spec:
         - name: xplayer-media
           persistentVolumeClaim:
             claimName: xplayer-media-pvc
+        - name: xplayer-libraries
+          persistentVolumeClaim:
+            claimName: xplayer-libraries-pvc
+            readOnly: true
         - name: tmp
           emptyDir: {}

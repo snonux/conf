@@ -53,3 +53,47 @@ spec:
   resources:
     requests:
       storage: 10Gi
+---
+# Shared libraries of other services, mounted read-only as media sets.
+#
+# Each PV points at the directory another chart already uses as a PV root
+# (Navidrome, Audiobookshelf, Jellyfin, Syncthing), because that is where the
+# .nfs-sentinel file lives (see docs/nfs-sentinel-initcontainer.md). The
+# deployment mounts the wanted subdirectory with subPath, so nothing is
+# copied, moved or created inside those libraries.
+#
+# Jellyfin libraries; xman/{ai,pictures,videos} are the sets "AI", "Pictures" and "Videos"
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: xplayer-libraries-pv
+spec:
+  capacity:
+    storage: 500Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
+  # share a hostPath with another chart's PV, so neither side may be left to
+  # the binder's capacity matching.
+  claimRef:
+    namespace: services
+    name: xplayer-libraries-pvc
+  hostPath:
+    path: /data/nfs/k3svolumes/jellyfin/libraries
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: xplayer-libraries-pvc
+  namespace: services
+spec:
+  storageClassName: ""
+  volumeName: xplayer-libraries-pv
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Gi
