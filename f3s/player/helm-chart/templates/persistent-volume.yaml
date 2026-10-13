@@ -95,7 +95,11 @@ spec:
 # (Navidrome, Audiobookshelf, Jellyfin, Syncthing), because that is where the
 # .nfs-sentinel file lives (see docs/nfs-sentinel-initcontainer.md). The
 # deployment mounts the wanted subdirectory with subPath, so nothing is
-# copied, moved or created inside those libraries.
+# copied or moved. Its init containers refuse to start the pod when such a
+# subdirectory is missing, because kubelet would otherwise create it.
+#
+# hostPath and the claim binding are immutable: to point a set elsewhere,
+# stop the pod and delete the PV and PVC by hand before syncing the change.
 #
 # Navidrome music library (set "Music")
 apiVersion: v1

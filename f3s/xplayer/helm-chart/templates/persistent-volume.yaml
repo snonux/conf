@@ -89,15 +89,18 @@ spec:
     requests:
       storage: 10Gi
 ---
-# Shared libraries of other services, mounted read-only as media sets.
+# The Jellyfin libraries, mounted read-only: xman/{ai,pictures,videos} are
+# the media sets "AI", "Pictures" and "Videos".
 #
-# Each PV points at the directory another chart already uses as a PV root
-# (Navidrome, Audiobookshelf, Jellyfin, Syncthing), because that is where the
-# .nfs-sentinel file lives (see docs/nfs-sentinel-initcontainer.md). The
-# deployment mounts the wanted subdirectory with subPath, so nothing is
-# copied, moved or created inside those libraries.
+# The PV points at the directory the Jellyfin chart uses as its PV root,
+# because that is where the .nfs-sentinel file lives (see
+# docs/nfs-sentinel-initcontainer.md). The deployment mounts the wanted
+# subdirectories with subPath, so nothing is copied or moved. Its init
+# container refuses to start the pod when such a subdirectory is missing,
+# because kubelet would otherwise create it.
 #
-# Jellyfin libraries; xman/{ai,pictures,videos} are the sets "AI", "Pictures" and "Videos"
+# hostPath and the claim binding are immutable: to point a set elsewhere,
+# stop the pod and delete the PV and PVC by hand before syncing the change.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -109,9 +112,9 @@ spec:
   accessModes:
     - ReadOnlyMany
   persistentVolumeReclaimPolicy: Retain
-  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
-  # share a hostPath with another chart's PV, so neither side may be left to
-  # the binder's capacity matching.
+  # Pre-bound both ways (claimRef here, volumeName on the claim): this PV
+  # shares its hostPath with the Jellyfin chart's PV, so neither side may be
+  # left to the binder's capacity matching.
   claimRef:
     namespace: services
     name: xplayer-libraries-pvc
