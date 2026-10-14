@@ -18,3 +18,6 @@ www     300 IN A @MASTER_IPV4@ ; Enable failover
 www     300 IN AAAA @MASTER_IPV6@ ; Enable failover
 standby  300 IN A @STANDBY_IPV4@ ; Enable failover
 standby  300 IN AAAA @STANDBY_IPV6@ ; Enable failover
+
+; Gunrunners game page, served by GitHub Pages (snonux/gunrunners, main:/docs).
+gunrunners 3600 IN CNAME snonux.github.io.
