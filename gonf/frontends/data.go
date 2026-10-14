@@ -73,6 +73,7 @@ var f3sHosts = []string{
 	"f3s.buetow.org",
 	"ychat.f3s.buetow.org",
 	"player.f3s.buetow.org",
+	"test-player.f3s.buetow.org",
 	"xplayer.f3s.buetow.org",
 	"pihole.f3s.buetow.org",
 	"jellyfin.f3s.buetow.org",
@@ -111,13 +112,14 @@ var (
 	// siteHTTPSStatus is the status line an HTTPS check must see, for sites
 	// that answer an anonymous request with an error by design.
 	siteHTTPSStatus = map[string]string{
-		"player.f3s.buetow.org":   "HTTP/1.1 401",
-		"xplayer.f3s.buetow.org":  "HTTP/1.1 401",
-		"webdav.f3s.buetow.org":   "HTTP/1.1 401",
-		"koreader.f3s.buetow.org": "HTTP/1.1 412",
-		"pihole.f3s.buetow.org":   "HTTP/1.1 404",
-		"anki.f3s.buetow.org":     "HTTP/1.1 404",
-		"pkgrepo.f3s.buetow.org":  "HTTP/1.1 404",
+		"player.f3s.buetow.org":      "HTTP/1.1 401",
+		"test-player.f3s.buetow.org": "HTTP/1.1 401",
+		"xplayer.f3s.buetow.org":     "HTTP/1.1 401",
+		"webdav.f3s.buetow.org":      "HTTP/1.1 401",
+		"koreader.f3s.buetow.org":    "HTTP/1.1 412",
+		"pihole.f3s.buetow.org":      "HTTP/1.1 404",
+		"anki.f3s.buetow.org":        "HTTP/1.1 404",
+		"pkgrepo.f3s.buetow.org":     "HTTP/1.1 404",
 		// bgtutor serves only /mcp (token required) and /healthz.
 		"bgtutor-mcp.f3s.buetow.org": "HTTP/1.1 404",
 	}
