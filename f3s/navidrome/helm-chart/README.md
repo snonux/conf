@@ -39,7 +39,8 @@ Navidrome 0.63.2 reads existing lyrics from matching sidecar files or embedded
 metadata. Its default `LyricsPriority` is
 `.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded`; the first available source wins.
 For `Artist/Album/Song.mp3`, place `Song.lrc` or `Song.txt` in that same folder.
-LRC provides line timestamps; plain text displays without synchronization.
+LRC provides line timestamps; plain text is available through the lyrics API.
+The bundled web player renders synchronized lyrics.
 Richer formats can include word timing and multiple voices. The web player and
 OpenSubsonic lyrics API consume these local sources. Navidrome does not fetch
 missing lyrics automatically. The shared Beets job currently fetches artwork
@@ -54,5 +55,13 @@ The 0.64.2 trial stalled authentication and API requests while its new artwork
 workers contended in SQLite on this deployment. Private-cache and rollback-
 journal trials did not resolve that. This deployment uses 0.63.2, which includes
 the structured lyrics support from 0.63 without the 0.64 artwork changes.
-The trial database is preserved separately before restoring the pre-upgrade
+The trial database is preserved as
+`/data/navidrome-after-0.64.2-trial-20261015.db` before restoring the pre-upgrade
 backup and migrating it to 0.63.2.
+
+Verified on 2026-10-15: ArgoCD Synced/Healthy, normal account login, album
+browsing and real audio playback, an existing track with 98 synchronized lyric
+lines through `getLyricsBySongId`, lyric display and seek updates in the web
+player, an empty result for a track without lyrics, and the expected error for
+a missing track. The temporary verification account was removed by restoring
+the pre-upgrade database. No music files were modified.
