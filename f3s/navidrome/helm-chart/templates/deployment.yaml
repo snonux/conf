@@ -46,7 +46,7 @@ spec:
       # (.nfs-sentinel in both directories).
       containers:
       - name: navidrome
-        image: deluan/navidrome:0.61.2
+        image: deluan/navidrome:0.64.2
         # Memory from the 14-day peak working set (67Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:
@@ -60,6 +60,9 @@ spec:
         env:
         - name: ND_SCANSCHEDULE
           value: "1h"
+        # Preserve the pre-0.63 default: public sharing stays opt-in.
+        - name: ND_ENABLESHARING
+          value: "false"
         - name: ND_LOGLEVEL
           value: "info"
         - name: ND_BASEURL
