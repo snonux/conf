@@ -63,6 +63,9 @@ spec:
         # Preserve the pre-0.63 default: public sharing stays opt-in.
         - name: ND_ENABLESHARING
           value: "false"
+        # Avoid shared-cache table-lock stalls in concurrent artwork work.
+        - name: ND_DBPATH
+          value: "/data/navidrome.db?cache=private&_busy_timeout=15000&_journal_mode=WAL&_foreign_keys=on&_synchronous=normal"
         - name: ND_LOGLEVEL
           value: "info"
         - name: ND_BASEURL
