@@ -1,6 +1,6 @@
 # Navidrome
 
-Subsonic-compatible music server, `deluan/navidrome:0.64.2`, port 4533.
+Subsonic-compatible music server, `deluan/navidrome:0.63.2`, port 4533.
 Namespace `services`, ArgoCD app `navidrome`, runs on any r-node (both
 volumes are NFS hostPath; shared music PVC with
 [beets-art](../../beets-art/helm-chart/README.md)).
@@ -35,7 +35,7 @@ Clients: play:Sub, substreamer (iOS); DSub, Ultrasonic, substreamer
 
 ## Lyrics
 
-Navidrome 0.64.2 reads existing lyrics from matching sidecar files or embedded
+Navidrome 0.63.2 reads existing lyrics from matching sidecar files or embedded
 metadata. Its default `LyricsPriority` is
 `.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded`; the first available source wins.
 For `Artist/Album/Song.mp3`, place `Song.lrc` or `Song.txt` in that same folder.
@@ -49,3 +49,10 @@ A pre-upgrade SQLite backup is retained in `/data` as
 `navidrome-before-0.64.2-20261015.db` (SQLite online backup, quick_check passed).
 A rollback across schema migrations requires restoring that backup, not only
 switching the image tag.
+
+The 0.64.2 trial stalled authentication and API requests while its new artwork
+workers contended in SQLite on this deployment. Private-cache and rollback-
+journal trials did not resolve that. This deployment uses 0.63.2, which includes
+the structured lyrics support from 0.63 without the 0.64 artwork changes.
+The trial database is preserved separately before restoring the pre-upgrade
+backup and migrating it to 0.63.2.
