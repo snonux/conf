@@ -4,7 +4,7 @@
 # Image configuration
 image:
   repository: jellyfin/jellyfin
-  tag: "10.11.6"
+  tag: "12.2"
   pullPolicy: Always
 
 # Persistence
