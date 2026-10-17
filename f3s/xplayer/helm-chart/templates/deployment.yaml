@@ -114,7 +114,7 @@ spec:
         fsGroup: 65534
       containers:
         - name: xplayer
-          image: registry.lan.buetow.org:30001/player:088735c
+          image: registry.lan.buetow.org:30001/player:5250e18
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
