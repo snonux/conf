@@ -159,7 +159,7 @@ spec:
               readOnly: true
       containers:
         - name: player
-          image: registry.lan.buetow.org:30001/player:6210a85
+          image: registry.lan.buetow.org:30001/player:088735c
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
