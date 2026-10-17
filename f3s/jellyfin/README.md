@@ -32,7 +32,9 @@ All three applications were stopped before the held snapshot on f0:
 `zdata/enc/nfsdata@jellyfin-retirement-20261017T101941Z`, hold tag
 `jellyfin-retirement`. Task `rf3` releases and deletes only this snapshot
 on or after 2026-10-31 10:19:41 UTC, after checking the migration remains
-healthy. The snapshot is protected from ordinary retention pruning.
+healthy. The snapshot is protected from ordinary retention pruning. It also covers the
+Audiobookshelf retirement; task `rf3` must verify both migrations before
+cleanup (see [Audiobookshelf](../audiobookshelf/README.md)).
 
 Jellyfin's remaining configuration/data tree is retained privately at
 `/data/nfs/retired/jellyfin/20261017/`. No Jellyfin users, history, or database

@@ -91,31 +91,6 @@ spec:
             - name: player-music
               mountPath: /mnt
               readOnly: true
-        - name: nfs-check-audiobooks
-          image: busybox:1.36.1
-          command:
-            - sh
-            - -c
-            - |
-              # Each check only ends its own subshell; set -e makes the
-              # first failing one end the script.
-              set -e
-              test -f /mnt/.nfs-sentinel || (
-                echo "ERROR: NFS sentinel missing at /mnt/.nfs-sentinel"
-                echo "refusing to start; node likely has NFS unmounted"
-                echo "pod would otherwise bind-mount the local-XFS shadow"
-                exit 1
-              )
-              test -d "/mnt/default" || (
-                echo "ERROR: library directory /mnt/default is missing"
-                echo "refusing to start; kubelet would create the subPath"
-                echo "inside the library and serve an empty set"
-                exit 1
-              )
-          volumeMounts:
-            - name: player-audiobooks
-              mountPath: /mnt
-              readOnly: true
         - name: nfs-check-libraries
           image: busybox:1.36.1
           command:
@@ -141,6 +116,16 @@ spec:
                 echo "ERROR: library directory /mnt/yoga is missing"
                 echo "refusing to start; kubelet would create the subPath"
                 echo "inside the library and serve an empty set"
+                exit 1
+              )
+              test -d "/mnt/audiobooks" || (
+                echo "ERROR: library directory /mnt/audiobooks is missing"
+                echo "refusing to start; kubelet would create an empty subPath"
+                exit 1
+              )
+              test -d "/mnt/podcasts" || (
+                echo "ERROR: library directory /mnt/podcasts is missing"
+                echo "refusing to start; kubelet would create an empty subPath"
                 exit 1
               )
           volumeMounts:
@@ -246,9 +231,13 @@ spec:
             - name: player-music
               mountPath: /media/Music
               readOnly: true
-            - name: player-audiobooks
+            - name: player-libraries
               mountPath: /media/Audiobooks
-              subPath: default
+              subPath: audiobooks
+              readOnly: true
+            - name: player-libraries
+              mountPath: /media/Podcasts
+              subPath: podcasts
               readOnly: true
             - name: player-libraries
               mountPath: "/media/Music Videos"
@@ -277,10 +266,6 @@ spec:
         - name: player-music
           persistentVolumeClaim:
             claimName: player-music-pvc
-            readOnly: true
-        - name: player-audiobooks
-          persistentVolumeClaim:
-            claimName: player-audiobooks-pvc
             readOnly: true
         - name: player-libraries
           persistentVolumeClaim:

@@ -84,7 +84,6 @@ var f3sHosts = []string{
 	"anki.f3s.buetow.org",
 	"bag.f3s.buetow.org",
 	"flux.f3s.buetow.org",
-	"audiobookshelf.f3s.buetow.org",
 	"garage.f3s.buetow.org",
 	"radicale.f3s.buetow.org",
 	"syncthing.f3s.buetow.org",

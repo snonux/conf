@@ -91,7 +91,7 @@ spec:
 ---
 # Library sources, mounted read-only as media sets.
 #
-# External sources use the existing Navidrome, Audiobookshelf and Syncthing
+# External sources use the existing Navidrome and Syncthing
 # roots; Player-owned content uses player/libraries. Each root has its own
 # .nfs-sentinel (see docs/nfs-sentinel-initcontainer.md). Init containers
 # check required subdirectories before kubelet can create an empty subPath.
@@ -135,43 +135,7 @@ spec:
     requests:
       storage: 500Gi
 ---
-# Audiobookshelf library; its default/ subdirectory is the set "Audiobooks"
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: player-audiobooks-pv
-spec:
-  capacity:
-    storage: 500Gi
-  volumeMode: Filesystem
-  accessModes:
-    - ReadOnlyMany
-  persistentVolumeReclaimPolicy: Retain
-  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
-  # share a hostPath with another chart's PV, so neither side may be left to
-  # the binder's capacity matching.
-  claimRef:
-    namespace: services
-    name: player-audiobooks-pvc
-  hostPath:
-    path: /data/nfs/k3svolumes/audiobookshelf/audiobooks
-    type: Directory
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: player-audiobooks-pvc
-  namespace: services
-spec:
-  storageClassName: ""
-  volumeName: player-audiobooks-pv
-  accessModes:
-    - ReadOnlyMany
-  resources:
-    requests:
-      storage: 500Gi
----
-# Player-owned libraries; musicvideos/ and yoga/ are read-only media sets.
+# Player-owned audiobooks, podcasts, musicvideos and yoga: read-only sets.
 apiVersion: v1
 kind: PersistentVolume
 metadata:

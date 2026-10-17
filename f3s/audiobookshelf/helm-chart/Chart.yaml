@@ -1,5 +1,0 @@
-apiVersion: v2
-name: audiobookshelf
-description: A Helm chart for deploying Audiobookshelf.
-version: 0.1.0
-appVersion: "2.37.1"

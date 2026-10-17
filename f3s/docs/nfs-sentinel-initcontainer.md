@@ -62,7 +62,7 @@ the pod so the replacement re-checks. `nfs-mount-monitor` (gonf
 ## Scope
 
 Only for workload manifests this repo owns: anki-sync-server, apache,
-audiobookshelf, filebrowser, forgejo, goprecords, immich (only
+filebrowser, forgejo, goprecords, immich (only
 `templates/postgres.yaml`), player, xplayer, keybr, kobo-sync-server, miniflux,
 navidrome, opodsync, pkgrepo, player, radicale, registry, syncthing,
 wallabag, xplayer.
