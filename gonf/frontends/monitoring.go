@@ -378,6 +378,10 @@ func addPiHTTPChecks(checks map[string]gogiosCheck) {
 func addSiteChecks(checks map[string]gogiosCheck) {
 	sites := Sites()
 	for _, site := range sites {
+		// Test Player is intentionally excluded from Gogios monitoring.
+		if site.Name == "test-player.f3s.buetow.org" {
+			continue
+		}
 		addHostChecks(checks, site)
 		addHTTPSChecks(checks, site)
 	}
