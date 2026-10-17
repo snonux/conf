@@ -4,7 +4,8 @@ Photo/video backup, `https://immich.f3s.buetow.org` (LAN ingress in
 `ingress-lan.yaml`). Namespace `services`. ArgoCD app `immich` has two
 sources: `f3s/immich/helm-chart` (PVs/PVCs, PostgreSQL with pgvector,
 Traefik middleware, LAN ingress) and upstream chart `immich` 0.10.3
-(release `immich`: server, machine learning, Valkey).
+(release `immich`: server, machine learning, Valkey). Server and machine
+learning images are pinned to `v3.3.3` in the ArgoCD application.
 
 | Volume | Size | hostPath |
 |---|---|---|
