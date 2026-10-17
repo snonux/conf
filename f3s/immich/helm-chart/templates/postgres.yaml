@@ -1,13 +1,7 @@
-# PostgreSQL Deployment for Immich
-# Requires PostgreSQL 16 with the VectorChord (vchord) extension. Immich 3.x
-# dropped pgvecto.rs, so we run the official Immich Postgres image which bundles
-# VectorChord *and* pgvecto.rs (the "vectors"/pgvectors extension). Keeping the
-# -pgvectors0.3.0 variant is mandatory during/after migration: our data dir was
-# created by pgvecto.rs 0.3.0, so vectors.so must stay loadable to (a) read the
-# existing catalog and (b) satisfy Immich 3.0.1, which preloads BOTH vchord.so
-# and vectors.so. The image's entrypoint sets shared_preload_libraries from its
-# own template (vchord.so, vectors.so); our previous tensorchord image set it via
-# a command-line arg (not persisted in PGDATA), so the swap starts clean.
+# PostgreSQL 18 with VectorChord 1.1.1 and pgvector 0.8.5.
+# The PG16 database was dumped and restored into 18/f3s on 2026-10-17;
+# its original files remain at the PVC root. The restore rebuilt vector
+# indexes, so the legacy pgvecto.rs preload and compatibility image are gone.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,10 +44,19 @@ spec:
           readOnly: true
       containers:
       - name: postgres
-        image: ghcr.io/immich-app/postgres:16-vectorchord0.4.3-pgvector0.8.0-pgvectors0.3.0
+        image: registry.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1
         ports:
         - containerPort: 5432
         env:
+        # The original PG16 directory remains at the PVC root for rollback.
+        # PostgreSQL supports our hard-mounted NFSv4 storage; the server uses
+        # synchronous writes (vfs.nfsd.async=0, ZFS sync=standard). The image
+        # rejects all NFS by default; retain the established storage layout.
+        # https://www.postgresql.org/docs/18/creating-cluster.html#CREATING-CLUSTER-NFS
+        - name: IGNORE_DATABASE_FSTYPE
+          value: "true"
+        - name: PGDATA
+          value: /var/lib/postgresql/18/f3s
         - name: POSTGRES_DB
           value: immich
         - name: POSTGRES_USER
@@ -76,7 +79,7 @@ spec:
             - -c
             # pg_isready only checks the TCP port; the NFS check catches stale
             # file handles on the data directory after an NFS server restart.
-            - pg_isready -U immich -d immich && test -f /var/lib/postgresql/data/global/pg_filenode.map
+            - pg_isready -U immich -d immich && test -f "$PGDATA/global/pg_filenode.map"
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
@@ -93,7 +96,7 @@ spec:
           failureThreshold: 6
         volumeMounts:
         - name: postgres-data
-          mountPath: /var/lib/postgresql/data
+          mountPath: /var/lib/postgresql
       volumes:
       - name: postgres-data
         persistentVolumeClaim:

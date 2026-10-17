@@ -16,7 +16,7 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: postgres:17.11-bookworm
+          image: postgres:18.6-bookworm
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -112,7 +112,7 @@ spec:
               readOnly: true
       containers:
         - name: miniflux-postgres
-          image: postgres:17.11-bookworm
+          image: postgres:18.6-bookworm
           # Memory from the 14-day peak working set (90Mi), limit well above
           # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
           resources:
@@ -123,6 +123,9 @@ spec:
           ports:
             - containerPort: 5432
           env:
+            # Restore into a separate directory; the pre-upgrade PG17 files stay at the PVC root.
+            - name: PGDATA
+              value: /var/lib/postgresql/18/f3s
             - name: POSTGRES_USER
               value: "miniflux"
             - name: POSTGRES_PASSWORD
@@ -132,7 +135,7 @@ spec:
                   key: fluxdb_password
           volumeMounts:
             - name: miniflux-postgres-data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql
           livenessProbe:
             exec:
               command:
@@ -140,7 +143,7 @@ spec:
                 - -c
                 # pg_isready only checks the TCP port; the NFS check catches stale
                 # file handles on the data directory after an NFS server restart.
-                - pg_isready -U miniflux && test -f /var/lib/postgresql/data/global/pg_filenode.map
+                - pg_isready -U miniflux && test -f "$PGDATA/global/pg_filenode.map"
             initialDelaySeconds: 60
             periodSeconds: 30
           readinessProbe:
