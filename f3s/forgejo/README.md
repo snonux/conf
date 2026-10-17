@@ -10,7 +10,7 @@ Internet -> relayd (OpenBSD, TLS) -> WireGuard -> Traefik -> svc forgejo:80 -> p
 git+ssh  -> relayd :2022 (TCP) ----> NodePort 30222 -------------------------> pod:2222
 ```
 
-- Image `codeberg.org/forgejo/forgejo:16.0.1-rootless`: UID/GID 1000, all
+- Image `codeberg.org/forgejo/forgejo:16.0.6-rootless`: UID/GID 1000, all
   capabilities dropped.
 - SQLite, one writer (`replicas: 1`, strategy `Recreate`). The DB sits on
   the NFS data volume, so WAL is off: `SQLITE_JOURNAL_MODE=DELETE`, 60 s busy
@@ -20,6 +20,8 @@ git+ssh  -> relayd :2022 (TCP) ----> NodePort 30222 -------------------------> p
   guarded by `.nfs-sentinel` (see
   [`../docs/nfs-sentinel-initcontainer.md`](../docs/nfs-sentinel-initcontainer.md)).
 - Installer locked (`INSTALL_LOCK=true`), registration disabled.
+
+Forgejo 17.0.0 is held back: [its release warning](https://codeberg.org/forgejo/forgejo/releases/tag/v17.0.0) advises against upgrading because Git operations can fail. The deployed 16.0.6 is the patched previous stable line.
 
 ## First install
 

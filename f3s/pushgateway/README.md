@@ -1,6 +1,6 @@
 # Pushgateway
 
-`prom/pushgateway:v1.10.0`, ClusterIP service `pushgateway:9091` in
+`prom/pushgateway:v1.11.4`, ClusterIP service `pushgateway:9091` in
 `monitoring`, ArgoCD app `pushgateway` (chart in `helm-chart/`). No auth, no
 persistence: metrics live until deleted or the pod restarts. Prometheus
 scrapes it through the `pushgateway` job in `additional-scrape-configs` with

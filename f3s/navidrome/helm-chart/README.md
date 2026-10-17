@@ -1,6 +1,6 @@
 # Navidrome
 
-Subsonic-compatible music server, `deluan/navidrome:0.63.2`, port 4533.
+Subsonic-compatible music server, `deluan/navidrome:0.64.2`, port 4533.
 Namespace `services`, ArgoCD app `navidrome`, runs on any r-node (both
 volumes are NFS hostPath; shared music PVC with
 [beets-art](../../beets-art/helm-chart/README.md)).
@@ -53,7 +53,7 @@ switching the image tag.
 
 The 0.64.2 trial stalled authentication and API requests while its new artwork
 workers contended in SQLite on this deployment. Private-cache and rollback-
-journal trials did not resolve that. This deployment uses 0.63.2, which includes
+journal trials did not resolve that. This deployment uses 0.64.2, which includes
 the structured lyrics support from 0.63 without the 0.64 artwork changes.
 The trial database is preserved as
 `/data/navidrome-after-0.64.2-trial-20261015.db` before restoring the pre-upgrade

@@ -3,7 +3,7 @@
 Photo/video backup, `https://immich.f3s.buetow.org` (LAN ingress in
 `ingress-lan.yaml`). Namespace `services`. ArgoCD app `immich` has two
 sources: `f3s/immich/helm-chart` (PVs/PVCs, PostgreSQL with pgvector,
-Traefik middleware, LAN ingress) and upstream chart `immich` 0.10.3
+Traefik middleware, LAN ingress) and upstream chart `immich` 0.12.0
 (release `immich`: server, machine learning, Valkey). Server and machine
 learning images are pinned to `v3.3.3` in the ArgoCD application.
 
@@ -14,7 +14,8 @@ learning images are pinned to `v3.3.3` in the ArgoCD application.
 | postgres | 20Gi | `/data/nfs/k3svolumes/immich/postgres` |
 | valkey | 1Gi | `/data/nfs/k3svolumes/immich/valkey` |
 
-All owned 911:911. Only `postgres.yaml` is ours, so only it has the NFS
+App volumes are owned 911:911; PostgreSQL manages its data as UID 999.
+Only `postgres.yaml` is ours, so only it has the NFS
 sentinel check. Valkey instead has a liveness probe that also writes to
 `/data`, so a stale NFS handle after a CARP failover restarts it.
 
@@ -72,3 +73,31 @@ r0/r1. **The policy was deleted after verification; r2 is unblocked.** r2 repair
 is handled separately. Face detection was already paused and remains paused;
 queue snapshots record the existing backlog and failures. Final queue counts
 and pause states match the baseline, with no active or waiting jobs.
+
+## PostgreSQL upgrade (2026-10-17)
+
+PostgreSQL 16 was dumped and restored into PostgreSQL 18.6, with
+VectorChord 1.1.1 and pgvector 0.8.5. Asset/user/album counts stayed at
+89,359 / 2 / 1. Both Immich deployments returned healthy.
+
+The current data directory is `/var/lib/postgresql/18/f3s`, under the
+existing PostgreSQL PVC. The old PG16 files remain at the PVC root.
+A stopped-database ZFS snapshot is
+`zdata/enc/nfsdata@qf3-postgres-before18-20261017` on f0, and the private
+custom-format dump is `~/.local/state/f3s/qf3-20261017/immich-pre-pg18.dump`.
+Rollback requires returning to the old image, mount path, and PGDATA and
+accounting for writes made since the restore.
+
+The image is built from `docker-image/postgres/Dockerfile`: the latest
+upstream extension bundle still had PostgreSQL 18.4, so the Dockerfile
+pins the PostgreSQL 18.6 Debian packages. Build and push:
+
+```sh
+podman build -t r0.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1 docker-image/postgres
+podman push --tls-verify=false r0.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1
+```
+
+The upstream image rejects NFS by default. `IGNORE_DATABASE_FSTYPE=true`
+retains this cluster's storage arrangement: hard-mounted NFSv4, FreeBSD
+`vfs.nfsd.async=0`, ZFS `sync=standard`, and PostgreSQL `fsync=on`.
+These match [PostgreSQL's NFS requirements](https://www.postgresql.org/docs/18/creating-cluster.html#CREATING-CLUSTER-NFS).

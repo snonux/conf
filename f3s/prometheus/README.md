@@ -1,6 +1,6 @@
 # Prometheus stack
 
-kube-prometheus-stack 55.5.0, release `prometheus`, namespace `monitoring`,
+kube-prometheus-stack 92.10.1, release `prometheus`, namespace `monitoring`,
 deployed by ArgoCD from `argocd-apps/monitoring/prometheus.yaml`. That
 Application has two sources: the upstream chart with inline
 `valuesObject`, and `f3s/prometheus/manifests/` (rules, dashboards,

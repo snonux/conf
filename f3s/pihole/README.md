@@ -7,9 +7,16 @@ DNS and ad blocking. Production runs on pi2 (192.168.1.127) and pi3
 
 ## On the Pis
 
-Docker Compose in `~/pihole` on each Pi, `pihole/pihole:2026.04.0` (pinned
-2026-09-25; to upgrade, change the tag on pi3, `sudo docker compose pull && sudo
-docker compose up -d`, check `dig @127.0.0.1`, then repeat on pi2),
+Docker Compose in `~/pihole` on each Pi. The desired image is
+`pihole/pihole:2026.09.0` (2026-10-17). Pi2 runs that version; pi3 could not
+be upgraded or inspected because SSH
+stalls after authentication (its last recorded image is 2026.04.0). Both
+still answer DNS.
+The pre-upgrade pi2 state archive is root-readable at
+`/home/paul/pihole-qf3-pre-upgrade-20261017.tar.gz`.
+
+To upgrade, change the tag on pi3, `sudo docker compose pull && sudo
+docker compose up -d`, check `dig @127.0.0.1`, then repeat on pi2. The containers use
 `network_mode: host`, `TZ=Europe/Sofia`, upstreams `1.1.1.1`/`1.0.0.1`.
 `WEBPASSWORD` is in the host-local `~/pihole/.env` (same on both, not in
 git). State lives under `~/pihole`, not NFS. firewalld allows 53/udp, 53/tcp

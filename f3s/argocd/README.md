@@ -9,7 +9,7 @@ cicd `f3s-lan-wildcard` Certificate), the same public + `-ingress-lan` pair
 every other f3s service has. Metrics via ServiceMonitor.
 
 The chart version is pinned in the Justfile (`CHART_VERSION`, currently
-`9.3.4` = Argo CD v3.2.5, as shown by `helm list -n cicd`). Bump it on purpose;
+`10.10.5` = Argo CD v3.5.5, as shown by `helm list -n cicd`). Bump it on purpose;
 `just upgrade` never floats to the latest chart.
 
 Files: `values.yaml`, `persistent-volumes.yaml` (10Gi hostPath PV for the

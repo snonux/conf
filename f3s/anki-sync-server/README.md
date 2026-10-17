@@ -2,7 +2,7 @@
 
 `https://anki.f3s.buetow.org`. Namespace `services`, ArgoCD app
 `anki-sync-server`, PVC `anki-data-pvc` mounted at `/anki_data`. Image built
-from `docker-image/`.
+from `docker-image/`, pinned to Anki 26.09.3.
 
 The login comes from secret `anki-sync-server-secret` (env `SYNC_USER1`,
 `user:password`), not in git:

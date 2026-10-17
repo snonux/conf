@@ -2,7 +2,7 @@
 
 Media server, `https://jellyfin.f3s.buetow.org` (LAN:
 `jellyfin.f3s.lan.buetow.org`). Namespace `services`, ArgoCD app
-`jellyfin`, image `jellyfin/jellyfin:10.11.6`, selector `app=jellyfin-server`.
+`jellyfin`, image `jellyfin/jellyfin:12.2`, selector `app=jellyfin-server`.
 
 | PVC | hostPath | Mount |
 |---|---|---|
@@ -34,3 +34,15 @@ corrupts the DB (10.11 needs a DB from 10.9.11 or later).
 
 Records: [`docs/archive/f3s/jellyfin/`](../../docs/archive/f3s/jellyfin/)
 (deployment summary, yoga library quality survey).
+
+## Upgrade to 12.2 (2026-10-17)
+
+Jellyfin was stopped for the f0 ZFS snapshot
+`zdata/enc/nfsdata@qf3-jellyfin-10.11.6-20261017`, then upgraded directly
+from 10.11.6 to 12.2. Database migrations and startup completed, and both
+public and LAN health checks passed. No third-party plugins were installed.
+
+The required full library scan remains pending: both accounts saved in
+foostore's `pass/infra/jellyfin.txt` were rejected at login. Run "Scan All
+Libraries" after correcting the credentials. Authenticated playback has
+not been verified in this upgrade run.
