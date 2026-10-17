@@ -38,7 +38,7 @@ spec:
           readOnly: true
       containers:
       - name: nginx
-        image: nginx:1.27-alpine
+        image: nginx:1.30.6-alpine
         # Memory from the 14-day peak working set (8Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:

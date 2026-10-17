@@ -38,7 +38,7 @@ spec:
           readOnly: true
       containers:
       - name: registry
-        image: registry:2
+        image: registry:3.1.2
         # Memory from the 14-day peak working set (45Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:

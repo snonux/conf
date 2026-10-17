@@ -51,7 +51,7 @@ spec:
           readOnly: true
       containers:
       - name: syncthing
-        image: lscr.io/linuxserver/syncthing:v2.1.5-ls229
+        image: lscr.io/linuxserver/syncthing:v2.1.6-ls232
         # Memory from the 14-day peak working set (367Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:

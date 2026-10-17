@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: prom/pushgateway
-  tag: v1.10.0
+  tag: v1.11.4
   pullPolicy: Always
 
 service:
