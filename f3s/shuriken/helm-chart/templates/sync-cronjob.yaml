@@ -7,15 +7,13 @@
 # `alt-irregular-ninja` are declared in gonf/frontends/assets/rsyncd.conf (deploy
 # with `./gonf.sh cluster frontends frontends_rsync`).
 #
-# It only publishes a site when its content actually changed: each site's
-# dist/status.json (image_count + total_size_bytes) is compared against a
-# backup copy of the status.json from the last publish
-# (<site>/.last-published-status.json on NFS -- the persisted "did it
-# change" state). generated_at is excluded from the comparison because
-# shuriken rewrites it on every run regardless of whether the source images
-# changed, so comparing the whole file would publish every tick. The shuriken
-# `--sync` over SSH stays available as an option; this cron job just uses the
-# rsync protocol instead.
+# Publish every newly generated album, including reshuffles of the same images.
+# Compare each site's complete dist/status.json with the last successfully
+# published copy (<site>/.last-published-status.json on NFS). Its generated_at
+# timestamp changes after every successful generation, even when image_count
+# and total_size_bytes stay the same. Repeated sync ticks without a new
+# generation remain no-ops. The shuriken `--sync` over SSH stays available;
+# this CronJob uses the rsync daemon protocol instead.
 #
 # The nfs-check initContainer refuses to start if NFS is down on the node, so
 # rsync --delete can never run against an empty/stale source and wipe the live
@@ -31,7 +29,7 @@ spec:
   # excluded 12:00 beets-art slot). Generation keeps a stable hour (the
   # hour-quantized marker in cronjob.yaml), so wherever that hour settles,
   # a tick skipped because generation holds the flock is caught up by the
-  # next one; the per-site status fingerprint makes publishing idempotent.
+  # next one; the per-site status snapshot makes publishing idempotent.
   # Each tick is a cheap per-site status.json comparison; only sites that
   # actually changed since the last publish get rsynced.
   schedule: "30 10,18 * * *"
@@ -96,19 +94,6 @@ spec:
                     exit 0
                   fi
 
-                  # Pull "image_count" and "total_size_bytes" out of a shuriken
-                  # status.json without a JSON parser (the image ships grep/sed,
-                  # not jq). The sidecar's layout is fixed
-                  # (status-metadata.source.sh in shuriken.sh), so grep+digits
-                  # is safe. generated_at is deliberately NOT part of the
-                  # fingerprint: it's rewritten on every run regardless of
-                  # whether the source images changed, so including it would
-                  # make every tick look "changed".
-                  status_fingerprint() {
-                    grep '"image_count"' "$1" | grep -oE '[0-9]+'
-                    grep '"total_size_bytes"' "$1" | grep -oE '[0-9]+'
-                  }
-
                   published=0
                   for pair in irregular.ninja:irregular-ninja alt.irregular.ninja:alt-irregular-ninja; do
                     site=${pair%%:*}
@@ -121,11 +106,9 @@ spec:
                       continue
                     fi
 
-                    cur=$(status_fingerprint "$status")
-                    prev=""
-                    [ -f "$backup" ] && prev=$(status_fingerprint "$backup")
-
-                    if [ "$cur" = "$prev" ]; then
+                    # Include generated_at: the same source images still
+                    # produce a new shuffled album on every generation.
+                    if cmp -s "$status" "$backup"; then
                       echo "shuriken-sync: $site unchanged since last publish; skipping"
                       continue
                     fi
@@ -137,7 +120,10 @@ spec:
                           "$D/$site/dist/" "rsync://$srv/$mod/"
                     done
 
-                    cp "$status" "$backup"
+                    # Acknowledge only after BOTH mirrors succeed. Atomic
+                    # rename keeps an interrupted copy eligible for retry.
+                    cp "$status" "$backup.tmp"
+                    mv "$backup.tmp" "$backup"
                     published=1
                   done
 

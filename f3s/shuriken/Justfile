@@ -28,7 +28,7 @@ logs lines="100":
 		echo "No running shuriken job pods; trigger one with: just run"
 
 # Trigger a manual run. It goes through the same marker gate as the
-# hourly ticks: if the last successful run is < 24h ago (or the last
+# hourly ticks: if the last successful run is < 72h ago (or the last
 # attempt failed < 4h ago) it just skips. To force a regeneration,
 # delete the markers first on any r-node (root):
 #   rm /data/nfs/k3svolumes/shuriken.sh/.last-generate-{run,fail}

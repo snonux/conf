@@ -1,5 +1,6 @@
 # shuriken: regeneration of the irregular.ninja and alt.irregular.ninja
-# static photo albums, roughly once a day. The container entrypoint runs
+# static photo albums, roughly once every three days. The container
+# entrypoint runs
 # `shuriken --generate --config <conf>` once per /configs/*.conf
 # (alphabetical), writing each site into /data/shuriken.sh/<site>/dist on
 # the shared NFS export.
@@ -8,10 +9,10 @@
 # and each tick first checks marker files on the persistent volume:
 #   - /data/shuriken.sh/.last-generate-run -- the HOUR-QUANTIZED epoch of the
 #     last fully successful multi-site run; a tick aborts early (exit 0)
-#     unless that is >= 24h ago. Quantizing to the gate-pass hour (not the
+#     unless that is >= 72h ago. Quantizing to the gate-pass hour (not the
 #     completion time) keeps the run pinned to one stable hour: comparing a
 #     completion timestamp against hour-quantized ticks would creep the run
-#     one hour later every day, because the run duration always rounds up
+#     one hour later every run, because the run duration always rounds up
 #     to the next tick. A missing or malformed marker means "never ran".
 #   - /data/shuriken.sh/.last-generate-fail -- epoch of the last attempt,
 #     stamped BEFORE the run and removed on success, so kill-path failures
@@ -47,7 +48,7 @@ metadata:
   namespace: services
 spec:
   # Hourly at minute 0, EXCEPT 12:00. The marker gate in the container
-  # script turns this into "at most once per 24h, at the first eligible hour
+  # script turns this into "at most once per 72h, at the first eligible hour
   # the cluster is up", and the hour-quantized marker keeps that hour stable.
   # History: the 04:00 slot never fired because the cluster is powered off
   # at night (up roughly 10:00-01:00 local); the later 13:00 slot missed
@@ -127,9 +128,9 @@ spec:
                   #
                   # .last-generate-run: HOUR-QUANTIZED epoch of the last
                   # successful multi-site run; generate only when it is
-                  # >= 24h ago. Quantizing to the gate-pass hour (not the
+                  # >= 72h ago. Quantizing to the gate-pass hour (not the
                   # completion time) keeps the run on one stable hour:
-                  # completion-time stamps drift an hour later per day
+                  # completion-time stamps drift an hour later per run
                   # because the run duration rounds up to the next tick.
                   # .last-generate-fail: epoch of the current attempt,
                   # stamped BEFORE the run and removed on success, so
@@ -154,8 +155,8 @@ spec:
                   last=$(valid_epoch "$MARKER")
                   if [ -n "$last" ]; then
                       age=$(( run_epoch - last ))
-                      if [ "$age" -ge 0 ] && [ "$age" -lt 86400 ]; then
-                          echo "shuriken: last successful run ${age}s ago (< 24h); skipping"
+                      if [ "$age" -ge 0 ] && [ "$age" -lt 259200 ]; then
+                          echo "shuriken: last successful run ${age}s ago (< 72h); skipping"
                           exit 0
                       fi
                   fi
