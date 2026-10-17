@@ -12,7 +12,7 @@ spec:
     # Source 1: Upstream Helm chart from prometheus-community
     - repoURL: https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      targetRevision: 55.5.0
+      targetRevision: 92.10.1
       helm:
         releaseName: prometheus
         valuesObject:
@@ -146,9 +146,10 @@ spec:
                   value: ""
                 - name: web.enable-admin-api
                   value: ""
+                - name: web.enable-otlp-receiver
+                  value: ""
               enableFeatures:
                 - exemplar-storage
-                - otlp-write-receiver
               additionalScrapeConfigs: []
               tsdb:
                 outOfOrderTimeWindow: 744h  # 31 days

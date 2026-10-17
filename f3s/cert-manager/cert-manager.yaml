@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Vendored from https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
+# Upgraded 2026-10-17 after k3s reached Kubernetes 1.36.
+# Memory overrides and CRD retention live in kustomization.yaml.
+
 apiVersion: v1
 kind: Namespace
 metadata:

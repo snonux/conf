@@ -6,7 +6,7 @@ RELEASE_NAME := "argocd"
 # Chart version in use (helm list -n cicd: argo-cd-9.3.4, app v3.2.5). Pinned
 # so `just upgrade` re-applies values.yaml without silently jumping to the
 # latest chart; bump it deliberately after reading the upstream changelog.
-CHART_VERSION := "9.3.4"
+CHART_VERSION := "10.10.5"
 
 install:
     helm repo add argo https://argoproj.github.io/argo-helm || true
