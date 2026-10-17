@@ -378,14 +378,13 @@ func addPiHTTPChecks(checks map[string]gogiosCheck) {
 func addSiteChecks(checks map[string]gogiosCheck) {
 	sites := Sites()
 	for _, site := range sites {
-		// Test Player is intentionally excluded from Gogios monitoring.
-		if site.Name == "test-player.f3s.buetow.org" {
+		// Test ingress names (including www./standby./ipv4./ipv6. aliases)
+		// are excluded from every Gogios site check.
+		if strings.HasSuffix(site.Name, "-test.f3s."+Domain) {
 			continue
 		}
 		addHostChecks(checks, site)
 		addHTTPSChecks(checks, site)
-	}
-	for _, site := range sites {
 		if site.Family != 0 {
 			checks[fmt.Sprintf("Check HTTP IPv%d %s", site.Family, site.Name)] = httpCheck(
 				List(site.Name, fmt.Sprintf("-%d", site.Family)), []string{fmt.Sprintf("Check Ping%d master.buetow.org", site.Family)})
