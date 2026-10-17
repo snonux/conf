@@ -50,33 +50,33 @@ var (
 	}
 )
 
-// f2 receives f3's VM datasets below zroot/sink (no second disk) and also
-// snapshots zdata locally. Only the freebsd VM's sink is unlocked at boot;
-// zroot/sink/f3/zroot/bhyve/rocky stays locked (keylocation=prompt, not in
-// zfskeys_datasets), as it was live.
+// f2 receives f3's VM datasets below zdata/sink. The sink moved off zroot
+// on 2026-10-17 after backup snapshots filled the OS/active-VM pool.
+// Both raw-received VM datasets are unlocked at boot with f3's bhyve key;
+// the local snapshot job excludes the sink so only the push job prunes it.
 var (
 	f2Zrepl = freebsd.ZreplJobs{
 		Sink: &freebsd.ZreplSink{
 			Listen: "192.168.2.132:8888", ClientIP: "192.168.2.133", ClientName: "f3",
-			RootFS: "zroot/sink",
+			RootFS: "zdata/sink",
 		},
 		Snap: []freebsd.ZreplFilesystem{
 			zreplLocalSnap,
-			{Pattern: "zroot/sink<", Include: false},
 			{Pattern: "zdata<", Include: true},
+			{Pattern: "zdata/sink<", Include: false},
 		},
 	}
 	f2Keys = freebsd.KeyDatasets{
 		Datasets: []string{"zdata/enc", "zroot/bhyve", "zroot/garage",
-			"zroot/sink/f3/zroot/bhyve/freebsd", "zroot/sink/f3/zroot/bhyve/rocky"},
+			"zdata/sink/f3/zroot/bhyve/freebsd", "zdata/sink/f3/zroot/bhyve/rocky"},
 		// Both f3 VM sinks are their own encryption roots, keyed with f3's
 		// bhyve key (verified with zfs load-key -n on 2026-09-25). The rocky
 		// sink was keylocation=prompt and never unlocked at boot until then.
 		SinkKeys: []freebsd.SinkKey{{
-			Dataset: "zroot/sink/f3/zroot/bhyve/freebsd",
+			Dataset: "zdata/sink/f3/zroot/bhyve/freebsd",
 			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
 		}, {
-			Dataset: "zroot/sink/f3/zroot/bhyve/rocky",
+			Dataset: "zdata/sink/f3/zroot/bhyve/rocky",
 			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
 		}},
 	}

@@ -51,7 +51,7 @@ doas sysrc zfskeys_datasets="zdata/enc zdata/enc/nfsdata zroot/bhyve zroot/garag
 doas sysrc zfskeys_datasets="zdata/enc zroot/bhyve zroot/garage zdata/sink/f0/zdata/enc/nfsdata"
 
 # f2
-doas sysrc zfskeys_datasets="zdata/enc zroot/bhyve zroot/garage zroot/sink/f3/zroot/bhyve/freebsd"
+doas sysrc zfskeys_datasets="zdata/enc zroot/bhyve zroot/garage zdata/sink/f3/zroot/bhyve/freebsd zdata/sink/f3/zroot/bhyve/rocky"
 
 # f3
 doas sysrc zfskeys_datasets="zroot/bhyve"
@@ -67,7 +67,9 @@ doas zfs set keylocation=file:///keys/f0.lan.buetow.org:zdata.key \
 
 # f2
 doas zfs set keylocation=file:///keys/f3.lan.buetow.org:bhyve.key \
-  zroot/sink/f3/zroot/bhyve/freebsd
+  zdata/sink/f3/zroot/bhyve/freebsd
+doas zfs set keylocation=file:///keys/f3.lan.buetow.org:bhyve.key \
+  zdata/sink/f3/zroot/bhyve/rocky
 ```
 
 ## Verification
@@ -91,5 +93,6 @@ zfs list -H -o name,encryption,keylocation,keystatus,mounted |
   awk '$2 != "off" { print }'
 ```
 
-`zroot/sink/f3/zroot/bhyve/freebsd` on f2 has `mountpoint=none`; its key should
-be available after boot, but the dataset is not expected to be mounted.
+Both VM backups below `zdata/sink/f3/zroot/bhyve` on f2 have `mountpoint=none`;
+their keys should be available after boot, but the datasets are not expected
+to be mounted. The sink moved from `zroot` to `zdata` on 2026-10-17.

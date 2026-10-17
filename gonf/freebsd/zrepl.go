@@ -17,7 +17,7 @@ import (
 //   - f1 is its sink (zdata/sink);
 //   - f3 pushes the freebsd and rocky VM datasets to f2 every 10 minutes
 //     (f3_to_f2_freebsd; the name predates the rocky VM);
-//   - f2 is that sink (zroot/sink: f2 has no second disk);
+//   - f2 is that sink (zdata/sink, moved off zroot on 2026-10-17);
 //   - every host runs the local_zfs_snapshots snap job (daily at 12:00),
 //     excluding the datasets a push job or sink already snapshots. It ran at
 //     03:00 until 2026-09-26, but f0-f3 are powered off most nights (see
