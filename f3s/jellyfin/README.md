@@ -45,7 +45,12 @@ Jellyfin was running when it was taken. Database migrations and startup
 completed, and both public and LAN health checks passed. No third-party
 plugins were installed.
 
-The required full library scan remains pending: both accounts saved in
-foostore's `pass/infra/jellyfin.txt` were rejected at login. Run "Scan All
-Libraries" after correcting the credentials. Authenticated playback has
-not been verified in this upgrade run.
+The required full library scan completed successfully at 09:51 UTC.
+The admin credentials in foostore's `pass/infra/jellyfin.txt` work with the
+current `Authorization: MediaBrowser ...` header. Earlier verification
+attempts used legacy authentication headers, disabled by default in v12,
+and incorrectly diagnosed the credentials as invalid.
+
+Authenticated browsing and playback information passed. A direct video
+stream returned HTTP 206 and 1 MiB of `video/mp2t`; FFmpeg successfully
+decoded a one-second sample. The verification session was logged out.
