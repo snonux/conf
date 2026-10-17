@@ -1,6 +1,6 @@
 # Navidrome
 
-Subsonic-compatible music server, `deluan/navidrome:0.64.2`, port 4533.
+Subsonic-compatible music server, `deluan/navidrome:0.63.2`, port 4533.
 Namespace `services`, ArgoCD app `navidrome`, runs on any r-node (both
 volumes are NFS hostPath; shared music PVC with
 [beets-art](../../beets-art/helm-chart/README.md)).
@@ -51,9 +51,9 @@ A pre-upgrade SQLite backup is retained in `/data` as
 A rollback across schema migrations requires restoring that backup, not only
 switching the image tag.
 
-The 0.64.2 trial stalled authentication and API requests while its new artwork
-workers contended in SQLite on this deployment. Private-cache and rollback-
-journal trials did not resolve that. This deployment uses 0.64.2, which includes
+The 2026-10-15 trial of 0.64.2 stalled authentication and API requests while
+its new artwork workers contended in SQLite on this deployment. Private-cache and rollback-
+journal trials did not resolve that. This deployment uses 0.63.2, which includes
 the structured lyrics support from 0.63 without the 0.64 artwork changes.
 The trial database is preserved as
 `/data/navidrome-after-0.64.2-trial-20261015.db` before restoring the pre-upgrade
@@ -65,3 +65,18 @@ lines through `getLyricsBySongId`, lyric display and seek updates in the web
 player, an empty result for a track without lyrics, and the expected error for
 a missing track. The temporary verification account was removed by restoring
 the pre-upgrade database. No music files were modified.
+
+On 2026-10-17, another 0.64.2 trial passed `/ping` but an authenticated web
+login timed out after 20 seconds. The temporary account was removed with the
+native user CLI while the server was stopped. The deployment returned to
+0.63.2 with the database and WAL restored from f0's held snapshot
+`zdata/enc/nfsdata@zrepl_20261017_084600_000` (08:46 UTC, before the upgrade).
+Database changes after that snapshot are absent from the restored database;
+the music volume was not changed. The failed trial's database files remain
+under `/data/qf3-trial-0.64.2-20261017/`, and its stopped-service snapshot is
+`zdata/enc/nfsdata@qf3-navidrome-failed-0642-20261017` (held).
+
+After restoring 0.63.2, a temporary account passed web login (0.04 seconds),
+Subsonic album/song browsing, and an original audio stream (65,536 bytes).
+Invalid credentials and a missing track were rejected. The account was then
+deleted with the native CLI while the server was stopped.

@@ -46,7 +46,9 @@ spec:
       # (.nfs-sentinel in both directories).
       containers:
       - name: navidrome
-        image: deluan/navidrome:0.64.2
+        # 0.64.2 still stalls authenticated requests with this NFS SQLite DB.
+        # See README before retrying; rollback also requires the older database.
+        image: deluan/navidrome:0.63.2
         # Memory from the 14-day peak working set (67Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:

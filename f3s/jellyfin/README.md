@@ -37,10 +37,13 @@ Records: [`docs/archive/f3s/jellyfin/`](../../docs/archive/f3s/jellyfin/)
 
 ## Upgrade to 12.2 (2026-10-17)
 
-Jellyfin was stopped for the f0 ZFS snapshot
-`zdata/enc/nfsdata@qf3-jellyfin-10.11.6-20261017`, then upgraded directly
-from 10.11.6 to 12.2. Database migrations and startup completed, and both
-public and LAN health checks passed. No third-party plugins were installed.
+Jellyfin was stopped for a ZFS snapshot, then upgraded directly from
+10.11.6 to 12.2. The retention job subsequently removed that ad hoc snapshot.
+The surviving pre-upgrade snapshot on f0 is
+`zdata/enc/nfsdata@zrepl_20261017_084600_000`, now protected by a ZFS hold;
+Jellyfin was running when it was taken. Database migrations and startup
+completed, and both public and LAN health checks passed. No third-party
+plugins were installed.
 
 The required full library scan remains pending: both accounts saved in
 foostore's `pass/infra/jellyfin.txt` were rejected at login. Run "Scan All

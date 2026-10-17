@@ -29,7 +29,9 @@ The database was dumped from PG17 and restored into PG18.6. The 2 users,
 38 feeds, and 376 entries matched afterward, and Miniflux returned healthy.
 `PGDATA=/var/lib/postgresql/18/f3s`; the original PG17 files remain at the
 PVC root. The private dump is
-`~/.local/state/f3s/qf3-20261017/miniflux-pre-pg18.dump`; the stopped-database
-snapshot on f0 is `zdata/enc/nfsdata@qf3-postgres-before18-20261017`.
+`~/.local/state/f3s/qf3-20261017/miniflux-pre-pg18.dump`. Retention removed
+the ad hoc stopped-database snapshot. The surviving pre-upgrade snapshot on
+f0 is `zdata/enc/nfsdata@zrepl_20261017_084600_000`, now protected by a ZFS
+hold; PostgreSQL was running when it was taken.
 Rollback requires restoring the old image, mount path and PGDATA, and
 accounting for writes since the restore.

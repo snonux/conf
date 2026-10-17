@@ -82,9 +82,11 @@ VectorChord 1.1.1 and pgvector 0.8.5. Asset/user/album counts stayed at
 
 The current data directory is `/var/lib/postgresql/18/f3s`, under the
 existing PostgreSQL PVC. The old PG16 files remain at the PVC root.
-A stopped-database ZFS snapshot is
-`zdata/enc/nfsdata@qf3-postgres-before18-20261017` on f0, and the private
-custom-format dump is `~/.local/state/f3s/qf3-20261017/immich-pre-pg18.dump`.
+The private custom-format dump is
+`~/.local/state/f3s/qf3-20261017/immich-pre-pg18.dump`. Retention removed
+the ad hoc stopped-database snapshot. The surviving pre-upgrade snapshot on
+f0 is `zdata/enc/nfsdata@zrepl_20261017_084600_000`, now protected by a ZFS
+hold; PostgreSQL was running when it was taken.
 Rollback requires returning to the old image, mount path, and PGDATA and
 accounting for writes made since the restore.
 
