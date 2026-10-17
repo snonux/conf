@@ -43,7 +43,7 @@ pass in inet6 proto udp from any to any port 56709
 #
 # Why this is needed at all: Traefik's Prometheus metrics only cover HTTP
 # that relayd forwards into the k3s ingress. Gemini, git+ssh, the pi0/pi1
-# static sites and the NodePort relays (jellyfin, anki, garage, registry)
+# static sites and the NodePort relays (anki, garage, registry)
 # all bypass Traefik entirely, so it reports zero for them however busy
 # they are. pf sits underneath everything and sees the lot.
 #
@@ -72,7 +72,7 @@ pass in on vio0 proto udp to port 56709 label "svc_wireguard"
 #
 # The rules above measure the front door only (`in on vio0`), where
 # everything TLS arrives on :443 and is therefore indistinguishable --
-# Immich, foo.zone, the Pi static sites and Jellyfin all land in svc_https
+# Immich, foo.zone and the Pi static sites all land in svc_https
 # together. The services only separate once relayd picks a backend, so
 # label that hop too: destination address and port together identify the
 # service unambiguously.
@@ -85,7 +85,6 @@ pass in on vio0 proto udp to port 56709 label "svc_wireguard"
 # what the backend sent back, i.e. what was ultimately served to the client.
 pass out on wg0 proto tcp to { 192.168.2.203 192.168.2.204 } port 80    label "dst_pi_static"
 pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 80    label "dst_traefik"
-pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30096 label "dst_jellyfin"
 pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30800 label "dst_anki"
 pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30001 label "dst_registry"
 pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30222 label "dst_forgejo_ssh"

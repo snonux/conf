@@ -266,7 +266,7 @@ print secret values.
 | [`f3s/pihole/`](f3s/pihole/README.md) | Pi-hole on pi2/pi3, LAN wildcard DNS |
 | [`f3s/pi-netbsd/`](f3s/pi-netbsd/README.md) | NetBSD on pi0/pi1: rebuild procedure, upgrade lessons |
 | [`f3s/freebsd-hosts/keys/`](f3s/freebsd-hosts/keys/README.md), [`zusb/`](f3s/freebsd-hosts/zusb/README.md), [`f3sctl/`](f3s/freebsd-hosts/f3sctl/README.md), [`shelly-fans/`](f3s/freebsd-hosts/shelly-fans/README.md) | FreeBSD host scripts |
-| [`f3s/shuriken/`](f3s/shuriken/README.md), [`f3s/beets-art/`](f3s/beets-art/helm-chart/README.md), [`f3s/immich/`](f3s/immich/README.md), [`f3s/jellyfin/`](f3s/jellyfin/README.md), [`f3s/navidrome/`](f3s/navidrome/helm-chart/README.md) | media workloads |
+| [`f3s/shuriken/`](f3s/shuriken/README.md), [`f3s/beets-art/`](f3s/beets-art/helm-chart/README.md), [`f3s/immich/`](f3s/immich/README.md), [`f3s/navidrome/`](f3s/navidrome/helm-chart/README.md), [`f3s/player/`](f3s/player/), [`f3s/xplayer/`](f3s/xplayer/) | media workloads |
 | other `f3s/<app>/README.md` | per-app notes |
 
 Most app directories have the same `Justfile`: `status`, `logs`,

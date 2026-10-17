@@ -76,7 +76,6 @@ var f3sHosts = []string{
 	"player-test.f3s.buetow.org",
 	"xplayer.f3s.buetow.org",
 	"pihole.f3s.buetow.org",
-	"jellyfin.f3s.buetow.org",
 	"navidrome.f3s.buetow.org",
 	"code.f3s.buetow.org",
 	"immich.f3s.buetow.org",
@@ -130,7 +129,6 @@ var (
 	siteRelaydUpstreams = map[string]string{
 		"f3s.buetow.org":          "f3s_static_proxy",
 		"registry.f3s.buetow.org": "f3s_registry",
-		"jellyfin.f3s.buetow.org": "f3s_jellyfin",
 		"anki.f3s.buetow.org":     "f3s_anki",
 	}
 )

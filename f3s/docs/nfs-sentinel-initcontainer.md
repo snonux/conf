@@ -49,7 +49,7 @@ the pod so the replacement re-checks. `nfs-mount-monitor` (gonf
 3. Add an `nfs-check-<volume>` initContainer per NFS PVC.
 4. Push; ArgoCD syncs.
 5. Verify with the workload's real selector (from `spec.selector.matchLabels`;
-   e.g. `app=docker-registry`, `app=jellyfin-server`,
+   e.g. `app=docker-registry`, `app=player`,
    `app=koreader-sync-server`, not always `app=<chart>`):
 
    ```sh
@@ -63,7 +63,7 @@ the pod so the replacement re-checks. `nfs-mount-monitor` (gonf
 
 Only for workload manifests this repo owns: anki-sync-server, apache,
 audiobookshelf, filebrowser, forgejo, goprecords, immich (only
-`templates/postgres.yaml`), jellyfin, keybr, kobo-sync-server, miniflux,
+`templates/postgres.yaml`), player, xplayer, keybr, kobo-sync-server, miniflux,
 navidrome, opodsync, pkgrepo, player, radicale, registry, syncthing,
 wallabag, xplayer.
 

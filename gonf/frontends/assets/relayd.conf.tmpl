@@ -18,11 +18,6 @@ table <f3s_registry> {
   192.168.2.121
   192.168.2.122
 }
-table <f3s_jellyfin> {
-  192.168.2.120
-  192.168.2.121
-  192.168.2.122
-}
 table <f3s_anki> {
   192.168.2.120
   192.168.2.121
@@ -79,7 +74,6 @@ relay "https4" {
     forward to <localhost> port 8080 check http "/" code 200
     forward to <f3s_static_proxy> port 18080 check tcp
     forward to <f3s_registry> port 30001 check tcp
-    forward to <f3s_jellyfin> port 30096 check tcp
     forward to <f3s_anki> port 30800 check tcp
     forward to <garage> port 3900 check tcp
 }
@@ -92,7 +86,6 @@ relay "https6" {
     forward to <localhost> port 8080 check http "/" code 200
     forward to <f3s_static_proxy> port 18080 check tcp
     forward to <f3s_registry> port 30001 check tcp
-    forward to <f3s_jellyfin> port 30096 check tcp
     forward to <f3s_anki> port 30800 check tcp
     forward to <garage> port 3900 check tcp
 }

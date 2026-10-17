@@ -89,17 +89,15 @@ spec:
     requests:
       storage: 10Gi
 ---
-# Shared libraries of other services, mounted read-only as media sets.
+# Library sources, mounted read-only as media sets.
 #
-# Each PV points at the directory another chart already uses as a PV root
-# (Navidrome, Audiobookshelf, Jellyfin, Syncthing), because that is where the
-# .nfs-sentinel file lives (see docs/nfs-sentinel-initcontainer.md). The
-# deployment mounts the wanted subdirectory with subPath, so nothing is
-# copied or moved. Its init containers refuse to start the pod when such a
-# subdirectory is missing, because kubelet would otherwise create it.
+# External sources use the existing Navidrome, Audiobookshelf and Syncthing
+# roots; Player-owned content uses player/libraries. Each root has its own
+# .nfs-sentinel (see docs/nfs-sentinel-initcontainer.md). Init containers
+# check required subdirectories before kubelet can create an empty subPath.
 #
 # hostPath and the claim binding are immutable: to point a set elsewhere,
-# stop the pod and delete the PV and PVC by hand before syncing the change.
+# introduce a new PV/PVC pair, switch the pod, then retire the old pair.
 #
 # Navidrome music library (set "Music")
 apiVersion: v1
@@ -173,11 +171,11 @@ spec:
     requests:
       storage: 500Gi
 ---
-# Jellyfin libraries; musicvideos/ and yoga/ are the sets "Music Videos" and "Yoga"
+# Player-owned libraries; musicvideos/ and yoga/ are read-only media sets.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: player-libraries-pv
+  name: player-content-pv
 spec:
   capacity:
     storage: 500Gi
@@ -185,24 +183,22 @@ spec:
   accessModes:
     - ReadOnlyMany
   persistentVolumeReclaimPolicy: Retain
-  # Pre-bound both ways (claimRef here, volumeName on the claim): these PVs
-  # share a hostPath with another chart's PV, so neither side may be left to
-  # the binder's capacity matching.
+  # Bind explicitly so the claim cannot select a different same-sized PV.
   claimRef:
     namespace: services
-    name: player-libraries-pvc
+    name: player-content-pvc
   hostPath:
-    path: /data/nfs/k3svolumes/jellyfin/libraries
+    path: /data/nfs/k3svolumes/player/libraries
     type: Directory
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: player-libraries-pvc
+  name: player-content-pvc
   namespace: services
 spec:
   storageClassName: ""
-  volumeName: player-libraries-pv
+  volumeName: player-content-pv
   accessModes:
     - ReadOnlyMany
   resources:

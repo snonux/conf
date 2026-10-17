@@ -1,56 +1,77 @@
-# Jellyfin
+# Jellyfin retirement (2026-10-17)
 
-Media server, `https://jellyfin.f3s.buetow.org` (LAN:
-`jellyfin.f3s.lan.buetow.org`). Namespace `services`, ArgoCD app
-`jellyfin`, image `jellyfin/jellyfin:12.2`, selector `app=jellyfin-server`.
+Jellyfin is retired. Player and Xplayer serve its former libraries using
+read-only mounts. Their existing container paths and application databases
+are retained.
 
-| PVC | hostPath | Mount |
+All source and destination paths below are relative to
+`/data/nfs/k3svolumes/` on the NFS server:
+
+| Former directory | Current directory | Application mount |
 |---|---|---|
-| `jellyfin-config-pvc` | `/data/nfs/k3svolumes/jellyfin/config` | `/config` |
-| `jellyfin-libraries-pvc` | `/data/nfs/k3svolumes/jellyfin/libraries` | `/media/libraries` |
-| `jellyfin-data-pvc` | `/data/nfs/k3svolumes/jellyfin/data` | `/data` |
+| `jellyfin/libraries/musicvideos` | `player/libraries/musicvideos` | Player `/media/Music Videos` |
+| `jellyfin/libraries/yoga` | `player/libraries/yoga` | Player `/media/Yoga` |
+| `jellyfin/libraries/xman/ai` | `xplayer/libraries/ai` | Xplayer `/media/AI` |
+| `jellyfin/libraries/xman/pictures` | `xplayer/libraries/pictures` | Xplayer `/media/Pictures` |
+| `jellyfin/libraries/xman/videos` | `xplayer/libraries/videos` | Xplayer `/media/Videos` |
 
-Owner 911:911. Each volume has an NFS sentinel check.
+Both new library roots have `.nfs-sentinel` files. Ownership is numeric
+`65534:65534`, directories are `0755`, and regular files are `0644`.
+`player-content-pv/pvc` and `xplayer-content-pv/pvc` explicitly bind to the
+new roots with `Retain`; their deployment mounts remain read-only.
 
-Networking: NodePorts 30096 (HTTP) and 30920. The OpenBSD relayd terminates
-TLS on 443 and forwards `jellyfin.f3s.buetow.org` to table `f3s_jellyfin`
-port 30096 directly, bypassing Traefik
-(`gonf/frontends/assets/relayd.conf.tmpl`). relayd must send the full chain
-(leaf + intermediate) or the Android app fails with "Unsupported version or
-product". Jellyfin network settings: HTTPS off,
-`PublicPort` 443, `KnownProxies` 10.0.0.0/8 and 192.168.0.0/16. Jellyfin
-owns `network.xml` on the config PVC; don't mount it from a ConfigMap (the
-migrations need to write it).
+The Jellyfin ArgoCD Application, chart, service/NodePort 30096, ingresses,
+and obsolete shared-library PV/PVC pairs have been removed. The frontend
+site inventory no longer generates its relayd routes, Gogios HTTP/HTTPS/TLS
+checks, DNS records, or ACME renewal configuration. The dedicated relayd
+upstream and PF rule have also been removed on both frontends.
 
-```sh
-just status | logs [lines] | port-forward [8096] | sync | argocd-status | restart
-curl https://jellyfin.f3s.buetow.org/System/Info/Public
-echo | openssl s_client -servername jellyfin.f3s.buetow.org -connect jellyfin.f3s.buetow.org:443 | grep -c "BEGIN CERTIFICATE"   # expect 2
-kubectl delete application jellyfin -n cicd    # uninstall, data stays
-```
+## Rollback data
 
-Upgrades from 10.8.x must go 10.8.13, 10.10.7, then 10.11.x; skipping
-corrupts the DB (10.11 needs a DB from 10.9.11 or later).
+All three applications were stopped before the held snapshot on f0:
+`zdata/enc/nfsdata@jellyfin-retirement-20261017T101941Z`, hold tag
+`jellyfin-retirement`. Task `rf3` releases and deletes only this snapshot
+on or after 2026-10-31 10:19:41 UTC, after checking the migration remains
+healthy. The snapshot is protected from ordinary retention pruning.
 
-Records: [`docs/archive/f3s/jellyfin/`](../../docs/archive/f3s/jellyfin/)
-(deployment summary, yoga library quality survey).
+Jellyfin's remaining configuration/data tree is retained privately at
+`/data/nfs/retired/jellyfin/20261017/`. No Jellyfin users, history, or database
+records were imported into Player. Existing Player/Xplayer data and thumbnail
+volumes remain in place. Separate pre-migration database backups and private
+verification records are at
+`~/.local/state/f3s/jellyfin-retirement-20261017/` on the controller.
 
-## Upgrade to 12.2 (2026-10-17)
+To roll back, stop Player/Xplayer, move the five library trees back, restore
+the Jellyfin tree and its chart/Application from git history, and restore
+frontend site/routing configuration. Restore individual paths from the held
+snapshot if needed; do not roll back the whole shared NFS dataset. Update
+PV/PVC bindings through new resources rather than editing bound PV paths.
 
-Jellyfin was stopped for a ZFS snapshot, then upgraded directly from
-10.11.6 to 12.2. The retention job subsequently removed that ad hoc snapshot.
-The surviving pre-upgrade snapshot on f0 is
-`zdata/enc/nfsdata@zrepl_20261017_084600_000`, now protected by a ZFS hold;
-Jellyfin was running when it was taken. Database migrations and startup
-completed, and both public and LAN health checks passed. No third-party
-plugins were installed.
+Earlier deployment and library notes remain in
+[`docs/archive/f3s/jellyfin/`](../../docs/archive/f3s/jellyfin/).
 
-The required full library scan completed successfully at 09:51 UTC.
-The admin credentials in foostore's `pass/infra/jellyfin.txt` work with the
-current `Authorization: MediaBrowser ...` header. Earlier verification
-attempts used legacy authentication headers, disabled by default in v12,
-and incorrectly diagnosed the credentials as invalid.
+## Verification
 
-Authenticated browsing and playback information passed. A direct video
-stream returned HTTP 206 and 1 MiB of `video/mp2t`; FFmpeg successfully
-decoded a one-second sample. The verification session was logged out.
+File counts, byte sizes, inode identities and relative paths matched before
+and after all five moves (1,468 regular files total). Recursive ownership and
+mode checks found no mismatches. Both applications completed rescans without
+errors; set IDs, existing media IDs and container paths remained unchanged.
+
+| Application | Set | Indexed media before / after |
+|---|---|---|
+| Player | Music Videos | 118 / 118 |
+| Player | Yoga | 449 / 449 |
+| Xplayer | AI | 301 / 301 |
+| Xplayer | Pictures | 415 / 415 |
+| Xplayer | Videos | 166 / 166 |
+
+Authenticated tests covered all five sets: listing, decoded thumbnails,
+media streaming, HTTP 206 raw downloads, and video or image decoding.
+Both applications rejected missing media (404) and unauthenticated browsing
+(401). Both frontend configurations validate, daemons are running, and each
+Gogios configuration contains 539 checks with no Jellyfin targets.
+
+A headless Chrome browser also passed real login, set/folder navigation,
+and video playback for Music Videos, Yoga and Videos, plus image display
+for AI and Pictures. Containers running as UID 65534 could read every moved
+file, and write attempts to the mounted libraries were rejected.
