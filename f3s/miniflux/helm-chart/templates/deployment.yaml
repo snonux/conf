@@ -16,7 +16,7 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: postgres:17
+          image: postgres:17.11-bookworm
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -112,7 +112,7 @@ spec:
               readOnly: true
       containers:
         - name: miniflux-postgres
-          image: postgres:17
+          image: postgres:17.11-bookworm
           # Memory from the 14-day peak working set (90Mi), limit well above
           # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
           resources:

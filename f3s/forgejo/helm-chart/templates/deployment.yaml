@@ -61,7 +61,7 @@ spec:
 
       containers:
       - name: forgejo
-        image: codeberg.org/forgejo/forgejo:16.0.1-rootless
+        image: codeberg.org/forgejo/forgejo:16.0.6-rootless
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
