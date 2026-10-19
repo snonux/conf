@@ -68,12 +68,27 @@ progress persistence and resume in both sets. Test positions were restored.
 Containers running as UID 65534 can read every moved file, write attempts
 are rejected, and all three r-nodes see the new library paths.
 
-Two source-format limitations remain, without deleting or converting files:
+The MPEG extension limitation was resolved on 2026-10-19 by task `sf3` in
+**player**, released as [v0.8.2](https://github.com/snonux/player/releases/tag/v0.8.2)
+and deployed with image `5040cfb` (chart 0.1.10). The scanner now accepts
+`.mpg`/`.mpeg`; web and Android players use its H.264/AAC compatibility copy.
+Original files remain in place on the read-only library mounts.
 
-- Player's extension list excludes 60 visible MPG videos. Follow-up task
-  `sf3` in the **player** project covers MPEG indexing and playback support.
-- One MP4 fails FFprobe with invalid data and is not indexed. Its original
-  is retained; the private `unindexed-files.json` records its path.
+The rescan indexed 120 MPG files across Audiobooks and Podcasts, including
+all 60 recorded during this retirement, and retained all 4,698 previously
+visible media IDs. Every one of the 60 recorded MPG files produced a ready
+compatibility stream and passed HTTP 206 range checks. Their SHA-256 hashes
+match the values recorded before deployment. Chrome, Firefox and the native
+Android API 34 emulator passed representative playback checks for all four
+source codec/resolution profiles; browser seeking also passed. The generated
+MPEG-1/MPEG-2 fixture suite covers playback, paused seeking and single-use
+shares on all three clients. Private verification records are under
+`~/.local/state/player-mpeg-sf3/` on the controller.
+
+One source-data limitation remains: an MP4 fails FFprobe with invalid data and
+is not indexed. Its original is retained; the private `unindexed-files.json`
+records its path. Audiobookshelf remains retired; this update does not alter
+the held migration snapshot or cleanup task `rf3`.
 
 Both frontend configurations validate and all services remain running.
 Authoritative DNS no longer serves the Audiobookshelf name or its www/standby
