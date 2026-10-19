@@ -80,3 +80,8 @@ After restoring 0.63.2, a temporary account passed web login (0.04 seconds),
 Subsonic album/song browsing, and an original audio stream (65,536 bytes).
 Invalid credentials and a missing track were rejected. The account was then
 deleted with the native CLI while the server was stopped.
+
+Rechecked upstream on 2026-10-19: 0.64.2 is still the latest stable release.
+There is no newer release to retry for the recorded NFS/SQLite regression;
+the live deployment remains on 0.63.2. This is still an exception to task
+qf3's latest-stable upgrade requirement.
