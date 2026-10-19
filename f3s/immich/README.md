@@ -74,6 +74,25 @@ is handled separately. Face detection was already paused and remains paused;
 queue snapshots record the existing backlog and failures. Final queue counts
 and pause states match the baseline, with no active or waiting jobs.
 
+## Valkey security patch (2026-10-19)
+
+The Application overrides the upstream chart's Valkey 9.1.0 with
+`9.1.2-alpine`, pinned to the published multi-architecture digest. Valkey 9.2
+is still a release candidate. Runtime 9.1.2, PING, write/read/delete, and RDB
+persistence checks pass. All 19 queue counts and pause states match the
+pre-upgrade baseline, including the paused face-detection queue and existing
+failed jobs. Immich server version and ping APIs remain healthy.
+
+A checked, point-in-time RDB backup (57,412 keys, 16,086,907 bytes) is private at
+`~/.local/state/f3s/xf3-20261019/immich-valkey-pre-9.1.2.rdb` on the controller
+(directory 0700, file 0600). SHA-256:
+`4debb592b90df38b0795ab8b3d1a9b60d75017ec3aeee07ff209624d458917f4`.
+For rollback, stop Immich writers and Valkey before restoring that RDB into
+the Valkey PVC and returning the Application image to the old
+`9.1-alpine@sha256:34f4f659e02a67cfdf3995d11ae432219c936005055b2cd39a042e86280e053e`
+(runtime 9.1.0). Restoring the RDB loses queue changes since the backup;
+photo files and PostgreSQL are separate and were not rolled back.
+
 ## PostgreSQL upgrade (2026-10-17)
 
 PostgreSQL 16 was dumped and restored into PostgreSQL 18.6, with
