@@ -25,6 +25,10 @@ spec:
               main:
                 containers:
                   main:
+                    image:
+                      # Override the chart's Valkey 9.1.0 with the stable security patch.
+                      tag: 9.1.2-alpine
+                      digest: sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11
                     probes:
                       # NFS-aware liveness: valkey-cli must PONG AND a write to the
                       # NFS-backed /data volume must succeed. Catches the "reads OK but

@@ -11,6 +11,9 @@ redis-ha:
 # Use standard Redis with authentication
 redis:
   enabled: true
+  image:
+    # The current ArgoCD chart still defaults to Redis 8.6.4.
+    tag: 8.10.2-alpine
   # Memory from the 14-day peak working set (36Mi), limit well above it
   # (audit 2026-09-25 #19).
   resources:
