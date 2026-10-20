@@ -101,6 +101,11 @@ var f3sHosts = []string{
 
 var garageBuckets = []string{"taskwarrior", "quicklog", "comicredr", "comicredr-test", "turbolaunch", "turbolaunch-test"}
 
+// garageNodes are the Garage cluster members (cluster.NameGarage in
+// gonf/cluster, which this package cannot import without a cycle). Gogios
+// checks each one's admin /health endpoint over WireGuard (addGarageChecks).
+var garageNodes = []string{"f0", "f1", "f2"}
+
 // Per-site exceptions to the default site policy (see SiteFor). A site
 // without an entry is served over HTTPS on 443 by relayd's generic routing,
 // and its HTTPS check accepts any non-error status.
@@ -308,16 +313,17 @@ func StandaloneWireGuardAddresses() []WireGuardAddress {
 	return append([]WireGuardAddress(nil), standaloneWireGuardAddresses...)
 }
 
-// wireGuardAddressFor returns host's row of the WireGuard inventory. A
-// frontend without a row is returned as an error for the caller to report
-// (Refuse), so the record fails before any SSH connection.
+// wireGuardAddressFor returns host's row of the WireGuard inventory (a
+// frontend's or a Garage node's). A host without a row is returned as an
+// error for the caller to report (Refuse, or a panic for static lists such
+// as garageNodes); either way the recording fails before any SSH connection.
 func wireGuardAddressFor(host string) (WireGuardAddress, error) {
 	for _, peer := range wireGuardAddresses {
 		if peer.Name == host {
 			return peer, nil
 		}
 	}
-	return WireGuardAddress{}, fmt.Errorf("no WireGuard address for frontend %q", host)
+	return WireGuardAddress{}, fmt.Errorf("no WireGuard address for host %q", host)
 }
 
 // WireGuardHostLines returns the legacy /etc/hosts rows in their established

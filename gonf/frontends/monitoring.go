@@ -261,12 +261,13 @@ type gogiosConfig struct {
 // shows the same state up to ~5 minutes late. Each frontend's own host checks
 // (Local) run on that frontend in either role, so both reports list both.
 //
-// Its one panic is a genuine programmer-bug invariant, not a recipe or input
-// error, so it stays a panic rather than a declaration error (see gonf's
-// AGENTS.md, "Registration-time contract"): gogiosConfig holds only strings,
-// ints, string slices and a string-keyed map of such structs, which
-// encoding/json always marshals, so MarshalIndent cannot fail unless a
-// future edit adds an unmarshalable field type. (MustServer's names are the
+// Its panics are genuine programmer-bug invariants, not recipe or input
+// errors, so they stay panics rather than declaration errors (see gonf's
+// AGENTS.md, "Registration-time contract"). addGarageChecks panics only on a
+// garageNodes entry without a WireGuard row (see its doc comment). Here,
+// gogiosConfig holds only strings, ints, string slices and a string-keyed
+// map of such structs, which encoding/json always marshals, so MarshalIndent
+// cannot fail unless a future edit adds an unmarshalable field type. (MustServer's names are the
 // package's own constants; see its doc comment.)
 func renderGogios(server Server) string {
 	peer := MustServer(Master)
@@ -305,6 +306,7 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 	addFrontendHostChecks(checks)
 	addPiHTTPChecks(checks)
 	addSiteChecks(checks)
+	addGarageChecks(checks)
 	addFrontendServiceChecks(checks)
 	addSystemChecks(checks, server)
 	addShurikenChecks(checks)
@@ -388,6 +390,40 @@ func addSiteChecks(checks map[string]gogiosCheck) {
 		if site.Family != 0 {
 			checks[fmt.Sprintf("Check HTTP IPv%d %s", site.Family, site.Name)] = httpCheck(
 				List(site.Name, fmt.Sprintf("-%d", site.Family)), []string{fmt.Sprintf("Check Ping%d master.buetow.org", site.Family)})
+		}
+	}
+}
+
+// addGarageChecks checks each Garage node's admin /health endpoint (:3903, no
+// token needed) over WireGuard. The garage.f3s.buetow.org site checks cannot
+// see a single node: relayd forwards to whichever node answers its TCP check,
+// so one node could be down while the public 403 stays green. A node answers
+// 200 while it has quorum and 503 without. The check does not require
+// "fully operational", because then one dead node would fail all three
+// checks instead of only its own. While a host's ping check is not OK its
+// Garage check is skipped as UNKNOWN (DependsOn), so a powered-off host is
+// CRITICAL only once. There is no RunInterval: Gogios stamps a result after
+// the random spread, so a 300s interval would skip every other */5 run. The
+// retries cover the short restart garage_config does after a config change.
+//
+// Its panic is a programmer-bug invariant like MustServer's: garageNodes is a
+// static list, so a node without a WireGuard row is a typo in this package,
+// not recipe or input data.
+func addGarageChecks(checks map[string]gogiosCheck) {
+	for _, node := range garageNodes {
+		peer, err := wireGuardAddressFor(node)
+		if err != nil {
+			panic(fmt.Sprintf("Garage node %q: %v", node, err))
+		}
+		host := node + ".wg0.wan.buetow.org"
+		checks["Check Garage Health "+host] = gogiosCheck{
+			Plugin:          gogiosPluginDir + "/check_http",
+			Args:            List("-H", peer.IPv4, "-p", "3903", "-u", "/health"),
+			OnlyIfNotExists: f3sTakenDown,
+			RandomSpread:    10,
+			Retries:         2,
+			RetryInterval:   10,
+			DependsOn:       []string{"Check Ping4 " + host},
 		}
 	}
 }
