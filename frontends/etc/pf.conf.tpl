@@ -17,6 +17,10 @@ set skip on lo
 block return	# block stateless traffic
 pass		# establish keep-state
 
+# Recursive crawler saturated fishfinger's TLS workers (2026-10-19).
+# Stop it before relayd; quick prevents the accounting passes overriding it.
+block drop in quick on vio0 from 185.177.72.38 label "abusive_crawler"
+
 # By default, do not permit remote connections to X11
 block return in on ! lo0 proto tcp to port 6000:6010
 

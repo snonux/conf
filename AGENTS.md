@@ -4,6 +4,10 @@ This repository is the **homelab configuration** (recipes, scripts, cluster
 inventory). The configuration-management **library** lives separately at
 `~/git/gonf` (`github.com/snonux/gonf`).
 
+## Where is more information about this setup
+
+See f3s skill, it has got tons of info about this infra.
+
 ## Where tests belong
 
 - **Do not add `*_test.go` under `./gonf`.** That tree is thin recipe code:
