@@ -573,7 +573,7 @@ kubectl exec grafana-pod -c grafana -- sqlite3 /var/lib/grafana/grafana.db "SELE
 **Alternative:** Checked API with different user (admin):
 ```bash
 $ kubectl get secret prometheus-grafana -n monitoring -o jsonpath="{.data.admin-password}" | base64 -d
-zeodL5KXK1ib8lNSrinGyzBFwEkDxSc7IQvi5MBs
+<redacted>
 
 $ curl -u admin:<redacted> http://localhost:3000/api/datasources
 # Authentication failed (despite correct password)
