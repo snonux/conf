@@ -16,7 +16,9 @@ Current values worth knowing:
   sidecar off). Its NFS PV/PVC (`grafana-data-pv`/`-pvc`) and the PostSync
   Grafana restart hook were removed (audit 2026-09-25 #16); the old data
   stays in `/data/nfs/k3svolumes/grafana/data`. Re-enabling needs a new PVC
-  (preferably local-path, not SQLite on NFS) for `existingClaim`.
+  (preferably local-path, not SQLite on NFS) for `existingClaim`. Do not
+  reuse the old `grafana.db`, or reset the admin password before exposing
+  it: its admin password is the one leaked in public history (`a8341c5`).
 - etcd and controller-manager scraped at 192.168.2.120-122 (ports 2381,
   10257). kube-proxy and kube-scheduler are off (embedded in k3s).
 - node-exporter reads the textfile collector at
