@@ -39,7 +39,11 @@ DaemonSet provided a remote-write/OTLP metrics sender.
 the proxy's 8080 port. `externalTrafficPolicy: Local` preserves client IPs
 for its NetworkPolicy. An explicit nginx GET/HEAD route allowlist rejects
 admin, write, OTLP, lifecycle and unknown paths, including GET mutations.
-It also excludes config and flags. Query URLs are not logged.
+It also excludes config and flags. Access logs are off and HTTP-context
+error logs go to `/dev/null`, since nginx upstream failures otherwise include
+the full query URI. Main-context startup diagnostics stay on stderr. Use
+HTTP status/readiness to detect upstream failures; request-context error
+details are deliberately discarded to avoid retaining private label values.
 
 The Prometheus ingress policy admits only proxy and Prometheus pods in the
 same namespace on TCP 9090. The latter preserves its ServiceMonitor
@@ -87,6 +91,9 @@ just --justfile f3s/prometheus/Justfile --dry-run firing-alerts
 The tests render both authoritative and example Helm values, check disabled
 admin/OTLP and retained historic-write/storage settings, evaluate the scoped
 source rules, and exercise real nginx GET queries plus method/path denial.
+A synthetic private-label query with an upstream failure must return 502
+without its sentinel or request URI appearing in stdout/stderr; a separate
+invalid-startup test confirms startup diagnostics are still retained.
 Source-policy evaluation is an offline model, not a live enforcement test.
 
 ## Approved deployment and live acceptance (pending)

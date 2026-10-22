@@ -14,6 +14,9 @@ data:
     http {
       # Queries can contain private label values; do not log request URLs.
       access_log off;
+      # Upstream errors include the full URI too. Discard HTTP error logs;
+      # the main-context stderr log above retains startup diagnostics.
+      error_log /dev/null;
       server_tokens off;
       client_body_temp_path /tmp/client_temp;
       proxy_temp_path /tmp/proxy_temp;

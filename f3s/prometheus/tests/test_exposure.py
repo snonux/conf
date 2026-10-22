@@ -108,10 +108,16 @@ class ProxyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.hits = []
+        cls.fail_upstream = False
 
         class Backend(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 cls.hits.append(self.path)
+                if cls.fail_upstream:
+                    # Trigger nginx's request-context upstream error logging.
+                    self.connection.shutdown(socket.SHUT_RDWR)
+                    self.connection.close()
+                    return
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(b'{"status":"success","data":{}}')
@@ -138,17 +144,20 @@ class ProxyTests(unittest.TestCase):
         path = Path(cls.directory.name) / "nginx.conf"
         path.write_text(config)
         image = PROXY[1]["spec"]["template"]["spec"]["containers"][0]["image"]
-        cls.process = subprocess.Popen([
+        cls.command = [
             "podman", "run", "--rm", "--pull=never", "--network=host",
             "--user=101:101", "--read-only", "--cap-drop=ALL",
             "--security-opt=no-new-privileges", "--tmpfs=/tmp:rw,size=16m",
             "--volume", f"{path}:/etc/nginx/nginx.conf:ro,Z",
             "--entrypoint=nginx", image, "-g", "daemon off;"
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        ]
+        cls.logs = tempfile.TemporaryFile()
+        cls.process = subprocess.Popen(
+            cls.command, stdout=cls.logs, stderr=cls.logs)
         cls.addClassCleanup(cls.cleanup)
         for _ in range(100):
             if cls.process.poll() is not None:
-                raise RuntimeError(cls.process.stderr.read().decode())
+                raise RuntimeError(os.pread(cls.logs.fileno(), 65536, 0).decode())
             try:
                 if cls.request("GET", "/-/ready") == 200:
                     return
@@ -160,6 +169,7 @@ class ProxyTests(unittest.TestCase):
     def cleanup(cls):
         cls.process.terminate()
         cls.process.communicate(timeout=15)
+        cls.logs.close()
         cls.backend.shutdown()
         cls.backend.server_close()
         cls.directory.cleanup()
@@ -183,6 +193,33 @@ class ProxyTests(unittest.TestCase):
                 self.assertEqual(self.request("GET", path), 200)
                 self.assertIn(path, self.hits)
         self.assertEqual(self.request("HEAD", "/api/v1/alerts"), 200)
+
+    def test_upstream_failure_does_not_log_private_query(self):
+        sentinel = "synthetic-private-label-6n3"
+        path = "/api/v1/query?query=up%7Bprivate%3D%22" + sentinel + "%22%7D"
+        type(self).fail_upstream = True
+        try:
+            self.assertEqual(self.request("GET", path), 502)
+        finally:
+            type(self).fail_upstream = False
+        self.assertIn(path, self.hits)
+        logs = os.pread(self.logs.fileno(), 65536, 0)
+        self.assertNotIn(sentinel.encode(), logs)
+        self.assertNotIn(path.encode(), logs)
+
+    def test_startup_diagnostics_are_retained(self):
+        path = Path(self.directory.name)
+        invalid = path / "invalid-nginx.conf"
+        invalid.write_text((path / "nginx.conf").read_text()
+                           + "\ninvalid_startup_directive;\n")
+        # Fail after parsing the production log configuration, not before it.
+        command = self.command[:-2] + ["-t"]
+        command[command.index("--volume") + 1] = (
+            f"{invalid}:/etc/nginx/nginx.conf:ro,Z")
+        result = subprocess.run(command, capture_output=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'unknown directive "invalid_startup_directive"',
+                      result.stdout + result.stderr)
 
     def test_mutation_and_unknown_routes_never_reach_upstream(self):
         for method in ("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"):
