@@ -3,7 +3,7 @@
 package netbsd
 
 func (Goprecords) DescUpload() string {
-	return "Installs the goprecords upload client, token and hourly root cron (output to syslog)"
+	return "Installs the goprecords upload client, token and hourly root cron (output to syslog) and retires the duplicate legacy root uploader"
 }
 
 func (Goprecords) DescUptimed() string {

@@ -19,7 +19,8 @@ const (
 	uptimedRcD  = "/etc/rc.d/uptimed"
 	// Same minute the hand-made paul crontab used; now root's crontab so the
 	// root-owned /etc/goprecords-upload.token is readable.
-	goprecordsSchedule = "17 * * * *"
+	goprecordsSchedule     = "17 * * * *"
+	legacyGoprecordsClient = "/usr/pkg/bin/goprecords-upload-client.sh"
 )
 
 // Uptimed installs /etc/uptimed.conf (LOG_MAXIMUM_ENTRIES=0), the custom
@@ -41,8 +42,8 @@ func (Goprecords) OptsUpload() TaskOptions {
 }
 
 // Upload installs the goprecords upload client, token and hourly root cron
-// (output to syslog). Leaves any former paul-user crontab line alone; root's
-// job is the managed one.
+// (output to syslog) and retires the duplicate legacy root uploader.
+// Leaves any former paul-user crontab line alone; root's job is managed.
 func (Goprecords) Upload() {
 	EachHost(func(c goprecords.ClientHost) {
 		host := c.Host
@@ -50,7 +51,18 @@ func (Goprecords) Upload() {
 		if !ok {
 			return
 		}
-		CronAt("goprecords-upload", goprecordsSchedule, goprecords.CronCommand(host),
+		cron := CronAt("goprecords-upload", goprecordsSchedule, goprecords.CronCommand(host),
+			WithLegacyCommand("env GOPRECORDS_HOST="+host+" "+legacyGoprecordsClient+" >/dev/null 2>&1"),
 			DependsOn(client))
+		// Keep the old script if adoption skipped it or another job uses it.
+		Command("rm", List("-f", "--", legacyGoprecordsClient), DependsOn(cron),
+			WithName("retired-goprecords-upload-client"),
+			OnlyIf("sh", List("-c", `
+[ -e "`+legacyGoprecordsClient+`" ] || [ -L "`+legacyGoprecordsClient+`" ] || exit 1
+tab=$(crontab -l) || exit 1
+case "$tab" in
+  *"`+legacyGoprecordsClient+`"*) exit 1 ;;
+esac
+exit 0`)))
 	})
 }

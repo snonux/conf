@@ -21,6 +21,11 @@ Live services: bozohttpd (vhosts `f3s.buetow.org`, `www.f3s.buetow.org`,
 dserver (DTail, TCP 2222), hourly goprecords upload and dserver key-cache
 cron, unattended upgrades and vuln audit via gonf (`pis_netbsd`).
 
+Goprecords uploader schedules and credentials are managed by
+`netbsd_goprecords_upload`; the active client path is `/usr/local/bin/`.
+See [duplicate-upload investigation and pending cleanup](goprecords-uploads.md)
+before retaining an old baked `/usr/pkg/bin` uploader or adding a manual job.
+
 Package repos:
 
 ```
