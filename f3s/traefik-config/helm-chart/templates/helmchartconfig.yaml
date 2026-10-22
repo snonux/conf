@@ -10,9 +10,16 @@ spec:
       repository: docker.io/library/traefik
       tag: "3.7.15"
 
-    # The public WG destinations are ServiceLB IPs, handled by kube-proxy
-    # before CNI hostPort DNAT. Local avoids the observed CNI/node SNAT.
-    # relayd TCP health checks select only nodes with a local ready endpoint.
+    # Local NodePort routing preserves the frontend source and admits only
+    # ready local endpoints. relayd TCP checks select the matching nodes.
+    # Public relayd uses this existing NodePort directly. ServiceLB hostPort
+    # forwarding on nodes without endpoints can SNAT through a pod despite
+    # Local policy; direct NodePort keeps frontend peer identity and fails
+    # health checks on those nodes. Keep relayd.conf.tmpl in sync.
+    ports:
+      web:
+        nodePort: 31637
+
     service:
       spec:
         externalTrafficPolicy: Local
