@@ -71,11 +71,21 @@ rename works). No `SYNC_*` settings.
 
 ## Publishing
 
-`shuriken-sync` uses the rsync daemon protocol (`rsync://`), no SSH key. The
-frontends run rsyncd from inetd with `hosts allow =
-*.wg0.wan.buetow.org,*.wg0,localhost`; pods on the r-nodes reach it over
-WireGuard. Writable modules `irregular-ninja` and `alt-irregular-ninja` in
-`gonf/frontends/assets/rsyncd.conf`, running as `uid=www`.
+Task 9n3 prepares authenticated rsync daemon publishing over WireGuard;
+this change is not deployed yet. Each connection uses daemon user `shuriken`
+and `--password-file=/etc/shuriken-rsync/password`. Separately provisioned
+Kubernetes Secret `services/shuriken-rsync-auth`, key `password`, is mounted
+read-only with mode 0400. No password is stored in Helm values, command-line
+arguments, environment variables or Git.
+
+The frontend modules `irregular-ninja` and `alt-irregular-ninja` in
+`gonf/frontends/assets/rsyncd.conf.tmpl` require authentication, are hidden
+from module listings, and allow numeric r-node/frontend WG addresses and
+loopback only. They continue running as `uid=www`. The anonymous read-only
+Joern module is separate. Existing system SSH authentication is unchanged.
+Coordinate both sides using [the rollout guide](../../frontends/docs/rsync-security.md);
+publishing the CronJob before its Secret and server credentials exist will
+break publishing. No production credential has been provisioned in this prep.
 
 A site is published when its complete `dist/status.json` differs from
 `<site>/.last-published-status.json` on NFS. This includes `generated_at`,
@@ -84,12 +94,9 @@ so every successful regeneration publishes the reshuffled album even when
 new generation skip publishing. The snapshot is replaced atomically only
 after both mirrors succeed, so a failed publish is retried next tick.
 
-One-time frontend setup:
-
-```sh
-./gonf.sh cluster frontends frontends_rsync
-doas chown -R www:www /var/www/htdocs/irregular.ninja /var/www/htdocs/alt.irregular.ninja   # on both, if files are owned by admin
-```
+The existing album trees are already owned by `www:www` on both frontends.
+Do not repeat an unconditional recursive ownership change. The separate
+Joern mirror migration has a bounded ownership step on fishfinger only.
 
 Manual SSH publishing (`shuriken --sync`) still works from the image.
 

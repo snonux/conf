@@ -1,10 +1,10 @@
 # shuriken-sync: a SEPARATE CronJob that publishes the generated
 # /data/shuriken.sh/<site>/dist trees to the public web servers (fishfinger +
-# blowfish) over the rsync DAEMON protocol (no SSH, no key). The frontends run
-# rsyncd via inetd with `hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost`; the
-# k3s pods run on r-nodes that have .wg0 (WireGuard) connectivity, so they match
-# and can push over the mesh. The writable modules `irregular-ninja` and
-# `alt-irregular-ninja` are declared in gonf/frontends/assets/rsyncd.conf (deploy
+# blowfish) over the authenticated rsync DAEMON protocol on WireGuard (no SSH).
+# A separately provisioned Kubernetes Secret supplies only the password file;
+# frontend rsyncd also restricts source IPs to the r-nodes and frontend peers.
+# The writable modules `irregular-ninja` and
+# `alt-irregular-ninja` are declared in gonf/frontends/assets/rsyncd.conf.tmpl (deploy
 # with `./gonf.sh cluster frontends frontends_rsync`).
 #
 # Publish every newly generated album, including reshuffles of the same images.
@@ -82,6 +82,11 @@ spec:
                 - |
                   set -euo pipefail
                   D=/data/shuriken.sh
+                  PASSWORD_FILE=/etc/shuriken-rsync/password
+                  if [ ! -s "$PASSWORD_FILE" ]; then
+                    echo "shuriken-sync: rsync password file missing or empty" >&2
+                    exit 1
+                  fi
 
                   # Mutually exclude with the generation CronJob: don't publish
                   # while a generation is running. Non-blocking -- if the lock is
@@ -116,8 +121,9 @@ spec:
                     echo "shuriken-sync: $site changed since last publish; publishing"
                     for srv in fishfinger.wg0 blowfish.wg0; do
                       echo "shuriken-sync: $site -> rsync://$srv/$mod/"
-                      rsync -a --delete --info=stats1 \
-                          "$D/$site/dist/" "rsync://$srv/$mod/"
+                      rsync -a --delete --info=stats1 --timeout=120 --contimeout=15 \
+                          --password-file="$PASSWORD_FILE" \
+                          "$D/$site/dist/" "rsync://shuriken@$srv/$mod/"
                     done
 
                     # Acknowledge only after BOTH mirrors succeed. Atomic
@@ -148,6 +154,9 @@ spec:
                   mountPath: /data
                 - name: tmp
                   mountPath: /tmp
+                - name: rsync-auth
+                  mountPath: /etc/shuriken-rsync
+                  readOnly: true
           volumes:
             - name: data
               persistentVolumeClaim:
@@ -155,3 +164,10 @@ spec:
             - name: tmp
               emptyDir:
                 sizeLimit: 256Mi
+            - name: rsync-auth
+              secret:
+                secretName: shuriken-rsync-auth
+                defaultMode: 0400
+                items:
+                  - key: password
+                    path: password

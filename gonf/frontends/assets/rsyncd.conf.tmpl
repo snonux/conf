@@ -1,5 +1,7 @@
 max connections = 5
 timeout = 300
+reverse lookup = no
+hosts deny = *
 
 [joernshtdocs]
 comment = Joerns htdocs
@@ -8,22 +10,28 @@ read only = yes
 list = yes
 uid = www
 gid = www
-hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
+hosts allow = {{ range .Readers }}{{ . }} {{ end }}
 
 [irregular-ninja]
 comment = Irregular Ninja photo album (push from k3s over wg0)
 path = /var/www/htdocs/irregular.ninja
 read only = no
-list = yes
+list = no
 uid = www
 gid = www
-hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
+hosts allow = {{ range .Publishers }}{{ . }} {{ end }}
+auth users = shuriken
+secrets file = /etc/rsyncd.secrets
+strict modes = yes
 
 [alt-irregular-ninja]
 comment = Alternative Irregular Ninja photo album (push from k3s over wg0)
 path = /var/www/htdocs/alt.irregular.ninja
 read only = no
-list = yes
+list = no
 uid = www
 gid = www
-hosts allow = *.wg0.wan.buetow.org,*.wg0,localhost
+hosts allow = {{ range .Publishers }}{{ . }} {{ end }}
+auth users = shuriken
+secrets file = /etc/rsyncd.secrets
+strict modes = yes

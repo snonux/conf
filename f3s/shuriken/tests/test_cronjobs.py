@@ -22,8 +22,10 @@ class CronJobTests(unittest.TestCase):
         chart = Path(__file__).resolve().parents[1] / "helm-chart"
         rendered = subprocess.check_output(["helm", "template", str(chart)], text=True)
         cls.scripts = {}
+        cls.resources = {}
         for resource in yaml.safe_load_all(rendered):
             if resource and resource["kind"] == "CronJob":
+                cls.resources[resource["metadata"]["name"]] = resource
                 container = resource["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
                 cls.scripts[resource["metadata"]["name"]] = (
                     container["command"], container["args"][0]
@@ -38,6 +40,9 @@ class CronJobTests(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.log = self.root / "calls"
+        self.password_file = self.root / "password"
+        self.password_file.write_text("fixture-only-password\n")
+        self.password_file.chmod(0o400)
         self.env = {
             **os.environ,
             "PATH": f"{self.bin}:{os.environ['PATH']}",
@@ -61,9 +66,10 @@ class CronJobTests(unittest.TestCase):
     def run_job(self, name, expected=0):
         command, script = self.scripts[name]
         script = script.replace("/data/shuriken.sh", str(self.data))
+        script = script.replace("/etc/shuriken-rsync/password", str(self.password_file))
         result = subprocess.run(command + [script], env=self.env, text=True, capture_output=True)
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
-        return result.stdout
+        return result.stdout + result.stderr
 
     def calls(self):
         return self.log.read_text().splitlines() if self.log.exists() else []
@@ -149,6 +155,38 @@ class CronJobTests(unittest.TestCase):
         status.unlink()  # Generator removes this until success.
         self.run_job("shuriken-sync")
         self.assertEqual(len(self.calls()), 2)
+
+    def test_sync_uses_secret_file_without_exposing_password(self):
+        self.status(self.NOW)
+        output = self.run_job("shuriken-sync")
+        calls = self.calls()
+        self.assertEqual(len(calls), 2)
+        for call in calls:
+            self.assertIn(f"--password-file={self.password_file}", call)
+            self.assertIn("rsync://shuriken@", call)
+            self.assertNotIn("fixture-only-password", call)
+        self.assertNotIn("fixture-only-password", output)
+        spec = self.resources["shuriken-sync"]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        volume = next(v["secret"] for v in spec["volumes"] if v["name"] == "rsync-auth")
+        self.assertEqual(volume["secretName"], "shuriken-rsync-auth")
+        self.assertEqual(volume["defaultMode"], 0o400)
+        mount = next(v for v in spec["containers"][0]["volumeMounts"] if v["name"] == "rsync-auth")
+        self.assertTrue(mount["readOnly"])
+        self.assertEqual(mount["mountPath"], "/etc/shuriken-rsync")
+
+    def test_missing_or_empty_password_never_publishes_or_acknowledges(self):
+        status, backup = self.status(self.NOW)
+        for missing in (False, True):
+            with self.subTest(missing=missing):
+                self.password_file.chmod(0o600)
+                self.password_file.write_text("")
+                if missing:
+                    self.password_file.unlink()
+                output = self.run_job("shuriken-sync", expected=1)
+                self.assertIn("password file missing or empty", output)
+                self.assertFalse(backup.exists())
+                self.assertTrue(status.exists())
+                self.assertEqual(self.calls(), [])
 
 
 if __name__ == "__main__":

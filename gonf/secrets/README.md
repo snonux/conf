@@ -18,9 +18,18 @@ from the vault; everything else comes from files below this directory.
 | `paths.FHostSecret("goprecords/<host>.token")` (`freebsd.GoprecordsToken`), f0-f3 | `Infra/goprecords-token-<host>` | none (imported from the hosts' `/etc/goprecords-upload.token`, task lk2) |
 | `paths.PiSecret("goprecords/<host>.token")` (`goprecords.PiToken`), pi0-pi3 | (none yet) | `gonf/secrets/pis/goprecords/<host>.token` |
 | `paths.FHostSecret("carp/vhid1.pass")` (`freebsd.CarpPassSecret`), f0/f1 | `Infra/carp-vhid1-pass` | none (imported from the hosts' `ifconfig_re0_alias0` in `/etc/rc.conf`, task gk2; rotated 2026-09-25, task 1l2) |
+| `paths.FrontendSecret("etc/rsync/shuriken.password")` | `Infra/rsync-shuriken` | none; task 9n3 preparation, provision only during an approved rollout |
 
 A frontend added later has no vault row and reads the file. Migrating another
 secret is one more table row; recipes keep the same logical path.
+
+The rsync password is one nonempty line without surrounding whitespace (an
+optional final newline is accepted). The approved provisioning step must copy
+the same value into Kubernetes Secret `services/shuriken-rsync-auth`, key
+`password`, outside Git. Gonf writes `shuriken:<password>` to root-only
+`/etc/rsyncd.secrets` on each frontend. No production rsync credential was
+created as part of the local preparation. See
+[the coordinated rollout](../../frontends/docs/rsync-security.md).
 
 ## Fallback rules
 

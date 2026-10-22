@@ -127,18 +127,44 @@ func (Maintenance) Goprecords() {
 	})
 }
 
-// Rsync installs frontend rsync service configuration and synchronization
-// cron.
-//
-// Rsync installs the common daemon configuration and the root cron entry
-// (which adopted the former Rex line). The command intentionally retains
-// Rex's leading -ns argument.
+// RsyncAccount creates the disabled account for the Joern content mirror.
+func (Maintenance) RsyncAccount() {
+	WhenHostname("fishfinger", func() {
+		User("_joernsync", WithPrimaryGroup("_joernsync"),
+			WithHome("/var/empty"), WithShell("/sbin/nologin"))
+	})
+}
+
+func (Maintenance) OptsRsync() TaskOptions {
+	return TaskOptions{Needs(Maintenance.RsyncAccount)}
+}
+
+func (Maintenance) OptsRsyncPauseJoern() TaskOptions {
+	return TaskOptions{Needs(Maintenance.RsyncAccount), Operational()}
+}
+
+// RsyncPauseJoern stops managed mirror schedules before an approved ownership migration.
+func (Maintenance) RsyncPauseJoern() {
+	WhenHostname("fishfinger", func() {
+		NoCron("frontend-rsync")
+		NoCron("frontend-rsync", WithCronUser("_joernsync"))
+	})
+}
+
+// Rsync installs authenticated album publishing and the unprivileged Joern mirror.
 func (Maintenance) Rsync() {
 	rsync := Package("rsync")
-	InstallFile("/etc/rsyncd.conf", frontendAsset("rsyncd.conf"), RootOwned)
+	EachHost(func(_ Server) { installRsyncConfig() })
 	script := InstallFile("/usr/local/bin/rsync.sh", legacyFrontendAsset("scripts/rsync.sh.tpl"),
 		RootExec)
-	CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh", DependsOn(rsync, script))
+	// Both hosts have this managed root job today; blowfish's script is a
+	// no-op. Remove it before enabling the fishfinger-only unprivileged job.
+	oldCron := NoCron("frontend-rsync")
+	WhenHostname("fishfinger", func() {
+		CronAt("frontend-rsync", "*/5 * * * *", "-ns /usr/local/bin/rsync.sh",
+			WithCronUser("_joernsync"), WithCronEnv("MAILTO=root"),
+			DependsOn(rsync, script, oldCron))
+	})
 }
 
 // Gemtexter installs the daily Gemtexter content updater.

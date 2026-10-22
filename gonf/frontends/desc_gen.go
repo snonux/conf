@@ -25,7 +25,15 @@ func (Maintenance) DescIRCBouncer() string { return "Installs and enables the fi
 func (Maintenance) DescMyname() string { return "Sets each frontend's OpenBSD hostname" }
 
 func (Maintenance) DescRsync() string {
-	return "Installs frontend rsync service configuration and synchronization cron"
+	return "Installs authenticated album publishing and the unprivileged Joern mirror"
+}
+
+func (Maintenance) DescRsyncAccount() string {
+	return "Creates the disabled account for the Joern content mirror"
+}
+
+func (Maintenance) DescRsyncPauseJoern() string {
+	return "Stops managed mirror schedules before an approved ownership migration"
 }
 
 func (Maintenance) DescServiceAccounts() string { return "Creates the disabled Gorum service account" }
