@@ -5,7 +5,9 @@
 `relayd/pf.conf`, `freebsd_relayd_pf` and `freebsd_relayd_rc_conf` are retired.
 Relayd depends on the firewall task. The `freebsd` aggregate includes it.
 
-**Prepared, not deployed, 2026-10-22.** The rm3 safety annotation requires
+**Rollout in progress, 2026-10-22.** User approved the guarded f1/f0/f2 rollout
+and CARP tests; f3 remains unapproved to wake/reboot and pending inspection.
+ The rm3 safety annotation requires
 explicit user approval before **any live change**, including deployment,
 module loads, firewall activation, rollback preparation and CARP failover.
 Obtain approval for the concrete procedure below before running it. Do not
@@ -149,10 +151,13 @@ echo "$!" > "$d/watchdog.pid"
 SH
 
 # Apply only to the one registered host whose guard is armed.
-./gonf.sh push "$host" freebsd_firewall_config
+./gonf.sh push -privilege=doas -- -p22 -oBatchMode=yes \
+  -oConnectTimeout=5 -oServerAliveInterval=5 -oServerAliveCountMax=2 \
+  "paul@$host.lan.buetow.org" freebsd_firewall_config
 ```
 
-`push f1` resolves the registered inventory (paul, port 22, doas). For a
+`push` requires explicit SSH target, port and privilege; `push f1` does not
+inherit the registered host settings and fails with privilege=none. For a
 necessary WG fallback use the explicit equivalent:
 
 ```sh
@@ -197,7 +202,7 @@ while the guard is armed because those files would be restored in full.
    ```sh
    scratch="/data/nfs/k3svolumes/.rm3-pf-check-$(date +%s)"
    ssh -oBatchMode=yes -oConnectTimeout=5 -p22 root@r0.lan.buetow.org \
-     "timeout 5 sh -ec 'printf rm3-pf-ok > $scratch; sync -f $scratch'"
+     "timeout 5 sh -ec 'printf rm3-pf-ok | dd of=$scratch conv=fsync status=none'"
    for node in r0 r1 r2; do
      ssh -oBatchMode=yes -oConnectTimeout=5 -p22 "root@$node.lan.buetow.org" \
        "timeout 5 cat $scratch"
@@ -236,22 +241,36 @@ ssh -oBatchMode=yes -oConnectTimeout=5 -p22 "paul@$host.lan.buetow.org" \
 After both CARP members pass, perform the **explicitly approved** failover
 test using the f3s skill's `references/storage/carp.md` procedure: disable
 f0 auto-failback, demote the current MASTER, verify peer becomes MASTER,
-then repeat the NFS scratch read/write and VIP 80/443 application checks.
+then repeat NFS **reads** and VIP 80/443 application checks. The CARP hook
+intentionally keeps f1's replica `readonly=on` while MASTER; confirm writes
+are rejected there and never make the receiver writable for this test.
+Prepare a scratch file on f0 and wait for replication before takeover; after
+restoring f0, verify fresh writes and remove the scratch file.
 Restore the original MASTER and auto-failback state. Do not change the CARP
 password, restart relayd/NFS/stunnel, or force failover during preparation.
 Arm a fresh guard if changing either firewall again during this test.
 
 For the verified baseline of f0 MASTER/f1 BACKUP, first record whether
 auto-failback is already disabled, then use these commands. If roles differ,
-adapt the procedure to the recorded original state before executing it:
+adapt the procedure to the recorded original state before executing it. Arm
+an independent timed restore of **both** the original skew and MASTER/auto-
+failback state before changing either member. The PF guard restores rules,
+not CARP roles. Do not repeat this test while the NFS issue below is unresolved:
 
 ```sh
 ssh -p22 paul@f0.lan.buetow.org 'doas -n carp'
 ssh -p22 paul@f0.lan.buetow.org 'doas -n carp auto-failback disable'
-ssh -p22 paul@f0.lan.buetow.org 'doas -n carp backup'
+# Temporarily lengthen f0's election timeout so f1 can take over.
+# carp backup alone can let lower-skew f0 elect itself again first.
+ssh -p22 paul@f0.lan.buetow.org \
+  'doas -n ifconfig re0 vhid 1 advskew 254 state backup'
 ssh -p22 paul@f0.lan.buetow.org 'doas -n carp state'
 ssh -p22 paul@f1.lan.buetow.org 'doas -n carp state'
-# Require f0 BACKUP / f1 MASTER, then repeat NFS scratch and VIP app checks.
+# Require f0 BACKUP / f1 MASTER; verify replicated scratch reads, expected
+# read-only rejection of writes, and VIP app checks. Do not require writes
+# to succeed on the intentionally read-only backup.
+# Restore the recorded original skew (0 in the observed baseline).
+ssh -p22 paul@f0.lan.buetow.org 'doas -n ifconfig re0 vhid 1 advskew 0'
 ssh -p22 paul@f0.lan.buetow.org 'doas -n carp master'
 ssh -p22 paul@f0.lan.buetow.org 'doas -n carp state'
 ssh -p22 paul@f1.lan.buetow.org 'doas -n carp state'
@@ -263,3 +282,46 @@ ssh -p22 paul@f0.lan.buetow.org 'doas -n carp auto-failback enable'
 Acceptance includes all four hosts, new WG handshakes, working guests and
 both replication streams. A scheduled reboot can later verify boot ordering;
 it needs its own approval and must preserve the storage pair's availability.
+
+
+## Live rollout evidence — 2026-10-22
+
+- **f1** applied 12:27:00 EEST, **f0** 12:29:11. Each used two independent
+  LAN/WG root sessions and the 15-minute rollback guard; guards were accepted
+  after checks. Explicit SSH target/doas/port commands above succeeded.
+  Each reapply reported `5 ok, 0 changed, 5 skipped`. The initial short
+  `push f1` failed locally with privilege=none before applying anything.
+- On each host, new LAN/WG SSH works, public IPv6 TCP 22/111/2049/2222 via
+  blowfish `vio0` is blocked, PF block counters increase, bridge hooks stay 0,
+  and boot enables are YES. Public TCP22 was open immediately before rollout.
+  Cross-host link-local IPv6 ping/TCP22 works. A guest cannot reach its own
+  host's link-local address even on f2 **before** PF; no PF ICMPv6 drops were
+  observed for that existing colocated-guest path.
+- r0–r2 mount/stat and unique scratch write/read/cleanup passed before CARP
+  testing. Miniflux through the VIP returns HTTP200; VIP80/443 transport works;
+  Garage reports all three nodes healthy and frontend WG S3 connections pass.
+  f0→f1 replication completed after each PF load (12:27:14 and 12:29:15), with
+  no replication plan/step error. Existing pruning errors concern held older
+  snapshots; no snapshot holds were changed.
+- **CARP networking transitioned**, with an independent 180-second restore
+  guard: temporarily setting f0 advskew254/BACKUP let f1 become MASTER. Its
+  NFS/stunnel services ran and its replica correctly remained readonly=on.
+  **NFS failover acceptance failed:** the first uncached read of a scratch
+  file already replicated to f1 returned `Stale file handle`. All three
+  clients logged NFSv4 open-file state-recovery error -116 during takeover.
+  The test aborted before the f1 write-rejection and VIP application checks.
+  Exact UTC syslog timeline: f0 BACKUP 09:35:52 (services stopped 09:35:53),
+  f1 MASTER 09:35:55 (services started 09:35:56), f0 MASTER restored 09:35:57
+  (services started 09:35:58), f1 BACKUP 09:35:57 (services stopped 09:35:58).
+  Client ESTALE recovery messages occurred at 09:35:56–57 UTC.
+- f0 was promptly restored to **MASTER, advskew0, auto-failback enabled**;
+  f1 is BACKUP. No manual NFS/WG/VM restart, remount or readonly change was
+  attempted. Pools are healthy, VIP app returns HTTP200, new file creation+
+  file-level fsync and uncached reads pass across all three r-nodes. A
+  filesystem-wide `sync -f` returned EIO after takeover, potentially surfacing
+  earlier workload writeback errors; existing application open handles need
+  separate recovery assessment. Do not claim seamless NFS/application failover.
+- f2 rollout is paused for workload recovery assessment; f3 inspection and
+  deployment remain pending at this checkpoint.
+  f3→f2 replication is unverified while f3 is unreachable. No f3 wake/reboot
+  is authorized. The overall rm3 task remains incomplete.
