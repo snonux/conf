@@ -1,0 +1,283 @@
+# Namespace ingress isolation (task 7n3)
+
+Local preparation only: none of these policies or Applications has been applied,
+refreshed, synced or published. Each namespace is a separate rollout stage. One task-7n3 approval may authorize
+a named, bounded sequence with the gates below, or only a canary. There is no
+all-namespace installer. SSH authentication and recovery boot
+configuration are outside this task.
+
+The policy set uses **Ingress only**. It leaves egress unrestricted. Replies to
+allowed connections remain allowed; these policies do not restrict external
+connections initiated by applications, including feed fetches, Syncthing relays,
+Proton Mail, Git remotes or CronJob publishing. New receiving workloads start
+closed until their necessary sources/ports are reviewed.
+
+## Evidence and allowed paths
+
+Read-only inventory on 2026-10-22 found eleven namespaces, 58 pods, 57 Services,
+41 Ingresses, three CronJobs and fourteen retained Jobs. Pod counts and addresses
+change; policies use stable labels, never pod names, addresses or template hashes.
+`tests/inventory.json` retains selected labels/ports and resolved Ingress backend
+ports from that inventory, without config, credentials or environment values.
+
+| Namespace | Receiving paths preserved |
+|---|---|
+| `default`, `kube-node-lease`, `kube-public`, `test` | No resident pods or pod-backed receiving services; default deny only. The default Kubernetes API Service targets host API servers and is outside pod ingress isolation. |
+| `player-trash-test` | Traefik in kube-system → its existing player backend on 8080. This is an active test deployment, not an empty namespace. |
+| `infra` | Traefik → pkgrepo **8080** (Service port 80); registry **5000** behind NodePort 30001 through its existing node paths. |
+| `services` | Traefik → the nineteen web backends at their actual endpoint ports; Immich server → its Postgres 5432, Valkey 6379 and machine-learning 3003; Miniflux server → its Postgres 5432; ArgoCD repo-server in cicd → Forgejo 3000; Prometheus → goprecords 8080. Existing Anki, Forgejo SSH and Bridge NodePorts keep the node paths described below. |
+| `monitoring` | Prometheus → Alertmanager 9093 and reloader 8080, operator 10250, kube-state-metrics 8080, Pushgateway 9091, its own reloader 8080; Alertmanager → its own TCP/UDP mesh 9094; host API servers → operator webhook 10250. The existing 6n3 policies remain separately owned and unchanged. |
+| `cert-manager` | Host API servers → webhook 10250; Prometheus may read its three exact metrics endpoints on 9402. The current self-signed CA issuers and LAN wildcard certificates have no HTTP01 solver; new ACME/solver modes need review. |
+| `cicd` | Traefik → ArgoCD server 8080; server/controller/repo-server → Redis 6379; server/controller/ApplicationSet → repo-server 8081; Prometheus → controller 8082, repo-server 8084 and server 8083. No active ApplicationSet webhook Ingress or rollouts ServiceMonitor was found. See the mandatory chart-policy transition below. |
+| `kube-system` | Pods in all namespaces → CoreDNS TCP/UDP 53; Prometheus → CoreDNS 9153 and Traefik 9100; host API servers → metrics-server 10250; frontends/LAN relays/ServiceLB → Traefik web ports, scoped below. |
+
+Web ports use the destination container/endpoint port, not the Service port:
+Forgejo 3000, pkgrepo 8080, koreader 17200 and opodsync 8081 are examples.
+Traefik is scoped by **both** its kube-system namespace and workload labels.
+Database allows select the owning app within services: an unrelated services
+pod, another app, Traefik or a matching label in another namespace cannot use them.
+Wallabag and Forgejo have no separate DB Service in this inventory; no invented
+Wallabag database allowance is added. Immich's global DB environment variables
+also appear on its ML/Valkey containers; that alone is not evidence that these
+components need Postgres access. Only the server is a DB/Valkey client.
+
+Read-only `/proc/net/nf_conntrack` metadata on r0/r1/r2 corroborated Miniflux's
+5432 connection, Immich's Valkey connection, ArgoCD Redis traffic and Prometheus
+scrapes/Alertmanager delivery. Snapshots miss short-lived, daily and manual
+traffic; recheck the table and application workflows before each stage.
+
+Services CronJobs are `beets-art`, `shuriken`, `shuriken-sync`; retained Jobs
+also include the k3s Traefik installers. They have no receiving Services and need
+no new ingress allowance. Their NFS volumes and outgoing publication paths are
+unchanged. Syncthing's existing connection to earth on 22000 is initiated by the
+pod and remains usable. Its GUI remains reachable through Traefik; arbitrary
+incoming pod access to the data port is not granted.
+
+Pushgateway `/metrics` contained no `push_time_seconds` or
+`push_failure_time_seconds` groups. Through the existing authorized frontend read
+proxy, both `push_time_seconds` and `max_over_time(push_time_seconds[10d])`
+returned no series. Its r2 local CNI connection is consistent with the configured
+10s readiness and 20s liveness HTTP probes. No production writer is evidenced;
+authenticated Kubernetes port-forward remains the manual push path. Repeat both
+checks before the monitoring stage and stop if any producer needs identifying.
+Do not add an API-server exception to Prometheus merely for diagnostic access:
+a service-proxy GET to its direct 9090 endpoint was denied during this inventory.
+
+## NodePort, node and host-network limits
+
+NodePort destinations use **pod ports**: registry 5000 (30001), Forgejo SSH 2222
+(30222), Anki 8080 (30800), Bridge IMAP 143 (30143) and SMTP 25 (30025).
+These Services currently use `externalTrafficPolicy: Cluster`. Conntrack showed
+frontend WG sources 192.168.2.110/.111 connecting to registry/SSH/Anki on all
+three nodes, and node/CNI sources after translation. Existing probes/clients must
+remain usable; exact r-node LAN/WG and CNI gateway addresses are allowed only to
+those receivers. Earth WG 192.168.2.200 is listed for ordinary direct clients.
+Bridge's documented SSH tunnel originates at a trusted node. No services-wide,
+namespace-wide or pod-CIDR allowance is used to keep these paths alive.
+
+The exact trusted-node addresses are r0/r1/r2 LAN 192.168.1.120–122, WG
+192.168.2.120–122, and CNI/flannel 10.42.{0,1,2}.{0,1}. NodePort translation
+can replace an external client's source with one of these identities. These
+exceptions **do not enforce the original external-client allowlist**.
+
+Read-only r0 NAT rule tracing made the ordinary-pod bypass concrete: each
+`KUBE-NODEPORTS` entry for 30001/30222/30800/30143/30025 jumps to a `KUBE-EXT`
+chain that unconditionally calls `KUBE-MARK-MASQ`, then its Service/endpoint
+DNAT chain. `KUBE-POSTROUTING` sees mark 0x4000 and runs MASQUERADE. On r2,
+kube-router's active receiver rules match **source** ipsets in the forwarding
+path; the existing proxy source set contains only .110/.111/.200, as expected.
+For a **cross-node** NodePort path, translation occurs on the entry node before
+policy evaluation on the remote destination node. An ordinary pod can therefore
+address an r-node NodePort and arrive at its remote receiver with an admitted
+node/CNI source, bypassing the direct-Service source restriction. For example,
+an r0 pod can target r0:30001 while the registry endpoint is on r2, producing
+a node/CNI identity that the registry's necessary source exception admits.
+Same-node evaluation can differ because FORWARD precedes local POSTROUTING;
+do not infer one path's behavior from another.
+
+This is a **rules-derived bypass**, not an executed packet probe: no ordinary
+probe pod was created in preparation. The tests explicitly retain the distinction
+between a rejected ordinary source and an admitted rewritten CNI source. It
+applies to registry, Bridge, Forgejo SSH and Anki NodePort receivers, not just
+an unspecified external client. Approved runtime acceptance must exercise
+Service/Pod and cross-node NodePort paths separately and record the residual
+bypass. A subsequent NodePort/source-preservation/host-control redesign is
+needed for stronger receiver isolation; this ingress-only task does not change
+those Services or introduce egress policy.
+
+**Database isolation is separate:** neither Postgres 5432 nor Immich Valkey/ML
+is exposed by these NodePorts. Their policy rules admit only the owning server
+pod selector, with no node/CNI ipBlock. The original unrelated-pod → database
+Service/Pod negative test on all nodes remains mandatory and must pass.
+
+Traefik and its ServiceLB accept only their web ports from the two frontend WG
+addresses, the f0/f1 LAN relay addresses 192.168.1.130/.131 (and CARP VIP .138),
+and the existing node/CNI paths. Traefik's web allow also admits the narrowly
+selected kube-system ServiceLB pods. Prometheus alone gets its metrics port.
+This is network access permission, **not** HTTP-header trust. The separate
+4n3/5n3 forwarding-trust/Local-service rollout must be re-inventoried before
+activating kube-system policies; no additional forwarded-header trust is added.
+
+Kubernetes allows local-node/pod traffic; host-network semantics depend on the
+implementation. The three node exporters use hostNetwork and listen on 9100;
+these manifests do **not** isolate them, the API servers, kubelets, etcd or host
+services. An authenticated port-forward bypasses pod ingress policy. Restrict
+node access and Kubernetes exec/port-forward permissions independently.
+Ordinary workload labels are not a cryptographic identity: anyone able to create
+pods with trusted labels in a trusted namespace can impersonate that source.
+
+Read-only r0 inspection found 91 `KUBE-NWPLCY` and 145 `KUBE-ROUTER` references
+in the filter rules; no `--disable-network-policy` flag was present in k3s's
+running ExecStart. This confirms a programmed controller, **not** packet proof
+for these new policies. Per-node packet acceptance is pending approved rollout.
+
+## Preserve the deployed Prometheus boundary
+
+Read [the 6n3 exposure runbook](../prometheus/exposure.md) before monitoring.
+These manifests add no receiver/proxy allowance. The separately managed
+`prometheus-api` admits only same-namespace proxy/self pods on 9090, and
+`prometheus-read-proxy` admits .110/.111/.200 WG sources on 8080. The additional
+Prometheus-reloader rule permits self only on 8080. Prometheus scraping other
+components does not imply those components may contact its receiver.
+
+Policies are additive: test the **union** with 6n3 and all active policies.
+Never add a monitoring-wide allow, all-pod metrics range, API-server receiver
+exception or general services → monitoring allow. The ordinary-pod denials and
+proxy source checks in the tests cover that union. Node/hostNetwork exceptions
+remain outside those claims.
+
+## Local checks
+
+The tests are an offline selector/port model and local Helm/schema validation.
+They create no pods, connections or writes in the cluster. Python needs PyYAML;
+the optional native schema check also needs jsonschema. The cluster OpenAPI GET
+below only saves public API schema, not workload data.
+
+```sh
+helm pull https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.10.5/argo-cd-10.10.5.tgz --destination /tmp
+kubectl get --raw /openapi/v3/apis/networking.k8s.io/v1 > /tmp/7n3-networking-openapi.json
+ARGOCD_CHART=/tmp/argo-cd-10.10.5.tgz NETWORK_POLICY_OPENAPI=/tmp/7n3-networking-openapi.json /usr/bin/python3 -m unittest discover -s f3s/network-policies/tests -v
+```
+
+Without the two environment variables, the offline reachability tests still run;
+the chart and native-schema checks explicitly skip. Run the complete command
+for review. No Go tests are added under gonf.
+
+## Staged approval and rollout
+
+Application templates are `.yaml.disabled`, have no automated sync, no finalizer
+and only one namespace source path. The generic recursive Application install
+therefore skips them. **Do not rename/apply all templates or recursively apply
+the policies.** Publication must be included in the approval; publish only an
+isolated reviewed commit, never evolving main. Pin the selected Application's
+`targetRevision` to the exact approved published commit before applying it.
+Copy its disabled template to a temporary filename ending `.yaml`; do not
+activate other templates in the repository. Manual sync must name exactly that
+Application. Each namespace is manually synced and checked before the next approved stage.
+
+1. Refresh read-only inventory and policy specs. Check current labels, Ingress
+   backend ports, metrics targets, Jobs, external clients, node/CNI source paths
+   and existing policy ownership. Stop for unexpected differences. Record
+   readiness, restarts, Prometheus target/rule health and two normal Gogios cycles
+   as the baseline; existing failing targets/Jobs are not new failures.
+2. Obtain task-7n3 approval for the **explicit named stage sequence** (or a
+   canary-only scope), its allows/default denies, manual Application creation/
+   syncs, and the bounded acceptance probes below. A useful sequence is empty
+   `test` first, `player-trash-test`,
+   `infra`, `services`, `monitoring`, `cert-manager`, `cicd`, then `kube-system`;
+   empty default/kube-public/kube-node-lease each get their own stage as well.
+   The operator may change that sequence after inventory. System namespaces are
+   not bulk enabled as a side effect of the application stages.
+3. For the approved namespace only, reconcile explicit allows first (wave -1),
+   then its default deny (wave 0). Each source file also puts the deny last for
+   a specifically approved manual file apply. Adding a narrow allow begins
+   isolating its selected workload immediately. Each receiver therefore has one
+   complete allow policy containing all of its necessary source/port rules;
+   its first selecting API write includes the full reviewed set. The offline
+   prefix-apply test checks that transition. Verify the required paths after
+   controller convergence; no blanket temporary allow is used, and no zero-gap
+   availability claim is made for asynchronous rule programming.
+4. Wait for kube-router rules on the destination nodes; inspect counters. Use
+   bounded, explicitly approved ordinary probe pods with no hostNetwork, no
+   trusted application labels and no privileges, on each r-node. Record the
+   resolved service endpoints and timeout exit codes. Remove only these probes
+   after capturing drop/reject counters; do not alter existing workloads.
+5. Verify every approved positive path: both public and LAN web routes with real
+   login/read workflows; owning app DB reads/health and Immich ML; Argo git fetch/
+   refresh, Redis and UI in cicd; registry's existing authenticated clients;
+   Anki/Forgejo/Bridge users and Gogios NodePorts; DNS TCP/UDP, cert-manager
+   webhook/issuance and metrics API when their stages are reached. Do not create
+   a production certificate, write mail, push image/data, or force a CronJob just
+   to test a TCP policy. Approve a bounded functional write separately if needed.
+6. For services, unrelated pods on **each node** must fail both ClusterIP and
+   actual Pod-IP TCP access to immich-postgres:5432 and miniflux-postgres:5432.
+   Wrong-app/wrong-namespace sources must fail; the existing owning clients must
+   continue succeeding. Include Valkey and ML negative checks. For every stage,
+   check a denied wrong port and cross-namespace source. For NodePorts exercise
+   direct endpoint and hairpin paths separately and report any trusted-node
+   bypass explicitly. Do not claim original-source isolation on Cluster policy.
+7. For monitoring, repeat the complete deployed 6n3 positive/negative matrix:
+   .110/.111/.200 proxy reads succeed on all three nodes; unrelated ordinary pods
+   fail raw Service/Pod 9090 and proxy Pod/NodePort 8080/30090; disallowed LAN/WG
+   sources fail. Retain the receiver flags and authenticated historic-import
+   path. Verify all previously healthy metrics targets/rules, Alertmanager and
+   Watchdog, plus two normal active/passive Gogios cycles. Check Pushgateway
+   groups/history again before applying. All stages retain their baseline
+   healthy targets and application Jobs; no restart is part of this rollout.
+8. Record this namespace's policy specs, per-node allow/deny packet evidence,
+   health comparisons and remaining limitations before continuing. Continue only
+   to the next explicitly approved stage after every gate passes; stop on a failed
+   gate, new scope or an unidentified necessary client. Ask for further approval
+   only when the next action falls outside the approved sequence. API objects
+   and the offline model alone are not task completion. No stage was executed
+   during this preparation.
+
+### Mandatory cicd chart transition
+
+The active argo-cd 10.10.5 chart creates four policies. Its server policy contains
+`ingress: [{}]`, and its metrics policies admit all namespaces. Default deny
+cannot override these additive allows. The replacement cicd policies therefore
+require a coordinated Helm transition:
+
+1. During cicd's approval window, apply/sync its explicit policies and default
+   deny first. Leave the chart's old policies until the replacement allow rules
+   are present; verify Argo's required paths.
+2. Upgrade the **same pinned chart/version and existing values** with the extra
+   `-f f3s/network-policies/cicd-chart-values.yaml`. The overlay disables all
+   chart-generated policies; Helm removes only the four chart-owned policies.
+   Do not steal their ownership or delete unrelated policies. Check the planned
+   Helm diff for unrelated runtime changes and stop if any exist.
+3. Retain the overlay on **every subsequent** ArgoCD install/upgrade. The ordinary
+   `f3s/argocd/Justfile` does not include it yet because cicd has not been activated.
+   The reviewed `cicd-activation.patch` adds the overlay to both standard install/
+   upgrade commands; `git apply --check` validates it without applying it. Apply
+   and commit that exact patch as part of the approved cicd stage,
+   before its Helm transition, and retain the patch until all copies of the
+   operator checkout use the updated workflow. This is mandatory: a plain
+   upgrade with existing values otherwise recreates the allow-all policy.
+   Do not run that plain workflow between activation and the persistence change.
+4. Inspect the live union: only the new scoped cicd policies must remain, then
+   prove unrelated pod → Argo server/Redis/repo-server denial and required UI,
+   git, controller/cache and metrics success.
+
+The overlay is local preparation, not an instruction to run an unrelated Helm
+upgrade before cicd's stage. Local chart rendering confirms the current broad
+server policy exists and that the reviewed overlay emits no chart policies.
+
+### Recovery within an approved stage
+
+Keep authenticated kubectl access and an independent operator session. These
+policies do not change SSH or recovery boot. On a new failure, stop the sequence
+and inspect selectors, endpoint ports, NAT and counters. Prefer a reviewed,
+precise missing allow. If the approved window includes availability rollback,
+remove only this stage's policies (the selected namespace source file), restoring
+its prior policy set; also restore cicd's prior Helm settings if that transition
+was part of the stage. A no-finalizer Application deletion alone leaves policies
+in place. Removing only default deny leaves selected receivers isolated by their
+allow policies, so it is not a complete rollback. Never remove deployed 6n3
+policies, open Prometheus 9090, delete storage, reschedule pods or restart hosts
+as policy recovery. Report any rollback as restored baseline, not successful
+isolation.
+
+References: [Kubernetes NetworkPolicy semantics and node exceptions](https://kubernetes.io/docs/concepts/services-networking/network-policies/),
+[Kubernetes Service source-IP behavior](https://kubernetes.io/docs/tutorials/services/source-ip/).

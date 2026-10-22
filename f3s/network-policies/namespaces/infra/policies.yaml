@@ -1,0 +1,89 @@
+# Task 7n3: activate only this namespace in the approved staged rollout.
+# Each receiver has one complete allow policy; namespace default deny follows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pkgrepo-web
+  namespace: infra
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+spec:
+  podSelector:
+    matchLabels:
+      app: pkgrepo
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+          app.kubernetes.io/instance: traefik-kube-system
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: registry-nodeport
+  namespace: infra
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+spec:
+  podSelector:
+    matchLabels:
+      app: docker-registry
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 192.168.2.110/32
+    - ipBlock:
+        cidr: 192.168.2.111/32
+    - ipBlock:
+        cidr: 192.168.2.200/32
+    - ipBlock:
+        cidr: 192.168.1.120/32
+    - ipBlock:
+        cidr: 192.168.1.121/32
+    - ipBlock:
+        cidr: 192.168.1.122/32
+    - ipBlock:
+        cidr: 192.168.2.120/32
+    - ipBlock:
+        cidr: 192.168.2.121/32
+    - ipBlock:
+        cidr: 192.168.2.122/32
+    - ipBlock:
+        cidr: 10.42.0.0/32
+    - ipBlock:
+        cidr: 10.42.0.1/32
+    - ipBlock:
+        cidr: 10.42.1.0/32
+    - ipBlock:
+        cidr: 10.42.1.1/32
+    - ipBlock:
+        cidr: 10.42.2.0/32
+    - ipBlock:
+        cidr: 10.42.2.1/32
+    ports:
+    - protocol: TCP
+      port: 5000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: infra
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress: []

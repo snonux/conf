@@ -1,0 +1,14 @@
+# Task 7n3: activate only this namespace in the approved staged rollout.
+# Each receiver has one complete allow policy; namespace default deny follows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: kube-node-lease
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress: []

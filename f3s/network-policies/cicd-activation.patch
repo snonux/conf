@@ -1,0 +1,12 @@
+--- a/f3s/argocd/Justfile
++++ b/f3s/argocd/Justfile
+@@ -15,3 +15,3 @@
+     kubectl apply -f persistent-volumes.yaml
+-    helm install {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml
++    helm install {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml -f ../network-policies/cicd-chart-values.yaml
+     @echo "Waiting for ArgoCD to be ready..."
+@@ -29,3 +29,3 @@
+ upgrade:
+-    helm upgrade {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml
++    helm upgrade {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml -f ../network-policies/cicd-chart-values.yaml
+     kubectl apply -f ingress.yaml
