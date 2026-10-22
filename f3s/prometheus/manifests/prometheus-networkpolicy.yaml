@@ -1,0 +1,48 @@
+# Scoped to Prometheus and its read proxy. Task 7n3 owns wider isolation;
+# never add a monitoring-wide allow rule that reopens Prometheus port 9090.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-api
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      prometheus: prometheus-kube-prometheus-prometheus
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus-read-proxy
+        # Preserve Prometheus's self-scrape through its ClusterIP.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+              prometheus: prometheus-kube-prometheus-prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-read-proxy
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-read-proxy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 192.168.2.110/32 # blowfish Gogios
+        - ipBlock:
+            cidr: 192.168.2.111/32 # fishfinger Gogios
+        - ipBlock:
+            cidr: 192.168.2.200/32 # earth laptop, use WG even on LAN
+      ports:
+        - protocol: TCP
+          port: 8080

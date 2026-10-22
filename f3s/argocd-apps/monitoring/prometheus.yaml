@@ -141,13 +141,12 @@ spec:
                   memory: 3Gi
                 limits:
                   memory: 6Gi
-              additionalArgs:
-                - name: web.enable-remote-write-receiver
-                  value: ""
-                - name: web.enable-admin-api
-                  value: ""
-                - name: web.enable-otlp-receiver
-                  value: ""
+              # Epimetheus historic imports use RBAC-protected port-forwarding.
+              # Policy permits the read proxy and Prometheus self-scrapes;
+              # Kubernetes node/host-network traffic remains trusted.
+              enableRemoteWriteReceiver: true
+              enableAdminAPI: false
+              enableOTLPReceiver: false
               enableFeatures:
                 - exemplar-storage
               additionalScrapeConfigs: []

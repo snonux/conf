@@ -3,16 +3,20 @@ kind: Service
 metadata:
   name: prometheus-nodeport
   namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   labels:
     app: prometheus
 spec:
   type: NodePort
+  # Preserve Gogios/laptop source addresses for the proxy NetworkPolicy.
+  # A read-proxy DaemonSet supplies a local endpoint on each r-node.
+  externalTrafficPolicy: Local
   ports:
     - port: 9090
-      targetPort: 9090
+      targetPort: read-http
       nodePort: 30090
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/name: prometheus
-    prometheus: prometheus-kube-prometheus-prometheus
+    app.kubernetes.io/name: prometheus-read-proxy

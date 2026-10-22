@@ -27,7 +27,10 @@ Current values worth knowing:
   (FreeBSD/OpenBSD hosts), garage, pushgateway, radicale-drop,
   kubernetes-services-no-radicale.
 - Storage: 10Gi PV selected by labels `type: local`, `app: prometheus`.
-- NodePort 30090 (`prometheus-nodeport`).
+- NodePort 30090 (`prometheus-nodeport`) selects a read-only nginx proxy
+  DaemonSet on r0/r1/r2. Only Gogios's frontend WireGuard sources and earth's
+  WireGuard source may connect. Direct Prometheus stays on ClusterIP;
+  its ingress policy allows the proxy and its own metric scrape.
 - Alertmanager routes: `component=argocd`, `component=nfs` (30m repeat),
   `component=trivy`; Watchdog to `null`. All receivers are UI-only (no
   mail/webhook).
@@ -38,7 +41,7 @@ Current values worth knowing:
 just status
 just alerts                  # port-forward Prometheus to :9090
 just alertmanager            # port-forward Alertmanager to :9093
-just firing-alerts [node]    # via NodePort 30090, default node r0
+just firing-alerts [node]    # read proxy over WG; default r0.wg0.wan.buetow.org
 just firing-count [node]
 just all-alerts [node]
 just logs-prometheus
@@ -48,21 +51,31 @@ just restart-prometheus; just restart-alertmanager
 
 ## Backfilling (test data)
 
-Enabled on purpose for ad-hoc testing (e.g. Epimetheus): remote-write
-receiver (`/api/v1/write`), admin API, features `exemplar-storage` and
-`otlp-write-receiver`, `tsdb.outOfOrderTimeWindow: 744h` (31 days). Costs
-memory, extra compactions and slower queries; not a production setting.
+Epimetheus historic imports still use the remote-write receiver
+(`/api/v1/write`) and `tsdb.outOfOrderTimeWindow: 744h` (31 days).
+Keep `exemplar-storage`. The admin API and unused OTLP receiver are disabled.
+The proxy never forwards write/admin/lifecycle routes, even if an operator
+temporarily enables one in Prometheus. Use your RBAC-authorized Kubernetes
+context and a localhost-only port forward for imports:
 
 Clean up after tests:
 
 ```sh
 kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
-curl -X POST 'http://localhost:9090/api/v1/admin/tsdb/delete_series?match[]=metric_name'
-curl -X POST 'http://localhost:9090/api/v1/admin/tsdb/clean_tombstones'
+# In another terminal, point Epimetheus historic mode at:
+# http://127.0.0.1:9090/api/v1/write
 ```
 
-Epimetheus's `cleanup-benchmark-data.sh` deletes all
+Ad-hoc destructive cleanup requires separate approval and a temporary,
+reviewed `enableAdminAPI: true` change in the ArgoCD values (never another
+`additionalArgs` flag). Keep both policies and the proxy in place, use the
+localhost port forward, then revert to `false` and verify the disabled API
+after reconciliation. Do not run Epimetheus's `cleanup-benchmark-data.sh`
+against production without that approval: it deletes every
 `epimetheus_benchmark_*` series.
+
+See [exposure controls and deployment acceptance](exposure.md) for the client
+inventory, trusted-node limits, local checks, and staged rollout.
 
 The Grafana datasource debugging record is in
 [`docs/archive/f3s/prometheus/problem.md`](../../docs/archive/f3s/prometheus/problem.md).

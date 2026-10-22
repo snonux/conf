@@ -42,19 +42,15 @@ prometheus-node-exporter:
 
 prometheus:
   prometheusSpec:
-    # Enable remote write receiver for accepting historic data with custom timestamps
-    # Enable admin API for data deletion and management
-    # In Prometheus 3.x, use web flags instead of feature flags
-    additionalArgs:
-      - name: web.enable-remote-write-receiver
-        value: ""
-      - name: web.enable-admin-api
-        value: ""
+    # Match the authoritative ArgoCD values: approved historic imports use
+    # port-forward; admin and unused OTLP ingestion stay disabled.
+    enableRemoteWriteReceiver: true
+    enableAdminAPI: false
+    enableOTLPReceiver: false
     # Enable out-of-order ingestion to allow backfilling historic data
     # even when newer data already exists for the same time series
     enableFeatures:
       - exemplar-storage
-      - otlp-write-receiver
     # Set out-of-order time window to 31 days (provides 1-day buffer for 30-day backfills)
     additionalScrapeConfigs: []
     tsdb:

@@ -274,6 +274,8 @@ func renderGogios(server Server) string {
 	if server.Name == Master {
 		peer = MustServer(Standby)
 	}
+	// Port 30090 serves the read proxy, permitting these frontends and earth's
+	// WireGuard clients. Gogios uses GET /api/v1/alerts.
 	config := gogiosConfig{
 		EmailTo:                   "paul",
 		EmailFrom:                 "gogios@mx.buetow.org",

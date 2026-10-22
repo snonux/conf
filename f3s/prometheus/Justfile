@@ -1,5 +1,6 @@
 NAMESPACE := "monitoring"
 APP_NAME := "prometheus"
+set shell := ["bash", "-euo", "pipefail", "-c"]
 
 status:
     @echo "=== Prometheus Pods ==="
@@ -89,14 +90,14 @@ restart-alertmanager:
 
 restart: restart-grafana
 
-# Query firing alerts via NodePort (default node: r0)
-firing-alerts node="r0":
-    @curl -s "http://{{node}}:30090/api/v1/alerts" | jq -r '.data.alerts[] | select(.state=="firing") | "\(.labels.alertname) [\(.labels.severity // "unknown")]: \(.annotations.summary // .annotations.description // "no description")"'
+# Query the read proxy over WG (allowed laptop source: earth 192.168.2.200).
+firing-alerts node="r0.wg0.wan.buetow.org":
+    @curl --fail --show-error --silent --max-time 15 "http://{{node}}:30090/api/v1/alerts" | jq -r '.data.alerts[] | select(.state=="firing") | "\(.labels.alertname) [\(.labels.severity // "unknown")]: \(.annotations.summary // .annotations.description // "no description")"'
 
-# Query all alerts (firing and pending) via NodePort
-all-alerts node="r0":
-    @curl -s "http://{{node}}:30090/api/v1/alerts" | jq '.data.alerts'
+# Query all alerts (firing and pending) via the read proxy.
+all-alerts node="r0.wg0.wan.buetow.org":
+    @curl --fail --show-error --silent --max-time 15 "http://{{node}}:30090/api/v1/alerts" | jq '.data.alerts'
 
 # Count of firing alerts
-firing-count node="r0":
-    @curl -s "http://{{node}}:30090/api/v1/alerts" | jq '[.data.alerts[] | select(.state=="firing")] | length'
+firing-count node="r0.wg0.wan.buetow.org":
+    @curl --fail --show-error --silent --max-time 15 "http://{{node}}:30090/api/v1/alerts" | jq '[.data.alerts[] | select(.state=="firing")] | length'

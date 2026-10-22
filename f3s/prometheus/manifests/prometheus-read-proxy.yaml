@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-read-proxy
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  nginx.conf: |
+    worker_processes 1;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr warn;
+    events { worker_connections 128; }
+    http {
+      # Queries can contain private label values; do not log request URLs.
+      access_log off;
+      server_tokens off;
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path /tmp/proxy_temp;
+      fastcgi_temp_path /tmp/fastcgi_temp;
+      uwsgi_temp_path /tmp/uwsgi_temp;
+      scgi_temp_path /tmp/scgi_temp;
+      proxy_connect_timeout 3s;
+      proxy_read_timeout 30s;
+      server {
+        listen 8080;
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        # Explicit read API allowlist. No UI assets, config/flags, admin,
+        # lifecycle, remote-write or OTLP routes are forwarded.
+        location ~ ^/api/v1/(alerts|query|query_range|query_exemplars|series|labels|label/[^/]+/values|metadata|rules|targets|targets/metadata)$ {
+          proxy_pass http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090;
+        }
+        location ~ ^/-/(healthy|ready)$ {
+          proxy_pass http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090;
+        }
+        location / { return 404; }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: prometheus-read-proxy
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-read-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus-read-proxy
+    spec:
+      automountServiceAccountToken: false
+      # Each r-node must have an endpoint for externalTrafficPolicy: Local.
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+        kubernetes.io/os: linux
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: read-proxy
+          image: docker.io/library/nginx:1.30.6-alpine@sha256:c59d1f8b1e0e42da75be973424cd72e23f7f8adfb54e982f4d1cd0216a5a5576
+          # Skip image entrypoint scripts: the whole config is mounted read-only.
+          command: [nginx]
+          args: [-g, "daemon off;"]
+          ports:
+            - name: read-http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: read-http
+          # Readiness checks the upstream; liveness must not restart nginx
+          # during a Prometheus outage or WAL replay.
+          livenessProbe:
+            tcpSocket:
+              port: read-http
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-read-proxy
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
