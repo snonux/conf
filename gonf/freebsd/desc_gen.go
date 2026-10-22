@@ -32,6 +32,10 @@ func (F3sctl) DescSSHD() string {
 	return "Installs sshd_config (stock + Match User f3sctl block), validated with sshd -t; reloads sshd on change"
 }
 
+func (Firewall) DescConfig() string {
+	return "Installs and activates validated default-deny inbound PF on f0-f3"
+}
+
 func (Goprecords) DescUpload() string {
 	return "Installs the goprecords upload client, token and hourly root cron (output to syslog)"
 }

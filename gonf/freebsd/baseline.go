@@ -18,7 +18,7 @@ import (
 //   - NFS, zfskeys, zrepl, node_exporter, uptimed, apcupsd *_enable and
 //     flags: NFS, ZfsKeys, Zrepl, Monitoring, Base and Apcupsd.
 //   - vm_*: Bhyve.RcConf.
-//   - pf_enable, pflog_enable, relayd_enable: Relayd.
+//   - pf_enable, pf_rules, pflog_enable: Firewall; relayd_enable: Relayd.
 //   - wireguard_*, garage, dserver, shellyfans: hand-set role keys, out of
 //     this task's scope.
 //

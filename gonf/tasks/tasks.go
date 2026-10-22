@@ -63,7 +63,7 @@ func Register() {
 	// Carp, NFS and Relayd serve the CARP pair: their f0/f1-only tasks
 	// narrow further with WhenHostnameIn companions.
 	RegisterOnCluster(cluster.NameFreeBSD,
-		freebsd.Carp{}, freebsd.NFS{}, freebsd.Relayd{},
+		freebsd.Carp{}, freebsd.NFS{}, freebsd.Relayd{}, freebsd.Firewall{},
 		freebsd.Periodic{}, freebsd.Zrepl{}, freebsd.Zusb{}, freebsd.Apcupsd{},
 		freebsd.Bhyve{}, freebsd.Debug{}, freebsd.Microcode{}, freebsd.Loader{},
 		freebsd.Base{}, freebsd.Baseline{}, freebsd.Goprecords{},
