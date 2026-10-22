@@ -19,6 +19,7 @@ from the vault; everything else comes from files below this directory.
 | `paths.PiSecret("goprecords/<host>.token")` (`goprecords.PiToken`), pi0-pi3 | (none yet) | `gonf/secrets/pis/goprecords/<host>.token` |
 | `paths.FHostSecret("carp/vhid1.pass")` (`freebsd.CarpPassSecret`), f0/f1 | `Infra/carp-vhid1-pass` | none (imported from the hosts' `ifconfig_re0_alias0` in `/etc/rc.conf`, task gk2; rotated 2026-09-25, task 1l2) |
 | `paths.FrontendSecret("etc/rsync/shuriken.password")` | `Infra/rsync-shuriken` | none; task 9n3 preparation, provision only during an approved rollout |
+| `paths.FrontendSecret("etc/foostats/ip-hmac.key")` | `Infra/foostats-ip-hmac` | none; task an3 preparation, provision only during an approved rollout |
 
 A frontend added later has no vault row and reads the file. Migrating another
 secret is one more table row; recipes keep the same logical path.
@@ -30,6 +31,13 @@ the same value into Kubernetes Secret `services/shuriken-rsync-auth`, key
 `/etc/rsyncd.secrets` on each frontend. No production rsync credential was
 created as part of the local preparation. See
 [the coordinated rollout](../../frontends/docs/rsync-security.md).
+
+Foostats needs the same random hex key on both frontends (at least 64 hex
+characters). Gonf writes only root-private `/etc/foostats/ip-hmac.key`; the
+key is outside `/var/db/foostats`, the peer-only counter export. The canonical
+Foostats checkout must support the private format; the old in-repo script is
+no longer a deployment fallback. Neither this key nor its production entry
+has been created during local preparation.
 
 ## Fallback rules
 

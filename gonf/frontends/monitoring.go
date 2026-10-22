@@ -3,7 +3,6 @@ package frontends
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -164,16 +163,37 @@ pkg_info -e "gogios-*" >/dev/null 2>&1 || rm -f -- "$path"`),
 		WithName("cleanup-unpackaged-gogios"))
 }
 
-// Foostats installs Foostats reporting, dependencies, daily hook, and logs
-// rotation.
+func (Monitoring) OptsFoostats() TaskOptions {
+	return TaskOptions{Needs(Maintenance.Rsync)}
+}
+
+// Foostats installs private visitor counters, shared keyed pseudonyms, and aggregate reporting.
 func (Monitoring) Foostats() {
-	deps := Packages("p5-Digest-SHA3", "p5-PerlIO-gzip", "p5-JSON", "p5-String-Util", "p5-LWP-Protocol-https")
-	script := InstallFile("/usr/local/bin/foostats.pl", foostatsSource("foostats.pl"), Perm(0o500, Root), DependsOn(deps))
-	data := InstallFile("/var/www/htdocs/buetow.org/self/foostats/fooodds.txt", foostatsSource("fooodds.txt"), Perm(0o440, Root))
-	Dir("/var/www/htdocs/gemtexter/stats.foo.zone", RootOwned)
-	Dir("/var/gemini/stats.foo.zone", RootOwned)
-	File(dailyLocal, WithLine("perl /usr/local/bin/foostats.pl --parse-logs --replicate --report"), RootOwned, DependsOn(script, data))
-	InstallFile("/etc/newsyslog.conf", legacyFrontendAsset("etc/newsyslog.conf"), RootOwned)
+	source, odds := foostatsSource("foostats.pl"), foostatsSource("fooodds.txt")
+	if source == "" || odds == "" {
+		return
+	}
+	EachHost(func(server Server) { installFoostats(server, source, odds) })
+}
+
+func (Monitoring) OptsFoostatsPurgePublic() TaskOptions {
+	return TaskOptions{Needs(Monitoring.Foostats), Operational()}
+}
+
+// FoostatsPurgePublic removes obsolete public visitor archives after an approved migration.
+func (Monitoring) FoostatsPurgePublic() {
+	Command("perl", List("-MFile::Find", "-e", `
+my $root = "/var/www/htdocs/buetow.org/self/foostats";
+die "Refusing a symlink statistics root\n" if -l $root;
+exit 0 unless -d $root;
+find({no_chdir => 1, wanted => sub {
+    my $path = $File::Find::name;
+    my ($name) = $path =~ m{([^/]+)$};
+    return unless $name =~ /\A(?:web|gemini)_[0-9]{8}\.[A-Za-z0-9.-]+\.json\.gz(?:\.tmp)?\z/;
+    return unless -f $path || -l $path;
+    unlink $path or die "Cannot remove an obsolete visitor archive\n";
+}}, $root);
+`), WithName("foostats-purge-public-archives"))
 }
 
 // shurikenAgePlugin is the Gogios album-age plugin in the controller's
@@ -187,21 +207,15 @@ func shurikenAgePlugin() string {
 		"clone shuriken.sh to ~/git/shuriken.sh or set GONF_SHURIKEN_ROOT to its checkout")
 }
 
-// foostatsSource returns the controller-local source of a Foostats file: the
-// controller's foostats checkout (paths.Foostats, ~/git/foostats by default)
-// when it has the file, otherwise the copy kept under frontends/scripts, as
-// Rex fell back to it. Unlike Rex, the in-repo copy is not refreshed from the
-// checkout.
+// foostatsSource requires the canonical Foostats checkout. The former
+// in-repo fallback predates private statistics and must never be deployed.
 func foostatsSource(name string) string {
-	if checkout := filepath.Join(paths.Foostats, name); isRegularFile(checkout) {
-		return checkout
+	path := RequireControllerFile(filepath.Join(paths.Foostats, name), "frontends_foostats",
+		"clone foostats or set GONF_FOOSTATS_ROOT to the reviewed private-statistics checkout")
+	if path != "" && name == "foostats.pl" && !foostatsPrivateSource(path) {
+		return ""
 	}
-	return legacyFrontendAsset(filepath.Join("scripts", name))
-}
-
-func isRegularFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
+	return path
 }
 
 // frontendAccount declares a frontend service account. WithManageHome keeps

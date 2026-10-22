@@ -49,7 +49,11 @@ func (Monitoring) DescDTail() string {
 }
 
 func (Monitoring) DescFoostats() string {
-	return "Installs Foostats reporting, dependencies, daily hook, and logs rotation"
+	return "Installs private visitor counters, shared keyed pseudonyms, and aggregate reporting"
+}
+
+func (Monitoring) DescFoostatsPurgePublic() string {
+	return "Removes obsolete public visitor archives after an approved migration"
 }
 
 func (Monitoring) DescGogios() string {

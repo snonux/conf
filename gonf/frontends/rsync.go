@@ -12,6 +12,7 @@ import (
 type rsyncConfigData struct {
 	Publishers []string
 	Readers    []string
+	StatsPeers []string
 }
 
 func installRsyncConfig() {
@@ -20,7 +21,7 @@ func installRsyncConfig() {
 		Refuse("File", "/etc/rsyncd.secrets", fmt.Errorf("rsync password must be a nonempty single line without surrounding whitespace"))
 		return
 	}
-	data := rsyncConfigData{Publishers: List("127.0.0.1", "::1"), Readers: List("127.0.0.1", "::1")}
+	data := rsyncConfigData{Publishers: List("127.0.0.1", "::1"), Readers: List("127.0.0.1", "::1"), StatsPeers: List("127.0.0.1", "::1")}
 	for _, host := range List("r0", "r1", "r2", "blowfish", "fishfinger") {
 		peer, err := wireGuardAddressFor(host)
 		if err != nil {
@@ -30,6 +31,9 @@ func installRsyncConfig() {
 		data.Publishers = append(data.Publishers, peer.IPv4, peer.IPv6)
 		if host == "fishfinger" {
 			data.Readers = append(data.Readers, peer.IPv4, peer.IPv6)
+		}
+		if host == "blowfish" || host == "fishfinger" {
+			data.StatsPeers = append(data.StatsPeers, peer.IPv4, peer.IPv6)
 		}
 	}
 	config, err := renderControllerTemplate(frontendAsset("rsyncd.conf.tmpl"), data)

@@ -1,4 +1,6 @@
 #!/usr/bin/perl
+# Historical copy only. frontends_foostats now requires the canonical
+# foostats checkout with private HMAC statistics; this copy is not deployed.
 
 use v5.38;
 

@@ -24,6 +24,15 @@ auth users = shuriken
 secrets file = /etc/rsyncd.secrets
 strict modes = yes
 
+[foostats-private]
+comment = Private Foostats visitor counters for WireGuard peers
+path = /var/db/foostats
+read only = yes
+list = no
+uid = www
+gid = www
+hosts allow = {{ range .StatsPeers }}{{ . }} {{ end }}
+
 [alt-irregular-ninja]
 comment = Alternative Irregular Ninja photo album (push from k3s over wg0)
 path = /var/www/htdocs/alt.irregular.ninja

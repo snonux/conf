@@ -60,6 +60,7 @@ func setSecretProvider() error {
 		secret.Ref(freebsd.GoprecordsToken("f3")):                       foostore.Field("Infra/goprecords-token-f3", "Password"),
 		secret.Ref(freebsd.CarpPassSecret()):                            foostore.Field("Infra/carp-vhid1-pass", "Password"),
 		secret.Ref(paths.FrontendSecret("etc/rsync/shuriken.password")): foostore.Field("Infra/rsync-shuriken", "Password"),
+		secret.Ref(paths.FrontendSecret("etc/foostats/ip-hmac.key")):    foostore.Field("Infra/foostats-ip-hmac", "Password"),
 	})
 	if err != nil {
 		return err
