@@ -108,7 +108,9 @@ undo the privacy fix and needs a separate explicit decision.
 
 ## Local checks and limits
 
-Read-only native preflight found `Digest::HMAC` missing on blowfish. The
+Read-only native preflight found `Digest::HMAC` missing on both frontends.
+The new private directory and key file are absent on both; their existing
+public archive counts were 2,728 on blowfish and 2,883 on fishfinger. The
 OpenBSD 7.9 amd64 repository lists `p5-Digest-HMAC-1.05.tgz`; the scoped
 recipe declares that dependency. No production package was installed during
 preparation, and the new Perl source was not executed on a frontend.
