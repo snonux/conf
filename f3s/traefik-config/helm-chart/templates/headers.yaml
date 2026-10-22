@@ -1,0 +1,25 @@
+# Traefik manages X-Forwarded-* and X-Real-IP according to the entrypoint's
+# trustedIPs. RFC Forwarded is not in that set: never pass a client value.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: forwarded-sanitize
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  headers:
+    customRequestHeaders:
+      Forwarded: ""
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: https-headers
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  headers:
+    # Applies only to websecure TLS. No includeSubDomains or preload.
+    stsSeconds: 31536000

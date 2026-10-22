@@ -10,9 +10,25 @@ spec:
       repository: docker.io/library/traefik
       tag: "3.7.15"
 
+    # The public WG destinations are ServiceLB IPs, handled by kube-proxy
+    # before CNI hostPort DNAT. Local avoids the observed CNI/node SNAT.
+    # relayd TCP health checks select only nodes with a local ready endpoint.
+    service:
+      spec:
+        externalTrafficPolicy: Local
+
     additionalArguments:
-      - "--entryPoints.web.forwardedHeaders.trustedIPs=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
-      - "--entryPoints.websecure.forwardedHeaders.trustedIPs=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
+      # Only the TLS-terminating OpenBSD frontends generate trusted headers.
+      # LAN f0/f1 relay TCP unchanged: trust no HTTP headers on websecure.
+      # Drop separator aliases before trusted-header handling; CGI-style
+      # backends can normalize X_Real_IP/X.Real.Ip to the canonical name.
+      - "--entryPoints.web.http.aliasHeadersStrategy=delete"
+      - "--entryPoints.websecure.http.aliasHeadersStrategy=delete"
+      - "--entryPoints.web.forwardedHeaders.trustedIPs=192.168.2.110/32,192.168.2.111/32"
+      - "--entryPoints.web.http.middlewares=kube-system-forwarded-sanitize@kubernetescrd"
+      - "--entryPoints.websecure.http.middlewares=kube-system-forwarded-sanitize@kubernetescrd,kube-system-https-headers@kubernetescrd"
+      # No relay emits PROXY protocol. Leave its parser disabled on both
+      # entrypoints; enabling trustedIPs would create an unused trust path.
 
     # Expose Traefik's own Prometheus metrics and let kube-prometheus-stack
     # scrape them. Without this there are no traefik_* series at all, so

@@ -38,7 +38,7 @@ metadata:
   name: pihole-ingress-lan
   namespace: services
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.middlewares: services-pihole-redirect-admin@kubernetescrd
 spec:
   ingressClassName: traefik

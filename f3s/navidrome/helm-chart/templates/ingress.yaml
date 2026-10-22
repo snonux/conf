@@ -26,7 +26,7 @@ metadata:
   name: navidrome-ingress-lan
   namespace: services
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   ingressClassName: traefik
   tls:
