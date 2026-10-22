@@ -204,7 +204,7 @@ Application. Each namespace is manually synced and checked before the next appro
    after capturing drop/reject counters; do not alter existing workloads.
 5. Verify every approved positive path: both public and LAN web routes with real
    login/read workflows; owning app DB reads/health and Immich ML; Argo git fetch/
-   refresh, Redis and UI in cicd; registry's existing authenticated clients;
+   refresh, Redis and UI in cicd; registry's existing clients;
    Anki/Forgejo/Bridge users and Gogios NodePorts; DNS TCP/UDP, cert-manager
    webhook/issuance and metrics API when their stages are reached. Do not create
    a production certificate, write mail, push image/data, or force a CronJob just
