@@ -40,6 +40,10 @@ func (Microcode) DescPackage() string {
 	return "Installs cpu-microcode-intel (/boot/firmware/intel-ucode.bin for early loading)"
 }
 
+func (Monitoring) DescKernelRebootMetrics() string {
+	return "Installs a read-only pending-kernel check and five-minute cron"
+}
+
 func (Monitoring) DescPackage() string { return "Installs node_exporter" }
 
 func (NFS) DescStunnelPackage() string { return "Installs stunnel on f0/f1" }

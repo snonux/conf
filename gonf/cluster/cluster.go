@@ -26,14 +26,15 @@ import (
 //	NameRockyPis     → rocky_kernel_audit / rocky_kernel_audit_* (also in rocky)
 //	NameFreeBSD      → freebsd / freebsd_*
 const (
-	NameFrontends = "frontends"
-	NameNetBSDPis = "netbsd-pis"
-	NameRockyPis  = "rocky-pis"
-	NamePis       = "pis"
-	NameRockyK3s  = "rocky-k3s"
-	NameRockyAll  = "rocky-all"
-	NameFreeBSD   = "freebsd-hosts"
-	NameGarage    = "garage"
+	NameFrontends  = "frontends"
+	NameNetBSDPis  = "netbsd-pis"
+	NameRockyPis   = "rocky-pis"
+	NamePis        = "pis"
+	NameRockyK3s   = "rocky-k3s"
+	NameRockyAll   = "rocky-all"
+	NameRockyDtail = "rocky-dtail"
+	NameFreeBSD    = "freebsd-hosts"
+	NameGarage     = "garage"
 )
 
 // Per-host recipe data is attached with WithData, one small struct type per
@@ -44,7 +45,7 @@ const (
 // targets only one host.
 
 // Register registers the OpenBSD frontend hosts, the four Raspberry Pis, the
-// Rocky k3s nodes (r0–r2), the FreeBSD hypervisors (f0–f3), and the clusters
+// Rocky k3s nodes (r0–r2), standalone rocky, the FreeBSD hypervisors (f0–f3), and the clusters
 // that group them. Privileged tasks apply via doas (OpenBSD / NetBSD /
 // FreeBSD) or sudo (Rocky).
 //
@@ -166,7 +167,8 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 // rocky-all clusters. Each r-node carries its wg0 address as rnodes.K3sNode
 // (k3s node-ip and advertise-address, rnodes_k3s_config). pi2 and pi3 (from
 // registerPis) fold into rocky-all, which is every Rocky unattended host
-// (Pis + k3s).
+// (Pis + k3s + the standalone VM). Dtail remains limited to its existing
+// Pis/k3s role; adding unattended coverage must not add a server to rocky.
 func registerRockyK3s(pi2, pi3 HostRef) {
 	rnode := HostDefaults(lan("root"),
 		WithPrivilege(PrivilegeSudo),
@@ -184,10 +186,14 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
 	)
-	// rocky-k3s = r0/r1/r2 only. rocky-all = every Rocky unattended host
-	// (Pis + k3s). Prefer OS-pair / role clusters for deploys.
+	// Root access is documented for the standalone VM; validate sudo and
+	// bootstrap gonf when it becomes reachable before approving a deploy.
+	standalone := Host("rocky", rnode,
+		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:55:00"}),
+	)
 	Cluster(NameRockyK3s, r0, r1, r2).Parallel(3)
-	Cluster(NameRockyAll, pi2, pi3, r0, r1, r2)
+	Cluster(NameRockyDtail, pi2, pi3, r0, r1, r2)
+	Cluster(NameRockyAll, pi2, pi3, r0, r1, r2, standalone)
 }
 
 // registerFreeBSD registers the FreeBSD hypervisor hosts (f0–f3) and their

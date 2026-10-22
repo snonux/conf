@@ -1,0 +1,72 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: upgrade-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  groups:
+    - name: upgrade-maintenance
+      rules:
+        - alert: K3sPatchUpdateAvailable
+          expr: max by (node) (f3s_k3s_update_available{job="node-exporter",namespace="monitoring",service="prometheus-prometheus-node-exporter"} == 1)
+          for: 1h
+          labels:
+            severity: warning
+            component: maintenance
+          annotations:
+            summary: "A k3s patch needs review on {{ $labels.node }}"
+            description: "Review the current minor channel and schedule an approved serial upgrade; this check never upgrades k3s."
+        - alert: K3sMinorUpdateAvailable
+          expr: max by (node) (f3s_k3s_minor_update_available{job="node-exporter",namespace="monitoring",service="prometheus-prometheus-node-exporter"} == 1)
+          for: 1h
+          labels:
+            severity: warning
+            component: maintenance
+          annotations:
+            summary: "A newer stable k3s minor needs review on {{ $labels.node }}"
+            description: "Review release notes and version skew; never skip intermediate minors or restart multiple servers together."
+        - alert: K3sVersionCheckCoverage
+          expr: |
+            max by (node) (kube_node_info{node=~"r[012][.]lan[.]buetow[.]org"})
+              unless on (node)
+            max by (node) (
+              (f3s_k3s_check_success{job="node-exporter",namespace="monitoring",service="prometheus-prometheus-node-exporter"} == 1)
+                and (time() - f3s_k3s_check_timestamp_seconds < 7200)
+                and (time() - f3s_k3s_check_timestamp_seconds >= -300)
+            )
+          for: 30m
+          labels:
+            severity: warning
+            component: maintenance
+          annotations:
+            summary: "The k3s release check is missing, failed or stale on {{ $labels.node }}"
+            description: "Inspect the hourly check, HTTPS channel reachability and node-exporter textfile collector."
+        - alert: FreebsdKernelRebootPending
+          expr: node_freebsd_kernel_reboot_pending{job="node-exporter",os="freebsd"} == 1
+          for: 15m
+          labels:
+            severity: warning
+            component: maintenance
+          annotations:
+            summary: "A newer installed kernel is not running on {{ $labels.instance }}"
+            description: "Schedule approved guest-aware maintenance; f3 and standalone rocky require explicit approval and must not auto-reboot."
+        - alert: FreebsdKernelCheckCoverage
+          expr: |
+            (up{job="node-exporter",os="freebsd"} == 1)
+              unless on (instance, job)
+            (
+              (node_freebsd_kernel_check_success{job="node-exporter",os="freebsd"} == 1)
+                and (time() - node_freebsd_kernel_check_timestamp_seconds < 900)
+                and (time() - node_freebsd_kernel_check_timestamp_seconds >= -300)
+            )
+          for: 15m
+          labels:
+            severity: warning
+            component: maintenance
+          annotations:
+            summary: "The kernel check is missing, failed or stale on {{ $labels.instance }}"
+            description: "Inspect the five-minute cron and freebsd-version output; a down exporter is covered separately."

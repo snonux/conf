@@ -107,16 +107,18 @@ new findings logged as warnings against a baseline) / UNKNOWN (coverage
 broken, exit 3). Lines go to the shared log (tag `vuln-audit:`) and syslog.
 Re-baseline: delete `findings` in the state dir.
 
-## Rocky pi2/pi3 and r0/r1/r2
+## Rocky pi2/pi3, r0/r1/r2 and standalone rocky
 
 systemd `unattended-upgrade-rocky.timer`: `OnBootSec=10min`, hourly
-`OnCalendar` at pi2 `:05`, pi3 `:35`, r0 `:05`, r1 `:25`, r2 `:45`,
+`OnCalendar` at pi2 `:05`, pi3 `:35`, r0 `:05`, r1 `:25`, r2 `:45`, rocky `:55`,
 `Persistent=true`. The oneshot service runs `daily`:
 
 1. Stamp `/var/lib/unattended-upgrade/last-daily` is today: skip to the
    reboot check.
 2. Partner gate (ping): pi2 needs pi3 (192.168.1.128), pi3 needs pi2
    (.127), each r-node needs both others. Miss: no stamp, retry next hour.
+   Standalone rocky has no redundant partner and explicitly bypasses this
+   package-update gate; it never automatically reboots.
 3. Pis only: wait until the clock was NTP-synced this boot (no RTC); logs
    `WARNING: unattended-upgrade skipped: clock not NTP-synchronised` once.
 4. `dnf -y upgrade` (`--disablerepo=f3s-dtail` when the repo is down),
@@ -131,6 +133,12 @@ systemd `unattended-upgrade-rocky.timer`: `OnBootSec=10min`, hourly
 
 Logs: journal and the log file. Test harness:
 `frontends/scripts/tests/unattended-upgrade-rocky.ksh`.
+
+The standalone inventory/timer coverage and read-only k3s/kernel monitoring
+are prepared in **jn3**, pending review and approved deployment; they are not
+live merely because these instructions exist. See the
+[upgrade maintenance policy](../../f3s/docs/upgrade-maintenance.md) for the
+manual k3s cadence, f3 approval-only reboot policy and acceptance gates.
 
 `rocky-kernel-audit` (pi2/pi3 only, timer 06:15 / 06:45;
 `rocky_kernel_audit`): the SIG AltArch kernel has no Rocky errata, so the

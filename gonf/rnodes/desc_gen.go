@@ -30,6 +30,10 @@ func (K3s) DescRegistries() string {
 	return "Installs /etc/rancher/k3s/registries.yaml (registry.lan.buetow.org:30001 -> http://localhost:30001); no k3s restart"
 }
 
+func (K3s) DescVersionMonitor() string {
+	return "Installs an hourly read-only release-channel check and textfile metrics"
+}
+
 func (Maintenance) DescImageGC() string {
 	return "Installs the k3s kubelet image-GC drop-in (collect at 70% disk, down to 60%)"
 }

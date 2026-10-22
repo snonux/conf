@@ -96,3 +96,17 @@ func (Monitoring) ZFSMetrics() {
 		RootExec)
 	CronAt("zfs-pool-metrics", "* * * * *", zfsMetricsCommand, DependsOn(script))
 }
+
+// OptsKernelRebootMetrics records the textfile collector before kernel monitoring.
+func (Monitoring) OptsKernelRebootMetrics() TaskOptions {
+	return TaskOptions{Needs(Monitoring.NodeExporter)}
+}
+
+// KernelRebootMetrics installs a read-only pending-kernel check and five-minute cron.
+func (Monitoring) KernelRebootMetrics() {
+	EnsureDir("/usr/local/bin", RootOwned)
+	script := InstallFile("/usr/local/bin/kernel-reboot-metrics.sh",
+		paths.FHostAsset("node-exporter/kernel-reboot-metrics.sh"), RootExec)
+	CronAt("kernel-reboot-metrics", "*/5 * * * *",
+		"/usr/local/bin/kernel-reboot-metrics.sh", DependsOn(script))
+}

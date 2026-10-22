@@ -42,10 +42,11 @@ type K3sNode struct {
 }
 
 const (
-	k3sConfigDir  = "/etc/rancher/k3s"
-	k3sConfig     = k3sConfigDir + "/config.yaml"
-	k3sRegistries = k3sConfigDir + "/registries.yaml"
-	k3sAssetsPath = "k3s/"
+	k3sConfigDir    = "/etc/rancher/k3s"
+	k3sConfig       = k3sConfigDir + "/config.yaml"
+	k3sRegistries   = k3sConfigDir + "/registries.yaml"
+	k3sAssetsPath   = "k3s/"
+	k3sVersionCheck = "/usr/bin/timeout -k 5s 30s /usr/local/sbin/k3s-version-metrics"
 )
 
 // Config renders /etc/rancher/k3s/config.yaml (etcd metrics, event-ttl,
@@ -79,4 +80,17 @@ func (K3s) Registries() {
 	EnsureDir(k3sConfigDir, RootOwned)
 	InstallFile(k3sRegistries, paths.RNodeAsset(k3sAssetsPath+"registries.yaml"),
 		RootOwned)
+}
+
+// VersionMonitor installs an hourly read-only release-channel check and textfile metrics.
+func (K3s) VersionMonitor() {
+	python := Package("python3")
+	EnsureDir("/usr/local/sbin", RootOwned)
+	EnsureDir("/var/lib/node_exporter", RootOwned)
+	EnsureDir("/var/lib/node_exporter/textfile_collector", RootOwned)
+	script := InstallFile("/usr/local/sbin/k3s-version-metrics",
+		paths.RNodeAsset(k3sAssetsPath+"k3s-version-metrics.py"), RootExec)
+	Sh(k3sVersionCheck, OnChange(script), DependsOn(python))
+	CronAt("k3s-version-metrics", "17 * * * *",
+		k3sVersionCheck, DependsOn(python, script))
 }

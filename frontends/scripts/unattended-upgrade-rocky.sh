@@ -1,7 +1,7 @@
 #!/bin/ksh
 #
 # unattended-upgrade-rocky — unattended package updates for Rocky hosts:
-# pi2/pi3 and the k3s nodes r0/r1/r2 (same on-demand pattern).
+# pi2/pi3, k3s nodes r0/r1/r2 and standalone rocky (no automatic reboot).
 #
 #   daily   once-per-day dnf upgrade (stamp-gated) + every-tick reboot check
 #
@@ -72,12 +72,15 @@ note() {
 
 # Partner IPs (pi2/pi3 do not resolve piN.lan.buetow.org). Gate requires
 # ALL listed partners pingable. r0/r1/r2 use both siblings (plan §12).
+# Standalone rocky has no redundancy partner: packages update independently,
+# while reboot_window_open always refuses an automatic reboot there.
 case $(hostname -s) in
 pi2) PARTNERS="192.168.1.128" ;;
 pi3) PARTNERS="192.168.1.127" ;;
 r0)  PARTNERS="192.168.1.121 192.168.1.122" ;;
 r1)  PARTNERS="192.168.1.120 192.168.1.122" ;;
 r2)  PARTNERS="192.168.1.120 192.168.1.121" ;;
+rocky) PARTNERS= ;;
 *)   PARTNERS= ;;
 esac
 
@@ -140,6 +143,10 @@ last=""
 # (date +%u % 3: Mon/Thu/Sun→r0, Tue/Fri→r1, Wed/Sat→r2).
 # Returns 0 when this tick may reboot.
 reboot_window_open() {
+	if [ "$(hostname -s)" = rocky ]; then
+		log "reboot deferred: standalone rocky requires explicit maintenance approval"
+		return 1
+	fi
 	if [ -f "$REBOOT_STAMP" ] && [ "$(cat "$REBOOT_STAMP")" = "$today" ]; then
 		return 1
 	fi
@@ -395,7 +402,7 @@ if ! clock_trusted; then
 	exit 0
 fi
 
-if ! partners_up; then
+if [ "$(hostname -s)" != rocky ] && ! partners_up; then
 	if [ -n "$PARTNERS" ]; then
 		log "skipped daily update: partner(s) not reachable (not stamped)"
 	else

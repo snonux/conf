@@ -37,6 +37,10 @@ Current values worth knowing:
 
 ## Operate
 
+Task **jn3** prepares [upgrade maintenance monitoring](../docs/upgrade-maintenance.md)
+for k3s release staleness and FreeBSD pending-kernel reboots. Its scripts,
+crons and alert rules await review and approved deployment.
+
 ```sh
 just status
 just alerts                  # port-forward Prometheus to :9090

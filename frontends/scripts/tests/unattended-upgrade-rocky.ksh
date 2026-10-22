@@ -478,4 +478,15 @@ grep -q '^-y upgrade' "$work/dnf.log" || fail "daily path: dnf did not run"
 [ "$(cat "$state/last-daily")" = "$(date +%F)" ] \
 	|| fail "daily path: daily stamp missing"
 
+# Standalone rocky updates packages but never automatically reboots, even
+# when a fresh core update would reboot an r-node in its allowed window.
+r_node_case fresh-day
+fake_host=rocky
+sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
+run_script || fail "standalone rocky: script failed"
+expect_no_reboot "standalone rocky"
+grep -q '^-y upgrade' "$work/dnf.log" || fail "standalone rocky: packages skipped"
+grep -q 'standalone rocky requires explicit maintenance approval' "$state/log" \
+	|| fail "standalone rocky: manual policy not logged"
+
 printf '%s\n' 'unattended-upgrade-rocky reboot tests passed'
