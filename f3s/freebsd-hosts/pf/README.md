@@ -5,7 +5,7 @@
 `relayd/pf.conf`, `freebsd_relayd_pf` and `freebsd_relayd_rc_conf` are retired.
 Relayd depends on the firewall task. The `freebsd` aggregate includes it.
 
-**Rollout in progress, 2026-10-22.** User approved the guarded f1/f0/f2 rollout
+**PF deployed to f0–f2, 2026-10-22.** User approved the guarded f1/f0/f2 rollout
 and CARP tests; f3 remains unapproved to wake/reboot and pending inspection.
  The rm3 safety annotation requires
 explicit user approval before **any live change**, including deployment,
@@ -167,6 +167,13 @@ necessary WG fallback use the explicit equivalent:
 
 Gonf validates before publishing the candidate, loads using `pfctl -f`, and
 only enables PF if disabled. It never flushes states or restarts PF/VMs/NFS.
+Reloading an already-enabled PF preserves its existing states. **First
+activation has no existing PF states**: established host TCP sessions may
+drop because the pass rules expect an initial SYN. The two pre-activation
+f2 SSH sessions did close during the observed rollout; fresh LAN and WG SSH
+worked immediately afterward. The independent rollback timer remains the
+recovery path if reconnection fails. Do not promise old-session survival
+when enabling PF for the first time.
 A root-owned `/var/db/gonf-pf.sha256` records the file's checksum only after
 a successful load, so a failed load is retried even if the file is already
 published. If any step fails, stop and investigate; use the guard to roll
@@ -321,7 +328,27 @@ it needs its own approval and must preserve the storage pair's availability.
   filesystem-wide `sync -f` returned EIO after takeover, potentially surfacing
   earlier workload writeback errors; existing application open handles need
   separate recovery assessment. Do not claim seamless NFS/application failover.
-- f2 rollout is paused for workload recovery assessment; f3 inspection and
-  deployment remain pending at this checkpoint.
+- Necessary test recovery restarted **only Forgejo** at 09:43:20 UTC to reopen
+  stale SQLite handles. Its replacement rolled out 1/1; `/explore/repos` and
+  `snonux/conf.git/info/refs?service=git-upload-pack` returned 200, LAN
+  `git ls-remote` succeeded, and fresh storage-error counts stayed zero.
+  `/api/healthz` alone had returned 200 while repository operations failed,
+  so it was not used as the recovery oracle. No other workload was restarted.
+- **f2** applied 09:44:53 UTC after that recovery, under its own dual-session
+  and timed-rollback guard. First activation loaded PF/pflog; reapply reported
+  `5 ok, 0 changed, 5 skipped`. New LAN/WG SSH, cross-host link-local TCP22,
+  all four public IPv6 rejections, increasing PF block counters, bridge0,
+  boot enables YES, NFS file fsync/direct reads across r0–r2, Ready nodes,
+  Garage health/frontend S3 and Miniflux VIP200 passed. The two original
+  pre-activation SSH sessions closed as noted above; no lockout occurred.
+  The guard was accepted. f2's WG zrepl TCP8888 listener is reachable;
+  actual f3→f2 replication remains unverified.
+- New WG handshakes after rollout were observed at 09:45:17 UTC on f0/f1
+  and 09:45:21 on f2; f0→f1 replication completed 09:45:14 with no plan error,
+  and the replicated canary age was 353 seconds. Unique test files were
+  removed after checks. f0 remains MASTER/skew0/auto-failback enabled and
+  f1 BACKUP; no further failover was attempted.
+- f3 inspection and deployment remain pending.
   f3→f2 replication is unverified while f3 is unreachable. No f3 wake/reboot
-  is authorized. The overall rm3 task remains incomplete.
+  is authorized. The overall rm3 task remains incomplete; follow-up **ao3**
+  tracks the failed NFS failover acceptance and recovery limitation.
