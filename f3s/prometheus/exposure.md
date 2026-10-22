@@ -1,8 +1,10 @@
 # Prometheus exposure controls (task 6n3)
 
-This change is prepared locally. Publishing/syncing it and running the live
-acceptance checks below require approval. Do not push the branch to the
-watched master branch: the Application automatically syncs and prunes.
+The reviewed runtime configuration was deployed with explicit approval on
+2026-10-22 from commit `5327733eee5249d57016491b96b4c4d4748d8910`.
+Only the two Prometheus commits were published; other prepared changes stayed
+unpublished. Live evidence is recorded below. Future publication, reconciliation
+and destructive maintenance still require approval.
 
 ## Consumers and chosen boundary
 
@@ -96,7 +98,7 @@ without its sentinel or request URI appearing in stdout/stderr; a separate
 invalid-startup test confirms startup diagnostics are still retained.
 Source-policy evaluation is an offline model, not a live enforcement test.
 
-## Approved deployment and live acceptance (pending)
+## Deployment and live acceptance procedure
 
 Schedule a Prometheus rollout: changing its receiver flags causes an Operator
 rollout/WAL replay. Do not combine it with NFS/CARP maintenance or restarts.
@@ -141,3 +143,66 @@ rollout/WAL replay. Do not combine it with NFS/CARP maintenance or restarts.
 If acceptance fails, stop and inspect before undoing isolation. For an
 availability workaround, operators can use the authenticated port forward;
 do not restore raw Prometheus NodePort exposure or re-enable admin globally.
+
+## 2026-10-22 rollout evidence
+
+- Published only `e907f31` and `5327733` by normal fast-forward from
+  `82664386c906a94d0a6ba1cd88dc650443384557` to GitHub and then Forgejo.
+  Forgejo's repository API reported `mirror: false`: it is a regular repo,
+  so publishing to GitHub alone did not advance Argo's watched source.
+  The exact same approved commit was then explicitly authorized for Forgejo;
+  no force push, unrelated commits or Argo source changes were used.
+- Applied only the approved Prometheus Application manifest and refreshed that
+  Application. Argo reached Synced/Healthy/Succeeded at chart 92.10.1 and
+  Git revision `5327733eee5249d57016491b96b4c4d4748d8910`. Its sync waited
+  for the read-proxy DaemonSet before switching the NodePort. All three proxy
+  pods and service endpoints were ready, with zero proxy restarts.
+- The live Prometheus resource retained a stale `otlp-write-receiver` feature
+  after initial reconciliation. A scoped JSON replacement aligned that list
+  with the reviewed `[exemplar-storage]` value. Final running arguments and
+  GET `/api/v1/status/flags` confirmed admin=false, OTLP=false,
+  remote-write=true and only exemplar-storage; no enabling additionalArgs.
+  Prometheus completed its approved rollout and was ready 2/2. Startup
+  detected out-of-sequence mmap chunks; Prometheus's own recovery discarded
+  the corrupt mmap files and replayed WAL. No manual TSDB deletion or storage
+  maintenance was performed.
+- Both frontends successfully queried alerts and a real PromQL `up` query
+  through every r-node's WG NodePort. Earth did the same from the approved
+  `192.168.2.200` source, with firing Watchdog observed on every node.
+  Its existing full-tunnel wg0 profile stayed down: an explicitly approved
+  runtime-only, root-private fixture reused its identity with routes restricted
+  to `192.168.2.0/24`. All three Justfile alert commands passed. The fixture
+  interface, routes and secret-bearing temporary files were removed; persisted
+  config bytes and the existing default route were unchanged.
+- Only after the disabled flags were verified, proxy GET admin/write/OTLP/
+  reload routes returned 404 and POST returned 405 on all three nodes.
+  A direct localhost port-forward admin probe returned HTTP 500 with
+  `admin APIs disabled`. No remote-write/OTLP payload was sent to Prometheus,
+  no data series were injected/deleted, and no cleanup ran. The authenticated
+  direct port-forward remained available for historic imports.
+- Three ordinary, non-hostNetwork probe pods, one on each r-node, each failed
+  all eight access attempts: direct Prometheus Service and Pod, all three
+  proxy Pod IPs, and all three NodePorts. Destination REJECT counters increased
+  on proxy pods by r0=9/r1=6/r2=8 and on the raw Prometheus pod by 8. Counters
+  were captured before deleting the probes because policy chains are rebuilt
+  as pod membership changes. All probe pods were deleted afterward.
+- Earth LAN source `192.168.1.6` and f0 WG source `192.168.2.130` each failed
+  access to all three NodePorts. The proxy REJECT counter rose by exactly two
+  on every r-node across these six requests. A pi0 source attempt was excluded
+  from evidence because its route to r-node WG addresses used its LAN gateway.
+- Post-rollout target health matched the pre-rollout baseline: 42/43 up;
+  only the existing `192.168.2.133:9100` f3 exporter was down. The r0/r1/r2
+  NFS-mount-monitor failure metrics were present and all zero. Watchdog stayed
+  firing; 41 rule groups / 270 rules were all healthy. The only changed target
+  identities were the restarted Prometheus pod's own 8080/9090 endpoints.
+  `GoprecordsFleetUploadStale` returned to pending after the restart while its
+  `for` window accumulated again; the rule was retained and healthy. Existing
+  TargetDown and KubeJobFailed alerts remained firing. No NFS/CARP operation,
+  unrelated host restart, SSH authentication
+  change, recovery boot or frontend recipe deployment occurred.
+- Normal active Gogios cycles completed at 11:21:59 and 11:26:54 UTC, with
+  Prometheus alerts and Watchdog both OK (check epochs `1792668119` and
+  `1792668414`). The passive frontend's reports at 11:25:11 and 11:30:10 UTC
+  copied those respective check epochs with both checks OK. Neither cycle
+  was forced. This completed live acceptance on both frontends; the temporary
+  localhost port-forward was then closed.
