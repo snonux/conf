@@ -186,10 +186,14 @@ func (Monitoring) FoostatsPurgePublic() {
 my $root = "/var/www/htdocs/buetow.org/self/foostats";
 die "Refusing a symlink statistics root\n" if -l $root;
 exit 0 unless -d $root;
+# Sys::Hostname values included historical underscore labels. Older copies
+# also put the source hostname before the protocol/date rather than after it.
+my $host = qr/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*/;
+my $day = qr/(?:web|gemini)_[0-9]{8}/;
 find({no_chdir => 1, wanted => sub {
     my $path = $File::Find::name;
     my ($name) = $path =~ m{([^/]+)$};
-    return unless $name =~ /\A(?:web|gemini)_[0-9]{8}\.[A-Za-z0-9.-]+\.json\.gz(?:\.tmp)?\z/;
+    return unless $name =~ /\A(?:$day\.$host|$host\.$day)\.json\.gz(?:\.tmp)?\z/;
     return unless -f $path || -l $path;
     unlink $path or die "Cannot remove an obsolete visitor archive\n";
 }}, $root);

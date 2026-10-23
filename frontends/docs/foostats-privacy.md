@@ -58,11 +58,23 @@ the live acceptance; do not claim unavailable history was reconstructed.
 
 Read-only inspection of blowfish on 2026-10-22 found 2,728 raw gzip archive
 names, 46 aggregate `.gmi` files and two filter-configuration text files in
-the old public tree. Therefore cleanup does **not** remove the whole tree.
+the old public tree. A refreshed inspection of fishfinger on 2026-10-23
+found 2,887 gzip archives: 2,732 matching the initial protocol/date/hostname
+pattern, 93 with underscore hostname labels (18 Gemini and 75 web), and
+62 with the older hostname prefix (31 each Gemini and web). All four missed
+groups have the legacy `count`/`feed_ips`/`page_ips` source schema; dictionary
+shape checks confirm visitor-hash sets without recording their values.
+The historical source hashes IPs with unsalted SHA3-512 and places those
+hashes in the feed/page dictionaries. Empty dictionaries in some archives
+do not change their classification as legacy visitor data.
+Therefore cleanup does **not** remove the whole tree.
 The by-name Operational task `frontends_foostats_purge_public` depends on
 the new Foostats configuration and unlinks only regular files/symlinks named
-`web_YYYYMMDD.<host>.json.gz` or `gemini_YYYYMMDD.<host>.json.gz`, including
-their `.tmp` leftovers. It does not follow directory symlinks and refuses
+`<protocol>_YYYYMMDD.<host>.json.gz` or
+`<host>.<protocol>_YYYYMMDD.json.gz`, including their `.tmp` leftovers.
+Protocol is exactly `web` or `gemini`; hostname labels contain letters,
+digits, underscores or hyphens, separated by single dots. No broad gzip
+wildcard is used. It does not follow directory symlinks and refuses
 a symlink root. Other files and aggregate reports survive. Refresh the
 inventory on both hosts before approval; unexpected per-visitor files need
 explicit inspection and a reviewed cleanup update.
@@ -110,7 +122,9 @@ undo the privacy fix and needs a separate explicit decision.
 
 Read-only native preflight found `Digest::HMAC` missing on both frontends.
 The new private directory and key file are absent on both; their existing
-public archive counts were 2,728 on blowfish and 2,883 on fishfinger. The
+public archive counts on 2026-10-22 were 2,728 on blowfish and 2,883 on
+fishfinger; the refreshed fishfinger count above supersedes its earlier
+count and identifies historical filename forms that must also be purged. The
 OpenBSD 7.9 amd64 repository lists `p5-Digest-HMAC-1.05.tgz`; the scoped
 recipe declares that dependency. No production package was installed during
 preparation, and the new Perl source was not executed on a frontend.
@@ -136,7 +150,11 @@ generated public artifacts. They also protect old aggregate pages when raw
 history is absent. The conf driver records real recipes using dummy secrets,
 checks private paths/owners/peer scope, rejects a stale source, and executes
 the actual purge command only after replacing its fixed production root with
-a temporary fixture. Symlink/outside-file/aggregate preservation is tested.
+a temporary fixture. Both historical filename forms and `.tmp` leftovers
+are covered. Near misses, unrelated gzip files, aggregate pages, matching
+directories and symlink targets outside the public tree are preserved.
+The old purge failed all twelve added regular-file fixtures and the added
+hostname-prefix symlink; the corrected command passes the same checks.
 No `*_test.go` is added to conf. These checks do not prove native OpenBSD
 permissions, real WG source identity, production deletion or live report
 acceptance; those remain gates after approval.

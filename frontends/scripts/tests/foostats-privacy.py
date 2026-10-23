@@ -118,21 +118,60 @@ class PrivacyPlan(unittest.TestCase):
         raw.write_text("private fixture")
         partial = public / "gemini_20261020.peer.example.json.gz.tmp"
         partial.write_text("partial private fixture")
+        historical = []
+        for proto in ("web", "gemini"):
+            for suffix in ("", ".tmp"):
+                for name in (f"{proto}_20261020.old_peer.example.json.gz{suffix}",
+                             f"peer.{proto}_20261020.json.gz{suffix}",
+                             f"old_peer.example.{proto}_20261020.json.gz{suffix}"):
+                    path = public / name
+                    path.write_text("legacy private fixture")
+                    historical.append(path)
         link = public / "web_20261021.peer.example.json.gz"
         link.symlink_to(outside)
+        historical_link = public / "peer.gemini_20261021.json.gz"
+        historical_link.symlink_to(outside)
+        outside_dir = self.root / "outside-dir"
+        outside_dir.mkdir()
+        outside_archive = outside_dir / "web_20261020.old_peer.example.json.gz"
+        outside_archive.write_text("preserve unvisited archive")
+        directory_link = public / "linked-directory"
+        directory_link.symlink_to(outside_dir, target_is_directory=True)
         aggregate = public / "20261020.gmi"
         aggregate.write_text("preserve aggregate")
         unrelated = public / "other.json.gz"
         unrelated.write_text("preserve unrelated")
+        near_misses = []
+        for name in ("peer.http_20261020.json.gz", "peer.web_2026102.json.gz",
+                     "peer.web_202610200.json.gz", "peer.web_20261020.json",
+                     "peer.web_20261020.json.gz.bak", "peer.web_20261020.json.gz.tmp.bak",
+                     "web_20261020.old+peer.example.json.gz", ".web_20261020.json.gz",
+                     "web_20261020..json.gz", "peer.web_20261020.gmi",
+                     "gemini_20261020.peer.example.html", "filter.txt"):
+            path = public / name
+            path.write_text("preserve near miss")
+            near_misses.append(path)
+        archive_directory = public / "peer.web_20261019.json.gz"
+        archive_directory.mkdir()
         fixture_args = args[:-1] + [script.replace(PUBLIC, str(public))]
         result = subprocess.run(["perl", *fixture_args], capture_output=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertFalse(raw.exists())
         self.assertFalse(partial.exists())
         self.assertFalse(link.is_symlink())
+        for path in historical:
+            with self.subTest(removed=path.name):
+                self.assertFalse(path.exists())
+        self.assertFalse(historical_link.is_symlink())
         self.assertTrue(outside.exists())
+        self.assertTrue(outside_archive.exists())
+        self.assertTrue(directory_link.is_symlink())
+        self.assertTrue(archive_directory.is_dir())
         self.assertTrue(aggregate.exists())
         self.assertTrue(unrelated.exists())
+        for path in near_misses:
+            with self.subTest(preserved=path.name):
+                self.assertTrue(path.exists())
         subprocess.run(["perl", *fixture_args], check=True, capture_output=True, timeout=5)
         alias = self.root / "public-alias"
         alias.symlink_to(public, target_is_directory=True)
