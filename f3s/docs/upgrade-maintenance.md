@@ -2,10 +2,11 @@
 
 Prepared 2026-10-22, reviewed and approved for scoped rollout 2026-10-23.
 The approved source was published in integrated commit `91d7fb2`. Monitoring
-is deployed on f0–f3 and r1; standalone rocky's package updater completed its
-first timer-triggered run. r0/r2 deployment remains incomplete because fresh
-SSH connections authenticate but never open a command channel. No host or
-guest was rebooted. See the rollout acceptance section for the actual limits.
+is deployed on f0–f3 and r0–r2; standalone rocky's package updater completed
+its first timer-triggered run. Read-only diagnosis established a two-minute
+PAM session timeout on r0/r2. Reusing existing authenticated SSH connections
+allowed their approved rollout without changing host authentication or
+services. No host or guest was rebooted. See rollout acceptance for limits.
 
 ## Current evidence
 
@@ -162,8 +163,8 @@ and missing-check coverage. Temporary preflight port-forwards were closed.
 Fresh independent review found no blocking issue. Deployment used compiled
 source and assets pinned to `56f09d8`, fresh host previews, serial explicit
 tasks and private logs/backups. The required normal Gonf bootstrap from
-0.25.0 to 0.25.2 on r1/f3/rocky was approved, backed up privately and performed
-through normal push; no version guard was bypassed.
+0.25.0 to 0.25.2 on r0/r1/r2/f3/rocky was approved, backed up privately and
+performed through normal push; no version guard was bypassed.
 
 - **f0–f3 kernel monitoring:** only the script and root cron changed. Existing
   exporter prerequisites matched and their process IDs stayed unchanged.
@@ -177,10 +178,18 @@ through normal push; no version guard was bypassed.
   metric timestamp `1792768621` was scraped with the expected node-exporter
   service and node labels. Installed, same-minor and stable targets were
   `v1.36.5+k3s1`, with patch and minor availability both 0.
-- **r0/r2 remain incomplete:** strict direct SSH and one bounded ProxyJump
-  through r1 authenticated but stalled before opening a command channel.
-  These hosts received no rollout changes. All three Kubernetes nodes
-  remained Ready at `v1.36.5+k3s1`; no k3s upgrade or restart was performed.
+- **r0/r2 version monitoring:** read-only diagnosis showed that fresh SSH
+  commands succeed after a roughly 120-second PAM timeout. Existing verified
+  connections were reused through per-invocation `ControlPath` options.
+  Normal Gonf version checks and privileged-task guards stayed in place;
+  normal sudo apply also waited for PAM (121.07 seconds on r0 and 121.09 on
+  r2). Deployment finished at 15:38:36 and 15:42:38 UTC respectively. Both
+  native initial checks and actual scrapes showed success 1, matching source
+  checksums, root:root 0644 metrics and the same current channel targets as
+  r1. Each active cron daemon has exactly the hourly `:17` bounded command.
+  Their next natural tick is 16:17 UTC and had **not yet been observed**.
+  All three Kubernetes nodes remained Ready at `v1.36.5+k3s1`; no k3s upgrade
+  or restart, SSH/PAM/logind change or host-service restart was performed.
 - **Standalone rocky:** missing ksh/yum-utils, updater, stamp directory,
   units and log rotation were installed. Enabling the approved timer
   triggered its first real daily package update at 15:03:10 UTC. It finished
@@ -188,25 +197,32 @@ through normal push; no version guard was bypassed.
   root:root 0600 `last-daily` containing `2026-10-23`. The timer remained
   enabled and active, next due at 18:55 Europe/Sofia. Kernel/package updates
   and affected service restarts occurred; the log explicitly deferred the
-  standalone reboot. Its boot time remained 07:57:55 UTC (10:57:55 Europe/Sofia).
+  standalone reboot. Its boot time remained 07:57:55 UTC
+  (10:57:55 Europe/Sofia).
 - **Rocky limits:** `auditd` refused the updater's manual systemctl restart
   (`RefuseManualStop=yes`); it remained active, and `needs-restarting -s`
-  still listed it. Fresh SSH then exhibited the same pre-command stall as
-  r0/r2, while the retained private pre-update connection remained usable.
-  No manual workaround, authentication change or reboot was attempted.
+  still listed it. A single longer strict fresh SSH probe, without a control
+  connection, succeeded in 120.52 seconds, confirming ordinary access after
+  the same session delay. The private pre-update connection remained usable
+  and was closed only after alternate access was confirmed. No manual auditd
+  workaround, authentication change or reboot was attempted.
 - **Five alerts:** the single published `upgrade-alerts` PrometheusRule was
   byte-checked against `91d7fb2`, server-dry-run validated and applied alone.
   Native Prometheus loaded all five with healthy evaluations. Patch, minor,
-  kernel-pending and kernel-coverage alerts were inactive; k3s coverage was
-  correctly pending for exactly the undeployed r0/r2 nodes. Alertmanager
-  retains its existing UI-only routing; no email/webhook route was added.
+  kernel-pending and kernel-coverage alerts were inactive. K3s coverage
+  initially identified exactly the undeployed r0/r2 nodes, then cleared as
+  their successful checks were scraped. At 15:43:49 UTC all five alerts were
+  inactive with healthy evaluations. Alertmanager retains its existing
+  UI-only routing; no email/webhook route was added.
 
 Public-only acceptance evidence and private operation logs are outside Git
 at `/home/paul/.local/state/conf-worktrees/jn3-rollout-20261023/live/`.
-Task jn3 remains unfinished pending r0/r2 deployment and their scheduled,
-scraped acceptance; the SSH access limitations and auditd warning remain
-explicit operational follow-up. No broad aggregate, NFS/CARP/failover,
-remount, SSH authentication or reboot operation ran for this rollout.
+All approved producers are deployed and scraped. Natural r0/r2 cron ticks
+at 16:17 UTC had not yet been observed; their exact schedules, initial
+checks and scrape coverage were verified. The two-minute session delays and
+active but stale auditd process remain explicit operational follow-up. No
+broad aggregate, NFS/CARP/failover, remount, SSH authentication or reboot
+operation ran for this rollout.
 
 Tests:
 
