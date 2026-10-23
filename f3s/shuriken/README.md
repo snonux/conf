@@ -71,8 +71,8 @@ rename works). No `SYNC_*` settings.
 
 ## Publishing
 
-Task 9n3 prepares authenticated rsync daemon publishing over WireGuard;
-this change is not deployed yet. Each connection uses daemon user `shuriken`
+Task 9n3 deployed authenticated rsync daemon publishing over WireGuard on
+2026-10-23. Each connection uses daemon user `shuriken`
 and `--password-file=/etc/shuriken-rsync/password`. Separately provisioned
 Kubernetes Secret `services/shuriken-rsync-auth`, key `password`, is mounted
 read-only with mode 0400. No password is stored in Helm values, command-line
@@ -85,7 +85,8 @@ loopback only. They continue running as `uid=www`. The anonymous read-only
 Joern module is separate. Existing system SSH authentication is unchanged.
 Coordinate both sides using [the rollout guide](../../frontends/docs/rsync-security.md);
 publishing the CronJob before its Secret and server credentials exist will
-break publishing. No production credential has been provisioned in this prep.
+break publishing. The named vault entry and Kubernetes Secret are provisioned;
+a bounded live Job successfully published both albums to both frontends.
 
 A site is published when its complete `dist/status.json` differs from
 `<site>/.last-published-status.json` on NFS. This includes `generated_at`,
@@ -96,7 +97,9 @@ after both mirrors succeed, so a failed publish is retried next tick.
 
 The existing album trees are already owned by `www:www` on both frontends.
 Do not repeat an unconditional recursive ownership change. The separate
-Joern mirror migration has a bounded ownership step on fishfinger only.
+Joern mirror migration changed ownership on fishfinger only and now runs as
+`_joernsync` from its own cron. See the guide's dated live acceptance, including
+the failed-second-mirror marker test and source-matching public status files.
 
 Manual SSH publishing (`shuriken --sync`) still works from the image.
 
