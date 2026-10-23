@@ -71,6 +71,18 @@ Checks actually run:
 - Native OpenBSD `sh -n` for both executable scripts and read-only
   `newsyslog -n` parsing of the candidate access-log configuration: PASS.
 
+Follow-up strict uploader previews succeeded on both frontends, f0-f3 and
+pi0-pi2, each with exactly one would-change: the shared script. Pi2 also prints
+an unconditional ensure-directory notice for its already-existing 0755 root:root
+systemd directory. The initial isolated Pi previews declared no client because
+the checkout lacks the ignored file-backed tokens. Re-running the compiled
+candidate from the canonical gonf working directory, with GONF_CONF_ROOT set
+to this reviewed checkout, uses the existing fallback store in place and the
+candidate assets. No tokens were copied, symlinked or changed. Use that same
+working-directory arrangement for isolated deployment; symlinking secrets is
+neither needed nor supported by the file provider. Pi3's separate known session
+and old-runtime limits remain pending; it is still included in final acceptance.
+
 Private controller evidence is under
 `/home/paul/.local/state/conf-worktrees/dn3-hardening-20261023/evidence/`.
 Initial Python-based preflight was unavailable on fishfinger; subsequent base
