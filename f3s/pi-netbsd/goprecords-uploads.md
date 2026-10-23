@@ -1,8 +1,9 @@
 # Duplicate Pi goprecords uploads (xn3)
 
-Local preparation dated 2026-10-22, refreshed 2026-10-23; independent review
-and live deployment remain pending. Both pi0 and pi1 need the cleanup. No live cron, script,
-token, daemon, upload or service changes have been made for xn3.
+Local preparation dated 2026-10-22, refreshed 2026-10-23. Fresh independent
+review passed on 2026-10-23; live deployment awaits approval. Both pi0 and pi1
+need the cleanup. No live cron, script, token, daemon, upload or service changes
+have been made for xn3.
 
 ## Current evidence
 
@@ -107,8 +108,9 @@ go test github.com/snonux/gonf/resource/cron \
 
 ## Approval and live acceptance still required
 
-1. Complete self-review and the required fresh expert review, checking the
-   memory guard before launching the reviewer.
+1. Self-review and fresh expert ROUND1 passed with no findings. Five real
+   recipe/guard fixtures and the pinned library's cron-adoption contracts pass;
+   the live gates below remain outstanding.
 2. Obtain explicit approval for the pinned recipe's serial pi1, then pi0
    rollout, including adoption of the two exact old root commands and removal
    of only `/usr/pkg/bin/goprecords-upload-client.sh` on each host. Inspect
