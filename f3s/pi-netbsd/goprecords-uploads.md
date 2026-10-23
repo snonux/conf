@@ -1,14 +1,15 @@
 # Duplicate Pi goprecords uploads (xn3)
 
-Local preparation dated 2026-10-22, refreshed 2026-10-23. Fresh independent
-review passed on 2026-10-23; live deployment awaits approval. Both pi0 and pi1
-need the cleanup. No live cron, script, token, daemon, upload or service changes
-have been made for xn3.
+Prepared on 2026-10-22 and independently reviewed on 2026-10-23. The user
+approved source `dcde1d2` and the serial pi1, then pi0 rollout. Both live
+cleanups, convergence checks and the next ordinary scheduled-upload acceptance
+passed on 2026-10-23. The receiver-wide race remains tracked separately as
+goprecords eo3.
 
-## Current evidence
+## Evidence before cleanup
 
-Each Pi's root crontab has these two minute-17 jobs (substitute its short
-hostname for `HOST`):
+Before cleanup, each Pi's root crontab had these two minute-17 jobs
+(substitute its short hostname for `HOST`):
 
 ```cron
 17 * * * * env GOPRECORDS_HOST=HOST /usr/pkg/bin/goprecords-upload-client.sh >/dev/null 2>&1
@@ -17,10 +18,10 @@ hostname for `HOST`):
 # END GONF Cron[goprecords-upload]
 ```
 
-On both hosts the old `/usr/pkg/bin` script byte-matches the managed
+On both hosts the old `/usr/pkg/bin` script byte-matched the managed
 `/usr/local/bin` script (2060 bytes, POSIX cksum 198191107). Their token files
-are mode 0600. The duplicate clients use the same host identity and can
-upload the same kind concurrently; the older job hides failures in
+are mode 0600. The duplicate clients used the same host identity and could
+upload the same kind concurrently; the older job hid failures in
 `/dev/null`.
 
 The application logs contain these adjacent records-upload outcomes on pi1:
@@ -70,7 +71,7 @@ cause of every old 400 cannot be proved. The exact duplicate jobs, matching
 400/204 pair and deterministic matching receiver failure strongly support
 this explanation for the observed pair.
 
-## Prepared recipe change
+## Recipe change
 
 `netbsd_goprecords_upload` now supplies the exact old command to
 `WithLegacyCommand` on the existing present `CronAt` resource. Gonf's pinned
@@ -106,32 +107,49 @@ go test github.com/snonux/gonf/resource/cron \
   -run 'TestAdoptLegacyCommand|TestAdoptUnmanaged|TestApplyMocked' -count=1
 ```
 
-## Approval and live acceptance still required
+## Approved rollout and live acceptance
 
-1. Self-review and fresh expert ROUND1 passed with no findings. Five real
-   recipe/guard fixtures and the pinned library's cron-adoption contracts pass;
-   the live gates below remain outstanding.
-2. Obtain explicit approval for the pinned recipe's serial pi1, then pi0
-   rollout, including adoption of the two exact old root commands and removal
-   of only `/usr/pkg/bin/goprecords-upload-client.sh` on each host. Inspect
-   actual per-host plans first. The task's uptimed prerequisite may restart
-   uptimed if its configuration has drifted; include that possibility in
-   approval rather than assuming a broad aggregate is harmless.
-3. On each Pi, verify the token is still private, the managed script exists,
-   the legacy script is absent and the root crontab contains one managed
-   minute-17 job with no exact unmanaged duplicate. Compare the remaining
-   crontab privately so unrelated jobs/environment are preserved. Reapply
-   once to verify convergence. Do not recreate the old job as a rollback
-   while the receiver race remains unfixed; stop on a failed adoption.
-4. After cleanup, observe ordinary :17 uploads from both Pis. Require one
-   records request per Pi and successful
-   payload completion (204), fresh timestamps and no 400s. A readiness 200
-   or persisting 500 cannot satisfy this acceptance. No forced production
-   upload, app restart or storage change is implied by the cron cleanup.
-5. Track receiver-wide prevention in goprecords eo3 and keep xn3 open until
-   its own reviewed cleanup and real scheduled-upload gates pass.
+Self-review and fresh expert ROUND1 passed with no findings. Five real
+recipe/guard fixtures and the pinned library's cron-adoption contracts passed.
+The approved `dcde1d2` source was compiled privately, with its isolated assets
+selected through `GONF_CONF_ROOT`. The process ran from the canonical
+`gonf/` directory so the official provider resolved existing secrets; none
+were copied or linked into the worktree.
 
-The cleanup has no dependency on completing the entire ao3 NFS HA redesign.
-Its upload-health acceptance still requires a new ordinary scheduled cycle
-after cleanup; the successful preflight uploads do not satisfy that gate.
-Do not widen this task into CARP tests, reboots or SSH policy.
+Fresh per-host dry runs preceded the serial applies: pi1 finished at
+15:00:55 UTC, then pi0 at 15:02:04 UTC on 2026-10-23. The strict preview
+initially refused the older remote gonf 0.25.0 without changing resources.
+The normal dry runs upgraded each remote runner to the pinned 0.25.2 before
+showing the expected cron update. No copy of the old runner was captured.
+
+Each Pi retains root-only backups of its previous root crontab and retired
+script in `/root/.local/state/xn3-rollout-20261023T1505Z` (directory 0700,
+files 0600). Private byte comparisons proved that each resulting crontab was
+exactly its previous contents minus the exact legacy line. All unrelated
+root jobs and environment lines were preserved. Each old `/usr/pkg/bin`
+client is absent; the managed client and token bytes are unchanged, and
+the token remains root:wheel 0600. Uptimed configuration matched the source,
+so neither daemon restarted; its PID was preserved on each host. Both
+scoped reapplies reported zero changes and zero pending changes, with the
+absent-path retirement guard skipping further removal.
+
+The next ordinary :17 cycle passed the acceptance gate. The observation
+window was 15:16:30–15:18:30 UTC, checked after it closed:
+
+| Host | Records PUT completed (UTC, 2026-10-23) | Records requests | HTTP | Final cpuinfo.txt PUT completed (UTC) |
+| --- | --- | --- | --- | --- |
+| pi1 | 15:17:00.668218 | 1 | 204 | 15:17:02.263918 |
+| pi0 | 15:17:01.032205 | 1 | 204 | 15:17:02.657279 |
+
+All ten requests across the two clients returned 204, with no duplicate
+records PUT and no 400. Only derived host/kind/status/timestamp metadata
+was retained locally; raw application logs, root crontabs and token contents
+were not printed or saved locally. No production upload was forced. Other
+users' crontabs, server authentication keys, application/storage settings,
+SSH, reboot and power policy were untouched.
+
+The receiver-wide concurrency defect still belongs to goprecords eo3;
+historical 400 attribution retains the evidence limits described above.
+Do not restore duplicate jobs as routine rollback while that race remains
+unfixed. The cleanup does not depend on completing the entire ao3 NFS HA
+redesign and does not authorize CARP tests, reboots or SSH policy changes.
