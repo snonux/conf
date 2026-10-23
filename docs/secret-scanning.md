@@ -3,7 +3,8 @@
 Preparation dated 2026-10-22, with host coverage refreshed on 2026-10-23 and
 prepared for review on an isolated branch based on approved commit `86e26cb`.
 Fresh independent review passed and the local hook was activated on 2026-10-23.
-Publication and the remaining key-inventory checks remain pending.
+Publication of the seven reviewed scanner paths to GitHub and Forgejo is
+approved; the push and Pi3 key-file verification remain pending.
 No keys, SSH policy, production configuration or Git history were changed.
 
 ## Fingerprint coverage
@@ -40,6 +41,12 @@ was treated as unverified until the RAM-file attempt succeeded. Codeberg's
 API required authentication, so its public `.keys` response provided user-key
 coverage; private Codeberg repository deploy-key lists were not audited.
 
+On 23 October the owner confirmed that GitHub and Forgejo are the only active
+forges and Codeberg is no longer used. The dated Codeberg results above remain
+part of the audit record; its private deploy-key inventory is outside the
+current active-forge scope. This clarification does not prove that historical
+Codeberg credentials were removed or establish global revocation.
+
 The owner separately authorized ordinary rack startup on 23 October. The same
 read-only probe then completed on f3 and rocky: account key roots were enumerated,
 find returned zero, and their one and six visited key files respectively
@@ -60,10 +67,10 @@ alongside the completed result; this review branch does not relocate the evidenc
 owned client process was terminated after inspection. A fresh 23 October
 probe with connection sharing disabled also exceeded its 40-second bound;
 `pi3-authorized-key-audit-20261023.json` in that same evidence directory records
-that failure without claiming key coverage. Private Codeberg deploy-key
-inventory also remains open.
+that failure without claiming key coverage. Pi3, tracked by **1g3**, is the
+remaining active-host coverage gap.
 No power operation, gateway access or SSH-auth change was performed by these
-key checks. These gaps prevent claiming that the leaked key is unusable everywhere.
+key checks. The dated checks do not prove that the leaked key is unusable everywhere.
 
 ## Local scanner
 
@@ -152,7 +159,7 @@ had no existing `gitleaks` entry. Fresh independent ROUND1 review of `fc551199`
 passed with no blocking or nonblocking findings, including all twelve native
 fixtures and nine additional failure/report/redaction checks. Only the seven
 reviewed paths were integrated into the canonical checkout at `3382f7d`.
-No source publication occurred.
+Source publication was pending at activation.
 
 After review, these absence checks were repeated before installing the verified
 8.30.1 archive member at `~/.local/lib/gitleaks/8.30.1/gitleaks` and creating
@@ -178,12 +185,13 @@ remains available, but that framework was not installed or activated.
 
 Configuring hooksPath affects the repository's other worktrees too. They need
 the reviewed hook files and the pinned tool available when committing.
-Publishing these changes requires the task's explicit approval
-and an isolated branch; evolving conf master contains unrelated unapproved
-preparations and must not be pushed wholesale.
+The owner approved publishing the seven reviewed scanner paths from the
+isolated branch to GitHub and Forgejo on 23 October; the push remains pending.
+Evolving conf master contains unrelated unapproved preparations and must not
+be pushed wholesale.
 
-Finish Pi3 verification when normal access is available and record the private
-Codeberg deploy-key inventory limit. Completed bounded investigations fo3 and go3 are independent
+Finish Pi3 verification when normal access is available. Completed bounded
+investigations fo3 and go3 are independent
 of this staged-hook/key-revocation task. Any necessary revocation/rotation
 or history rewrite needs its own explicit authorization. The user's SSH
 policy and recovery-boot/power-cycle opt-outs remain in effect; the separately
