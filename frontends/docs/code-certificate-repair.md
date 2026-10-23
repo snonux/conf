@@ -2,7 +2,7 @@
 
 Prepared on 2026-10-23; **not deployed**. Fresh expert review and explicit
 approval are required before certificate/key transfer, production-file changes,
-relayd reloads or monitoring deployment. The f3 power-on and PF approvals do
+relayd reloads/restarts or monitoring deployment. The f3 power-on and PF approvals do
 not authorize this repair. Do not push evolving conf master.
 
 ## Verified problem and candidate
@@ -46,7 +46,11 @@ does not authorize another HTTP Host.
 Request approval for the complete repair: copying this existing primary web
 keypair from blowfish to fishfinger, root-private staging/backups and timed
 rollback, the one-line relayd SNI addition on both frontends, and the two new
-Gogios checks. Use the isolated ho3 source and targeted tasks only. No package
+Gogios checks. The material replacement reloads relayd; the targeted Gonf
+configuration task uses the existing activation helper to **restart relayd**
+on each changed frontend. Approval must cover these brief service
+interruptions and rollback recovery of a previously running daemon. Use the
+isolated ho3 source and targeted tasks only. No package
 upgrade, SSH authentication change, reboot, CARP operation or Argo publication
 is part of this procedure.
 
@@ -81,6 +85,7 @@ work=/root/ho3-code-cert-20261023
 rcctl check relayd
 relayd -n -f /etc/relayd.conf
 mkdir -m 700 "$work"
+touch "$work/relayd-was-running"
 cp -p /etc/relayd.conf "$work/previous.relayd.conf"
 cp -p /etc/gogios.json "$work/previous.gogios.json"
 if [ "$(hostname -s)" = fishfinger ]; then
@@ -91,7 +96,6 @@ if [ "$(hostname -s)" = fishfinger ]; then
     done
     cp -p /etc/ssl/code.f3s.buetow.org.fullchain.pem "$work/previous.fullchain.pem"
     cp -p /etc/ssl/private/code.f3s.buetow.org.key "$work/previous.key"
-    chmod 600 "$work/previous.key"
     mkdir -m 700 "$work/incoming"
 fi
 SH
@@ -105,9 +109,9 @@ redirect it to a controller file:
 ```bash
 set -euo pipefail
 ssh -T -oBatchMode=yes -oStrictHostKeyChecking=yes rex@blowfish.buetow.org \
-  'doas -n tar -C /etc/ssl -cf - code.f3s.buetow.org.fullchain.pem private/code.f3s.buetow.org.key' \
+  'doas -n tar -C /etc/ssl -cf - code.f3s.buetow.org.fullchain.pem private/code.f3s.buetow.org.key 2>/dev/null' \
   | ssh -T -oBatchMode=yes -oStrictHostKeyChecking=yes rex@fishfinger.buetow.org \
-      'doas -n tar -C /root/ho3-code-cert-20261023/incoming -xf - code.f3s.buetow.org.fullchain.pem private/code.f3s.buetow.org.key'
+      'doas -n tar -C /root/ho3-code-cert-20261023/incoming -xf - code.f3s.buetow.org.fullchain.pem private/code.f3s.buetow.org.key 2>/dev/null'
 ```
 
 A failed/unknown transfer is not permission to retry blindly: inspect the
@@ -130,11 +134,16 @@ fail without prompting. Stop on any failure; do not publish either file.
 
 The committed rollback helper stages every old file before changing any live
 file, restores only configuration on blowfish, and also restores the old pair
-on fishfinger. It uses same-directory rename, root ownership, modes0644 for
-relayd configuration/chain,0744 for existing Gogios configuration and0600 for
-the key. It leaves the `.crt` symlink intact, validates the restored native
-configuration and reloads only an already-running relayd. Failure is reported
-and the private backups remain. Install this public script after approval:
+on fishfinger. It preserves backup ownership/modes with cp -p, followed by
+same-directory rename: the verified baseline is root:wheel, relayd0600,
+Gogios0744, chain0444 and key0400. It leaves the `.crt` symlink intact and
+validates the restored native configuration. A running daemon is reloaded;
+a stopped daemon is started only when the private preflight marker records
+that it was running. Thus a failed approved restart can recover, while a
+stopped baseline is never started. Native validation/reload/start are bounded
+to30s and status checks to10s; an unknown/timed-out status fails without
+attempting a start. Failure is reported and the private backups
+remain. Install this public script after approval:
 
 ```sh
 for host in fishfinger blowfish; do
@@ -160,12 +169,14 @@ echo "$!" >"$work/watchdog.pid"
 
 Do not arm this command until the tested rollback script and old backups
 exist. Do not overwrite those backups during retries. Preserve them after
-acceptance for manual rollback; they include a private key and stay0700/0600.
+acceptance for manual rollback; the directory stays0700 and the backed-up
+private key retains0400.
 
 On fishfinger, after validation and arming its watchdog, publish both files
 before reloading. The daemon uses its loaded pair until reload. The EXIT trap
 rolls back an ordinary command failure; the independent timer covers an
-interrupted/killed session. Do not restart an unexpectedly stopped daemon:
+interrupted/killed session. Only the rollback helper may recover a stopped
+daemon, and only with the recorded running baseline:
 
 ```sh
 ssh -T -oBatchMode=yes -oStrictHostKeyChecking=yes rex@fishfinger.buetow.org \
@@ -191,8 +202,8 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 chain_tmp=$(mktemp /etc/ssl/.ho3-new-chain.XXXXXXXXXX)
 key_tmp=$(mktemp /etc/ssl/private/.ho3-new-key.XXXXXXXXXX)
-install -o root -g wheel -m 0644 "$work/incoming/code.f3s.buetow.org.fullchain.pem" "$chain_tmp"
-install -o root -g wheel -m 0600 "$work/incoming/private/code.f3s.buetow.org.key" "$key_tmp"
+install -o root -g wheel -m 0444 "$work/incoming/code.f3s.buetow.org.fullchain.pem" "$chain_tmp"
+install -o root -g wheel -m 0400 "$work/incoming/private/code.f3s.buetow.org.key" "$key_tmp"
 rcctl check relayd
 mv "$key_tmp" /etc/ssl/private/code.f3s.buetow.org.key
 key_tmp=
@@ -225,22 +236,29 @@ The existing d_tail_checks action publishes only Gogios configuration; it
 does not install/upgrade packages or alter cron/services. The relayd task
 includes existing ACME setup prerequisites, not ACMEInvoke. Inspect the exact
 fresh plan/dry run and stop if anything outside the two intended configuration
-changes per host would change. Do not run frontends_gogios or the aggregate.
+changes per host and its documented relayd activation would change. That
+activation calls rcctl restart relayd; it is not a reload-only action. If it
+fails, invoke the prepared rollback immediately rather than waiting for the
+watchdog; the helper can start the restored service from its running baseline.
+Do not run frontends_gogios or the aggregate.
 
 ## Acceptance and renewal ownership
 
-Before accepting either watchdog, require:
+Before accepting the **current frontend's** watchdog, require these immediate
+checks on that frontend. They do not require the second frontend's SNI/config
+change to have happened yet:
 
-- Normal trusted TLS connections to both frontends, on443 and2443, with code
-  SNI serve the verified primary leaf. Standby code SNI on2443 must now verify
-  the standby hostname/chain instead of falling back to the primary leaf.
+- Normal trusted TLS connections to the current frontend, on443 and2443, with
+  code SNI serve the verified primary leaf. Its standby code SNI on2443 must
+  now verify the standby hostname/chain instead of falling back to the primary leaf.
   blowfish's existing standby certificate is valid until November6; it is
   not the transferred primary certificate and is not claimed to have renewed.
-- Real conf Git advertisement requests return200 through both frontends on
+- Real conf Git advertisement requests return200 through the current frontend on
   2443. Unknown/LAN/missing/duplicate Host rejection and public443 code denial
   retain the existing policy; canonical HSTS/forwarding behavior is preserved.
 - The exact new check_http commands select the primary SNI on both pinned
-  endpoints and report OK. Both Gogios configurations contain both checks.
+  endpoints and report OK. The current frontend's Gogios configuration contains
+  both checks; the other frontend's configuration is a later phase.
 - No unexpected process, configuration, certificate permission or service
   change. Record public certificate fingerprints/dates, command statuses,
   backup locations and final monitoring state, never key/session/cookie bytes.
@@ -248,7 +266,9 @@ Before accepting either watchdog, require:
 After those immediate checks on a frontend pass, create its `accepted` marker
 before proceeding. If time is running out or a test fails, roll back instead
 of disarming the timer. A fresh normal monitoring cycle with no remaining TLS
-critical is a separate **task-completion** gate: an hourly cached old result
+critical, both frontends' SNI/Git checks, and both updated Gogios configurations
+are separate combined **task-completion** gates after both hosts are updated.
+An hourly cached old result
 must not keep an otherwise verified repair's rollback timer armed past its
 deadline. Capture that pending state honestly; do not force a whole Gogios run
 or claim all-green acceptance from direct plugin output alone. Do not remove
@@ -276,19 +296,23 @@ Real fixture tests cover RSA/EC pairs, multi-PEM chains, mismatched keys,
 wrong pins, untrusted chains, near expiry, malformed/missing inputs and
 noninteractive encrypted-key refusal, with unchanged inputs and no secret
 output. Rollback fixtures cover restoration on each host, staging failure
-before publication, missing/symlinked backups, parser failure, stopped daemon,
-reload failure and wrong-host/non-root refusal. Render integration tests cover both SNI bindings and both pinned
+before publication, missing/symlinked backups, parser failure, stopped-daemon
+recovery from a recorded running baseline, refusal without that baseline,
+failed start/reload and wrong-host/non-root refusal. Render integration tests cover both SNI bindings and both pinned
 primary checks, with previous-single-keypair/missing-endpoint/wrong-SNI/
 unpinned-address/duplicate-endpoint negative controls. Baseline JSON comparison
 finds exactly two added checks and no changed/removed checks or other fields
 on either frontend. Native relayd candidates passed on both OpenBSD hosts in
 temporary private files, subsequently removed; stdin-only candidate parsing
-was refused, so it is not claimed as successful. Native shell syntax passes;
-native staged-material crypto validation remains an approved-rollout gate.
+was refused, so it is not claimed as successful. Native shell syntax passes.
+The validator also passed against blowfish's existing source pair in place
+under native OpenBSD LibreSSL, without extracting private bytes or changing
+the files/service. Native validation of the transferred staged material is
+still required after the approved transfer to catch changes or mismatches.
 
 Primary references: [OpenBSD openssl](https://man.openbsd.org/openssl.1),
 [relayd TLS keypairs/SNI](https://man.openbsd.org/relayd.conf.5),
 [check_http options](https://www.monitoring-plugins.org/doc/man/check_http.html).
 The expiry plugin does not replace the hostname/chain-verified TLS acceptance
 above. No production key transfer, certificate issuance, configuration
-publication or service reload has occurred during preparation.
+publication or service reload/restart has occurred during preparation.

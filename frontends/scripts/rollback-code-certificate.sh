@@ -49,13 +49,13 @@ trap 'exit 143' TERM
 # lives beside its destination, so publication uses same-filesystem rename.
 relay_tmp=$(mktemp "$config_dir/.ho3-relayd.XXXXXXXXXX")
 gogios_tmp=$(mktemp "$config_dir/.ho3-gogios.XXXXXXXXXX")
-install -o root -g wheel -m 0644 "$work/previous.relayd.conf" "$relay_tmp"
-install -o root -g wheel -m 0744 "$work/previous.gogios.json" "$gogios_tmp"
+cp -p "$work/previous.relayd.conf" "$relay_tmp"
+cp -p "$work/previous.gogios.json" "$gogios_tmp"
 if [ "$host" = fishfinger ]; then
     chain_tmp=$(mktemp "$ssl_dir/.ho3-chain.XXXXXXXXXX")
     key_tmp=$(mktemp "$ssl_dir/private/.ho3-key.XXXXXXXXXX")
-    install -o root -g wheel -m 0644 "$work/previous.fullchain.pem" "$chain_tmp"
-    install -o root -g wheel -m 0600 "$work/previous.key" "$key_tmp"
+    cp -p "$work/previous.fullchain.pem" "$chain_tmp"
+    cp -p "$work/previous.key" "$key_tmp"
     mv -f "$key_tmp" "$ssl_dir/private/code.f3s.buetow.org.key"
     key_tmp=
     mv -f "$chain_tmp" "$ssl_dir/code.f3s.buetow.org.fullchain.pem"
@@ -66,9 +66,33 @@ relay_tmp=
 mv -f "$gogios_tmp" "$config_dir/gogios.json"
 gogios_tmp=
 
-# Never reload an invalid restored configuration or start a stopped service.
-relayd -n -f "$config_dir/relayd.conf" >/dev/null 2>&1 ||
+# Never activate an invalid restored configuration. Recovery can start a
+# stopped daemon only when the preflight recorded that it was running.
+timeout 30 relayd -n -f "$config_dir/relayd.conf" >/dev/null 2>&1 ||
     fail 'restored configuration did not validate; daemon was not reloaded'
-rcctl check relayd >/dev/null 2>&1 || fail 'relayd is not running'
-rcctl reload relayd >/dev/null 2>&1 || fail 'relayd reload failed'
+running() {
+    check_status=0
+    timeout 10 rcctl check relayd >/dev/null 2>&1 || check_status=$?
+    case "$check_status" in
+        0) return 0 ;;
+        1) return 1 ;;
+        *) fail 'relayd status is unknown; refusing to start it' ;;
+    esac
+}
+if running; then
+    if ! timeout 30 rcctl reload relayd >/dev/null 2>&1; then
+        # A refused reload with the old process still alive is an error,
+        # not a reason to restart it. A dead process needs baseline recovery.
+        if running; then
+            fail 'relayd reload failed'
+        fi
+    fi
+fi
+if ! running; then
+    [ -f "$work/relayd-was-running" ] && [ ! -L "$work/relayd-was-running" ] ||
+        fail 'relayd is stopped and no running baseline was recorded'
+    timeout 30 rcctl start relayd >/dev/null 2>&1 ||
+        fail 'could not restore the previously running relayd'
+    running || fail 'relayd did not stay running'
+fi
 printf 'Previous frontend configuration restored; private backups retained.\n'
