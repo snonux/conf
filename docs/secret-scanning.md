@@ -2,8 +2,8 @@
 
 Preparation dated 2026-10-22, with host coverage refreshed on 2026-10-23 and
 prepared for review on an isolated branch based on approved commit `86e26cb`.
-Independent review, hook activation/publication and the remaining key-inventory
-checks remain pending.
+Fresh independent review passed and the local hook was activated on 2026-10-23.
+Publication and the remaining key-inventory checks remain pending.
 No keys, SSH policy, production configuration or Git history were changed.
 
 ## Fingerprint coverage
@@ -65,7 +65,7 @@ inventory also remains open.
 No power operation, gateway access or SSH-auth change was performed by these
 key checks. These gaps prevent claiming that the leaked key is unusable everywhere.
 
-## Scanner preparation
+## Local scanner
 
 `.gitleaks.toml` extends the standard Gitleaks rules and adds a WireGuard
 PrivateKey assignment rule. The only added global value exceptions are the
@@ -143,48 +143,47 @@ does not suppress new secrets merely because a historical scan has findings.
 Default upstream rule coverage and exclusions still apply; a passing scan
 cannot prove that every possible secret format is absent.
 
-## Activation and completion still pending
+## Local activation and remaining completion
 
 Read-only inspection on 23 October found no Gitleaks executable on the active
 PATH, no configured `core.hooksPath` and no `.git/hooks/pre-commit` in the
 canonical `/home/paul/git/conf` checkout. `~/.local/bin` is on that PATH and
-has no existing `gitleaks` entry. No tool installation or hook activation has
-been performed.
+had no existing `gitleaks` entry. Fresh independent ROUND1 review of `fc551199`
+passed with no blocking or nonblocking findings, including all twelve native
+fixtures and nine additional failure/report/redaction checks. Only the seven
+reviewed paths were integrated into the canonical checkout at `3382f7d`.
+No source publication occurred.
 
-After fresh review, first make the verified pinned tool persistently available.
-Recheck these facts, verify the archive checksum above and compare the extracted
-binary with the verified archive member. Create a new versioned executable at
-`~/.local/lib/gitleaks/8.30.1/gitleaks` and a new `~/.local/bin/gitleaks` link,
-refusing to overwrite an existing file or link. Verify version and executable
-identity through PATH before activating the hook. Do not depend on the scanner
-under the temporary preparation's state/worktree directory or change global
-Git configuration.
+After review, these absence checks were repeated before installing the verified
+8.30.1 archive member at `~/.local/lib/gitleaks/8.30.1/gitleaks` and creating
+the `~/.local/bin/gitleaks` link. Neither operation overwrote an existing file
+or link. The archive checksum above, executable bytes against the archive
+member, PATH resolution and reported version were verified. The active hook
+uses this persistent installation without an environment override or a
+dependency on the temporary preparation directory.
 
-Then place the reviewed seven paths in the canonical checkout and choose one
-hook integration, preserving any hooks/configuration discovered on reinspection:
+The native hook was activated with repository-local configuration:
 
 ```sh
-# Native Git hook; first inspect the existing hooksPath/hook setup.
 git config --local core.hooksPath .githooks
-
-# Or, if the pre-commit framework is already used:
-pre-commit install
 ```
 
-Both routes call the same staged-index gate. Configuring hooksPath affects
-the repository's other worktrees too; it has not been enabled during this
-preparation. Publishing these changes requires the task's explicit approval
+`git hook run pre-commit` and the direct staged gate both passed in the
+canonical checkout. All twelve native fixtures were rerun successfully using
+the persistent scanner through PATH. The temporary-repository commit test
+again checked rejection with unchanged HEAD and subsequent clean-commit
+success; no fixture commit was made in this repository. Global Git
+configuration was unchanged. The optional pre-commit framework configuration
+remains available, but that framework was not installed or activated.
+
+Configuring hooksPath affects the repository's other worktrees too. They need
+the reviewed hook files and the pinned tool available when committing.
+Publishing these changes requires the task's explicit approval
 and an isolated branch; evolving conf master contains unrelated unapproved
 preparations and must not be pushed wholesale.
 
-After activation, run the staged gate in the canonical checkout and repeat the
-native fixture suite with the persistent tool. Its temporary-repository commit
-test checks rejection/unchanged HEAD and clean-commit success without committing
-a fixture into this repository.
-
-Fresh independent review of this branch has not run. Finish Pi3 verification
-when normal access is available and record the private Codeberg deploy-key
-inventory limit. Completed bounded investigations fo3 and go3 are independent
+Finish Pi3 verification when normal access is available and record the private
+Codeberg deploy-key inventory limit. Completed bounded investigations fo3 and go3 are independent
 of this staged-hook/key-revocation task. Any necessary revocation/rotation
 or history rewrite needs its own explicit authorization. The user's SSH
 policy and recovery-boot/power-cycle opt-outs remain in effect; the separately
