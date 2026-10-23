@@ -187,9 +187,14 @@ performed through normal push; no version guard was bypassed.
   native initial checks and actual scrapes showed success 1, matching source
   checksums, root:root 0644 metrics and the same current channel targets as
   r1. Each active cron daemon has exactly the hourly `:17` bounded command.
-  Their next natural tick is 16:17 UTC and had **not yet been observed**.
-  All three Kubernetes nodes remained Ready at `v1.36.5+k3s1`; no k3s upgrade
-  or restart, SSH/PAM/logind change or host-service restart was performed.
+  The natural 16:17 UTC ticks passed after the known PAM delay: both cron
+  logs recorded command start at 16:19:01 and completion at 16:19:02 UTC.
+  Both root:root 0644 metric files advanced to timestamp `1792772341`, and
+  actual Prometheus scrapes confirmed that same timestamp with success 1,
+  patch availability 0 and minor availability 0. No collector was invoked
+  manually for this acceptance check. All three Kubernetes nodes remained
+  Ready at `v1.36.5+k3s1`; no k3s upgrade or restart, SSH/PAM/logind change
+  or host-service restart was performed.
 - **Standalone rocky:** missing ksh/yum-utils, updater, stamp directory,
   units and log rotation were installed. Enabling the approved timer
   triggered its first real daily package update at 15:03:10 UTC. It finished
@@ -212,17 +217,19 @@ performed through normal push; no version guard was bypassed.
   kernel-pending and kernel-coverage alerts were inactive. K3s coverage
   initially identified exactly the undeployed r0/r2 nodes, then cleared as
   their successful checks were scraped. At 15:43:49 UTC all five alerts were
-  inactive with healthy evaluations. Alertmanager retains its existing
-  UI-only routing; no email/webhook route was added.
+  inactive with healthy evaluations. The same state was verified after the
+  final natural r0/r2 cron ticks, with all three nodes reporting successful
+  fresh checks. Alertmanager retains its existing UI-only routing; no
+  email/webhook route was added.
 
 Public-only acceptance evidence and private operation logs are outside Git
 at `/home/paul/.local/state/conf-worktrees/jn3-rollout-20261023/live/`.
-All approved producers are deployed and scraped. Natural r0/r2 cron ticks
-at 16:17 UTC had not yet been observed; their exact schedules, initial
-checks and scrape coverage were verified. The two-minute session delays and
-active but stale auditd process remain explicit operational follow-up. No
-broad aggregate, NFS/CARP/failover, remount, SSH authentication or reboot
-operation ran for this rollout.
+All approved producers are deployed and scraped, with natural scheduled
+runs observed on every monitoring host. Final scheduled acceptance evidence
+is retained as `live/acceptance-natural-cron-final.json` alongside the native
+cron logs. The two-minute session delays and active but stale auditd process
+remain explicit operational follow-up. No broad aggregate, NFS/CARP/failover,
+remount, SSH authentication or reboot operation ran for this rollout.
 
 Tests:
 
