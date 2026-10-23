@@ -6,8 +6,9 @@
 Relayd depends on the firewall task. The `freebsd` aggregate includes it.
 
 **PF deployed to f0–f2, 2026-10-22.** User approved the guarded f1/f0/f2 rollout
-and CARP tests; f3 remains unapproved to wake/reboot and pending inspection.
- The rm3 safety annotation requires
+and CARP tests. On 2026-10-23 the user authorized ordinary power-on of f3s;
+all four hosts booted and f3 was inspected. **PF deployment to f3 is still
+pending explicit approval.** The rm3 safety annotation requires
 explicit user approval before **any live change**, including deployment,
 module loads, firewall activation, rollback preparation and CARP failover.
 Obtain approval for the concrete procedure below before running it. Do not
@@ -48,7 +49,8 @@ Read-only baseline on 2026-10-22:
 | f0 LAN ULA | Already marked `detached`; ULA ping fails before this change |
 
 Do not attribute the existing detached-ULA failure to PF or claim an end-to-end
-ULA success without resolving it. Do not wake/reboot f3 without approval.
+ULA success without resolving it. Ordinary power-on was approved on 2026-10-23;
+that does not authorize power cycles, recovery boots or a PF deployment.
 
 ## Preflight (read only)
 
@@ -348,7 +350,85 @@ it needs its own approval and must preserve the storage pair's availability.
   and the replicated canary age was 353 seconds. Unique test files were
   removed after checks. f0 remains MASTER/skew0/auto-failback enabled and
   f1 BACKUP; no further failover was attempted.
-- f3 inspection and deployment remain pending.
-  f3→f2 replication is unverified while f3 is unreachable. No f3 wake/reboot
-  is authorized. The overall rm3 task remains incomplete; follow-up **ao3**
+- At this 2026-10-22 checkpoint, f3 inspection/deployment and f3→f2
+  replication remained unverified because f3 was unreachable. No f3 wake
+  was then authorized. The 2026-10-23 update below supersedes that access
+  limitation. The overall rm3 task remains incomplete; follow-up **ao3**
   tracks the failed NFS failover acceptance and recovery limitation.
+
+
+## Approved power-on and f3 preflight — 2026-10-23
+
+The user authorized powering f3s on because it was off. Initial local and
+Pi-side status found f0–f3 and r0–r2 unreachable, fans off and mains AC on.
+`f3sctl power all on` switched the fans on, sent Wake-on-LAN packets and
+completed after all three guests answered; both frontend monitoring mutes
+were cleared. No power-off, reset, recovery boot or extra deployment ran.
+
+All four hosts report FreeBSD 15.1-RELEASE-p2, healthy pools and their
+configured Rocky guest Running. f3 booted at 07:57:26 UTC; f1/f2 at
+07:57:46 and f0 at 07:57:48. All three k3s nodes are Ready on
+v1.36.5+k3s1. f0 is MASTER/advskew0 with its NFS dataset writable and NFS /
+stunnel running; f1 is BACKUP/advskew100, replica readonly=on and those
+services stopped. PF is enabled on f0/f1 after boot. These cold-start
+checks do **not** prove retained-handle NFS failover or resolve ao3.
+
+f3 preflight now verifies:
+
+- LAN IPv4 192.168.1.133; re0, lo0, vm-public, wg0 and tap0. The bridge has
+  re0/tap0 members and both bridge PF hooks are 0. WG listens on UDP 56709.
+- ULA fd22:c702:acb7:0:eaff:1eff:fed7:f3d7 is detached; the public address is
+  2a01:5a8:304:bc3:eaff:1eff:fed7:f3d7. Preserve the detached-ULA qualification.
+- pf_enable and pflog_enable are NO; /dev/pf is absent. No PF module was
+  loaded for this preflight. Native parse-only validation of the identical
+  candidate passed again on f0, where PF is already loaded; no claim is
+  made that a native f3 parser check ran.
+- From blowfish, fresh public IPv6 TCP22 and TCP2222 are reachable; TCP111
+  and TCP2049 were not reachable. The latter observations do not establish
+  filtering: f3 has no active PF firewall.
+- New LAN IPv4 SSH and WG SSH through blowfish both succeed. For the WG
+  hostname, verify the existing LAN host-key pin with HostKeyAlias; never
+  accept an unverified new key. Plain default-family LAN SSH initially
+  timed out, while explicit IPv4 succeeded.
+
+The firewall source and recipe still byte-match reviewed commit 812eee5.
+A fresh local plan from isolated branch agent/rm3-f3-preflight-20261023
+contains 13 records (10 resources plus plan/hostname-guard records), no
+sensitive records and no prerequisites outside this firewall task. Its PF
+bytes match the source. The local plan is outside Git at
+`/home/paul/.local/state/conf-worktrees/rm3-f3-preflight-20261023/plan/plan.jsonl`:
+
+- Plan SHA-256: `86ab1aeadb654100d5a38ef3a594835f5588610b395207576d5af43d10cd0159`.
+- PF source SHA-256: `cd8aec0e41adabaa03fd211a8f3186542362019bc162b1d9319b63e43515461d`.
+
+For a separately approved f3-only rollout, use the 15-minute rollback guard
+above, open LAN and WG sessions first, and push only freebsd_firewall_config
+to paul@f3.lan.buetow.org with explicit IPv4/port22/doas. This performs the
+module load, candidate validation, rule load/enable, persistence and pflog
+activation. Reconnect if first activation drops old host TCP sessions;
+require new LAN/WG SSH, unchanged bridge hooks/VM health, public IPv6
+rejection with PF counters, successful replication and unchanged reapply
+before accepting the guard. Stop and roll back on failure. Do not repeat
+CARP failover, restart guests/storage/apps or publish evolving master.
+
+Verified WG command using the already trusted LAN identity:
+
+```sh
+ssh -4 -p22 -oBatchMode=yes -oStrictHostKeyChecking=yes \
+  -oHostKeyAlias=f3.lan.buetow.org -oConnectTimeout=5 \
+  -J rex@blowfish.buetow.org paul@f3.wg0.wan.buetow.org hostname
+```
+
+A fresh f3→f2 interval completed at 08:07:50 UTC. Both filesystem states
+were done, with no plan/step error and no sender/receiver pruning error.
+This is a pre-deployment baseline, not post-firewall replication acceptance.
+
+The ordinary cluster start reopened application state: both Player/Xplayer
+now answer the database-backed `/api/v1/auth/count` and `/login.html` with
+HTTP200; their unauthenticated roots answer401. Initial Player requests
+briefly timed out during startup before these successful checks. No
+separate app restart, authentication flow, database mutation or NFS failover
+test was performed. Gogios initially reported 48 startup criticals; the
+next report at 08:05:11 UTC had 0 critical, 0 explicit warning, 0 unknown,
+1 stale and 538 OK (the CLI counts the stale result as one warning).
+This is not an all-green monitoring claim.
