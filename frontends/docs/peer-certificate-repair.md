@@ -1,11 +1,11 @@
 # Four frontend peer certificate refreshes (ro3)
 
-Prepared 2026-10-23 from published `613310e`; **not deployed or approved**.
-This preparation read public TLS/DNS, configuration and file metadata only.
-It never read/exported/copied a production private key, issued a certificate,
-changed production files or reloaded a service. Synthetic fixture keys are
-disposable and unrelated to production. Parent owns fresh review, integration,
-approval, live acceptance and task completion.
+Prepared 2026-10-23 from published `613310e`, reviewed at `1bb8be3`, then
+explicitly approved and deployed on 2026-10-23. See the live acceptance record
+below. The preparation itself read public TLS/DNS, configuration and file
+metadata only; it performed no production key transfer or service activation.
+Synthetic fixture keys are disposable and unrelated to production. Future
+refreshes still require the concrete approval described by this runbook.
 
 ## Named material and public identity
 
@@ -342,12 +342,74 @@ against613310e, and Local/dependency/trust/address/expiry/SNI negatives. No
 `*_test.go` is added under gonf. Native check_curl probes select the expected
 off-DNS stale leaves and ownerOK, proving the address/SNI path.
 
-Native relayd parsing/publication with transferred material and real timed
-rollback activation remain future approval gates. No full Web plan, CA request,
-production key validation or service reload/restart ran during preparation.
+At preparation time, native relayd parsing/publication with transferred
+material and real rollback activation had not run. No full Web plan, CA
+request, production key validation or service reload/restart ran during
+preparation. The approved live results follow below.
 
 Targeted checks passed: `go build -p 1 ./...`, `go vet -p 1 ./frontends` and
 `errcheck ./frontends` in gonf; shellcheck for both shell helpers; native
 fishfinger `sh -n` for both helpers. The rollback suite also parses every
 documented shell block and exercises the documented timer's four marker
 decisions with a zero-delay synthetic shim. This is not a production timer test.
+
+
+## Approved live acceptance, 2026-10-23
+
+The user explicitly approved source publication, the four exact pair transfers,
+twenty monitoring additions, serial relayd reloads, 15-minute guards and live
+acceptance. Blowfish's three standby pairs were accepted at 14:56:40 UTC;
+fishfinger's Gogios pair was accepted at 15:00:17 UTC. The public owner pins,
+SANs and expiry dates in the table above remained unchanged. Only the four
+named chain/key pairs and each host's ten Gogios definitions were published.
+
+Every pair passed native LibreSSL validation of the independent public pin,
+exact SANs, trusted server chain, at least 30 days of lifetime and matching
+private key. Transfers streamed the two named archive members between pinned
+SSH connections directly into destination staging. No production private-key
+bytes entered controller files, shell arguments, logs or tool output. Original
+backups were preserved on their destination throughout.
+
+Each host passed native relayd validation, bounded reload and running checks;
+all five SANs on both address families passed strict TLS/SNI, reviewed leaf
+identity, lifetime, HTTP 200 and HSTS checks. All twenty native check_curl
+commands returned OK. Ecat/album body hashes matched their pre-operation
+baseline. Normal Gogios pages, unknown/LAN/missing Host 403, duplicate Host 400,
+dedicated code 2443 routing, public 443 code denial and dedicated-port LAN
+denial were preserved. The code certificate's identity and expiry were
+unchanged. Relayd, HTTPD and ACME configuration hashes, certificate aliases,
+ownership and modes matched the live baseline.
+
+Fishfinger's first immediate extra route check failed an HTTP-status assertion
+after reload. The original assertion did not retain the row or actual status,
+so its exact cause is unknown; reload/backend settling is only a possibility.
+The approved scoped rollback ran successfully, native-validated and reloaded
+relayd, and restored both the original pair and Gogios file byte-for-byte.
+The original watchdog wrapper was terminated after verified rollback, its PID
+retained, and its publication marker cleared. Original backups were never
+overwritten. The same validated staging was then republished under a fresh
+15-minute guard after baseline revalidation. Bounded readiness probes returned
+200 before the complete acceptance suite passed. Neither host was accepted
+on a failed assertion.
+
+Each live Gogios merge preserved all 531 existing checks and every other
+configuration field, adding exactly ten Local checks without dependencies.
+The normal scheduled 15:00 UTC run produced all twenty new own-host results
+with Status 0 and no federation source: blowfish at 15:00:02–15:00:11 UTC,
+fishfinger at 15:00:01–15:00:39 UTC. This includes execution on the passive
+frontend; no forced Gogios run was used. Observed totals were 548 OK on
+blowfish and 558 OK on fishfinger, with one critical and one warning on each;
+the difference reflects peer results available during that cycle. Remaining
+non-OK states were the pre-existing standby.code TLS critical (current code
+certificate expires 2026-10-24 07:34:23 UTC) and KubeJobFailed warning. The
+separate code-certificate task ho3 was not activated or repaired here.
+
+Both acceptance markers disarmed their guards promptly. Private backups,
+incoming staging, rollback helper and status files remain under root:wheel
+0700 `/root/ro3-peer-certs-20261023` on each destination for separately approved
+cleanup; publication/rollback scratch directories were removed. Accepted
+guard wrappers may finish their original sleep and then exit without action.
+No full Gonf deployment, CA issuance or unrelated configuration change ran.
+A real scoped rollback/reload was exercised on fishfinger; automatic watchdog
+expiry and baseline-stopped daemon recovery were not deliberately triggered.
+Renewal custody remains the operator-assisted procedure above.
