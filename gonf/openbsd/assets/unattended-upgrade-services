@@ -10,4 +10,5 @@ inetd
 uptimed
 node_exporter
 dserver
+znc
 #gorum

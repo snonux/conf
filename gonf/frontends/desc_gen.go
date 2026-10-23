@@ -64,8 +64,14 @@ func (Monitoring) DescGogios() string {
 	return "Installs Gogios monitoring, checks, schedules, and status publishing"
 }
 
+func (Monitoring) DescLowRisk() string { return "Restricts monitoring and access-log files" }
+
 func (Monitoring) DescPkgRepo() string {
 	return "Configures the signed frontend package repository for interactive pkg_add"
+}
+
+func (Monitoring) DescRetireNRPE() string {
+	return "Removes NRPE after confirming it is unused and saving its package"
 }
 
 func (Web) DescACMEInvoke() string { return "Requests and renews frontend ACME certificates" }

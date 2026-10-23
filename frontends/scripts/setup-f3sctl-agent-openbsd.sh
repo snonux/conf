@@ -3,9 +3,11 @@
 # (blowfish / fishfinger).
 #
 # On the gateways the agent does exactly one thing: create and remove
-# /tmp/f3s_taken_down, the marker Gogios checks (OnlyIfNotExists) so that a
+# /var/db/f3s/monitoring/f3s_taken_down, the marker Gogios checks (OnlyIfNotExists) so that a
 # deliberate cluster shutdown does not page. That needs no privileges, so
-# unlike the FreeBSD f-hosts there are no doas rules here at all.
+# unlike the FreeBSD f-hosts there are no doas rules here at all. The gonf
+# frontends_low_risk task provisions the protected directory and helper.
+# This historical SSH bootstrap is not part of the dn3 rollout.
 #
 # The account still gets the full treatment -- own user, root-owned
 # authorized_keys outside its home, source-pinned key, ForceCommand -- because

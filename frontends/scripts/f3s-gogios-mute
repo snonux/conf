@@ -2,7 +2,7 @@
 # Set or clear the Gogios mute marker, as an SSH forced command.
 #
 # Gogios runs on the OpenBSD gateways, and its config keys several checks on
-# OnlyIfNotExists: /tmp/f3s_taken_down -- so muting alerts during a deliberate
+# OnlyIfNotExists: /var/db/f3s/monitoring/f3s_taken_down -- so muting alerts during a deliberate
 # cluster shutdown means touching a file on blowfish and fishfinger. That, and
 # nothing else, is why f3sctl reaches these hosts at all.
 #
@@ -17,9 +17,10 @@
 # for the f3sctl user in sshd_config, so the account can run this and nothing
 # else regardless of what the client asks for.
 
-set -eu
+set -efu
+umask 027
 
-MARKER=/tmp/f3s_taken_down
+MARKER=/var/db/f3s/monitoring/f3s_taken_down
 
 # The requested verb arrives in SSH_ORIGINAL_COMMAND, which is entirely
 # client-controlled. Require exactly one bare word from the allowlist: never
@@ -47,8 +48,8 @@ gogios-status)
     fi
     ;;
 gogios-mute)
-    # /tmp on purpose: a gateway reboot clears it, so a mute can never outlive
-    # the machine that set it.
+    # The protected directory admits only the restricted f3sctl writer.
+    # rc.local clears this marker at boot, preserving the old reboot behavior.
     : > "$MARKER"
     ;;
 gogios-unmute)

@@ -19,7 +19,7 @@ import (
 const (
 	customOpenBSDPackages = "https://pkgrepo.f3s.buetow.org/openbsd/7.9/packages/amd64/"
 	gogiosPluginDir       = "/usr/local/libexec/nagios"
-	f3sTakenDown          = "/tmp/f3s_taken_down"
+	f3sTakenDown          = "/var/db/f3s/monitoring/f3s_taken_down"
 )
 
 // Monitoring owns frontend monitoring and custom-package configuration.
@@ -121,13 +121,14 @@ func (Monitoring) Gogios() {
 		return
 	}
 	EachHost(func(server Server) {
-		plugins := Packages("monitoring-plugins", "nrpe")
+		plugins := Packages("monitoring-plugins")
 		cleanup := cleanupLegacyGogios()
 		gogios := Package("gogios", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
 		account := frontendAccount(serviceAccount{Name: "_gogios", Home: "/var/run/gogios"})
 		statusDir := Dir("/var/www/htdocs/buetow.org/self/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
 		runDir := Dir("/var/run/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
-		config := File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o744, Root), DependsOn(plugins, gogios, statusDir, runDir))
+		mute := installMuteControl(account)
+		config := File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o640, "root:_gogios"), DependsOn(plugins, gogios, statusDir, runDir, mute))
 		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, RootExec)
 		removeStaleDNSRoleFiles()
 		gogiosUser := WithCronUser("_gogios")
@@ -369,7 +370,7 @@ func addPingCheck(checks map[string]gogiosCheck, host string, proto int, address
 // mesh peer except the roaming clients and the rocky VM. The standalone
 // peers (f3) are pinged by address too, although the frontends' /etc/hosts
 // does not list them; like every non-frontend peer they pause while
-// /tmp/f3s_taken_down exists (`f3sctl power all off` sets it and powers f3
+// /var/db/f3s/monitoring/f3s_taken_down exists (`f3sctl power all off` sets it and powers f3
 // off with the rest).
 func addPingChecks(checks map[string]gogiosCheck) {
 	for _, role := range []string{"master", "standby"} {
