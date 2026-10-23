@@ -1,7 +1,7 @@
 # Duplicate Pi goprecords uploads (xn3)
 
-Local preparation dated 2026-10-22; independent review and live deployment
-remain pending. Both pi0 and pi1 need the cleanup. No live cron, script,
+Local preparation dated 2026-10-22, refreshed 2026-10-23; independent review
+and live deployment remain pending. Both pi0 and pi1 need the cleanup. No live cron, script,
 token, daemon, upload or service changes have been made for xn3.
 
 ## Current evidence
@@ -30,8 +30,16 @@ The application logs contain these adjacent records-upload outcomes on pi1:
 | 09:17:01.154188 | pi1/records | 400 | 27 ms |
 
 This pair precedes the 09:35 NFS failover incident (ao3). The later global
-upload 500s are investigated in pn3 and must be distinguished from the
+upload 500s were investigated in pn3 and must be distinguished from the
 intermittent 400s here.
+
+A read-only refresh on 2026-10-23 found the current `goprecords:0.6.1` pod
+Running and Ready. Four ordinary hourly cycles produced 16 records requests:
+eight successful HTTP 204 responses for each Pi, still two per Pi per cycle.
+These observations supersede the assumption that the daemon remains broken
+after startup; they do not prove the duplicate schedules have been removed.
+No production upload was forced. Derived status/timestamp metadata is retained
+outside Git with xn3's rollout evidence; no raw logs or credentials were saved.
 
 ## Receiver race
 
@@ -99,8 +107,8 @@ go test github.com/snonux/gonf/resource/cron \
 
 ## Approval and live acceptance still required
 
-1. Complete self-review and the required fresh expert review. The memory
-   guard currently prevents launching a reviewer (about 98% swap use).
+1. Complete self-review and the required fresh expert review, checking the
+   memory guard before launching the reviewer.
 2. Obtain explicit approval for the pinned recipe's serial pi1, then pi0
    rollout, including adoption of the two exact old root commands and removal
    of only `/usr/pkg/bin/goprecords-upload-client.sh` on each host. Inspect
@@ -113,8 +121,8 @@ go test github.com/snonux/gonf/resource/cron \
    crontab privately so unrelated jobs/environment are preserved. Reapply
    once to verify convergence. Do not recreate the old job as a rollback
    while the receiver race remains unfixed; stop on a failed adoption.
-4. After the separate pn3 daemon recovery succeeds, observe ordinary :17
-   uploads from both Pis. Require one records request per Pi and successful
+4. After cleanup, observe ordinary :17 uploads from both Pis. Require one
+   records request per Pi and successful
    payload completion (204), fresh timestamps and no 400s. A readiness 200
    or persisting 500 cannot satisfy this acceptance. No forced production
    upload, app restart or storage change is implied by the cron cleanup.
@@ -122,5 +130,6 @@ go test github.com/snonux/gonf/resource/cron \
    its own reviewed cleanup and real scheduled-upload gates pass.
 
 The cleanup has no dependency on completing the entire ao3 NFS HA redesign.
-Its upload-health acceptance does require actual recovery of the currently
-failing daemon. Do not widen this task into CARP tests, reboots or SSH policy.
+Its upload-health acceptance still requires a new ordinary scheduled cycle
+after cleanup; the successful preflight uploads do not satisfy that gate.
+Do not widen this task into CARP tests, reboots or SSH policy.
