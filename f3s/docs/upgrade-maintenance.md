@@ -1,9 +1,11 @@
 # Upgrade maintenance and coverage (jn3)
 
-Local preparation dated 2026-10-22, refreshed 2026-10-23. No upgrades,
-restarts, reboots, configuration deployments, Git publication or ArgoCD sync
-ran for this task. f3 and rocky are now up after separately authorized ordinary
-power-on work. Independent review and approved jn3 rollout remain pending.
+Prepared 2026-10-22, reviewed and approved for scoped rollout 2026-10-23.
+The approved source was published in integrated commit `91d7fb2`. Monitoring
+is deployed on f0–f3 and r1; standalone rocky's package updater completed its
+first timer-triggered run. r0/r2 deployment remains incomplete because fresh
+SSH connections authenticate but never open a command channel. No host or
+guest was rebooted. See the rollout acceptance section for the actual limits.
 
 ## Current evidence
 
@@ -20,13 +22,15 @@ f3's native kernel producer probe succeeded with reboot pending **0**; all four
 FreeBSD exporter targets were up. This checks installed versus running kernel
 versions, not whether a newer kernel is available upstream.
 
-Standalone rocky accepts strict, verified root SSH on port 22 without sharing
-a multiplexed connection. It reports Rocky Linux **9.8**, Europe/Sofia time,
+Before rollout, standalone rocky accepted strict, verified root SSH on port 22
+without sharing a multiplexed connection. It reported Rocky Linux **9.8**,
+Europe/Sofia time,
 working Python and `sudo -n true`, and root-owned mode-0755 gonf at
 `/usr/local/bin/gonf` plus its `/usr/bin/gonf` symlink. `ksh`, `yum-utils` and
-`needs-restarting` are absent, as are the unattended script, service, timer
-and last-daily stamp. The unattended coverage gap is confirmed. These checks
-installed no packages, refreshed no cache and started no update service.
+`needs-restarting` were absent, as were the unattended script, service, timer
+and last-daily stamp. This confirmed the unattended coverage gap. Those
+preflight checks installed no packages, refreshed no cache and started no
+service.
 Public-only evidence is retained outside Git beside this worktree in
 `../evidence/f3-kernel-20261023.json` and `rocky-preflight-20261023.json`.
 
@@ -50,7 +54,7 @@ every intermediate minor. A notice is a request to review, not approval to
 run the installer. The detailed existing procedure is in the f3s skill,
 `references/k3s/install.md`, section "Upgrading k3s".
 
-Prepared task `rnodes_k3s_version_monitor` installs a Python-stdlib checker on
+Task `rnodes_k3s_version_monitor` installs a Python-stdlib checker on
 r0–r2 and an hourly root cron at `:17`. It also runs once when installed or
 changed. The command has a 30-second timeout plus a five-second kill grace;
 the checker uses a five-second version subprocess timeout, ten-second HTTPS
@@ -86,24 +90,25 @@ through this inventory addition. No SSH authentication policy is changed.
 The shared daily package updater explicitly permits standalone rocky to
 update without a redundant partner and explicitly refuses its automatic
 reboot path. Existing Pi/r-node partner and reboot gates stay in place.
-Daily package upgrades can restart affected services; deploying and enabling
-the timer therefore needs explicit approval after a live preflight.
+Daily package upgrades can restart affected services. The user approved the
+missing prerequisites, updater and timer, including an immediate package
+update and affected service restarts, after the live preflight.
 
-The ordinary-access preflight above has succeeded. Preview and approve only
-the unattended tasks and missing package prerequisites needed there; do not
-deploy the whole evolving `rocky` aggregate. Verify the installed schedule,
-then observe a real scheduled update, successful daily stamp and deferred
-reboot. Package installation, deployment and runtime acceptance remain pending.
+The rollout used only the required unattended prerequisites and explicit
+`rocky_units` and `rocky_logrotate` tasks. It did not run the `rocky` aggregate.
+The timer immediately triggered a real update; the native service result,
+fresh successful stamp and explicit reboot deferral are recorded below.
 
 ## f3: approval-only kernel reboots with a visible pending state
 
-The proposed design preserves f3's existing no-automatic-reboot policy and
+The approved design preserves f3's existing no-automatic-reboot policy and
 makes pending kernel fixes visible for a separately approved, guest-aware
-maintenance window. This design still needs approval. The user's restriction
+maintenance window. No f3 reboot was approved or performed. The user's
+restriction
 covers recovery boots and SSH authentication changes; it is not a blanket ban
 on normal reboots. This preparation authorizes no guest stop or reboot.
 
-Prepared task `freebsd_monitoring_kernel_reboot_metrics` installs a five-minute
+Task `freebsd_monitoring_kernel_reboot_metrics` installs a five-minute
 read-only `freebsd-version -k` versus `-r` check on f0–f3. It publishes atomic
 metrics in the existing `/var/tmp/node_exporter` collector. Empty, malformed
 or failed version reads publish failed coverage, not a clean kernel result.
@@ -112,13 +117,14 @@ reachable exporter. Target-down monitoring remains responsible when f3 is
 offline. The existing updater's f0–f2 behavior is unchanged by this task.
 
 The monitoring prerequisite also manages node_exporter's existing configuration
-and may restart that exporter if it has drifted. Preview and include any such
-restart explicitly in approval. The check itself never updates the OS, stops
-guests or reboots a machine. The successful f3 kernel comparison satisfies the
-read-only preflight; deployed monitoring and any future pending-kernel
-maintenance still need separate operational acceptance.
+and may restart that exporter if it has drifted. Conditional exporter
+restarts were included in approval; all four configurations matched, so no
+exporter restart occurred. The check itself never updates the OS, stops
+guests or reboots a machine. The successful f3 kernel comparison satisfied the
+read-only preflight. Its deployed monitor passed real scheduled and scraped
+acceptance below; future kernel maintenance still needs separate approval.
 
-## Verification and rollout remaining
+## Verification
 
 Local tests exercise real JSON/version comparisons, local HTTP and subprocess
 I/O, failure publication, atomic replacement and kernel-read failures. Native
@@ -148,19 +154,59 @@ kernel comparison with no reboot pending. These are native read-only probes,
 not deployed cron/scrape/alert acceptance. The corrected shell producer also
 passed FreeBSD's native `sh -n` through SSH stdin. Local
 Gonf plans include the typed standalone timer and preserve the Dtail guard.
-Read-only evaluation against the live Prometheus API confirms three expected
-k3s inventory nodes and the current missing-check coverage on those three
-nodes and f0–f2. The proposed producers are not yet scraped. Temporary local
-port-forwards used for these reads were closed.
+Pre-rollout read-only evaluation confirmed the expected k3s node inventory
+and missing-check coverage. Temporary preflight port-forwards were closed.
 
-After fresh independent review, request a separate approval for the monitoring
-scripts/crons, any exporter drift correction and isolated publication/sync of
-`f3s/prometheus/manifests/upgrade-alerts.yaml`. Verify fresh files, successful
-scheduled ticks, actual scraped series/label joins, loaded rules and expected
-alert state. Alertmanager currently exposes these alerts in its UI; this
-task adds no email/webhook route. Rocky/f3 host preflights have succeeded;
-their scoped rollout and scheduled/scraped acceptance remain pending. No jn3
-rollout has been approved.
+## Rollout acceptance — 2026-10-23
+
+Fresh independent review found no blocking issue. Deployment used compiled
+source and assets pinned to `56f09d8`, fresh host previews, serial explicit
+tasks and private logs/backups. The required normal Gonf bootstrap from
+0.25.0 to 0.25.2 on r1/f3/rocky was approved, backed up privately and performed
+through normal push; no version guard was bypassed.
+
+- **f0–f3 kernel monitoring:** only the script and root cron changed. Existing
+  exporter prerequisites matched and their process IDs stayed unchanged.
+  Natural cron ticks at 15:05, 15:10 and 15:15 UTC published root:wheel 0644
+  metrics. Actual Prometheus scrapes showed success 1, pending 0 and fresh
+  timestamps on all four hosts, with textfile scrape errors 0. f0 remained
+  CARP MASTER, f1 BACKUP with its replica dataset read-only, and guests kept
+  their existing process IDs.
+- **r1 version monitoring:** the initial run and natural 15:17 UTC cron run
+  succeeded. The cron log recorded command start and completion; the fresh
+  metric timestamp `1792768621` was scraped with the expected node-exporter
+  service and node labels. Installed, same-minor and stable targets were
+  `v1.36.5+k3s1`, with patch and minor availability both 0.
+- **r0/r2 remain incomplete:** strict direct SSH and one bounded ProxyJump
+  through r1 authenticated but stalled before opening a command channel.
+  These hosts received no rollout changes. All three Kubernetes nodes
+  remained Ready at `v1.36.5+k3s1`; no k3s upgrade or restart was performed.
+- **Standalone rocky:** missing ksh/yum-utils, updater, stamp directory,
+  units and log rotation were installed. Enabling the approved timer
+  triggered its first real daily package update at 15:03:10 UTC. It finished
+  at 15:11:51 with native service result success and exit status 0, and wrote
+  root:root 0600 `last-daily` containing `2026-10-23`. The timer remained
+  enabled and active, next due at 18:55 Europe/Sofia. Kernel/package updates
+  and affected service restarts occurred; the log explicitly deferred the
+  standalone reboot. Its boot time remained 07:57:55 UTC (10:57:55 Europe/Sofia).
+- **Rocky limits:** `auditd` refused the updater's manual systemctl restart
+  (`RefuseManualStop=yes`); it remained active, and `needs-restarting -s`
+  still listed it. Fresh SSH then exhibited the same pre-command stall as
+  r0/r2, while the retained private pre-update connection remained usable.
+  No manual workaround, authentication change or reboot was attempted.
+- **Five alerts:** the single published `upgrade-alerts` PrometheusRule was
+  byte-checked against `91d7fb2`, server-dry-run validated and applied alone.
+  Native Prometheus loaded all five with healthy evaluations. Patch, minor,
+  kernel-pending and kernel-coverage alerts were inactive; k3s coverage was
+  correctly pending for exactly the undeployed r0/r2 nodes. Alertmanager
+  retains its existing UI-only routing; no email/webhook route was added.
+
+Public-only acceptance evidence and private operation logs are outside Git
+at `/home/paul/.local/state/conf-worktrees/jn3-rollout-20261023/live/`.
+Task jn3 remains unfinished pending r0/r2 deployment and their scheduled,
+scraped acceptance; the SSH access limitations and auditd warning remain
+explicit operational follow-up. No broad aggregate, NFS/CARP/failover,
+remount, SSH authentication or reboot operation ran for this rollout.
 
 Tests:
 
