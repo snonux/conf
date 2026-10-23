@@ -38,28 +38,56 @@ table <localhost> {
   ::1
 }
 http protocol "https" {
+    return error
 {{range .KeypairNames}}     tls keypair {{.}}
      tls keypair standby.{{.}}
 {{end}}     tls keypair {{.ServerFQDN}}
 
      http websockets
 
+    # set replaces all case-insensitive duplicates; remove alone only hides
+    # the first header in relayd. Clear before removing untrusted metadata.
+    # When absent on input, an empty synthetic field may remain (no value).
+    match request header set "X-Real-IP" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
+    match request header set "Forwarded" value ""
+    match request header remove "Forwarded"
+    match request header set "X-Forwarded-Host" value ""
+    match request header remove "X-Forwarded-Host"
+    match request header set "X-Forwarded-Port" value ""
+    match request header remove "X-Forwarded-Port"
+    match request header set "X-Forwarded-Server" value ""
+    match request header remove "X-Forwarded-Server"
+    match request header set "X-Forwarded-Prefix" value ""
+    match request header remove "X-Forwarded-Prefix"
+    match request header set "X-Forwarded-Uri" value ""
+    match request header remove "X-Forwarded-Uri"
+    match request header set "X-Forwarded-Method" value ""
+    match request header remove "X-Forwarded-Method"
+    match request header set "X-Forwarded-Tls-Client-Cert" value ""
+    match request header remove "X-Forwarded-Tls-Client-Cert"
+    match request header set "X-Forwarded-Tls-Client-Cert-Info" value ""
+    match request header remove "X-Forwarded-Tls-Client-Cert-Info"
+    # Host-only policy: no includeSubDomains or preload (other protocols and
+    # subdomains have separate HTTPS policies). Both protocols terminate TLS.
+    match response header set "Strict-Transport-Security" value "max-age=31536000"
     pass header "Connection"
     pass header "Upgrade"
     pass header "Sec-WebSocket-Key"
     pass header "Sec-WebSocket-Version"
     pass header "Sec-WebSocket-Extensions"
     pass header "Sec-WebSocket-Protocol"
-{{range .CodeBlocks}}    block request header "Host" value "{{.}}"
+    # Last matching pass/block wins. Put the default after the WebSocket
+    # pass rules, then admit only exact public Hosts (no port suffixes).
+    # OpenBSD rejects duplicate Host fields before evaluating these rules.
+    block request
+{{range .LocalhostHosts}}    pass request header "Host" value "{{.}}" forward to <localhost>
 {{end -}}
-{{range .LocalhostHosts}}    match request header "Host" value "{{.}}" forward to <localhost>
-{{end -}}
-{{range .F3SRoutes}}    match request header "Host" value "{{.Host}}" forward to <{{.Upstream}}>
-{{end}}    match request header "Host" value "www.snonux.foo" forward to <localhost>
-    match request header "Host" value "snonux.foo" forward to <f3s_static_proxy>
-    match request header "Host" value "standby.snonux.foo" forward to <f3s_static_proxy>
+{{range .F3SRoutes}}    pass request header "Host" value "{{.Host}}"{{if .Upstream}} forward to <{{.Upstream}}>{{end}}
+{{end}}    pass request header "Host" value "www.snonux.foo" forward to <localhost>
+    pass request header "Host" value "snonux.foo" forward to <f3s_static_proxy>
+    pass request header "Host" value "standby.snonux.foo" forward to <f3s_static_proxy>
     match response header "Server" value "OpenBSD httpd" tag "HTTPD_FALLBACK"
     match response tagged "HTTPD_FALLBACK" header set "Cache-Control" value "no-cache, no-store, must-revalidate"
     match response tagged "HTTPD_FALLBACK" header set "Pragma" value "no-cache"
@@ -70,7 +98,7 @@ relay "https4" {
     listen on {{.ServerIPv4}} port 443 tls
     protocol "https"
     session timeout 300
-    forward to <f3s> port 80 check tcp
+    forward to <f3s> port 31637 check tcp
     forward to <localhost> port 8080 check http "/" code 200
     forward to <f3s_static_proxy> port 18080 check tcp
     forward to <f3s_registry> port 30001 check tcp
@@ -82,7 +110,7 @@ relay "https6" {
     listen on {{.ServerIPv6}} port 443 tls
     protocol "https"
     session timeout 300
-    forward to <f3s> port 80 check tcp
+    forward to <f3s> port 31637 check tcp
     forward to <localhost> port 8080 check http "/" code 200
     forward to <f3s_static_proxy> port 18080 check tcp
     forward to <f3s_registry> port 30001 check tcp
@@ -113,27 +141,56 @@ relay "gemini6" {
 }
 
 http protocol "forgejo-alt" {
+    return error
     tls keypair code.f3s.buetow.org
     http websockets
+    # set replaces all case-insensitive duplicates; remove alone only hides
+    # the first header in relayd. Clear before removing untrusted metadata.
+    # When absent on input, an empty synthetic field may remain (no value).
+    match request header set "X-Real-IP" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-For" value "$REMOTE_ADDR"
     match request header set "X-Forwarded-Proto" value "https"
+    match request header set "Forwarded" value ""
+    match request header remove "Forwarded"
+    match request header set "X-Forwarded-Host" value ""
+    match request header remove "X-Forwarded-Host"
+    match request header set "X-Forwarded-Port" value ""
+    match request header remove "X-Forwarded-Port"
+    match request header set "X-Forwarded-Server" value ""
+    match request header remove "X-Forwarded-Server"
+    match request header set "X-Forwarded-Prefix" value ""
+    match request header remove "X-Forwarded-Prefix"
+    match request header set "X-Forwarded-Uri" value ""
+    match request header remove "X-Forwarded-Uri"
+    match request header set "X-Forwarded-Method" value ""
+    match request header remove "X-Forwarded-Method"
+    match request header set "X-Forwarded-Tls-Client-Cert" value ""
+    match request header remove "X-Forwarded-Tls-Client-Cert"
+    match request header set "X-Forwarded-Tls-Client-Cert-Info" value ""
+    match request header remove "X-Forwarded-Tls-Client-Cert-Info"
+    # Host-only policy: no includeSubDomains or preload (other protocols and
+    # subdomains have separate HTTPS policies). Both protocols terminate TLS.
+    match response header set "Strict-Transport-Security" value "max-age=31536000"
     pass header "Connection"
     pass header "Upgrade"
     pass header "Sec-WebSocket-Key"
     pass header "Sec-WebSocket-Version"
     pass header "Sec-WebSocket-Extensions"
     pass header "Sec-WebSocket-Protocol"
-    match request header "Host" value "code.f3s.buetow.org" forward to <f3s>
+    # This alternate listener admits only the public Forgejo authority.
+    block request
+    pass request header "Host" value "code.f3s.buetow.org"
+    pass request header "Host" value "code.f3s.buetow.org:2443"
 }
 relay "forgejo_alt4" {
     listen on {{.ServerIPv4}} port 2443 tls
     protocol "forgejo-alt"
-    forward to <f3s> port 80 check tcp
+    forward to <f3s> port 31637 check tcp
 }
 relay "forgejo_alt6" {
     listen on {{.ServerIPv6}} port 2443 tls
     protocol "forgejo-alt"
-    forward to <f3s> port 80 check tcp
+    forward to <f3s> port 31637 check tcp
 }
 
 relay "forgejo_ssh4" {

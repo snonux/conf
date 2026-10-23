@@ -6,6 +6,8 @@ Temporary plan/template files are retained and their location is printed.
 Native OpenBSD parsing is documented in frontends/docs/legacy-tls.md.
 """
 import copy
+import argparse
+import hashlib
 import json
 import ipaddress
 import os
@@ -70,17 +72,111 @@ def validate(config):
                 assert '--continue-after-certificate' in args
                 assert check['RunInterval'] == 300
                 assert not check.get('OnlyIfNotExists')
+                assert check.get('Local') is True
+                assert not check.get('DependsOn')
+
+
+def policy(protocol, headers):
+    """Narrow oracle for the reviewed 7.9 rules, not a daemon emulator."""
+    hosts = [value for name, value in headers if name.lower() == 'host']
+    if len(hosts) > 1:
+        return 400
+    status = 200
+    for line in protocol.splitlines():
+        line = line.strip()
+        if line == 'block request':
+            status = 403
+        elif line.startswith('pass request header "Host"'):
+            allowed = re.fullmatch(r'pass request header "Host" value "([^\"]+)"(?: forward to <[^>]+>)?', line)
+            assert allowed, line
+            if hosts == [allowed[1]]:
+                status = 200
+        elif line.startswith('pass header '):
+            field = re.fullmatch(r'pass header "([^\"]+)"', line)
+            assert field, line
+            if any(name.lower() == field[1].lower() for name, _ in headers):
+                status = 200
+        elif line.startswith(('pass ', 'block ')):
+            raise AssertionError('Unmodeled policy: ' + line)
+    return status
+
+
+def validate_policy(relay):
+    protocols = dict(re.findall(r'http protocol "([^\"]+)" \{\n(.*?)\n\}', relay, re.S))
+    for protocol in protocols.values():
+        assert protocol.count('    block request\n') == 1
+        assert '    return error\n' in protocol
+        allowed = re.findall(r'pass request header "Host" value "([^\"]+)"', protocol)
+        assert len(allowed) == len(set(allowed))
+        for name in allowed:
+            assert '.lan.' not in name and not any(c in name for c in '*?[]')
+            assert policy(protocol, [('Host', name)]) == 200
+        websocket = [('Connection', 'Host, Upgrade'), ('Upgrade', 'websocket')]
+        for denied in ['unknown.example', 'immich.f3s.lan.buetow.org',
+                       'joern.buetow.org.attacker.example', 'JOERN.BUETOW.ORG',
+                       'joern.buetow.org:443', 'joern.buetow.org.']:
+            assert policy(protocol, [('Host', denied)] + websocket) == 403
+        assert policy(protocol, websocket) == 403
+        assert policy(protocol, [('Host', allowed[0]), ('hOsT', allowed[0])]) == 400
+        # Native relayd starts permissive, so both regressions must be caught.
+        assert policy(protocol.replace('    block request\n', ''), [('Host', 'unknown.example')]) == 200
+        assert policy(protocol + '\npass header "Connection"', [('Host', 'unknown.example')] + websocket) == 200
+    for prefix in PREFIXES:
+        assert policy(protocols['https'], [('Host', prefix + 'joern.buetow.org')]) == 200
+    assert policy(protocols['forgejo-alt'], [('Host', 'joern.buetow.org')]) == 403
+
+
+def compare_live(configs, directory):
+    """Prove the complete rendered files contain only reviewed Joern deltas."""
+    for frontend, config in zip(('blowfish', 'fishfinger'), configs):
+        http, relay = (directory / (frontend + '-live-web.txt')).read_text().split('log connection\n', 1)
+        relay = 'log connection\n' + relay
+        stripped_http = config['/etc/httpd.conf']
+        stripped_relay = config['/etc/relayd.conf']
+        for prefix in PREFIXES:
+            name = prefix + 'joern.buetow.org'
+            pattern = r'^server "' + re.escape(name) + r'" \{\n  listen on \* port 80\n.*?^}\n'
+            stripped_http, count = re.subn(pattern, '', stripped_http, flags=re.M | re.S)
+            assert count == 1
+            rule = f'    pass request header "Host" value "{name}" forward to <localhost>\n'
+            assert stripped_relay.count(rule) == 1
+            stripped_relay = stripped_relay.replace(rule, '')
+        for name in ('joern.buetow.org', 'standby.joern.buetow.org'):
+            keypair = f'     tls keypair {name}\n'
+            assert stripped_relay.count(keypair) == 1
+            stripped_relay = stripped_relay.replace(keypair, '')
+        assert stripped_http == http, frontend + ' unexpected httpd delta'
+        assert stripped_relay == relay, frontend + ' unexpected relayd delta'
+        acme, script = (directory / (frontend + '-live-acme.txt')).read_text().split('#!/bin/sh\n', 1)
+        stripped_acme, count = re.subn(r'\ndomain joern\.buetow\.org \{.*?\n}\ndomain standby\.joern\.buetow\.org \{.*?\n}\n', '', config['/etc/acme-client.conf'], flags=re.S)
+        assert count == 1 and stripped_acme == acme
+        stripped_script = config['/usr/local/bin/acme.sh'].replace('joern.buetow.org site\nstandby.joern.buetow.org standby\n', '')
+        assert stripped_script == '#!/bin/sh\n' + script
+        old = json.loads((directory / (frontend + '-live-gogios.json')).read_text())
+        new = json.loads(config['/etc/gogios.json'])
+        added = set(new['Checks']) - set(old['Checks'])
+        assert len(added) == 29
+        assert all(name.startswith('Check Legacy HTTPS ') or 'joern.buetow.org' in name for name in added)
+        for name in added:
+            del new['Checks'][name]
+        assert new == old, frontend + ' unexpected monitoring delta'
+        print(f'PASS {frontend}: only 3 HTTP blocks, 2 keypairs, 3 Host rules, 2 ACME domains, 2 renewal rows, 29 added checks')
+        print('  unchanged live web SHA256:', hashlib.sha256(http.encode()).hexdigest(), hashlib.sha256(relay.encode()).hexdigest())
 
 
 def rejected(config):
     try:
         validate(config)
+        validate_policy(config['/etc/relayd.conf'])
     except AssertionError:
         return
     raise AssertionError('regression negative control passed unexpectedly')
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--compare-live', type=Path, help='directory of read-only public config snapshots')
+    args = parser.parse_args()
     scratch = Path(tempfile.mkdtemp(prefix='qo3-render-'))
     env = dict(os.environ, GOFLAGS='-p=1', GOMAXPROCS='2')
     subprocess.run([str(ROOT / 'gonf.sh'), 'plan', '-o', str(scratch / 'plan'),
@@ -104,6 +200,7 @@ def main():
     assert len(counts) == 5 and set(counts.values()) == {2}
     for config in configs:
         validate(config)
+        validate_policy(config['/etc/relayd.conf'])
         missing = copy.deepcopy(config)
         missing['/etc/relayd.conf'] = missing['/etc/relayd.conf'].replace(
             'tls keypair joern.buetow.org\n', '')
@@ -120,6 +217,24 @@ def main():
                 break
         missing['/etc/gogios.json'] = json.dumps(checks)
         rejected(missing)
+        for field, value in [('Local', False), ('DependsOn', ['Check Ping4 master.buetow.org'])]:
+            missing = copy.deepcopy(config)
+            checks = json.loads(missing['/etc/gogios.json'])
+            for name, check in checks['Checks'].items():
+                if name.startswith('Check Legacy HTTPS '):
+                    check[field] = value
+                    break
+            missing['/etc/gogios.json'] = json.dumps(checks)
+            rejected(missing)
+        missing = copy.deepcopy(config)
+        missing['/etc/relayd.conf'] = missing['/etc/relayd.conf'].replace('    block request\n', '')
+        rejected(missing)
+        missing = copy.deepcopy(config)
+        missing['/etc/relayd.conf'] = missing['/etc/relayd.conf'].replace(
+            '    block request\n', '    block request\n    pass request header "Host" value "unknown.example"\n')
+        rejected(missing)
+    if args.compare_live:
+        compare_live(configs, args.compare_live)
     print('PASS: actual rendered TLS/HTTP-01/Host/36 strict checks; missing keypair, SAN and verification negatives')
     print(f'Retained synthetic render fixture: {scratch}')
 

@@ -375,7 +375,9 @@ func addFrontendHostChecks(checks map[string]gogiosCheck) {
 // frontend's own public addresses, including aliases that resolve to its peer.
 // check_http deliberately does not verify names or trust chains; check_curl's
 // -D does both. Checking each frontend catches stale peer copies before DNS
-// failover exposes them. A 200 response also checks the explicit Host route.
+// failover exposes them. Local keeps them running on the passive frontend;
+// curl checks reachability itself, so no non-local ping can suppress it.
+// A 200 response also checks the explicit Host route.
 func addLegacyHTTPSChecks(checks map[string]gogiosCheck, server Server) {
 	for _, host := range List("joern.buetow.org", "dory.buetow.org", "ecat.buetow.org") {
 		for _, prefix := range TemplateData().Prefixes {
@@ -390,8 +392,7 @@ func addLegacyHTTPSChecks(checks map[string]gogiosCheck, server Server) {
 					"-e", "HTTP/1.1 200", "-t", "10")
 				checks[fmt.Sprintf("Check Legacy HTTPS IPv%d %s on %s", proto, name, server.Name)] = gogiosCheck{
 					Plugin: gogiosPluginDir + "/check_curl", Args: args,
-					RandomSpread: 10, RunInterval: 300,
-					DependsOn: []string{fmt.Sprintf("Check Ping%d %s", proto, server.FQDN)},
+					RandomSpread: 10, RunInterval: 300, Local: true,
 				}
 			}
 		}

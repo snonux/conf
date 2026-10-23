@@ -397,15 +397,14 @@ func renderRelayd(data webConfigData) (string, error) {
 type relaydTemplateData struct {
 	KeypairNames   []string
 	ServerFQDN     string
-	CodeBlocks     []string
 	LocalhostHosts []string
 	F3SRoutes      []relaydF3SRoute
 	ServerIPv4     string
 	ServerIPv6     string
 }
 
-// relaydF3SRoute is one prefixed host routed to a dedicated f3s upstream
-// table (Site.RelaydUpstream), rather than the generic f3s forwarding.
+// relaydF3SRoute is one allowed public host. An empty Upstream preserves
+// the relay-level f3s/localhost failover; dedicated upstreams select a table.
 type relaydF3SRoute struct {
 	Host     string
 	Upstream string
@@ -415,7 +414,6 @@ func relaydTemplateDataFor(data webConfigData) relaydTemplateData {
 	return relaydTemplateData{
 		KeypairNames:   relaydKeypairNames(),
 		ServerFQDN:     data.Server.FQDN,
-		CodeBlocks:     prefixed(data.Prefixes, "code.f3s.buetow.org"),
 		LocalhostHosts: relaydLocalhostHosts(data),
 		F3SRoutes:      relaydF3SRoutes(data),
 		ServerIPv4:     data.Server.IPv4,
@@ -443,21 +441,25 @@ func relaydLocalhostHosts(data webConfigData) []string {
 		if contains(data.F3SHosts, host) || host == "snonux.foo" {
 			continue
 		}
-		hosts = append(hosts, prefixed(data.Prefixes, host)...)
+		if SiteFor(host).FrontendHost {
+			hosts = append(hosts, host)
+		} else {
+			hosts = append(hosts, prefixed(data.Prefixes, host)...)
+		}
 	}
 	return hosts
 }
 
-// relaydF3SRoutes lists only the f3s sites with a dedicated upstream
-// (Site.RelaydUpstream); the rest use the generic f3s forwarding the
-// relay blocks already provide.
+// relaydF3SRoutes lists every allowed f3s site on port 443. Sites with a
+// dedicated HTTPS port are admitted only by that listener's protocol.
 func relaydF3SRoutes(data webConfigData) []relaydF3SRoute {
 	var routes []relaydF3SRoute
 	for _, host := range data.F3SHosts {
-		upstream := SiteFor(host).RelaydUpstream
-		if upstream == "" {
+		site := SiteFor(host)
+		if site.HTTPSPort != "" {
 			continue
 		}
+		upstream := site.RelaydUpstream
 		for _, prefix := range data.Prefixes {
 			routes = append(routes, relaydF3SRoute{Host: prefix + host, Upstream: upstream})
 		}
