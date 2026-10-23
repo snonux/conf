@@ -3,8 +3,8 @@
 Preparation dated 2026-10-22, with host coverage refreshed on 2026-10-23 and
 prepared for review on an isolated branch based on approved commit `86e26cb`.
 Fresh independent review passed and the local hook was activated on 2026-10-23.
-Publication of the seven reviewed scanner paths to GitHub and Forgejo is
-approved; the push and Pi3 key-file verification remain pending.
+The seven reviewed scanner paths were published to GitHub and Forgejo at
+`e454051` on 2026-10-23. Pi3 key-file verification remains pending.
 No keys, SSH policy, production configuration or Git history were changed.
 
 ## Fingerprint coverage
@@ -186,9 +186,12 @@ remains available, but that framework was not installed or activated.
 Configuring hooksPath affects the repository's other worktrees too. They need
 the reviewed hook files and the pinned tool available when committing.
 The owner approved publishing the seven reviewed scanner paths from the
-isolated branch to GitHub and Forgejo on 23 October; the push remains pending.
-Evolving conf master contains unrelated unapproved preparations and must not
-be pushed wholesale.
+isolated branch to GitHub and Forgejo on 23 October. Both active forges'
+`master` branches advanced from `86e26cb` to `e454051`, changing exactly those
+seven paths. The changed-range redacted scan reported zero findings and the
+native hook passed. The canonical checkout integrated that publication at
+`33cd169`. Evolving conf master contains unrelated unapproved preparations
+and must not be pushed wholesale.
 
 Finish Pi3 verification when normal access is available. Completed bounded
 investigations fo3 and go3 are independent
