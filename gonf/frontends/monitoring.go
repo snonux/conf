@@ -308,6 +308,7 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 	addFrontendHostChecks(checks)
 	addPiHTTPChecks(checks)
 	addSiteChecks(checks)
+	addPeerCertificateChecks(checks, server)
 	addGarageChecks(checks)
 	addFrontendServiceChecks(checks)
 	addSystemChecks(checks, server)
