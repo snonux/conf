@@ -1,11 +1,14 @@
-# Legacy Joern HTTPS repair (qo3, preparation 2026-10-23)
+# Legacy Joern HTTPS repair (qo3, deployed 2026-10-23)
 
-This change is local preparation. No issuance, production key access/copy,
-configuration deployment, DNS change, daemon activation or push was performed.
-Fresh review and concrete owner approval are still required. Do not mark qo3
-complete until public acceptance passes and the manual custody procedure below
-is approved. The selected renewal procedure is operator-assisted custody, as
-documented below; it still requires explicit deployment approval.
+Deployed on 23 October 2026 with explicit approval for the two owner
+issuances, two named-pair transfers, five scoped configuration files, serial
+httpd/relayd reloads, rollback and end-to-end acceptance. Reviewed source
+`830ddb8` was integrated into published `91d7fb2`, preserving the completed
+ro3 peer-certificate repair and its monitoring. The selected renewal procedure
+is **operator-assisted custody**, approved with this deployment; each future
+production transfer still requires explicit approval. The commands below
+record this rollout and provide the bounded procedure for subsequent approved
+work. They do not authorize a new issuance, transfer or activation.
 
 ## Evidence and intended behavior
 
@@ -48,6 +51,10 @@ on blowfish at 22:33:04, and bare/www.gogios.buetow.org on fishfinger at
 under separate urgent task **ro3**; this Joern change
 does not silently renew or transfer them.
 
+The four expiring peer copies above were refreshed under separately approved
+**ro3** before this deployment; their renewed pairs and monitoring remain
+preserved. These timestamps describe the original investigation.
+
 The change adds Joern to the existing topology and adds `check_curl -D` checks
 for all nine Joern/Dory/Ecat aliases on each frontend's own IPv4 and IPv6
 addresses. They verify trust, hostname, 200 content routing and expiry (warning
@@ -71,7 +78,7 @@ placeholder does not provide valid HTTPS. Running `frontends_acme_invoke` would
 also process unrelated certificates and may reload/restart consumers, so it is
 not the scoped action for this repair.
 
-Proposed initial custody, requiring explicit approval:
+The approved initial custody procedure:
 
 1. Issue `joern.buetow.org` with SAN `www.joern.buetow.org` on blowfish.
 2. Issue `standby.joern.buetow.org` on fishfinger.
@@ -109,7 +116,7 @@ issuance, key-transfer and activation scope.
 
 ## Publishable source and exact runtime delta
 
-The source remains based on published `613310e`, with preparation `6689272`
+The reviewed preparation was based on published `613310e`, with `6689272`
 and a narrow integration of the already reviewed `3cd0355` lineage. Only its
 `relayd.conf.tmpl` and relayd data builders from `web.go` are adopted. Published
 recipe activation, PF, inetd, httpd listener layout and all 9n3 authentication,
@@ -135,7 +142,7 @@ content, mirror account, rsync credentials, cron schedule or package change is
 part of deployment. Source publication and production activation are separate
 approvals; do not run the full frontend aggregate or full Gogios setup task.
 
-## Approval scope and private preflight (not executed)
+## Approval scope and private preflight
 
 Approve initial HTTP-01 configuration, issuance of exactly the two Joern
 certificates on their DNS owners, named-pair transfer in both directions,
@@ -155,7 +162,7 @@ The new Local monitoring checks will expose the known ro3 stale peer copy;
 that warning is not permission to transfer or renew an unrelated pair.
 
 After approval, on each frontend as root, create an exclusive 0700 directory.
-These are examples of **future live-operation commands**, not preparation:
+These live-operation commands were used for the approved rollout; a retry must use a fresh exclusive directory:
 
 ```sh
 set -eu
@@ -192,7 +199,7 @@ preflight. Do not overwrite backups or reuse this directory on a retry. Keep
 all private staging on the frontends, outside the content mirror and controller
 disk. Retain backups after acceptance for an explicitly approved rollback.
 
-## Initial issuance and named-pair transfer (not executed)
+## Initial issuance and named-pair transfer
 
 First install only the reviewed httpd candidate, validate with
 `timeout 30 httpd -n -f <candidate>`, then perform the approved
@@ -273,7 +280,7 @@ untrusted, wrong-name, wrong-pin and mismatched inputs fail without printing
 key material or prompting. Every validator invocation reads only staged keys
 **after approval**; preparation uses isolated synthetic fixtures.
 
-## Publication, acceptance and rollback (not executed)
+## Publication, acceptance and rollback
 
 Publish one frontend at a time. Both named pairs must already be validated on
 both frontends. Stage each chain beside `/etc/ssl/<name>.fullchain.pem` and key
@@ -391,3 +398,62 @@ regressions pass. No task method descriptions changed, so no generation delta.
 
 Protocol references: [OpenBSD acme-client](https://man.openbsd.org/acme-client.1)
 and [acme-client.conf](https://man.openbsd.org/acme-client.conf.5).
+
+## Live acceptance on 23 October 2026
+
+The current live files were captured again before deployment. Removing only
+the reviewed Joern additions from the integrated render reproduced both live
+configurations exactly. Each frontend retained all **541 existing checks**,
+including ro3's peer checks, and gained exactly 29 checks, for 570 total.
+Root-private backups, scoped issuance material and rollback scripts remain on
+each frontend under `/root/qo3-legacy-tls-20261023`. The daily ACME schedules
+were preserved; no ACME process was active and work occurred outside their
+renewal windows. No full frontend aggregate or broad ACME invocation was run.
+
+Exactly two owner issuances returned status zero. At 15:13 UTC, both named pairs were then
+streamed over strict, authenticated SSH directly into private peer staging;
+no private-key bytes entered controller files, logs or arguments. Independent
+owner observations supplied these public leaf pins and expiries:
+
+| Certificate / owner | Public leaf SHA256 | Expires UTC |
+| --- | --- | --- |
+| Joern + www / blowfish | `c9e0c012bd0e25f0d88bca43abae794e59d91ad6c448dc6f65b8e24a1fb78ee2` | 2027-01-21 14:14:02 |
+| standby.joern / fishfinger | `68b060d2f4216d140cf525d117f5040dfa46f7e7c77d5aa0fab306eba2d3caf7` | 2027-01-21 14:14:31 |
+
+All four staged certificate validations passed exact SAN, trusted server chain,
+public pin, more than 30 days remaining and private-key correspondence. Both
+live copies of each chain/key are regular files, root:wheel 0444/0400; each
+`.crt` is a symlink to its matching full-chain path. No unrelated key was
+issued, copied or replaced. Owner account keys remained local.
+
+HTTPD challenge-only configuration was activated serially before issuance.
+Final publication was also serial, with native HTTPD/relayd/ACME syntax checks
+and bounded reloads; no restart was needed. Bounded backend readiness observed
+502, 502, 200 on blowfish and 502, 200 on fishfinger before formal acceptance.
+No rollback was required. A diagnostic initially expected HTTP 301, while
+the reviewed configuration correctly returns 302; its assertion was corrected.
+A post-issuance metadata command used an unsupported LibreSSL `x509 -ext`
+option; the successful issuance was not repeated, and dates were read with
+supported options. These were acceptance-driver issues, not service failures.
+
+| Check | Observed result |
+| --- | --- |
+| Public legacy TLS and content | All nine Joern/Dory/Ecat aliases return verified HTTPS 200 with correct SNI on both IPv4 and IPv6 addresses of both frontends: 36 probes. Both Joern copies match body SHA256 `aa74e99cf73020129fd7b102a3c7583421929388f07d0d20af94c168e325064e`; Dory/Ecat pins, expiries and bodies match their fresh baseline. HSTS is preserved. |
+| HTTP challenge and redirects | All three Joern aliases on all four frontend addresses serve the expected challenge path and redirect with 302 to the same HTTPS alias, preserving path/query: 12 combined assertions. |
+| Host and LAN boundaries | Unknown, LAN, suffix, case, explicit port, trailing dot and missing Host return 403; duplicate Host returns 400, with and without WebSocket/Connection headers, on all four addresses: 64 denial assertions. Dedicated code port 2443, port-443 denial and LAN denial remain unchanged. |
+| ro3 preservation | Its refreshed peer pins, strict TLS, content and lifetime probes still pass on both frontends. All prior monitoring check definitions remain unchanged. |
+| Nonroot mirror and authentication | Existing module hiding, anonymous/wrong-password/wrong-user denial and authenticated dry runs pass for both album modules on both hosts. Root has no mirror schedule; fishfinger retains its `_joernsync` schedule. Normal 17:15 CEST cron invocation was observed; a separate native run as `_joernsync` returned zero with zero wrong-owner entries. PF, inetd, rsync config/script, credential metadata and unrelated cron remain unchanged. |
+| Monitoring | Both frontends actually ran all 18 new Local strict checks in their normal 15:15 UTC cycles, including passive fishfinger: 36/36 own-host results OK, no federation and no dependencies. These completed state rows were confirmed at 15:20 UTC. Each host has exactly 570 configured checks with all 541 prior definitions preserved; only the two baseline alerts below remain. |
+
+Manual renewal custody is accepted: after every owner renewal, request approval
+for the named peer refresh, independently observe the owner's new public pin,
+repeat staged validation/publication and peer reload, and record transfer time,
+source/destination, pin and expiry in qo3. Respond to peer warnings at 20 days
+remaining, before the 7-day critical threshold. This repair adds no automatic
+key replication, new credential or SSH authentication policy.
+
+The existing `standby.code.f3s.buetow.org` certificate critical (ho3, expiry
+24 October 07:34:23 UTC) and `Prometheus: KubeJobFailed` warning remain outside
+this repair. Do not describe the overall monitoring state as all green.
+Private controller evidence is retained under
+`~/.local/state/conf-worktrees/qo3-live-20261023/ops/`.
