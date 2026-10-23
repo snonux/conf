@@ -141,6 +141,9 @@ var acmeHosts = []string{
 	"buetow.org",
 	"git.buetow.org",
 	"paul.buetow.org",
+	// Joern preview DNS is intentionally fixed to blowfish (standby to
+	// fishfinger); the existing manual DNS entries keep that preview policy.
+	"joern.buetow.org",
 	"dory.buetow.org",
 	"ecat.buetow.org",
 	"znc.buetow.org",

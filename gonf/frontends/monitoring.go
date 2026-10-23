@@ -309,6 +309,7 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 	addPiHTTPChecks(checks)
 	addSiteChecks(checks)
 	addPeerCertificateChecks(checks, server)
+	addLegacyHTTPSChecks(checks, server)
 	addGarageChecks(checks)
 	addFrontendServiceChecks(checks)
 	addSystemChecks(checks, server)
@@ -367,6 +368,33 @@ func addFrontendHostChecks(checks map[string]gogiosCheck) {
 			addPingCheck(checks, fqdn, proto, fqdn, 3, false)
 		}
 		checks["Check TLS Certificate "+fqdn] = gogiosCheck{Plugin: gogiosPluginDir + "/check_http", Args: List("--sni", "-H", fqdn, "-C", "20"), RandomSpread: 10, RunInterval: 3600, DependsOn: pingDependencies(fqdn)}
+	}
+}
+
+// addLegacyHTTPSChecks verifies the mirrored legacy sites against this
+// frontend's own public addresses, including aliases that resolve to its peer.
+// check_http deliberately does not verify names or trust chains; check_curl's
+// -D does both. Checking each frontend catches stale peer copies before DNS
+// failover exposes them. A 200 response also checks the explicit Host route.
+func addLegacyHTTPSChecks(checks map[string]gogiosCheck, server Server) {
+	for _, host := range List("joern.buetow.org", "dory.buetow.org", "ecat.buetow.org") {
+		for _, prefix := range TemplateData().Prefixes {
+			name := prefix + host
+			for _, proto := range []int{4, 6} {
+				address := server.IPv4
+				if proto == 6 {
+					address = server.IPv6
+				}
+				args := List("-S", "-D", "--sni", "-H", name, "-I", address,
+					fmt.Sprintf("-%d", proto), "-C", "20,7", "--continue-after-certificate",
+					"-e", "HTTP/1.1 200", "-t", "10")
+				checks[fmt.Sprintf("Check Legacy HTTPS IPv%d %s on %s", proto, name, server.Name)] = gogiosCheck{
+					Plugin: gogiosPluginDir + "/check_curl", Args: args,
+					RandomSpread: 10, RunInterval: 300,
+					DependsOn: []string{fmt.Sprintf("Check Ping%d %s", proto, server.FQDN)},
+				}
+			}
+		}
 	}
 }
 
