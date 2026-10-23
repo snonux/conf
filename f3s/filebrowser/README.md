@@ -7,7 +7,7 @@ change it.
 Runs a patched build of the fork `~/git/filebrowser` (`snonux/filebrowser`),
 not the upstream image: upstream was archived on 2026-09-01 and left published
 security advisories unfixed. The image lives in the f3s registry, tagged with
-the fork's server release (`v2.63.24` currently).
+the fork's server release (`v2.63.25` currently).
 
 Volumes under `/data/nfs/k3svolumes/filebrowser/`: `data` (50Gi, also served
 by [WebDAV](../webdav/README.md)), `database` (1Gi), `config` (1Gi). Create
