@@ -1,9 +1,10 @@
 # Foostats private visitor statistics (task an3)
 
-Local preparation only. No production key, counter directory, export, daily
-hook or public archive has been changed. Task an3 requires its own reviewed
-rollout approval. It is composed on the prepared 9n3 branch, whose authenticated
-album publishing and Joern ownership migration must be completed first.
+The reviewed privacy change is deployed on both OpenBSD frontends. See the
+[live acceptance record](foostats-privacy-acceptance-20261023.md) for source
+pins, retained-history coverage, actual private WireGuard replication and
+scoped archive cleanup. The user approved keeping reports and applying this
+fix after 9n3's authenticated publishing and nonroot mirror rollout completed.
 Neither task authorizes PF, SSH, HTTPD, CARP, NFS or recovery-mode changes.
 
 ## Source and data flow
@@ -79,7 +80,7 @@ a symlink root. Other files and aggregate reports survive. Refresh the
 inventory on both hosts before approval; unexpected per-visitor files need
 explicit inspection and a reviewed cleanup update.
 
-## Approved rollout sequence (not executed)
+## Approved rollout sequence
 
 1. Finish 9n3 review and its approved rollout. Review the paired an3 Foostats
    and conf commits and obtain explicit approval for key provisioning,
