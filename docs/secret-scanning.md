@@ -4,8 +4,10 @@ Preparation dated 2026-10-22, with host coverage refreshed on 2026-10-23 and
 prepared for review on an isolated branch based on approved commit `86e26cb`.
 Fresh independent review passed and the local hook was activated on 2026-10-23.
 The seven reviewed scanner paths were published to GitHub and Forgejo at
-`e454051` on 2026-10-23. Pi3 key-file verification remains pending.
-No keys, SSH policy, production configuration or Git history were changed.
+`e454051` on 2026-10-23. Dated key-file checks cover all 14 known hosts,
+and current GitHub, Forgejo and ArgoCD inventories were verified on 23 October.
+No key material, SSH policy or production configuration was changed, and
+history was not rewritten.
 
 ## Fingerprint coverage
 
@@ -14,16 +16,17 @@ The previously derived public fingerprint is
 committed at `eff2c9c` and removed at `5f06401`; no disk copy of that
 historical private key was made for this check. Public history remains intact.
 
-Fresh checks found no matching fingerprint in:
+Dated checks found no matching fingerprint in:
 
 | Source | Verified coverage |
 | --- | --- |
 | Host key files, 22 October | f0, f1, f2, r0, r1, r2, pi0, pi1, pi2, blowfish, fishfinger |
 | Host key files, 23 October | f3 and rocky: seven nonempty file visits, no parse errors or target matches; standard key paths, no global external key command |
-| GitHub | 3 user keys; deploy-key lists of all 99 owned repositories, containing 1 deploy key |
+| Pi3 key files, 23 October | Two nonempty file visits, no parse errors or target matches; standard key paths, no global external key command |
+| GitHub, refreshed 23 October | 3 user keys; deploy-key lists of all 99 owned repositories, containing 1 deploy key; no parse errors or target matches |
 | Codeberg | 2 keys from the published `snonux.keys` endpoint |
-| Forgejo | Read-only DB query: 3 public keys, 0 deploy-key rows |
-| ArgoCD | Active `cicd/git-server-repo-creds` repository key parsed and different |
+| Forgejo, refreshed 23 October | Read-only DB query: 3 public keys, 0 deploy-key rows; no parse errors or target matches |
+| ArgoCD, refreshed 23 October | Active `cicd/git-server-repo-creds` repository key parsed and different |
 
 Host inspection covered common key-file roots and account `.ssh` directories
 without following unrelated filesystem mounts. All inspected hosts reported
@@ -56,21 +59,40 @@ checks; these seven visits are additional.
 Rocky's initial probe timed out after 40 seconds. A fresh verified connection
 with client connection sharing disabled completed both `true` and the complete
 key audit. This changed only the diagnostic command's SSH options, not SSH
-configuration or authentication policy. These dated checks cover 13 of the 14
-known hosts. Sanitized evidence remains outside Git in the original preparation's
+configuration or authentication policy. These checks initially covered 13 of
+the 14 known hosts. Sanitized evidence remains outside Git in the original preparation's
 `/home/paul/.local/state/conf-worktrees/kn3-secret-scanning-20261022/evidence/`
 directory: `authorized-key-audit-20261023.json`, `rocky-ssh-access-20261023.json`
 and `rocky-authorized-key-audit-20261023.json`. The initial timeout is retained
 alongside the completed result; this review branch does not relocate the evidence.
 
-**Still unverified:** pi3's earlier SSH probe did not complete and only that
-owned client process was terminated after inspection. A fresh 23 October
-probe with connection sharing disabled also exceeded its 40-second bound;
+Pi3's earlier SSH probe did not complete and only that owned client process
+was terminated after inspection. An early 23 October probe with connection
+sharing disabled also exceeded its 40-second bound;
 `pi3-authorized-key-audit-20261023.json` in that same evidence directory records
-that failure without claiming key coverage. Pi3, tracked by **1g3**, is the
-remaining active-host coverage gap.
-No power operation, gateway access or SSH-auth change was performed by these
-key checks. The dated checks do not prove that the leaked key is unusable everywhere.
+that failure without claiming key coverage.
+
+A later 23 October connection using the existing normal SSH key succeeded
+after 120.659 seconds; normal sudo succeeded after 120.367 seconds. The same
+existing read-only key audit then completed in 121.649 seconds: default key
+paths, no global external key command, account key roots enumerated, two
+nonempty key-file visits, zero parse errors, zero target matches and successful
+find completion. The original SSH result was successful; an inherited master
+output pipe delayed the outer tool response until the private connection
+master was closed after the audit. That delay was not an SSH timeout.
+Task **1g3** records the delayed but working access; no Pi-hole upgrade ran.
+
+These checks complete dated coverage of all 14 known hosts. Pi3 evidence is
+retained outside Git at
+`/home/paul/.local/state/conf-worktrees/kn3-pi3-access-20261023/key-audit-result.json`.
+Fresh GitHub/Forgejo and ArgoCD summaries in the same directory's
+`active-forge-summary.json` report no target matches or parse errors. All 99
+GitHub deploy-key lists were verified without an unverified repository; the
+current ArgoCD key was parsed in an anonymous mode-0600 RAM file without
+saving or printing its private bytes. No power operation, gateway access,
+service or SSH-auth change was performed by these key checks. Coverage is
+the inspected key files and active inventories on the stated dates, not a
+proof about every external machine or historical copy of the leaked key.
 
 ## Local scanner
 
@@ -134,7 +156,7 @@ commit `0f8661f` reported **13 potential findings**: 8 generic API-key
 detections, 2 curl user-auth detections, 2 curl header-auth detections and the
 known historical private key. This is not a clean history result. The prior audit records
 rotation of ArgoCD admin material and replacement of the old repository key;
-the key-inventory gaps above remain open. The seven non-Argo detections were
+the dated current-inventory verification is recorded above. The seven non-Argo detections were
 triaged in **fo3**; its bounded local report completed independent review on
 23 October at `de9edcc:docs/historical-secret-triage.md`. Follow-up **go3**
 completed review of the historical LiteLLM token's dated retirement/reuse
@@ -150,7 +172,7 @@ does not suppress new secrets merely because a historical scan has findings.
 Default upstream rule coverage and exclusions still apply; a passing scan
 cannot prove that every possible secret format is absent.
 
-## Local activation and remaining completion
+## Local activation, publication and completion
 
 Read-only inspection on 23 October found no Gitleaks executable on the active
 PATH, no configured `core.hooksPath` and no `.git/hooks/pre-commit` in the
@@ -193,10 +215,14 @@ native hook passed. The canonical checkout integrated that publication at
 `33cd169`. Evolving conf master contains unrelated unapproved preparations
 and must not be pushed wholesale.
 
-Finish Pi3 verification when normal access is available. Completed bounded
-investigations fo3 and go3 are independent
-of this staged-hook/key-revocation task. Any necessary revocation/rotation
+The required local scanner, independent review, two-forge source publication
+and dated active-inventory checks are complete within the scope above.
+The audit found no matching fingerprint in inspected files across all 14
+known hosts or in the verified active GitHub, Forgejo and ArgoCD inventories.
+This does not establish universal revocation or a clean history scan;
+historical findings and the former Codeberg coverage limits remain recorded.
+Completed bounded investigations fo3 and go3 are independent of this
+staged-hook/key-verification task. Any necessary revocation/rotation
 or history rewrite needs its own explicit authorization. The user's SSH
 policy and recovery-boot/power-cycle opt-outs remain in effect; the separately
 authorized ordinary rack startup does not permit further power operations.
-kn3 stays unfinished.
