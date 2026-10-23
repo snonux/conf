@@ -436,10 +436,32 @@ func addSiteChecks(checks map[string]gogiosCheck) {
 			continue
 		}
 		addHostChecks(checks, site)
+		addAlternateCertificateChecks(checks, site)
 		addHTTPSChecks(checks, site)
 		if site.Family != 0 {
 			checks[fmt.Sprintf("Check HTTP IPv%d %s", site.Family, site.Name)] = httpCheck(
 				List(site.Name, fmt.Sprintf("-%d", site.Family)), []string{fmt.Sprintf("Check Ping%d master.buetow.org", site.Family)})
+		}
+	}
+}
+
+// addAlternateCertificateChecks watches the primary certificate on each
+// frontend, independently of which frontend currently owns the site's DNS.
+// The standby SNI certificate is a separate keypair, so checking only the
+// standby name cannot detect stale primary material on the failover host.
+func addAlternateCertificateChecks(checks map[string]gogiosCheck, site Site) {
+	if site.FrontendHost || site.Family != 0 || site.HTTPSPort == "" {
+		return
+	}
+	for _, name := range List(Master, Standby) {
+		server := MustServer(name)
+		checkName := fmt.Sprintf("Check TLS Certificate %s via %s:%s", site.Name, server.FQDN, site.HTTPSPort)
+		checks[checkName] = gogiosCheck{
+			Plugin: gogiosPluginDir + "/check_http",
+			Args: List("--sni", "-H", site.Name, "-I", server.IPv4,
+				"-p", site.HTTPSPort, "-C", "20"),
+			RandomSpread: 10, RunInterval: 3600,
+			DependsOn: List("Check Ping4 " + server.FQDN),
 		}
 	}
 }

@@ -143,6 +143,7 @@ relay "gemini6" {
 http protocol "forgejo-alt" {
     return error
     tls keypair code.f3s.buetow.org
+    tls keypair standby.code.f3s.buetow.org
     http websockets
     # set replaces all case-insensitive duplicates; remove alone only hides
     # the first header in relayd. Clear before removing untrusted metadata.
