@@ -146,5 +146,118 @@ class KernelTests(unittest.TestCase):
                         self.assertIn("kernel_reboot_pending " + str(pending), result.stdout)
 
 
+class KernelPublicationTests(unittest.TestCase):
+    """Exercise the nobody-owned directory boundary using synthetic files.
+
+    Hooks deterministically perform the directory owner's allowed replacement
+    at the vulnerable command boundary. FreeBSD stat is adapted on Linux;
+    file writes, permissions, rename, symlinks and cleanup are real.
+    """
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        for name in ("bin", "metrics", "private-staging", "private-directory"):
+            (self.root / name).mkdir(mode=0o700)
+        self.metric = self.root / "metrics/kernel_reboot.prom"
+        self.private = self.root / "synthetic-private"
+        self.private.write_text("synthetic private data\n")
+        self.private.chmod(0o600)
+        self.env = {**os.environ,
+                    "KERNEL_METRICS_TEST_PATH": str(self.root / "bin") + os.pathsep + os.defpath,
+                    "KERNEL_METRICS_TEST_OUTPUT": str(self.metric),
+                    "KERNEL_METRICS_TEST_PUBLISH_PARENT": str(self.root / "private-staging"),
+                    "FIXTURE_ROOT": str(self.root)}
+        self.stub("freebsd-version", 'echo 15.1-RELEASE-p2\n')
+        if not sys.platform.startswith("freebsd"):
+            self.stub("stat", 'test "$1" = -f && test "$2" = %d\n'
+                      'exec python3 -c "import os,sys; print(os.stat(sys.argv[1]).st_dev)" "$3"\n')
+
+    def stub(self, name, body):
+        tool = self.root / "bin" / name
+        tool.write_text("#!/bin/sh\nset -eu\n" + body)
+        tool.chmod(0o755)
+
+    def run_producer(self, status=0):
+        result = subprocess.run(["sh", str(KERNEL)], env=self.env,
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, status, result.stderr)
+        self.assertEqual(list((self.root / "private-staging").iterdir()), [])
+        self.assertEqual(self.private.read_text(), "synthetic private data\n")
+        self.assertEqual(self.private.stat().st_mode & 0o777, 0o600)
+        return result
+
+    def test_private_staging_avoids_public_write_and_chmod_races(self):
+        hooks = {
+            "mktemp": 'p=$(/usr/bin/mktemp "$@")\n'
+                      'case "$p" in "$FIXTURE_ROOT"/metrics/*)\n'
+                      'rm -f "$p"; ln -s "$FIXTURE_ROOT/synthetic-private" "$p";; esac\n'
+                      'printf "%s\\n" "$p"\n',
+            "chmod": 'case "$2" in "$FIXTURE_ROOT"/metrics/*)\n'
+                     'rm -f "$2"; ln -s "$FIXTURE_ROOT/synthetic-private" "$2";; esac\n'
+                     'exec /bin/chmod "$@"\n',
+        }
+        for command, body in hooks.items():
+            with self.subTest(boundary=command):
+                self.stub(command, body)
+                self.run_producer()
+                self.assertIn("kernel_check_success 1", self.metric.read_text())
+                self.assertFalse(self.metric.is_symlink())
+                self.assertEqual(self.metric.stat().st_mode & 0o777, 0o644)
+                (self.root / "bin" / command).unlink()
+
+    def test_destination_symlink_to_directory_is_replaced(self):
+        target = self.root / "private-directory"
+        self.metric.symlink_to(target, target_is_directory=True)
+        self.run_producer()
+        self.assertEqual(list(target.iterdir()), [])
+        self.assertFalse(self.metric.is_symlink())
+        self.assertIn("kernel_check_success 1", self.metric.read_text())
+
+    def test_failed_rename_preserves_previous_metrics(self):
+        self.metric.write_text("previous 1\n")
+        self.stub("mv", 'exit 1\n')
+        self.run_producer(status=1)
+        self.assertEqual(self.metric.read_text(), "previous 1\n")
+
+    def test_failed_kernel_read_publishes_failed_coverage(self):
+        self.metric.write_text("node_freebsd_kernel_check_success 1\n")
+        self.stub("freebsd-version", 'exit 1\n')
+        self.run_producer(status=1)
+        self.assertIn("kernel_check_success 0", self.metric.read_text())
+        self.assertNotIn("kernel_reboot_pending", self.metric.read_text())
+
+    def test_cross_filesystem_publication_refused_before_move(self):
+        self.metric.write_text("previous 1\n")
+        self.stub("stat", 'case "$3" in .) echo 2;; *) echo 1;; esac\n')
+        self.stub("mv", 'touch "$FIXTURE_ROOT/unexpected-move"\nexit 1\n')
+        self.run_producer(status=1)
+        self.assertFalse((self.root / "unexpected-move").exists())
+        self.assertEqual(self.metric.read_text(), "previous 1\n")
+
+    def test_collector_symlink_redirect_refused(self):
+        self.metric.parent.rmdir()
+        self.metric.parent.symlink_to(self.root / "private-directory", target_is_directory=True)
+        self.run_producer(status=1)
+        self.assertEqual(list((self.root / "private-directory").iterdir()), [])
+
+    def test_directory_is_pinned_before_final_rename(self):
+        self.stub("stat", 'if [ "$3" = . ]; then\n'
+                  '/bin/mv "$FIXTURE_ROOT/metrics" "$FIXTURE_ROOT/moved-metrics"\n'
+                  'ln -s "$FIXTURE_ROOT/private-directory" "$FIXTURE_ROOT/metrics"\n'
+                  'fi\nprintf "1\\n"\n')
+        self.run_producer()
+        self.assertEqual(list((self.root / "private-directory").iterdir()), [])
+        self.assertIn("kernel_check_success 1",
+                      (self.root / "moved-metrics/kernel_reboot.prom").read_text())
+
+    def test_signal_before_publication_preserves_previous_metrics(self):
+        self.metric.write_text("previous 1\n")
+        self.stub("chmod", 'kill -TERM "$PPID"\nexec /bin/chmod "$@"\n')
+        self.run_producer(status=1)
+        self.assertEqual(self.metric.read_text(), "previous 1\n")
+
+
 if __name__ == "__main__":
     unittest.main()

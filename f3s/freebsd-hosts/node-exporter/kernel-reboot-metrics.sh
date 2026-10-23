@@ -7,7 +7,7 @@ umask 077
 
 mode=${1:-}
 case $mode in
-    '') output=/var/tmp/node_exporter/kernel_reboot.prom ;;
+    '') output=${KERNEL_METRICS_TEST_OUTPUT:-/var/tmp/node_exporter/kernel_reboot.prom} ;;
     --stdout) output= ;;
     *) exit 64 ;;
 esac
@@ -46,10 +46,26 @@ emit() {
 if [ -z "$output" ]; then
     emit
 else
-    temporary=$(mktemp "${output}.XXXXXX")
-    trap 'rm -f "$temporary"' EXIT HUP INT TERM
-    emit >"$temporary"
-    chmod 644 "$temporary"
-    mv -f "$temporary" "$output"
+    # The collector is owned by nobody, who can replace even root-owned
+    # entries there. Keep every write and chmod in a root-private directory
+    # under trusted, sticky /var/tmp, on the collector's filesystem.
+    publish_parent=${KERNEL_METRICS_TEST_PUBLISH_PARENT:-/var/tmp}
+    publish=$(mktemp -d "$publish_parent/kernel-reboot-metrics.XXXXXXXX")
+    trap 'rm -rf -- "$publish"' 0
+    trap 'exit 1' HUP INT TERM
+    emit >"$publish/kernel_reboot.prom"
+    chmod 644 "$publish/kernel_reboot.prom"
+    (
+        target_dir=${output%/*}
+        cd -P "$target_dir" || exit 1
+        [ "$(pwd -P)" = "$target_dir" ] || exit 1
+        source_dev=$(stat -f %d "$publish") || exit 1
+        target_dev=$(stat -f %d .) || exit 1
+        # Refuse mv's cross-filesystem copy fallback onto a public pathname.
+        [ "$source_dev" = "$target_dev" ] || exit 1
+        # Rename relative to the pinned directory, replacing a destination
+        # symlink even when it points to a directory. Never write through it.
+        mv -f "$publish/kernel_reboot.prom" .
+    )
 fi
 [ "$success" -eq 1 ]

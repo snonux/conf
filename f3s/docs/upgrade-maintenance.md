@@ -1,8 +1,9 @@
 # Upgrade maintenance and coverage (jn3)
 
-Local preparation dated 2026-10-22. No upgrades, restarts, reboots, VM starts,
-configuration deployments, Git publication or ArgoCD sync ran for this task.
-Independent review and approved rollout remain pending.
+Local preparation dated 2026-10-22, refreshed 2026-10-23. No upgrades,
+restarts, reboots, configuration deployments, Git publication or ArgoCD sync
+ran for this task. f3 and rocky are now up after separately authorized ordinary
+power-on work. Independent review and approved jn3 rollout remain pending.
 
 ## Current evidence
 
@@ -13,10 +14,21 @@ claim that k3s had never been upgraded is stale; the existing skill already
 records the September rolling upgrade. This does not replace a maintenance
 cadence or prove future versions will be installed.
 
-f3 (`192.168.1.133`) and standalone rocky (`192.168.1.123`) both returned
-no route to host. They were not powered on or rebooted. f3's exporter target
-is down. Its current kernel and rocky's current packages, sudo/bootstrap
-state, clock and update services are therefore unverified.
+The 2026-10-22 no-route observations for f3 (`192.168.1.133`) and standalone
+rocky (`192.168.1.123`) are superseded by read-only preflights on 2026-10-23.
+f3's native kernel producer probe succeeded with reboot pending **0**; all four
+FreeBSD exporter targets were up. This checks installed versus running kernel
+versions, not whether a newer kernel is available upstream.
+
+Standalone rocky accepts strict, verified root SSH on port 22 without sharing
+a multiplexed connection. It reports Rocky Linux **9.8**, Europe/Sofia time,
+working Python and `sudo -n true`, and root-owned mode-0755 gonf at
+`/usr/local/bin/gonf` plus its `/usr/bin/gonf` symlink. `ksh`, `yum-utils` and
+`needs-restarting` are absent, as are the unattended script, service, timer
+and last-daily stamp. The unattended coverage gap is confirmed. These checks
+installed no packages, refreshed no cache and started no update service.
+Public-only evidence is retained outside Git beside this worktree in
+`../evidence/f3-kernel-20261023.json` and `rocky-preflight-20261023.json`.
 
 ## k3s: attended upgrades with automatic detection
 
@@ -77,21 +89,19 @@ reboot path. Existing Pi/r-node partner and reboot gates stay in place.
 Daily package upgrades can restart affected services; deploying and enabling
 the timer therefore needs explicit approval after a live preflight.
 
-When ordinary access returns, verify the hostname, Rocky release, root SSH,
-`sudo -n`, gonf bootstrap, clock, current timers and pre-existing update tools.
-Preview and approve only the unattended tasks needed there; do not deploy the
-whole evolving `rocky` aggregate. Verify the installed schedule, then observe
-a real scheduled update, successful daily stamp and deferred reboot. That
-runtime acceptance is still outstanding while the VM is unreachable.
+The ordinary-access preflight above has succeeded. Preview and approve only
+the unattended tasks and missing package prerequisites needed there; do not
+deploy the whole evolving `rocky` aggregate. Verify the installed schedule,
+then observe a real scheduled update, successful daily stamp and deferred
+reboot. Package installation, deployment and runtime acceptance remain pending.
 
 ## f3: approval-only kernel reboots with a visible pending state
 
-Preserve f3's existing no-automatic-reboot policy, consistent with the user's
-instruction against rebooting systems. Do not infer permission to stop its
-Rocky guest, invoke recovery mode or reboot it from this task. Record pending
-kernel fixes and arrange a separately approved guest-aware maintenance window
-when the host is available. This is an explicit maintenance policy, not a
-claim that an installed kernel fix has already taken effect.
+The proposed design preserves f3's existing no-automatic-reboot policy and
+makes pending kernel fixes visible for a separately approved, guest-aware
+maintenance window. This design still needs approval. The user's restriction
+covers recovery boots and SSH authentication changes; it is not a blanket ban
+on normal reboots. This preparation authorizes no guest stop or reboot.
 
 Prepared task `freebsd_monitoring_kernel_reboot_metrics` installs a five-minute
 read-only `freebsd-version -k` versus `-r` check on f0–f3. It publishes atomic
@@ -104,9 +114,9 @@ offline. The existing updater's f0–f2 behavior is unchanged by this task.
 The monitoring prerequisite also manages node_exporter's existing configuration
 and may restart that exporter if it has drifted. Preview and include any such
 restart explicitly in approval. The check itself never updates the OS, stops
-guests or reboots a machine. f3's policy can only be accepted operationally
-after access returns, its installed/running kernels are inspected and any
-pending fix receives approved maintenance.
+guests or reboots a machine. The successful f3 kernel comparison satisfies the
+read-only preflight; deployed monitoring and any future pending-kernel
+maintenance still need separate operational acceptance.
 
 ## Verification and rollout remaining
 
@@ -117,10 +127,26 @@ including absent/stale/failed/future data, wrong service, one missing peer,
 target down and pending periods. The Rocky harness verifies a standalone
 daily package run with a fresh core update still cannot reboot.
 
-Unchanged producer sources were sent through SSH stdin with `--stdout`, which
-writes no metrics or host file: r0–r2 each report a successful current-version
-check; f0 reports successful kernel comparison with no reboot pending. These
-are native read-only probes, not deployed cron/scrape/alert acceptance. Local
+An isolated synthetic fixture confirmed a root publication race in the new
+shell producer's original public temporary-file write/chmod sequence: a
+directory owner could substitute a symlink, overwrite a private sentinel and
+change its mode from 0600 to 0644. The corrected producer writes and chmods
+only inside a private directory beneath trusted sticky `/var/tmp`, pins the
+physical collector directory, refuses cross-filesystem publication and renames
+the complete file into that directory. Regression fixtures cover both race
+boundaries, destination symlinks, directory replacement, failed rename,
+cross-filesystem refusal and signal cleanup. The existing nobody-owned
+exporter directory policy is preserved. The new Python producer's Gonf recipe
+requires a root-owned mode-0755 collector, also observed by read-only stat on
+r1. The Python producer writes/chmods through its retained file descriptor.
+No equivalent publication defect was confirmed there.
+
+Producer sources from the initial preparation were sent through SSH stdin
+with `--stdout`, which writes no metrics or host file: r0–r2 each reported a
+successful current-version check; f0 and the later f3 probe reported successful
+kernel comparison with no reboot pending. These are native read-only probes,
+not deployed cron/scrape/alert acceptance. The corrected shell producer also
+passed FreeBSD's native `sh -n` through SSH stdin. Local
 Gonf plans include the typed standalone timer and preserve the Dtail guard.
 Read-only evaluation against the live Prometheus API confirms three expected
 k3s inventory nodes and the current missing-check coverage on those three
@@ -132,8 +158,9 @@ scripts/crons, any exporter drift correction and isolated publication/sync of
 `f3s/prometheus/manifests/upgrade-alerts.yaml`. Verify fresh files, successful
 scheduled ticks, actual scraped series/label joins, loaded rules and expected
 alert state. Alertmanager currently exposes these alerts in its UI; this
-task adds no email/webhook route. Rocky/f3 rollout stays pending until ordinary
-access and their host preflights succeed. No jn3 rollout has been approved.
+task adds no email/webhook route. Rocky/f3 host preflights have succeeded;
+their scoped rollout and scheduled/scraped acceptance remain pending. No jn3
+rollout has been approved.
 
 Tests:
 
