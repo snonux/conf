@@ -14,6 +14,7 @@ from the vault; everything else comes from files below this directory.
 |---|---|---|
 | `paths.FrontendSecret("var/nsd/etc/nsd_key.txt")` | `Infra/nsd-tsig-key` | `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` |
 | `paths.GarageSecret("rpc_secret")` | `Infra/garage-rpc` | `gonf/secrets/garage/rpc_secret` |
+| `garage.MetricsTokenSecret()` (`garage/metrics_token`) | `Infra/garage-metrics` | none provisioned; cn3 requires approved credential enrollment |
 | `paths.FrontendSecret("etc/goprecords/<host>.token")`, blowfish and fishfinger | `Infra/goprecords-token-<host>` | `gonf/secrets/frontends/etc/goprecords/<host>.token` |
 | `paths.FHostSecret("goprecords/<host>.token")` (`freebsd.GoprecordsToken`), f0-f3 | `Infra/goprecords-token-<host>` | none (imported from the hosts' `/etc/goprecords-upload.token`, task lk2) |
 | `paths.PiSecret("goprecords/<host>.token")` (`goprecords.PiToken`), pi0-pi3 | (none yet) | `gonf/secrets/pis/goprecords/<host>.token` |
@@ -38,6 +39,13 @@ key is outside `/var/db/foostats`, the peer-only counter export. The canonical
 Foostats checkout must support the private format; the old in-repo script is
 no longer a deployment fallback. Neither this key nor its production entry
 has been created during local preparation.
+
+Garage metrics use a dedicated token, shared only with the external Kubernetes
+Secret `monitoring/garage-metrics` (`token` key). Gonf writes it into the private
+Garage TOML; Prometheus reads its mounted file. The controller helper defaults
+to read-only checking and refuses credential replacement. No production metrics
+credential or Secret was created during preparation. See the
+[ordered cn3 rollout](../../f3s/garage/admin-metrics.md).
 
 ## Fallback rules
 

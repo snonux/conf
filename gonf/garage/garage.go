@@ -3,6 +3,8 @@
 package garage
 
 import (
+	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -16,9 +18,11 @@ const (
 )
 
 // Node is a Garage node's own address (host data, see gonf/cluster):
-// RPCPublicAddr is the RPC address other nodes reach it on, with its port.
+// RPCPublicAddr is the RPC address other nodes reach it on, with its port;
+// AdminAPIBindAddr is its private admin/metrics listener, also with its port.
 type Node struct {
-	RPCPublicAddr string
+	RPCPublicAddr    string
+	AdminAPIBindAddr string
 }
 
 // tomlData carries the per-node values rendered into garage.toml. It stays
@@ -39,6 +43,7 @@ type tomlData struct {
 	S3Region                     string
 	RootDomain                   string
 	AdminAPIBindAddr             string
+	MetricsToken                 string
 }
 
 // Deployment carries the root-only Garage configuration task. The config is
@@ -55,7 +60,8 @@ type Deployment struct {
 	RequiresRoot
 }
 
-// Config renders and installs Garage TOML on f0, f1, and f2 (config only;
+// Config renders private admin/metrics settings and installs Garage TOML
+// on f0, f1, and f2 (config only;
 // Garage must already be installed and provisioned).
 //
 // Config installs each node's Garage configuration and only restarts Garage
@@ -73,16 +79,28 @@ type Deployment struct {
 // rendered template_data byte-identical for either source.
 func (Deployment) Config() {
 	secret := trimFinalNewline(MustSecret(paths.GarageSecret("rpc_secret")))
+	metrics := strings.TrimRight(MustSecret(MetricsTokenSecret()), "\r\n")
+	if !validMetricsToken(metrics) {
+		Refuse("File", configPath, fmt.Errorf("Garage metrics token must be nonempty printable ASCII without whitespace"))
+		return
+	}
 	EachHost(func(node Node) {
+		if !validAdminBind(node.AdminAPIBindAddr) {
+			Refuse("File", configPath, fmt.Errorf("Garage admin listener requires an explicit private or loopback IP and numeric port"))
+			return
+		}
 		config := InstallFile(configPath, paths.GarageAsset(template),
 			Perm(0o640, "root:garage"),
-			WithTemplateData(defaultConfig(secret, node.RPCPublicAddr)),
+			WithTemplateData(defaultConfig(secret, metrics, node)), WithSensitive,
 		)
 		Service("garage", WithRestart, OnChange(config))
 	})
 }
 
-func defaultConfig(secret, rpcPublicAddr string) tomlData {
+// MetricsTokenSecret is the logical reference shared with Prometheus.
+func MetricsTokenSecret() string { return paths.GarageSecret("metrics_token") }
+
+func defaultConfig(secret, metrics string, node Node) tomlData {
 	return tomlData{
 		ReplicationFactor:            3,
 		ConsistencyMode:              "consistent",
@@ -93,11 +111,12 @@ func defaultConfig(secret, rpcPublicAddr string) tomlData {
 		DBEngine:                     "lmdb",
 		RPCSecret:                    strconv.Quote(secret),
 		RPCBindAddr:                  "0.0.0.0:3901",
-		RPCPublicAddr:                rpcPublicAddr,
+		RPCPublicAddr:                node.RPCPublicAddr,
 		S3APIBindAddr:                "0.0.0.0:3900",
 		S3Region:                     "garage",
 		RootDomain:                   ".garage.f3s.buetow.org",
-		AdminAPIBindAddr:             "0.0.0.0:3903",
+		AdminAPIBindAddr:             node.AdminAPIBindAddr,
+		MetricsToken:                 strconv.Quote(metrics),
 	}
 }
 
@@ -105,4 +124,18 @@ func defaultConfig(secret, rpcPublicAddr string) tomlData {
 // matching Rex's chomp before it interpolated the one-line RPC secret.
 func trimFinalNewline(secret string) string {
 	return strings.TrimSuffix(secret, "\n")
+}
+
+func validMetricsToken(token string) bool {
+	return token != "" && strings.IndexFunc(token, func(r rune) bool { return r < 33 || r > 126 }) < 0
+}
+
+func validAdminBind(address string) bool {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	n, err := strconv.Atoi(port)
+	return err == nil && n > 0 && n <= 65535 && ip != nil && (ip.IsPrivate() || ip.IsLoopback())
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/snonux/conf/gonf/cluster"
 	"github.com/snonux/conf/gonf/freebsd"
+	"github.com/snonux/conf/gonf/garage"
 	"github.com/snonux/conf/gonf/paths"
 	"github.com/snonux/conf/gonf/tasks"
 	"github.com/snonux/gonf/api"
@@ -52,6 +53,7 @@ func setSecretProvider() error {
 	items, err := foostore.Items(map[secret.Ref]foostore.Item{
 		secret.Ref(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")):     foostore.Field("Infra/nsd-tsig-key", "Password"),
 		secret.Ref(paths.GarageSecret("rpc_secret")):                    foostore.Field("Infra/garage-rpc", "Password"),
+		secret.Ref(garage.MetricsTokenSecret()):                         foostore.Field("Infra/garage-metrics", "Password"),
 		secret.Ref(goprecordsToken("blowfish")):                         foostore.Field("Infra/goprecords-token-blowfish", "Password"),
 		secret.Ref(goprecordsToken("fishfinger")):                       foostore.Field("Infra/goprecords-token-fishfinger", "Password"),
 		secret.Ref(freebsd.GoprecordsToken("f0")):                       foostore.Field("Infra/goprecords-token-f0", "Password"),

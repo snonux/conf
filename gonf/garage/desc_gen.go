@@ -3,5 +3,5 @@
 package garage
 
 func (Deployment) DescConfig() string {
-	return "Renders and installs Garage TOML on f0, f1, and f2 (config only; Garage must already be installed and provisioned)"
+	return "Renders private admin/metrics settings and installs Garage TOML on f0, f1, and f2 (config only; Garage must already be installed and provisioned)"
 }

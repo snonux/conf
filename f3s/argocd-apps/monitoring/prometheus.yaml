@@ -149,6 +149,9 @@ spec:
               enableOTLPReceiver: false
               enableFeatures:
                 - exemplar-storage
+              # Provision this credential outside Git before syncing.
+              secrets:
+                - garage-metrics
               additionalScrapeConfigs: []
               tsdb:
                 outOfOrderTimeWindow: 744h  # 31 days

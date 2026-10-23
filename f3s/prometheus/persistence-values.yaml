@@ -52,6 +52,9 @@ prometheus:
     enableFeatures:
       - exemplar-storage
     # Set out-of-order time window to 31 days (provides 1-day buffer for 30-day backfills)
+    # Provision this credential outside Git before deploying.
+    secrets:
+      - garage-metrics
     additionalScrapeConfigs: []
     tsdb:
       outOfOrderTimeWindow: 744h  # 31 days

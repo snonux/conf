@@ -226,7 +226,7 @@ func registerFreeBSD() {
 		WithData(freebsd.CarpNode{}), // CARP MASTER by default (advskew 0)
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSServer{NISIP: "192.168.1.130"}),
-		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901"}),
+		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
@@ -238,7 +238,7 @@ func registerFreeBSD() {
 		WithData(freebsd.CarpNode{AdvSkew: 100}), // CARP standby, loses to f0
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
-		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901"}),
+		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
 	f2 := Host("f2", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
@@ -249,7 +249,7 @@ func registerFreeBSD() {
 		WithData(f2Baseline),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
-		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901"}),
+		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
 	f3 := Host("f3", fhost,
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
