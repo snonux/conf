@@ -77,3 +77,7 @@ func (Maintenance) DescPersistentJournal() string {
 func (Maintenance) DescRetiredNFSCron() string {
 	return "Removes the legacy per-minute check-nfs-mount.sh root cron line (the timer runs it)"
 }
+
+func (NodePortGuard) DescStage() string {
+	return "Installs the NodePort candidate and guarded tools without loading rules"
+}

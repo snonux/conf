@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+declare -r config=/etc/f3s-nodeport-guard
+declare -r state=/var/lib/f3s-nodeport-guard
+declare -r pending=$state/pending
+declare -r timer=f3s-nodeport-guard-rollback
+declare -r unit=f3s-nodeport-guard.service
+
+_guard_session() {
+    local client client_port server server_port extra
+    read -r client client_port server server_port extra <<< "${2:-}"
+    [[ -n $client && -n $client_port && -n $server && $server_port == 22 &&
+        -z $extra ]] || {
+        echo 'Pass the current SSH_CONNECTION as the second argument.' >&2
+        exit 1
+    }
+    local sessions
+    sessions=$(ss -Htn state established '( sport = :22 )' | wc -l)
+    (( sessions >= 2 )) || {
+        echo 'Keep two independent SSH connections open on port 22.' >&2
+        exit 1
+    }
+}
+
+_rollback() {
+    [[ -d $pending ]] || return 0
+    local batch
+    batch=$(mktemp "$state/rollback.XXXXXX")
+    printf 'add table inet f3s_nodeport_guard\ndelete table inet f3s_nodeport_guard\n' > "$batch"
+    cat "$pending/table.nft" >> "$batch"
+    nft -c -f "$batch"
+    nft -f "$batch"
+    rm -f "$batch" /run/f3s-nodeport-guard-applied.sha256
+    if [[ -f $pending/confirmed.nft ]]; then
+        install -m 600 "$pending/confirmed.nft" "$config/confirmed.nft"
+    else
+        rm -f "$config/confirmed.nft"
+    fi
+    if [[ -f $pending/enabled ]]; then
+        systemctl enable "$unit"
+    else
+        systemctl disable "$unit"
+    fi
+    # After a reboot or timer dispatch the transient timer may be gone.
+    if systemctl is-active --quiet "$timer.timer"; then
+        systemctl stop "$timer.timer"
+    fi
+    rm -rf "$pending"
+    echo 'Restored the previous f3s_nodeport_guard table and boot policy.'
+}
+
+_apply() {
+    _guard_session "$@"
+    [[ ! -e $pending ]] || {
+        echo 'A rollback is pending; confirm or roll back first.' >&2
+        exit 1
+    }
+    # Check before recording or arming anything; never touch another table.
+    nft -c -f "$config/candidate.nft"
+    local prepared
+    prepared=$(mktemp -d "$state/prepared.XXXXXX")
+    if nft list table inet f3s_nodeport_guard > "$prepared/table.nft" 2>/dev/null; then
+        :
+    else
+        # Distinguish absent table from failure to read the current ruleset.
+        nft list tables > "$prepared/tables"
+        if grep -Fxq 'table inet f3s_nodeport_guard' "$prepared/tables"; then
+            rm -rf "$prepared"
+            echo 'Cannot snapshot f3s_nodeport_guard; refusing activation.' >&2
+            exit 1
+        fi
+        : > "$prepared/table.nft"
+    fi
+    if [[ -f $config/confirmed.nft ]]; then
+        cp "$config/confirmed.nft" "$prepared/confirmed.nft"
+    fi
+    if systemctl is-enabled --quiet "$unit"; then
+        touch "$prepared/enabled"
+    fi
+    cp "$config/candidate.nft" "$prepared/candidate.nft"
+    printf '%s\n' "$2" > "$prepared/session"
+    # Publish only complete rollback state. An interrupted preparation can
+    # leave prepared.* debris, but cannot leave a partial pending snapshot.
+    mv "$prepared" "$pending"
+    # A separate PID 1 timer survives SSH loss and controller failure.
+    systemctl reset-failed "$timer.service" 2>/dev/null || true
+    if ! systemd-run --collect --unit="$timer" --on-active=5m \
+        --timer-property=AccuracySec=1s /usr/local/sbin/f3s-nodeport-guard rollback; then
+        rm -rf "$pending"
+        exit 1
+    fi
+    systemctl is-active --quiet "$timer.timer"
+    if ! nft -f "$pending/candidate.nft"; then
+        _rollback
+        exit 1
+    fi
+    # Only a successful load earns this marker. Staging file changes alone
+    # never suppresses a retry after a failed activation.
+    sha256sum "$pending/candidate.nft" | cut -d' ' -f1 \
+        > /run/f3s-nodeport-guard-applied.sha256
+    echo 'Candidate active; rollback in five minutes unless confirmed.'
+}
+
+_confirm() {
+    _guard_session "$@"
+    [[ -d $pending ]]
+    [[ $2 != "$(<"$pending/session")" ]] || {
+        echo 'Confirm from a new independent SSH connection.' >&2
+        exit 1
+    }
+    systemctl is-active --quiet "$timer.timer"
+    local digest
+    digest=$(sha256sum "$pending/candidate.nft" | cut -d' ' -f1)
+    [[ $digest == "$(</run/f3s-nodeport-guard-applied.sha256)" ]]
+    nft list table inet f3s_nodeport_guard >/dev/null
+    install -m 600 "$pending/candidate.nft" "$config/confirmed.nft.next"
+    mv "$config/confirmed.nft.next" "$config/confirmed.nft"
+    restorecon "$config/confirmed.nft"
+    systemctl enable "$unit"
+    systemctl stop "$timer.timer"
+    rm -rf "$state/previous"
+    mv "$pending" "$state/previous"
+    echo 'Confirmed policy persisted; boot service enabled.'
+}
+
+_boot() {
+    # A reboot during an unconfirmed apply restores the previous confirmed
+    # policy, even if confirmation had begun publishing its new disk copy.
+    local rules=$config/confirmed.nft
+    if [[ -d $pending ]]; then
+        rules=$pending/confirmed.nft
+    fi
+    [[ -f $rules ]] || return 0
+    nft -c -f "$rules"
+    nft -f "$rules"
+    sha256sum "$rules" | cut -d' ' -f1 \
+        > /run/f3s-nodeport-guard-applied.sha256
+}
+
+(( EUID == 0 )) || { echo 'Run as root.' >&2; exit 1; }
+umask 077
+mkdir -p "$state"
+exec 9>/run/f3s-nodeport-guard.lock
+flock -x 9
+case "${1:-}" in
+    check) nft -c -f "$config/candidate.nft" ;;
+    apply) _apply "$@" ;;
+    confirm) _confirm "$@" ;;
+    rollback) _rollback ;;
+    revert)
+        _guard_session "$@"
+        [[ ! -e $pending && -d $state/previous ]]
+        cp -a "$state/previous" "$pending"
+        _rollback
+        ;;
+    boot) _boot ;;
+    *) echo 'Usage: f3s-nodeport-guard check|apply|confirm|rollback|revert|boot [SSH_CONNECTION]' >&2
+       exit 2 ;;
+esac

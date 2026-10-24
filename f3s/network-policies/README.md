@@ -298,7 +298,8 @@ All eleven manual Applications are pinned to published policy commit `a1112b9`.
 The live union contains exactly 55 matching task policies and the two existing
 6n3 Prometheus policies, whose UIDs and specs were preserved. Application
 synchronization/health and the namespace policy specs were checked after each
-stage. This is ingress isolation; task co3 still owns the NodePort bypass.
+stage. At this original acceptance point, co3 still owned the NodePort bypass;
+its later completed guard rollout is recorded below.
 
 - Each namespace had three temporary listening receivers, one per node. Six
   ordinary clients in test/services made 18 fresh connections before activation
@@ -342,9 +343,9 @@ the laptop profile is inactive and the phone was not available for those tests.
 Their explicit /32 policies and positive/negative model cases are in place;
 Traefik forwarded-header trust remains only `.110` and `.111`.
 
-The known co3 bypass is now also packet-observed: an ordinary r0 pod reached
+At the original 7n3 acceptance, the co3 bypass was also packet-observed: an ordinary r0 pod reached
 r1 Cluster NodePorts 30001, 30222, 30143, 30025 and 30800 after activation. This
-is a remaining limitation, not a successful isolation result. No NodePort
+was a remaining limitation at that point, not a successful isolation result. No NodePort
 traffic-policy redesign, application restart, storage change or host/VPN change
 was performed for this rollout.
 
@@ -362,3 +363,22 @@ working files were preserved. All 16 policy tests passed, including native
 OpenAPI validation and pinned chart rendering, with no skips. The original
 fresh preparation review passed; necessary later roaming/Helm-name fixes were
 self-reviewed and covered by the updated tests and native rollout evidence.
+
+## Follow-up NodePort guard (co3, 2026-10-24)
+
+The separate pre-NAT pod-source guard is now active, confirmed and boot-enabled
+on r0, r1 and r2. It closes the observed ordinary-pod bypass of registry,
+Forgejo SSH, Anki and Bridge NodePorts. All 180 final LAN/WG NodePort attempts
+and 90 additional CNI-gateway attempts were denied. A real temporary Service
+transitioned r0-only to r0+r1 to r1-only while ordinary clients stayed denied
+and both gateways retained access through every node. The existing 57
+NetworkPolicies retain their exact UIDs/specs; this adds no receiver allowance.
+
+See [the co3 runbook](../docs/nodeport-pod-source-guard.md) for native packet,
+client, rollback-timer, convergence and cleanup evidence. Existing non-pod
+client SNAT and hostNetwork/node trust remain under sm3's separate scope.
+Laptop `.200` and phone `.201` access is preserved; their actual device-side
+WireGuard packets have not been tested while the tunnels are inactive.
+Two normal post-cleanup active/passive monitoring cycles passed with no
+critical, unknown or stale checks; only the pre-existing failed-Job warning
+remains. No production workload restart or storage/SSH/VPN change was made.
