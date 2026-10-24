@@ -192,12 +192,13 @@ Scoped frontend tasks and uploader tasks reapply with zero changes.
 
 The exact revised uploader is installed on both frontends, f0-f3, Pi0/Pi1 and
 Pi2. Only the script changed; credentials, services and schedules were preserved.
-Both frontends and both NetBSD Pis have completed normal HTTP204 records uploads
-with advancing nonempty files. The remaining five changed hosts await the next
-normal hourly cycle at 16:00 UTC; a private observer is running. No upload was
-forced. Pi3 still runs Gonf0.25.0 and is unchanged: its separately prepared
-0.25.2 runtime bootstrap requires the outstanding explicit approval. DN3 remains
-open until that host and the remaining required acceptance are resolved.
+All nine changed hosts have completed normal HTTP204 records uploads with
+advancing nonempty files: both frontends at 15:15 UTC, both NetBSD Pis at
+15:17 UTC, and f0-f3/Pi2 at the normal 16:00 UTC hourly run. The read-only
+observer finished successfully; no upload was forced and no schedule changed.
+Pi3 still runs Gonf0.25.0 and is unchanged: its separately prepared 0.25.2
+runtime bootstrap requires the outstanding explicit approval. DN3 remains open
+until that host's deployment and required acceptance are resolved.
 
 Six fishfinger TLS checks became critical in the 15:15 normal cycle and cleared
 on the next active cycle without configuration/service changes; the passive
