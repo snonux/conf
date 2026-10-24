@@ -3,7 +3,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: argocd-server
+  name: argocd-server-scoped
   namespace: cicd
   annotations:
     argocd.argoproj.io/sync-wave: '-1'
@@ -41,7 +41,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: argocd-redis
+  name: argocd-redis-scoped
   namespace: cicd
   annotations:
     argocd.argoproj.io/sync-wave: '-1'
@@ -73,7 +73,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: argocd-repo-server
+  name: argocd-repo-server-scoped
   namespace: cicd
   annotations:
     argocd.argoproj.io/sync-wave: '-1'

@@ -1,7 +1,9 @@
 # Namespace ingress isolation (task 7n3)
 
-Local preparation only: none of these policies or Applications has been applied,
-refreshed, synced or published. Each namespace is a separate rollout stage. One task-7n3 approval may authorize
+Approved rollout preparation (2026-10-24): none of these policies or Applications
+has been applied or synced yet. The laptop and phone requirements add one scoped
+phone read-proxy policy, making 55 policies across eleven namespaces.
+Each namespace is a separate rollout stage. One task-7n3 approval may authorize
 a named, bounded sequence with the gates below, or only a canary. There is no
 all-namespace installer. SSH authentication and recovery boot
 configuration are outside this task.
@@ -71,7 +73,12 @@ These Services currently use `externalTrafficPolicy: Cluster`. Conntrack showed
 frontend WG sources 192.168.2.110/.111 connecting to registry/SSH/Anki on all
 three nodes, and node/CNI sources after translation. Existing probes/clients must
 remain usable; exact r-node LAN/WG and CNI gateway addresses are allowed only to
-those receivers. Earth WG 192.168.2.200 is listed for ordinary direct clients.
+those receivers. Earth/laptop WG `192.168.2.200` and phone WG `192.168.2.201`
+are explicit direct clients. Both are also admitted to Traefik/ServiceLB web
+ports. This is network reachability only: the separate HTTP-header trust still
+admits only the two frontends. Neither device gets database or raw Prometheus
+receiver access. Both identities were confirmed in the actual gateway peer
+configuration; their inactive device tunnels are not claimed as packet-tested.
 Bridge's documented SSH tunnel originates at a trusted node. No services-wide,
 namespace-wide or pod-CIDR allowance is used to keep these paths alive.
 
@@ -134,9 +141,12 @@ for these new policies. Per-node packet acceptance is pending approved rollout.
 ## Preserve the deployed Prometheus boundary
 
 Read [the 6n3 exposure runbook](../prometheus/exposure.md) before monitoring.
-These manifests add no receiver/proxy allowance. The separately managed
+These manifests add no raw receiver allowance. The separately managed
 `prometheus-api` admits only same-namespace proxy/self pods on 9090, and
-`prometheus-read-proxy` admits .110/.111/.200 WG sources on 8080. The additional
+`prometheus-read-proxy` admits .110/.111/.200 WG sources on 8080. A separate
+`prometheus-read-proxy-phone` policy adds only the authorized phone .201 on
+8080, without changing ownership or bytes of the deployed 6n3 policies.
+The additional
 Prometheus-reloader rule permits self only on 8080. Prometheus scraping other
 components does not imply those components may contact its receiver.
 
@@ -240,7 +250,9 @@ cannot override these additive allows. The replacement cicd policies therefore
 require a coordinated Helm transition:
 
 1. During cicd's approval window, apply/sync its explicit policies and default
-   deny first. Leave the chart's old policies until the replacement allow rules
+   deny first. Replacement server/Redis/repo policies have distinct `-scoped`
+   names so they coexist with the Helm-owned originals; otherwise Helm would
+   delete the replacements during its removal step. Leave the chart's old policies until the replacement allow rules
    are present; verify Argo's required paths.
 2. Upgrade the **same pinned chart/version and existing values** with the extra
    `-f f3s/network-policies/cicd-chart-values.yaml`. The overlay disables all

@@ -188,10 +188,10 @@ class Policies(unittest.TestCase):
                 matches({'matchLabels': proxy}, row['labels']))
             self.assert_path(source, 'monitoring', PROM, 9090, expected)
             self.assert_path(source, 'monitoring', proxy, 8080, False)
-        for address in ['192.168.2.110', '192.168.2.111', '192.168.2.200']:
+        for address in ['192.168.2.110', '192.168.2.111', '192.168.2.200', '192.168.2.201']:
             self.assert_path({'ip': address}, 'monitoring', proxy, 8080, True)
             self.assert_path({'ip': address}, 'monitoring', PROM, 9090, False)
-        for address in ['192.168.1.6', '192.168.2.130', '192.168.2.201']:
+        for address in ['192.168.1.6', '192.168.2.130', '192.168.2.202']:
             self.assert_path({'ip': address}, 'monitoring', proxy, 8080, False)
         self.assert_path(pod('services', proxy), 'monitoring', PROM, 9090, False)
         self.assert_path(self.prometheus, 'monitoring', PROM, 8080, True)
@@ -226,11 +226,25 @@ class Policies(unittest.TestCase):
                                           ('services', {'app': 'forgejo'}, [2222]),
                                           ('services', {'app': 'anki-sync-server'}, [8080])]:
             for port in ports:
-                self.assert_path({'ip': '192.168.2.200'}, namespace, labels, port, True)
+                for address in ['192.168.2.200', '192.168.2.201']:
+                    self.assert_path({'ip': address}, namespace, labels, port, True)
                 self.assert_path(self.unrelated, namespace, labels, port, False)
-                self.assert_path({'ip': '192.168.2.201'}, namespace, labels, port, False)
+                self.assert_path({'ip': '192.168.2.202'}, namespace, labels, port, False)
                 # After Cluster SNAT, original external identities cannot be distinguished.
                 self.assert_path({'ip': '10.42.1.0'}, namespace, labels, port, True)
+
+    def test_laptop_and_phone_reach_web_without_database_or_receiver_access(self):
+        servicelb = {'svccontroller.k3s.cattle.io/svcname': 'traefik',
+                     'svccontroller.k3s.cattle.io/svcnamespace': 'kube-system'}
+        for address, permitted in [('192.168.2.200', True), ('192.168.2.201', True),
+                                   ('192.168.2.202', False)]:
+            for labels, ports in [(TRAEFIK, [8000, 8443]), (servicelb, [80, 443])]:
+                for port in ports:
+                    self.assert_path({'ip': address}, 'kube-system', labels, port, permitted)
+                self.assert_path({'ip': address}, 'kube-system', labels, 9100, False)
+            for database in ['immich-postgres', 'miniflux-postgres']:
+                self.assert_path({'ip': address}, 'services', {'app': database}, 5432, False)
+            self.assert_path({'ip': address}, 'monitoring', PROM, 9090, False)
 
     def test_cross_node_nodeport_snat_is_a_documented_receiver_bypass(self):
         # Observed KUBE-EXT/MARK-MASQ/POSTROUTING rules rewrite a cross-node
@@ -267,6 +281,12 @@ class Policies(unittest.TestCase):
         baseline = list(yaml.safe_load_all(subprocess.check_output(command, text=True)))
         self.assertTrue(any(p and p['kind'] == 'NetworkPolicy' and p['spec'].get('ingress') == [{}]
                             for p in baseline))
+        chart_names = {p['metadata']['name'] for p in baseline
+                       if p and p['kind'] == 'NetworkPolicy'}
+        replacement_names = {p['metadata']['name'] for p in self.prepared
+                             if p['metadata']['namespace'] == 'cicd'}
+        self.assertFalse(chart_names & replacement_names,
+                         'Helm removal must not delete same-named replacement policies')
         rendered = list(yaml.safe_load_all(subprocess.check_output(
             command + ['-f', str(ROOT / 'cicd-chart-values.yaml')], text=True)))
         self.assertFalse(any(p and p['kind'] == 'NetworkPolicy' for p in rendered))

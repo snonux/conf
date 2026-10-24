@@ -132,6 +132,10 @@ spec:
     - ipBlock:
         cidr: 192.168.2.111/32
     - ipBlock:
+        cidr: 192.168.2.200/32
+    - ipBlock:
+        cidr: 192.168.2.201/32
+    - ipBlock:
         cidr: 192.168.1.130/32
     - ipBlock:
         cidr: 192.168.1.131/32
@@ -191,6 +195,10 @@ spec:
         cidr: 192.168.2.110/32
     - ipBlock:
         cidr: 192.168.2.111/32
+    - ipBlock:
+        cidr: 192.168.2.200/32
+    - ipBlock:
+        cidr: 192.168.2.201/32
     - ipBlock:
         cidr: 192.168.1.130/32
     - ipBlock:
