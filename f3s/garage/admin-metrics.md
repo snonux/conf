@@ -1,11 +1,49 @@
 # Garage private admin and authenticated metrics (cn3)
 
-Prepared on 2026-10-23. **No production credential, configuration, Secret,
-service or workload has been changed.** Task cn3 requires explicit approval
-before live changes. Source publication will trigger an Argo Prometheus rollout,
-so credential provisioning must precede publication.
+Prepared and reviewed on 2026-10-23; **deployed with explicit approval on
+2026-10-24**. Future live changes require their own authorization. Credential
+provisioning must precede publication and the Prometheus rollout.
 
-## Scope and current evidence
+## Production acceptance (2026-10-24)
+
+The dedicated `Infra/garage-metrics` entry was created after actual vault
+identity checks, then enrolled into the external `monitoring/garage-metrics`
+Secret. Exact readback and subsequent read-only reuse checks passed without
+displaying values or writing a metrics fallback file. Source `a4217ed` was
+published to GitHub and Forgejo after enrollment. The selected Prometheus
+Application diff added only the Secret mount; its documented bootstrap apply
+was required because publication alone does not update the live valuesObject.
+Argo completed successfully and Prometheus is Ready with the new mount/job
+credential-file reference. Its Bound PVC UID is unchanged.
+
+Garage was deployed **f2, then f1, then f0**, with exact root-private TOML
+backups and independent 15-minute rollback guards. Each guard was accepted
+before changing another node. All three passed:
+
+- Native WireGuard-only listener, local non-WG/LAN refusal, TOML mode
+  0640 root:garage, matching metrics credential, and identical parsed
+  non-admin settings, including RPC identity and storage configuration.
+- Unauthenticated health 200, missing/wrong metrics credentials 403, all three
+  cluster nodes healthy, layout version 1 and unchanged Garage 2.4.1/RF3.
+- Actual Gogios health plugin success and a real authenticated Prometheus
+  scrape newer than that host's completed restart. Initial accepted scrapes
+  were f2 07:42:20Z, f1 07:44:02Z and f0 07:45:32Z.
+- Trusted external S3 authentication: anonymous listing denied 403,
+  authenticated listing returned valid S3 XML, and an existing object read
+  returned 200. No S3 object, bucket or credential was changed.
+
+F1 briefly lacked a peer's descriptive metadata immediately after restart;
+the next node was held until its full three-node view converged. No extra
+restart or weakened health assertion was used. Actual reapplication on all
+three nodes converged with zero changes and no additional restart. The active
+frontend's normal 07:46 UTC Gogios report has all three Garage health checks OK.
+Private backups and the syntax-checked rollback script remain in
+`/root/cn3-garage-20261024` on each
+node; accepted guards do not restore the old configuration. Controller-side
+acceptance observations are private artifacts under the evidence directory
+listed below. The unrelated ho3 cached certificate alert is tracked separately.
+
+## Scope and baseline before rollout
 
 Garage runs on f0/f1/f2. Their approved rm3 firewall rollout is complete; fresh
 read-only checks confirm PF enabled, reviewed configuration and successful-load
@@ -47,8 +85,8 @@ The candidate:
   is required before invoking it for the next host. The former all-node
   convenience target is not used for this cutover.
 
-The exact vault machine read currently returns exit 4 (reference/field not
-available), and the Kubernetes Secret is absent. Nothing was created. The
+Before enrollment, the exact vault machine read returned exit 4
+(reference/field not available) and the Kubernetes Secret was absent. The
 RPC fallback initializer remains a legacy helper and must not run during this
 rollout; it does not provision the metrics credential.
 
@@ -84,7 +122,7 @@ The native fixture binary was extracted from the official Garage 2.4.1 image;
 a preliminary 2.3.0 image pull was not used after native inspection established
 the installed release. No Garage package upgrade is included.
 
-## Proposed ordered rollout, pending review and approval
+## Approved rollout procedure
 
 1. Confirm the intended Kubernetes context and healthy current Prometheus,
    all three Garage nodes/layout, S3 read access, the three Garage Gogios
@@ -130,7 +168,8 @@ the installed release. No Garage package upgrade is included.
 An error/timeout is an uncertain outcome: inspect state and stop, rather than
 blindly retrying or proceeding to another host. The review/approval request
 must include credential provisioning, publication/Argo Prometheus restart,
-serial Garage restarts and the exact tests. No such approval is inferred now.
+serial Garage restarts and the exact tests. This scope was approved on
+2026-10-24; it does not authorize unrelated future changes.
 
 ## Rollback
 
