@@ -116,13 +116,14 @@ func (Base) SelinuxWireguard() {
 		DependsOn(pkg))
 }
 
-// FirewalldOff keeps firewalld stopped and disabled (decided in task tj2,
-// f3s-k3s install.md).
+// FirewalldOff keeps firewalld stopped and disabled alongside the separate source guard.
 //
 // FirewalldOff keeps firewalld stopped and disabled, the decision of task
-// tj2 (f3s-k3s skill, install.md "Host firewall on r0/r1/r2"): its nftables
-// rules fight kube-proxy and flannel, and the nodes sit on the LAN and the
-// wg0 mesh only. The package stays installed.
+// tj2 about kube-proxy/flannel coexistence still applies, but its LAN-only
+// exposure assumption was disproved by public IPv6 (sm3). The dedicated
+// f3s_guard nft table is staged separately with rnodes_firewall_stage; see
+// f3s/docs/linux-source-firewall.md for approval and guarded activation.
+// The firewalld package stays installed.
 func (Base) FirewalldOff() {
 	NoService("firewalld")
 }

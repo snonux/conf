@@ -108,9 +108,11 @@ func (Maintenance) OptsNFSClientUnits() TaskOptions {
 	return TaskOptions{Needs(Maintenance.NFSClientPackages)}
 }
 
-// NFSClientUnits enables and starts rpcbind and nfs-client.target.
+// NFSClientUnits enables and starts nfs-client.target for the NFSv4-only client.
 func (Maintenance) NFSClientUnits() {
-	Service("rpcbind")
+	// NFSv4 over the fixed stunnel port needs no rpcbind. Do not re-enable
+	// either rpcbind unit after the separately approved sm3 cleanup masks it.
+	// This baseline change itself stops no service and never remounts NFS.
 	Service("nfs-client.target")
 }
 

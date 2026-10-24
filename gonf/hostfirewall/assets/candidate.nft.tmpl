@@ -1,0 +1,25 @@
+# Gonf owns only this table. Replacement is one atomic nft batch.
+add table inet f3s_guard
+delete table inet f3s_guard
+table inet f3s_guard {
+    chain before_dnat {
+        type filter hook prerouting priority -150; policy accept;
+        # conntrack (-200) is available; kube-proxy/CNI/Docker DNAT (-100)
+        # has not changed the original host destination or NodePort yet.
+        iifname "{{.Interface}}" fib daddr type local jump from_lan
+    }
+    chain from_lan {
+        # Trust source ranges, never the public IPv6 prefix assigned by ISP.
+        ip saddr 192.168.1.0/24 return
+        ip6 saddr fd22:c702:acb7::/64 return
+        # Keep replies to host-initiated traffic and current sessions.
+        ct state established,related return
+        meta l4proto { icmp, ipv6-icmp } return
+        # IPv6 autoconfiguration; do not expose a service in this exception.
+        ip6 saddr fe80::/10 udp sport 547 udp dport 546 return
+{{if .WireGuardPort}}        # Live wg0 ListenPort; encrypted peer traffic enters via wg0 and
+        # does not hit this LAN-only chain. Flannel uses the trusted mesh.
+        udp dport {{.WireGuardPort}} return
+{{end}}        counter drop
+    }
+}

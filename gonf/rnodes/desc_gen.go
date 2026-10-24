@@ -3,7 +3,7 @@
 package rnodes
 
 func (Base) DescFirewalldOff() string {
-	return "Keeps firewalld stopped and disabled (decided in task tj2, f3s-k3s install.md)"
+	return "Keeps firewalld stopped and disabled alongside the separate source guard"
 }
 
 func (Base) DescHosts() string {
@@ -20,6 +20,14 @@ func (Base) DescSSHD() string {
 
 func (Base) DescSelinuxWireguard() string {
 	return "Keeps SELinux enforcing with only wireguard_t permissive (semanage permissive -a)"
+}
+
+func (Firewall) DescRpcbindOff() string {
+	return "Stops and masks rpcbind only after checking every NFS mount uses NFSv4"
+}
+
+func (Firewall) DescStage() string {
+	return "Installs a candidate and guarded firewall activation tools without loading rules"
 }
 
 func (K3s) DescConfig() string {
@@ -59,7 +67,7 @@ func (Maintenance) DescNFSClientSysctl() string {
 }
 
 func (Maintenance) DescNFSClientUnits() string {
-	return "Enables and starts rpcbind and nfs-client.target"
+	return "Enables and starts nfs-client.target for the NFSv4-only client"
 }
 
 func (Maintenance) DescNFSMountMonitor() string {

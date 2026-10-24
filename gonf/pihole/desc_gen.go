@@ -5,3 +5,7 @@ package pihole
 func (Deployment) DescCompose() string {
 	return "Installs ~paul/pihole/docker-compose.yml and the LAN wildcard, recreates on change"
 }
+
+func (Firewall) DescStage() string {
+	return "Installs a candidate and guarded firewall activation tools without loading rules"
+}
