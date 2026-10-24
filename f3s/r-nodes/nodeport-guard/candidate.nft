@@ -1,0 +1,29 @@
+# Task co3. Own-table replacement is atomic; never flush kube-proxy/kube-router.
+add table inet f3s_nodeport_guard
+delete table inet f3s_nodeport_guard
+table inet f3s_nodeport_guard {
+    set node_ipv4 {
+        type ipv4_addr;
+        elements = {
+            192.168.1.120, 192.168.1.121, 192.168.1.122,
+            192.168.2.120, 192.168.2.121, 192.168.2.122
+        }
+    }
+    set receiver_ports {
+        type inet_service;
+        elements = { 30001, 30222, 30800, 30143, 30025 }
+    }
+    chain before_nat {
+        type filter hook prerouting priority -151; policy accept;
+        # After defragmentation/conntrack, before DNAT and source-node Flannel
+        # MASQUERADE. Every r-node needs the same rule: remote-node destinations
+        # must be caught at the source before their pod identity disappears.
+        ip saddr 10.42.0.0/16 tcp dport @receiver_ports jump from_pod
+    }
+    chain from_pod {
+        # Cover the other nodes as well as this node's LAN/WG addresses.
+        ip daddr @node_ipv4 counter drop
+        # Also cover local CNI gateways and other local IPv4 aliases.
+        fib daddr type local counter drop
+    }
+}

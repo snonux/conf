@@ -1,0 +1,15 @@
+[Unit]
+Description=f3s NodePort pod-source guard (confirmed policy only)
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target NetworkManager.service firewalld.service docker.service k3s.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/f3s-nodeport-guard boot
+RemainAfterExit=yes
+# No ExecStop: stopping a service must never silently remove protection.
+
+[Install]
+WantedBy=multi-user.target
