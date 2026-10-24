@@ -93,6 +93,57 @@ An early strict preview caught a content-less File operation for metadata;
 using EnsureFile corrected it before any apply. Final strict-preview results
 and source/review identifiers are recorded in the task annotations.
 
+## Current approved-base integration (2026-10-24)
+
+The new isolated candidate is under
+`/home/paul/.local/state/conf-worktrees/dn3-rollout-20261024/`. Read-only
+GitHub and Forgejo head checks agreed on conf `e5ec8e7`, dotfiles `3d06d93`,
+and f3sctl `10d0c8e`. Those are its bases. Only DN3's reviewed commits were
+cherry-picked; the canonical conf preparations and dotfiles user changes
+were left untouched. The dotfiles base retains both the deployed Garage
+documentation and the upstream AI-usage change.
+
+Two blocking findings were fixed during the focused integration checks:
+
+- The newer scoped DTail publisher still used 0744 `root:wheel`; it now
+  preserves 0640 `root:_gogios`, like the other Gogios writers.
+- Rendering the normal Gogios task exposed a latent original-DN3 duplicate
+  `/etc/rc.local` resource registration. Earlier scoped tests had not rendered
+  this task. Its runtime startup line edit now has a distinct name and depends
+  on the mute helper, reusing that helper's existing file declaration.
+
+`frontends/tests/test_gogios_plan_permissions.py` renders all three actual
+configuration publishers locally, requires both hosts' configurations to be
+identical across publishers with private permissions, and verifies both the
+mute boot-clear and the existing Gogios runtime startup lines. It initially
+exposed the duplicate registration and passes after the fixes, with zero
+skips. The candidate build, targeted `go vet ./frontends`, diff checks and
+staged secret scan passed. Prior unchanged implementation checks remain the
+2026-10-23 results above; no redundant full suite was rerun.
+
+Fresh exact native comparisons of each full live JSON object against the
+matching rendered host pass after substituting only the 82 old mute paths.
+Each retains all 572 checks, including both newly deployed frontend-specific
+Forgejo TLS checks with SNI, the three Garage health checks, and all other
+fields. Strict read-only previews of `frontends_low_risk`,
+`frontends_services` and `frontends_retire_nrpe` pass on both frontends:
+27 operations, zero changed, nine would-change. The local plan has an explicit
+path/mode/owner allowlist and only the separate NRPE package removal.
+
+Fresh uploader previews pass on eight hosts (both frontends, f0-f3 and
+pi0/pi1), each showing only the shared script would change. Pi2's fresh
+strict preview exceeded its 55-second bound without a result; its earlier
+2026-10-23 pass remains historical evidence, not a current pass. Pi3's known
+slow session/old-runtime check was not repeated. Both Pi checks remain
+explicitly pending, without retries, runtime bootstrap or service repair.
+
+Private fresh evidence, the compiled candidate and bounded preflight drivers
+are in the sibling `evidence/` directory. No production writes, bootstrap,
+publication, uploads, restarts, power/mute actions or credential changes were
+performed. Required live backup, cutover, natural-upload and rollback checks
+remain pending explicit DN3 approval. The original review covers unchanged
+code; the two fixes and new guard require their focused review before rollout.
+
 ## Proposed rollout, after review and explicit approval
 
 1. Integrate/publish only this task's reviewed conf, f3sctl metadata and two
@@ -129,7 +180,7 @@ and source/review identifiers are recorded in the task annotations.
    the marker, _gogios can read its config but cannot write it/mute, and _dserver
    can read but cannot write the log. Check native dry-run rotation metadata,
    unchanged httpd PID and successful real web requests/log growth. Require
-   monitoring to match the pre-change baseline; record pre-existing ho3 TLS
+   monitoring to match the pre-change baseline; record any pre-existing
    failure separately without silencing it. Do not reboot to test boot cleanup.
 6. Deploy the shared uploader serially to both frontends, f0-f3 and pi0-pi3 via
    their existing gonf upload tasks (frontends_goprecords,
