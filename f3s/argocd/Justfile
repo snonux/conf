@@ -13,7 +13,7 @@ install:
     helm repo update
     kubectl create namespace {{NAMESPACE}} || true
     kubectl apply -f persistent-volumes.yaml
-    helm install {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml
+    helm install {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml -f ../network-policies/cicd-chart-values.yaml
     @echo "Waiting for ArgoCD to be ready..."
     @sleep 10
     kubectl apply -f ingress.yaml
@@ -27,7 +27,7 @@ install:
     @echo "NOTE: Password changes via UI are preserved on helm upgrade"
 
 upgrade:
-    helm upgrade {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml
+    helm upgrade {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml -f ../network-policies/cicd-chart-values.yaml
     kubectl apply -f ingress.yaml
 
 uninstall:
