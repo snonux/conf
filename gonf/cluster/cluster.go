@@ -3,6 +3,7 @@
 package cluster
 
 import (
+	"github.com/snonux/conf/gonf/dtail"
 	"github.com/snonux/conf/gonf/freebsd"
 	"github.com/snonux/conf/gonf/frontends"
 	"github.com/snonux/conf/gonf/garage"
@@ -89,10 +90,12 @@ func registerFrontends() {
 		WithPlatform("openbsd/amd64"),
 	)
 	blowfish := Host("blowfish", frontend,
+		WithData(dtail.ServerHost{BindAddress: "192.168.2.110", Platform: "openbsd"}),
 		WithData(openbsd.UnattendedSchedule{BaseHour: "6", PkgsHour: "6", AuditHour: "7"}),
 		WithData(frontends.MustServer("blowfish")),
 	)
 	fishfinger := Host("fishfinger", frontend,
+		WithData(dtail.ServerHost{BindAddress: "192.168.2.111", Platform: "openbsd"}),
 		WithData(openbsd.UnattendedSchedule{BaseHour: "22", PkgsHour: "22", AuditHour: "23"}),
 		WithData(frontends.MustServer("fishfinger")),
 	)
@@ -122,6 +125,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		WithPlatform("netbsd/arm64"),
 	)
 	pi0 = Host("pi0", netbsdPi,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.125", Platform: "netbsd"}),
 		// Hours are local time (Europe/Sofia since 2026-09-25). The pkgs
 		// window must fall while the k3s cluster is up: the custom repo
 		// pkgrepo.f3s.buetow.org runs on it, and at the old 02:xx window the
@@ -136,6 +140,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		WithData(goprecords.ClientHost{Host: "pi0"}),
 	)
 	pi1 = Host("pi1", netbsdPi,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.126", Platform: "netbsd"}),
 		WithData(netbsd.UnattendedSchedule{PkgsHour: "22", RebootHour: "22"}),
 		// After the 22:10 pkgs / 22:50 reboot window.
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "23"}),
@@ -151,11 +156,13 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 		WithPlatform("linux/arm64"),
 	)
 	pi2 = Host("pi2", rockyPi,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.127", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
 		WithData(goprecords.ClientHost{Host: "pi2"}),
 	)
 	pi3 = Host("pi3", rockyPi,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.128", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
 		WithData(goprecords.ClientHost{Host: "pi3"}),
@@ -175,14 +182,17 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 		WithPlatform("linux/amd64"),
 	)
 	r0 := Host("r0", rnode,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.120", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.120"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
 	r1 := Host("r1", rnode,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.121", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.121"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
 	r2 := Host("r2", rnode,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.122", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
 	)
@@ -217,6 +227,7 @@ func registerFreeBSD() {
 		WithPlatform("freebsd/amd64"),
 	)
 	f0 := Host("f0", fhost,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.130", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
 		WithData(f0Zrepl), WithData(f0Keys),
@@ -229,6 +240,7 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.131", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
 		WithData(f1Zrepl), WithData(f1Keys),
@@ -241,6 +253,7 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
 	f2 := Host("f2", fhost,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.132", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
 		WithData(f2Zrepl), WithData(f2Keys),
@@ -252,6 +265,7 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
 	f3 := Host("f3", fhost,
+		WithData(dtail.ServerHost{BindAddress: "192.168.1.133", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
 		WithData(f3Zrepl), WithData(f3Keys),

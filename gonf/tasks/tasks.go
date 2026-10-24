@@ -3,6 +3,7 @@ package tasks
 
 import (
 	"github.com/snonux/conf/gonf/cluster"
+	"github.com/snonux/conf/gonf/dtail"
 	"github.com/snonux/conf/gonf/freebsd"
 	"github.com/snonux/conf/gonf/frontends"
 	"github.com/snonux/conf/gonf/garage"
@@ -31,6 +32,11 @@ func Register() {
 		frontends.Web{}, frontends.MailDNS{},
 	}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterOnCluster(cluster.NameFrontends, frontends.WireGuard{})
+
+	RegisterMethods(dtail.Deployment{}, WithPrefix("pis_netbsd_dtail_"), OnCluster(cluster.NameNetBSDPis))
+	// Standalone rocky has no dserver; keep its broader unattended role separate.
+	RegisterMethods(dtail.Deployment{}, WithPrefix("rocky_dtail_"), OnCluster(cluster.NameRockyDtail))
+	RegisterMethods(dtail.Deployment{}, WithPrefix("freebsd_dtail_"), OnCluster(cluster.NameFreeBSD))
 
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Periodic{}, WithPrefix("pis_netbsd_periodic_"), OnCluster(cluster.NameNetBSDPis))

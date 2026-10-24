@@ -8,6 +8,7 @@ import (
 
 	. "github.com/snonux/gonf/api"
 
+	"github.com/snonux/conf/gonf/dtail"
 	"github.com/snonux/conf/gonf/paths"
 )
 
@@ -54,18 +55,11 @@ func (Monitoring) PkgRepo() {
 
 // DTail installs DTail from the signed fleet repository and enables dserver.
 //
-// DTail preserves the former cleanup, account, retention, key-cache, and
-// daemon behavior. Cleanup only removes an old unpackaged installation.
-//
-// /etc/dserver/dtail.json is managed too (task 3h2): an unmanaged, hand-edited
-// copy on blowfish once pointed HostKeyFile below /var/run, which OpenBSD
-// wipes at boot, so dserver failed after a reboot. The asset pins the host key
-// to /var/db/dserver/ssh_host_key (persistent; the key itself is never managed
-// here) and keeps the key cache under /var/run/dserver/cache, which the daily
-// dserver-update-key-cache.sh run rebuilds. It holds only paths and settings,
-// no secrets. Mode and ownership match the package's 0644 root:bin install.
-// The file depends on the package, which creates /etc/dserver, and a changed
-// config restarts dserver so the daemon reads it.
+// DTail keeps the account, retention and daily refresh hook. The shared
+// dtail recipe installs per-host binding, log-only read permissions, a
+// root-owned runtime cache and the matching rc.d script after the package.
+// The persistent host key stays in /var/db/dserver. Migrate the former
+// daemon-owned runtime tree using docs/dserver-cache-hardening.md first.
 func (Monitoring) DTail() {
 	cleanup := cleanupLegacyDTail()
 	pkg := Package("dtail", WithEnv(map[string]string{"PKG_PATH": customOpenBSDPackages}), IsLatest, DependsOn(cleanup))
@@ -74,9 +68,18 @@ func (Monitoring) DTail() {
 		WithLine("/usr/local/bin/dserver-update-key-cache.sh"),
 		WithLine("find /var/log/dserver -name \"*.log\" -mtime +7 -delete"),
 		RootOwned, DependsOn(pkg, account))
-	config := InstallFile("/etc/dserver/dtail.json", frontendAsset("dtail.json"),
-		Perm(0o644, "root:bin"), DependsOn(pkg))
-	Service("dserver", WithRestart, DependsOn(pkg, account), OnChange(config))
+	EachHost(func(host dtail.ServerHost) { dtail.Install(host, pkg, account) })
+}
+
+// OptsDTailHardening keeps existing-installation hardening out of the aggregate.
+func (Monitoring) OptsDTailHardening() TaskOptions {
+	return TaskOptions{Operational()}
+}
+
+// DTailHardening updates the existing dserver configuration without package or
+// account reconciliation. Migrate unsafe runtime trees before applying it.
+func (Monitoring) DTailHardening() {
+	EachHost(func(host dtail.ServerHost) { dtail.Install(host) })
 }
 
 // OptsDTailChecks keeps this configuration-only action out of the aggregate,
@@ -396,7 +399,7 @@ func addPingChecks(checks map[string]gogiosCheck) {
 func addFrontendHostChecks(checks map[string]gogiosCheck) {
 	for _, host := range []string{Master, Standby} {
 		fqdn := host + ".buetow.org"
-		checks["Check DTail "+fqdn] = gogiosCheck{Plugin: "/usr/local/bin/dtailhealth", Args: List("--server", fqdn+":2222"), RandomSpread: 10, RunInterval: 3600, DependsOn: pingDependencies(fqdn)}
+		checks["Check DTail "+fqdn] = gogiosCheck{Plugin: "/usr/local/bin/dtailhealth", Args: List("--server", host+".wg0.wan.buetow.org:2222"), RandomSpread: 10, RunInterval: 3600, DependsOn: pingDependencies(fqdn)}
 		for _, proto := range []int{4, 6} {
 			addPingCheck(checks, fqdn, proto, fqdn, 3, false)
 		}

@@ -89,8 +89,8 @@
     }
   },
   "Server": {
-    "SSHBindAddress": "0.0.0.0",
-    "HostKeyFile": "cache/ssh_host_key",
+    "SSHBindAddress": "127.0.0.1",
+    "HostKeyFile": "/var/lib/dserver/ssh_host_key",
     "HostKeyBits": 2048,
     "MapreduceLogFormat": "default",
     "MaxConcurrentCats": 2,
@@ -100,31 +100,17 @@
     "TurboBoostDisable": false,
     "Permissions": {
       "Default": [
-        "readfiles:^/.*$"
+        "readfiles:^/var/log/.*$",
+        "readfiles:^/var/www/logs/.*$"
       ],
-      "Users": {
-        "paul": [
-          "readfiles:^/.*$"
-        ],
-        "pbuetow": [
-          "readfiles:^/.*$"
-        ],
-        "jamesblake": [
-          "readfiles:^/tmp/foo.log$",
-          "readfiles:^/.*$",
-          "readfiles:!^/tmp/bar.log$"
-        ],
-        "root": [
-          "readfiles:^/.*$"
-        ]
-      }
+      "Users": {}
     }
   },
   "Common": {
-    "LogDir": "log",
+    "LogDir": "/var/log/dserver",
     "Logger": "Fout",
     "LogRotation": "Daily",
-    "CacheDir": "cache",
+    "CacheDir": "/var/run/dserver/cache",
     "SSHPort": 2222,
     "LogLevel": "Info"
   }

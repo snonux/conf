@@ -27,12 +27,8 @@ dserver_precmd()
     # key lives in persistent /var/db/dserver so it survives reboots (a
     # regenerated host key would break clients' known_hosts).
     install -d -o dserver -m 0755 /var/log/dserver
-    install -d -o dserver -m 0755 /var/run/dserver
-    install -d -o dserver -m 0755 /var/run/dserver/cache
     install -d -o dserver -m 0700 /var/db/dserver
-    if [ -x /usr/local/bin/dserver-update-key-cache.sh ]; then
-        /usr/local/bin/dserver-update-key-cache.sh
-    fi
+    /usr/local/bin/dserver-update-key-cache.sh || return 1
 }
 
 load_rc_config $name

@@ -52,6 +52,10 @@ func (Monitoring) DescDTailChecks() string {
 	return "Publishes Gogios configuration with the WireGuard DTail targets"
 }
 
+func (Monitoring) DescDTailHardening() string {
+	return "Updates the existing dserver configuration without package or account reconciliation"
+}
+
 func (Monitoring) DescFoostats() string {
 	return "Installs private visitor counters, shared keyed pseudonyms, and aggregate reporting"
 }

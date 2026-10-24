@@ -41,6 +41,11 @@ func GonfAsset(pkg, name string) string {
 	return filepath.Join(Conf, "gonf", pkg, "assets", name)
 }
 
+// PackageAsset returns a package-maintained asset under packages/files.
+func PackageAsset(relativePath string) string {
+	return filepath.Join(Conf, "packages", "files", relativePath)
+}
+
 // GarageAsset returns the controller-local path of a source-controlled Garage
 // asset such as etc/garage.toml.tmpl.
 func GarageAsset(relativePath string) string {

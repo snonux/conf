@@ -89,7 +89,7 @@
     }
   },
   "Server": {
-    "SSHBindAddress": "0.0.0.0",
+    "SSHBindAddress": "127.0.0.1",
     "HostKeyFile": "/var/db/dserver/ssh_host_key",
     "HostKeyBits": 2048,
     "MapreduceLogFormat": "default",
@@ -99,21 +99,10 @@
     "MaxLineLength": 1048576,
     "Permissions": {
       "Default": [
-        "readfiles:^/.*$"
+        "readfiles:^/var/log/.*$",
+        "readfiles:^/var/www/logs/.*$"
       ],
-      "Users": {
-        "paul": [
-          "readfiles:^/.*$"
-        ],
-        "pbuetow": [
-          "readfiles:^/.*$"
-        ],
-        "jamesblake": [
-          "readfiles:^/tmp/foo.log$",
-          "readfiles:^/.*$",
-          "readfiles:!^/tmp/bar.log$"
-        ]
-      }
+      "Users": {}
     }
   },
   "Common": {
