@@ -144,6 +144,22 @@ performed. Required live backup, cutover, natural-upload and rollback checks
 remain pending explicit DN3 approval. The original review covers unchanged
 code; the two fixes and new guard require their focused review before rollout.
 
+## Refreshed source and server compatibility (2026-10-24)
+
+The conf candidate now includes final deployed policy documentation `b042676`
+through merge `e0e900d`; no Gonf or frontend recipe bytes changed in that merge.
+The paired skill candidate retains published policy reference `ab3a381`.
+
+Goprecords 0.6.2 has since been released independently. The exact revised DN3
+client was tested against the local binary independently verified to match the
+running container: all five existing real-client authentication cases passed,
+zero skips. These cover valid payloads, wrong key preserving existing files,
+wrong hostname, empty-key default refusal and a missing token file. The tests
+used loopback, disposable databases and freshly generated temporary keys; they
+made no production upload or credential change. Private results are in
+`evidence/server062-compatibility.json` beside the current candidate checkout.
+The server image and release are outside this rollout.
+
 ## Proposed rollout, after review and explicit approval
 
 1. Integrate/publish only this task's reviewed conf, f3sctl metadata and two
@@ -197,7 +213,7 @@ code; the two fixes and new guard require their focused review before rollout.
    records to advance. Inspect process arguments for header option shape only;
    never print arguments from the old uploader or secret values. Negative auth
    tests stay on the local disposable daemon: do not send negative PUTs to the
-   currently deployed older server. Do not change schedules or rotate tokens.
+   production server. Do not change schedules or rotate tokens.
 8. Only after frontend acceptance, recheck NRPE users/dependencies/listeners and
    apply `frontends_retire_nrpe` separately per host. Require the package absent,
    all local plugins still present and existing monitoring unchanged. Reapply
