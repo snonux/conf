@@ -90,7 +90,7 @@ func (Monitoring) OptsDTailChecks() TaskOptions {
 // plugin, cron job or running service. Use alongside the dserver bind rollout.
 func (Monitoring) DTailChecks() {
 	EachHost(func(server Server) {
-		File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o744, Root))
+		File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o640, "root:_gogios"))
 	})
 }
 
@@ -143,11 +143,10 @@ func (Monitoring) Gogios() {
 		// WARNING/UNKNOWN changes still wait for the 07:02 renotify.
 		CronAt("gogios-checks", "*/5 * * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
 		CronAt("gogios-force", "2 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
-		rcLocal := ensureRCLocal()
 		File("/etc/rc.local",
 			WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
 			WithLine("chown _gogios /var/run/gogios"),
-			RootOwned, DependsOn(account, rcLocal))
+			RootOwned, WithName("gogios-rc-local"), DependsOn(account, mute))
 	})
 }
 
