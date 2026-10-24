@@ -1,9 +1,9 @@
 # NodePort pod-source guard — co3
 
-Prepared locally on 2026-10-24; **not published, installed or activated**.
-Fresh expert ROUND1 review passed with zero blockers. Explicit approval for
-staging, activation and temporary cluster probes is still required. Task 7n3 is deployed; its policies and the
-existing Prometheus boundary remain unchanged.
+Deployed on 2026-10-24 to r0, r1 and r2 after explicit approval and a fresh
+expert ROUND1 review with zero blockers. All three guards are confirmed and
+enabled for boot. The 57 existing NetworkPolicies retain their exact UIDs/specs;
+the Prometheus boundary and Argo chart overlay remain unchanged.
 
 ## Problem and current evidence
 
@@ -114,8 +114,8 @@ host reboot or recovery boot in this procedure.
 Fresh expert ROUND1 independently reran both isolated native scripts, Bash
 syntax, ShellCheck and diff checks: all passed, with zero blocking or actionable
 nonblocking findings. It reviewed the native preflight/staging/cleanup evidence
-without new host operations or heavy Go checks. Real host PID1 rollback and
-Kubernetes endpoint-transition acceptance remain unexecuted until approval.
+without new host operations or heavy Go checks. The later live acceptance below records real PID1 timer arming/confirmation and
+Kubernetes endpoint transitions separately from those isolated checks.
 
 Run the local checks from this checkout:
 
@@ -128,7 +128,11 @@ shellcheck f3s/r-nodes/nodeport-guard/f3s-nodeport-guard f3s/tests/nodeport-guar
 The tests refuse the real host user/network namespaces before mutating routes
 or rules. Their servers and namespace processes are cleaned at exit.
 
-## Proposed live sequence — approval required
+## Reviewed live sequence
+
+This sequence was approved and performed for the rollout below. Future changes
+need their own current reviewed approval; this record does not authorize an
+unrelated host firewall or service repair.
 
 1. Recheck node CIDRs/addresses, the five Services/endpoint placements, native
    source-NAT rules, the existing guard/table absence or ownership, and current
@@ -174,7 +178,8 @@ or rules. Their servers and namespace processes are cleaned at exit.
 7. Validate a real Kubernetes endpoint transition without moving an existing
    workload: use an unused reserved test NodePort30417, a UID-recorded temporary
    Service in test, and bounded canary pods on r0/r1. Its exact-label temporary
-   allow policy is scoped to trusted node/CNI and gateway sources on8080.
+   allow policy is scoped to trusted node/CNI and gateway sources on8080,
+   including both Flannel `10.42.n.0` and CNI `10.42.n.1` interface sources.
    Temporarily add 30417 to the owned `receiver_ports` set on each host only after
    verifying it was absent. Observe one ready endpoint, add the second, then
    remove only the first owned pod. At each transition, ordinary pod connections
@@ -202,3 +207,59 @@ after restoration; report rollback as baseline restored, not bypass fixed.
 Sources: [Kubernetes NodePort source behavior](https://kubernetes.io/docs/tutorials/services/source-ip/),
 [Netfilter hook ordering](https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks)
 and [nft route-type matching](https://wiki.nftables.org/wiki-nftables/index.php/Matching_routing_information).
+
+## Live acceptance on 2026-10-24
+
+Strict previews and exact-file permission/hash checks preceded each serial
+activation r0, r1, r2. Two independent verified SSH transports were retained.
+Each real five-minute PID1 rollback timer and its rollback command were checked
+before the packet/client gates; confirmation came from the second transport.
+All timers stopped and all confirmed files match the reviewed five-port source.
+No live timer expiry, reboot or forced outage was induced. Staging reapplied
+with zero changes on all three nodes, and the live table still matches the
+confirmed policy apart from counters. All three k3s PIDs/start times are unchanged.
+
+- Six ordinary test/services pods, one in each namespace on each node, made
+  180 baseline NodePort attempts. All 120 cross-node cases and 40 local-entry/
+  remote-backend cases succeeded. Twenty local-backend cases were already
+  denied by 7n3; native endpoint placement explains them. After activation,
+  all 180 attempts were denied. An additional 90 CNI-gateway NodePort attempts
+  were denied. Native guard drop counters increased on every node.
+- The owning temporary Service used NodePort30417 and only test canaries.
+  Its ready endpoints transitioned r0-only, r0+r1, r1-only. Every phase denied
+  all 36 ordinary-pod NodePort attempts while both real WG gateways read HTTP200
+  through every node. Total: 108 NodePort denials, 42 direct Service/Pod denials
+  and 18 actual positive gateway HTTP reads. Existing applications never moved.
+- Actual protected-receiver and Prometheus API/proxy checks denied all 132
+  unrelated-client attempts. Six real UDP and six TCP DNS queries returned the
+  expected A answer. Both gateway sources retained 24 TCP/12 HTTP positive
+  checks. The LAN observer retained its measured six positive and six existing
+  denied paths; this did not grant it a new receiver identity.
+- All three nodes successfully pulled the exact current goprecords digest using
+  native CRI and read the localhost registry API. The existing laptop Bridge
+  tunnel passed pinned-certificate IMAP/SMTP STARTTLS and NOOP, without reading
+  credentials, authentication, mail sending or a new port-forward.
+- All 59 TLS-verified web GET results match baseline. The two pre-existing
+  forced fishfinger standby certificate mismatches remain unverified and were
+  not counted as successes. The 54 non-Job running workload pod UIDs/readiness/
+  restart counts, 40 healthy/synced Applications, 43 healthy targets, 42 rule
+  groups and Watchdog remained stable. Completed Jobs were not treated as
+  running workloads and the three existing failed Jobs were not changed.
+
+The endpoint fixture needed two controller corrections: treating a transient
+null EndpointSlice list as empty, and including the actual Flannel interface
+sources in its temporary allowlist. Failed attempts were cleaned by UID and
+archived before rerunning; production receiver policies and guard bytes did
+not change. Every owned temporary Kubernetes resource is gone and 30417 was
+removed from all three live sets. Private evidence and bounded operational
+drivers are under the sibling `ops/` directory of the isolated co3 checkout.
+Actual laptop `.200` and phone `.201` tunnel packets remain unverified while
+those devices are inactive/unavailable; their explicit policies and tested
+non-pod guard exclusion are preserved. sm3 still owns the separate external/
+host-source firewall scope.
+
+Two distinct normal active/passive monitoring cycles after cleanup passed.
+First: blowfish 2026-10-24T16:00:11+02:00, fishfinger 2026-10-24T16:01:03+02:00.
+Second: blowfish 2026-10-24T16:05:11+02:00, fishfinger 2026-10-24T16:05:53+02:00.
+Both views retained critical/unknown/stale/suppressed zero, 608 OK and only
+the pre-existing KubeJobFailed warning. Monitoring was not muted.
