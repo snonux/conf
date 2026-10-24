@@ -141,9 +141,9 @@ explicitly pending, without retries, runtime bootstrap or service repair.
 Private fresh evidence, the compiled candidate and bounded preflight drivers
 are in the sibling `evidence/` directory. No production writes, bootstrap,
 publication, uploads, restarts, power/mute actions or credential changes were
-performed. Required live backup, cutover, natural-upload and rollback checks
-remain pending explicit DN3 approval. The original review covers unchanged
-code; the two fixes and new guard require their focused review before rollout.
+performed. At that pre-approval stage, live backup, cutover and natural-upload checks were
+pending. The two fixes and new guard subsequently passed their focused review;
+the current live status is recorded below.
 
 ## Refreshed source and server compatibility (2026-10-24)
 
@@ -175,6 +175,45 @@ Pi3's Gonf 0.25.0 is below the controller's 0.25.2 strict-preview gate; that hos
 remains unchanged pending separate runtime-bootstrap approval. Its replacement
 ARM64 binary and a backup/rollback procedure are prepared. No failed preview is
 counted as deployment or worked around with an implicit bootstrap.
+
+## Live status (2026-10-24)
+
+Both frontend cutovers are deployed and verified: protected marker/helper,
+all 82 Gogios path references, 0640 root:_gogios configuration, and active/future
+access logs 0640 root:_dserver. Real Pi0 and Pi1 restricted SSH connections each
+completed mute/unmute/status cycles on both gateways. Existing SSH policies,
+httpd parent PIDs and active log inodes stayed unchanged. Verified TLS requests
+still grow both logs. Native rotation dry runs pass.
+
+Unused NRPE was removed serially after its installed package was recreated and
+its private rollback archive/listing/hash checked. Package-owned unused
+`check_nrpe` and `update-cfg.pl` were removed; unrelated monitoring plugins remain.
+Scoped frontend tasks and uploader tasks reapply with zero changes.
+
+The exact revised uploader is installed on both frontends, f0-f3, Pi0/Pi1 and
+Pi2. Only the script changed; credentials, services and schedules were preserved.
+Both frontends and both NetBSD Pis have completed normal HTTP204 records uploads
+with advancing nonempty files. The remaining five changed hosts await the next
+normal hourly cycle at 16:00 UTC; a private observer is running. No upload was
+forced. Pi3 still runs Gonf0.25.0 and is unchanged: its separately prepared
+0.25.2 runtime bootstrap requires the outstanding explicit approval. DN3 remains
+open until that host and the remaining required acceptance are resolved.
+
+Six fishfinger TLS checks became critical in the 15:15 normal cycle and cleared
+on the next active cycle without configuration/service changes; the passive
+view caught up on its subsequent normal refresh. Their original failure state
+is retained, and the precise transient cause is unconfirmed. All six actual
+plugins then passed as _gogios, followed by two distinct clean normal active/
+passive cycles. Current views have critical/unknown/stale/suppressed zero,
+608 OK and only the pre-existing failed-Job warning. Cluster workload, policy,
+application and Prometheus baselines are unchanged.
+
+Backups and native evidence are in the private `live/` sibling of the current
+isolated checkout. The backup wrapper's initial pkg_create output parsing and
+coordination-helper issues were corrected before any frontend cutover. Pi1's
+existing Perl loader failure is tracked separately as task jp3; a temporary
+static lock helper was used for this window and removed afterwards. No Pi1
+library or package repair was performed. Power coordination locks are released.
 
 ## Approved rollout procedure
 
@@ -232,7 +271,7 @@ counted as deployment or worked around with an implicit bootstrap.
    production server. Do not change schedules or rotate tokens.
 8. Only after frontend acceptance, recheck NRPE users/dependencies/listeners and
    apply `frontends_retire_nrpe` separately per host. Require the package absent,
-   all local plugins still present and existing monitoring unchanged. Reapply
+   all unrelated local monitoring plugins still present and existing monitoring unchanged. Reapply
    the selected tasks and require convergence. Task dn3 remains open until all
    required live acceptance is actually observed; source preparation is not
    deployment success.
