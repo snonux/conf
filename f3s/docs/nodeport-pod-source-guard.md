@@ -85,8 +85,8 @@ host reboot or recovery boot in this procedure.
 
 ## Checks already run
 
-- Native `nft -c` passed on r0, r1 and r2 with their actual nftables 1.0.9
-  environment. An initial 25-second check timed out; the bounded retry through
+- Native `nft -c` passed on r0, r1 and r2 (r0 reports nftables 1.0.9).
+  An initial 25-second check timed out; the bounded retry through
   dedicated read-only SSH transports completed. No rules were loaded. The
   custom table was verified absent afterwards and all three transports closed.
 - Native Linux user/network namespace packet tests reproduce source-node
