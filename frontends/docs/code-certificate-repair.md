@@ -1,9 +1,48 @@
 # Forgejo frontend certificate repair (ho3)
 
-Prepared on 2026-10-23; **not deployed**. Fresh expert review and explicit
-approval are required before certificate/key transfer, production-file changes,
-relayd reloads/restarts or monitoring deployment. The f3 power-on and PF approvals do
-not authorize this repair. Do not push evolving conf master.
+Prepared and reviewed on 2026-10-23; **deployed with explicit approval on
+2026-10-24**. Both frontends passed immediate acceptance and their rollback
+guards were accepted. Normal monitoring acceptance remains pending the cached
+pre-repair hourly certificate result's next recheck. Future changes still
+require their own authorization; f3 power-on and PF approvals alone do not
+authorize certificate changes. Do not push evolving conf master.
+
+## Deployment checkpoint (2026-10-24, 07:28 UTC)
+
+- Approved-only source `4915728` is published to GitHub and Forgejo. Integration
+  includes the identical configuration-only `DTailChecks` publisher inherited
+  by the reviewed preparation, plus its generated description; it includes no
+  other pending DTail changes. The first preview refused the absent task before
+  any deployment; the integrated previews then showed exactly relayd config,
+  its restart and Gogios config on each host.
+- Fishfinger's primary certificate was replaced and reloaded before expiry;
+  both frontends now serve the verified primary leaf through December 31.
+  Each frontend was deployed and accepted separately with a 15-minute guard.
+  Trusted primary/standby TLS on 443/2443, real Git advertisement status/type/
+  payload, singular HSTS and unknown/LAN/missing/duplicate/public-443 Host denials
+  passed on both. Blowfish's separate standby certificate still expires
+  November 6; this operation did not renew it.
+- Both native pinned primary expiry commands return OK. Parsed live Gogios
+  configurations contain exactly the two intended additions and retain all
+  previous checks/settings. Native relayd parsing/service checks and recorded
+  root:wheel modes 0600/0744/0444/0400 passed. Final strict previews converge
+  with zero would-change operations on both hosts.
+- Integrated Go generation/build/test/vet/errcheck and all 26 certificate,
+  rollback and renderer behavior tests passed. Source publication was limited
+  to the approved branch; canonical master and unrelated preparation remain
+  untouched. Only GitHub and Forgejo were used.
+- Ordinary `f3sctl power on` completed; all three k3s nodes are Ready and
+  Forgejo is Ready. No AC cycle, reboot or SSH authentication change occurred.
+- Fishfinger's normal 07:26 UTC report includes both new checks OK but still
+  holds a standby critical sampled at 07:22 UTC, before the repair. Blowfish's
+  earlier peer report also retains it. Direct trusted standby TLS now passes;
+  neither forced Gogios execution nor cache edits were used to hide the old
+  result. Task completion awaits the normal recheck and peer propagation.
+
+Root-private backups/staging remain at `/root/ho3-code-cert-20261023` on the
+applicable frontend; no private key was stored on the controller. Sanitized
+observations are under the controller's private
+`/home/paul/.local/state/conf-worktrees/ho3-code-tls-20261023/evidence/`.
 
 ## Verified problem and candidate
 
