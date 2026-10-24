@@ -1,9 +1,11 @@
 # Rocky source firewall — sm3
 
-2026-10-24: **prepared, not deployed**. Refreshed on approved source base
-`7e8e97f`, preserving the deployed co3 NodePort guard. No sm3 live rules, service enablement,
-rpcbind stop, network restart, mount change or SSH authentication change was
-performed. Every live step below needs explicit approval. The ISP gateway
+2026-10-24: **r0 canary deployed and confirmed** from published `a54265e`
+(base `7e8e97f`), preserving the deployed co3 NodePort guard. r1/r2 and both
+Pis remain pending separate approval. No rpcbind stop, network restart,
+mount change or SSH authentication change was performed. The rollout
+procedure below requires explicit approval for each further host. The ISP
+gateway
 192.168.1.1 is ISP-managed; there is no permission to administer it. OpenWrt
 192.168.1.101 is an AP and cannot supply the missing perimeter firewall.
 FreeBSD PF is separate. Never fail over CARP, reboot into recovery mode,
@@ -156,8 +158,9 @@ the parallel cluster aggregates for rollout.
    restarting it: current rules are verified with nft, not service activity.
    Future staging changes only the candidate; boot always loads confirmed
    rules. A reboot during an unconfirmed apply loads the **previous**
-   confirmed policy. Boot/native systemd timer execution still needs a
-   later approved maintenance check; it was not exercised on real hosts.
+   confirmed policy. The r0 canary exercised real PID-1 timer arming and
+   cancellation. Reboot persistence and timer-triggered rollback have not
+   been exercised on a production host; those remain maintenance checks.
 
 The laptop currently has no active f3s `.200` tunnel, and phone `.201` packet
 tests are unavailable. Mesh probes through the frontends and isolated packet
@@ -207,6 +210,62 @@ Check existing NFS reads and workloads again; do not remount or fail over.
 Record prior unit states so an approved rollback can unmask and restore
 exactly those service/socket enablement/activity states.
 
+## r0 canary acceptance — 2026-10-24
+
+The owner approved publication and **r0 only** after reviewing the prepared
+14-file change. GitHub and Forgejo `master` both received `a54265e`; no
+canonical pending changes or other repositories were published with it.
+
+- Established two independent trusted root SSH transports and warmed the
+  normal sudo path. Strict staging preview passed, then the three installed
+  assets matched the reviewed hashes and root ownership/modes. Staging
+  loaded no table and enabled no boot service.
+- Applied the candidate with a real PID-1 five-minute rollback timer. All
+  guarded checks passed, then confirmed from the second transport after
+  16.991 seconds. The timer was cancelled, pending state cleared and
+  confirmed policy persisted as mode 0600 with its boot service enabled.
+  Candidate/confirmed SHA-256:
+  `794a9c28c4bbfa174eaa7f0edb77e958568e490f701ffc08eede45641ea435e7`.
+- From blowfish's public IPv6 `vio0` route, six host services were reachable
+  before activation: TCP 22/111/6443/9100/10250/10257. After activation and
+  again after confirmation, none of ten probes connected (those six plus
+  80/443/30001/30090). The new guard's drop counter increased during the
+  guarded checks; absent listeners were not used as the sole deny proof.
+- Ordinary r0 pod probes still denied all 30 combinations of co3's five
+  protected NodePorts across the three LAN and three WG node addresses.
+  The co3 policy was unchanged with counters normalized and remains
+  boot-enabled. Pod-to-host API, API ClusterIP, UDP/TCP Service DNS and
+  direct cross-node CoreDNS pod queries all passed.
+- Fresh LAN IPv4 SSH with normal sudo and fresh trusted ULA SSH passed.
+  LAN registry access, both frontend WG clients' registry/Prometheus/Forgejo
+  SSH/Anki paths, normal LAN Player ingress with certificate validation and
+  the unchanged unauthenticated HTTP 401 response,
+  API readiness/etcd leader health, local registry HTTP and a bounded read
+  of the existing public NFS package index all passed before and after.
+- Preserved measured baseline restrictions: the laptop's direct LAN
+  Prometheus and Forgejo SSH NodePort access was already denied; both
+  intended frontend WG clients remained allowed. Direct laptop-to-r0 HTTPS and HTTPS NodePort
+  probes also failed before activation; their cause was not established.
+  Normal LAN ingress returned its expected HTTP 401. Do not describe those
+  direct failed pre-change paths as successful tests or as a new firewall regression.
+- k3s PID/start time and both rpcbind unit states remained unchanged.
+  Cluster checks retained 3 Ready nodes, 54 production pods with unchanged
+  UIDs/readiness/restart counts, 40 Healthy/Synced Argo apps, 57 unchanged
+  NetworkPolicies and 43 healthy Prometheus targets. Seven r0-specific
+  targets subsequently scraped successfully after activation. Both normal
+  Gogios reports refreshed after activation with no critical, unknown or
+  stale checks; their existing Job warning was unchanged.
+- Repeated packet/client checks after confirmation, then deleted the one
+  temporary unprivileged probe using its exact UID as a delete precondition.
+  No test NetworkPolicy or workload deployment was needed.
+
+No reboot, real timer expiry/rollback, CARP failover, remount, SSH-policy
+change or rpcbind cleanup was performed. Laptop/phone f3s tunnel packets
+remain untested as described above. Full sm3 is **not complete**: r1/r2,
+Pi2/Pi3, separately approved rpcbind cleanup and device checks remain.
+Private receipts are under
+`~/.local/state/conf-worktrees/sm3-integration-20261024/live/`.
+
 ## Verification performed during preparation
 
 - October 22: native read-only `nft -c -f -` passed on r0/r1/r2/pi2; pi3
@@ -242,4 +301,5 @@ exactly those service/socket enablement/activity states.
   All runtime helper/policy/unit/profile files and the original packet
   test are byte-identical to reviewed `4cd0137` (round 1 passed with no
   findings). The current integration retains both task registrations and
-  adds the co3 lifecycle assertions above. All live acceptance remains.
+  adds the co3 lifecycle assertions above. Further fleet acceptance remains;
+  the separately approved r0 canary is recorded above.
