@@ -93,8 +93,11 @@ hardening action for this rollout.
 
 ### Approved-base integration, 2026-10-24
 
-The refreshed isolated candidate starts at approved `7e8e97f`, preserving the
+The original refreshed candidate started at approved `7e8e97f`, preserving
 deployed DN3, NodePort guard, namespace policies, TLS checks and Garage monitoring.
+The subsequent preparation is integrated onto published `1edefe8`, retaining the
+accepted r0 sm3 source guard and both firewall task registrations. Runtime cache
+helpers and dserver policy remain unchanged from the reviewed candidate.
 The reviewed cache helpers and attack/authentication tests are unchanged from
 `21ec6f8`; the optional-reboot clarification from `2c6045c` is retained.
 
@@ -123,7 +126,9 @@ The original seven-host BSD proposal still has persistent keys at its configured
 `/var/db/dserver/ssh_host_key` paths. f3 is reachable and serving, but its existing
 key is in `/var/run/dserver/cache/ssh_host_key` and its persistent directory is
 absent. Keep f3 outside that proposal until a key-preserving move to persistent
-storage is separately prepared and approved. No host-key contents were read.
+storage is separately prepared and approved. A subsequent read-only preparation
+is recorded in [the f3 identity plan](dserver-f3-identity-preservation.md), including
+a newly observed successful-empty client-read blocker. No host-key contents were read.
 Linux's dated missing-key findings have not been refreshed or repaired here.
 
 Strict previews of the scoped operations pass on the seven proposed BSD hosts
