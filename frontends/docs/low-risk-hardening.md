@@ -1,7 +1,8 @@
 # Frontend hardening preparation (dn3)
 
-Prepared on 2026-10-23; **not deployed or published**. Task dn3's explicit
-live-change approval gate still applies. Its old dependency on tm3 was removed:
+Reviewed and approved for the bounded rollout on 2026-10-24. Live acceptance
+is recorded below as it is completed; source preparation alone is not deployment.
+Additional runtime bootstrap or service repair still requires separate approval. Its old dependency on tm3 was removed:
 the owner skipped SSH authentication changes, and none of these fixes needs
 them. This work changes no SSH authentication configuration, keys or doas rules.
 
@@ -160,7 +161,22 @@ made no production upload or credential change. Private results are in
 `evidence/server062-compatibility.json` beside the current candidate checkout.
 The server image and release are outside this rollout.
 
-## Proposed rollout, after review and explicit approval
+## Approved rollout refresh (2026-10-24)
+
+The source now retains the completed co3 guard and policy documentation
+(conf `f350f2c`, skill `e5bea8b`). Full merged Go generation/build/test/vet/errcheck
+passed. All seven focused checks passed: the real three-writer plan guard and
+curl process-privacy test as the controller user, then all five credential-drop
+permission tests under local sudo. The initial unprivileged collection skipped
+the permission class; its separate privileged rerun passed without skips.
+
+Fresh uploader previews show only the script update on nine managed hosts.
+Pi3's Gonf 0.25.0 is below the controller's 0.25.2 strict-preview gate; that host
+remains unchanged pending separate runtime-bootstrap approval. Its replacement
+ARM64 binary and a backup/rollback procedure are prepared. No failed preview is
+counted as deployment or worked around with an implicit bootstrap.
+
+## Approved rollout procedure
 
 1. Integrate/publish only this task's reviewed conf, f3sctl metadata and two
    skill files to the active GitHub/Forgejo repositories. Preserve all other
