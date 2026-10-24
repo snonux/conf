@@ -2,8 +2,9 @@
 
 Prepared and reviewed on 2026-10-23; **deployed with explicit approval on
 2026-10-24**. Both frontends passed immediate acceptance and their rollback
-guards were accepted. Normal monitoring acceptance remains pending the cached
-pre-repair hourly certificate result's next recheck. Future changes still
+guards were accepted. Normal monitoring acceptance passed on 2026-10-24:
+the active 08:31 UTC and passive 08:30 UTC reports have zero critical or stale
+checks. The cached TLS result cleared without a forced run or cache edits. Future changes still
 require their own authorization; f3 power-on and PF approvals alone do not
 authorize certificate changes. Do not push evolving conf master.
 
@@ -355,3 +356,13 @@ Primary references: [OpenBSD openssl](https://man.openbsd.org/openssl.1),
 The expiry plugin does not replace the hostname/chain-verified TLS acceptance
 above. No production key transfer, certificate issuance, configuration
 publication or service reload/restart has occurred during preparation.
+
+## Final normal monitoring acceptance (2026-10-24)
+
+Both reports now contain zero critical, unknown or stale checks and no failing
+TLS certificate check. The existing `Prometheus: KubeJobFailed` warning is
+unrelated and remains visible; no global zero-warning claim is made. The new
+primary checks and repaired standby SNI are healthy. Trusted TLS/Git/Host-policy
+acceptance, parsed monitoring preservation, serial guarded activation and final
+zero-change previews are recorded above. Task ho3 is complete. The historical
+07:28 checkpoint describes the earlier cache wait, not the current status.

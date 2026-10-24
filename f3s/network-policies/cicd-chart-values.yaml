@@ -1,0 +1,30 @@
+# Use only in the approved cicd stage, AFTER its scoped policies exist.
+# Include this overlay on every subsequent ArgoCD Helm upgrade.
+global:
+  networkPolicy:
+    create: false
+    defaultDenyIngress: false
+controller:
+  networkPolicy:
+    create: false
+server:
+  networkPolicy:
+    create: false
+repoServer:
+  networkPolicy:
+    create: false
+redis:
+  networkPolicy:
+    create: false
+applicationSet:
+  networkPolicy:
+    create: false
+dex:
+  networkPolicy:
+    create: false
+notifications:
+  networkPolicy:
+    create: false
+commitServer:
+  networkPolicy:
+    create: false

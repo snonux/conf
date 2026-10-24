@@ -1,0 +1,249 @@
+# Task 7n3: activate only this namespace in the approved staged rollout.
+# Each receiver has one complete allow policy; namespace default deny follows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dns
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: kube-dns
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    - ipBlock:
+        cidr: 192.168.1.120/32
+    - ipBlock:
+        cidr: 192.168.1.121/32
+    - ipBlock:
+        cidr: 192.168.1.122/32
+    - ipBlock:
+        cidr: 192.168.2.120/32
+    - ipBlock:
+        cidr: 192.168.2.121/32
+    - ipBlock:
+        cidr: 192.168.2.122/32
+    - ipBlock:
+        cidr: 10.42.0.0/32
+    - ipBlock:
+        cidr: 10.42.0.1/32
+    - ipBlock:
+        cidr: 10.42.1.0/32
+    - ipBlock:
+        cidr: 10.42.1.1/32
+    - ipBlock:
+        cidr: 10.42.2.0/32
+    - ipBlock:
+        cidr: 10.42.2.1/32
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+          prometheus: prometheus-kube-prometheus-prometheus
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9153
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics-server-api
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: metrics-server
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 192.168.1.120/32
+    - ipBlock:
+        cidr: 192.168.1.121/32
+    - ipBlock:
+        cidr: 192.168.1.122/32
+    - ipBlock:
+        cidr: 192.168.2.120/32
+    - ipBlock:
+        cidr: 192.168.2.121/32
+    - ipBlock:
+        cidr: 192.168.2.122/32
+    - ipBlock:
+        cidr: 10.42.0.0/32
+    - ipBlock:
+        cidr: 10.42.0.1/32
+    - ipBlock:
+        cidr: 10.42.1.0/32
+    - ipBlock:
+        cidr: 10.42.1.1/32
+    - ipBlock:
+        cidr: 10.42.2.0/32
+    - ipBlock:
+        cidr: 10.42.2.1/32
+    ports:
+    - protocol: TCP
+      port: 10250
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traefik
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+      app.kubernetes.io/instance: traefik-kube-system
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+          prometheus: prometheus-kube-prometheus-prometheus
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9100
+  - from:
+    - ipBlock:
+        cidr: 192.168.2.110/32
+    - ipBlock:
+        cidr: 192.168.2.111/32
+    - ipBlock:
+        cidr: 192.168.2.200/32
+    - ipBlock:
+        cidr: 192.168.2.201/32
+    - ipBlock:
+        cidr: 192.168.1.130/32
+    - ipBlock:
+        cidr: 192.168.1.131/32
+    - ipBlock:
+        cidr: 192.168.1.138/32
+    - ipBlock:
+        cidr: 192.168.1.120/32
+    - ipBlock:
+        cidr: 192.168.1.121/32
+    - ipBlock:
+        cidr: 192.168.1.122/32
+    - ipBlock:
+        cidr: 192.168.2.120/32
+    - ipBlock:
+        cidr: 192.168.2.121/32
+    - ipBlock:
+        cidr: 192.168.2.122/32
+    - ipBlock:
+        cidr: 10.42.0.0/32
+    - ipBlock:
+        cidr: 10.42.0.1/32
+    - ipBlock:
+        cidr: 10.42.1.0/32
+    - ipBlock:
+        cidr: 10.42.1.1/32
+    - ipBlock:
+        cidr: 10.42.2.0/32
+    - ipBlock:
+        cidr: 10.42.2.1/32
+    - podSelector:
+        matchLabels:
+          svccontroller.k3s.cattle.io/svcname: traefik
+          svccontroller.k3s.cattle.io/svcnamespace: kube-system
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traefik-servicelb
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: '-1'
+spec:
+  podSelector:
+    matchLabels:
+      svccontroller.k3s.cattle.io/svcname: traefik
+      svccontroller.k3s.cattle.io/svcnamespace: kube-system
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 192.168.2.110/32
+    - ipBlock:
+        cidr: 192.168.2.111/32
+    - ipBlock:
+        cidr: 192.168.2.200/32
+    - ipBlock:
+        cidr: 192.168.2.201/32
+    - ipBlock:
+        cidr: 192.168.1.130/32
+    - ipBlock:
+        cidr: 192.168.1.131/32
+    - ipBlock:
+        cidr: 192.168.1.138/32
+    - ipBlock:
+        cidr: 192.168.1.120/32
+    - ipBlock:
+        cidr: 192.168.1.121/32
+    - ipBlock:
+        cidr: 192.168.1.122/32
+    - ipBlock:
+        cidr: 192.168.2.120/32
+    - ipBlock:
+        cidr: 192.168.2.121/32
+    - ipBlock:
+        cidr: 192.168.2.122/32
+    - ipBlock:
+        cidr: 10.42.0.0/32
+    - ipBlock:
+        cidr: 10.42.0.1/32
+    - ipBlock:
+        cidr: 10.42.1.0/32
+    - ipBlock:
+        cidr: 10.42.1.1/32
+    - ipBlock:
+        cidr: 10.42.2.0/32
+    - ipBlock:
+        cidr: 10.42.2.1/32
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress: []

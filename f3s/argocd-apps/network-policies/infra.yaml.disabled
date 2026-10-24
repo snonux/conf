@@ -1,0 +1,18 @@
+# Manual activation only; pin targetRevision to the approved published commit first.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: network-policies-infra
+  namespace: cicd
+spec:
+  project: default
+  source:
+    repoURL: http://forgejo.services.svc.cluster.local/snonux/conf.git
+    targetRevision: master
+    path: f3s/network-policies/namespaces/infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=false
