@@ -79,6 +79,21 @@ func (Monitoring) DTail() {
 	Service("dserver", WithRestart, DependsOn(pkg, account), OnChange(config))
 }
 
+// OptsDTailChecks keeps this configuration-only action out of the aggregate,
+// where Gogios already publishes the same configuration.
+func (Monitoring) OptsDTailChecks() TaskOptions {
+	return TaskOptions{Operational()}
+}
+
+// DTailChecks publishes Gogios configuration with the WireGuard DTail targets.
+// It assumes the existing Gogios installation and changes no package, account,
+// plugin, cron job or running service. Use alongside the dserver bind rollout.
+func (Monitoring) DTailChecks() {
+	EachHost(func(server Server) {
+		File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o744, Root))
+	})
+}
+
 func cleanupLegacyDTail() Resource {
 	return Command("sh", List("-ceu", `
 for binary in dserver dcat dgrep dmap dtail dtailhealth; do

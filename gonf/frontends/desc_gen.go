@@ -48,6 +48,10 @@ func (Monitoring) DescDTail() string {
 	return "Installs DTail from the signed fleet repository and enables dserver"
 }
 
+func (Monitoring) DescDTailChecks() string {
+	return "Publishes Gogios configuration with the WireGuard DTail targets"
+}
+
 func (Monitoring) DescFoostats() string {
 	return "Installs private visitor counters, shared keyed pseudonyms, and aggregate reporting"
 }
