@@ -1,7 +1,6 @@
 # Namespace ingress isolation (task 7n3)
 
-Approved rollout preparation (2026-10-24): none of these policies or Applications
-has been applied or synced yet. The laptop and phone requirements add one scoped
+Deployed on 2026-10-24: all eleven namespace stages are active. The laptop and phone requirements add one scoped
 phone read-proxy policy, making 55 policies across eleven namespaces.
 Each namespace is a separate rollout stage. One task-7n3 approval may authorize
 a named, bounded sequence with the gates below, or only a canary. There is no
@@ -78,8 +77,10 @@ are explicit direct clients. Both are also admitted to Traefik/ServiceLB web
 ports. This is network reachability only: the separate HTTP-header trust still
 admits only the two frontends. Neither device gets database or raw Prometheus
 receiver access. Both identities were confirmed in the actual gateway peer
-configuration; their inactive device tunnels are not claimed as packet-tested.
-Bridge's documented SSH tunnel originates at a trusted node. No services-wide,
+configuration. The laptop profile is inactive; phone-side packets have not been
+tested. The existing Bridge tunnel is a Kubernetes port-forward, with IMAP and
+SMTP STARTTLS checked against its pinned certificate. Direct frontend WG access
+to Bridge on its receiving node is intentionally absent from the allowlist. No services-wide,
 namespace-wide or pod-CIDR allowance is used to keep these paths alive.
 
 The exact trusted-node addresses are r0/r1/r2 LAN 192.168.1.120–122, WG
@@ -239,8 +240,7 @@ Application. Each namespace is manually synced and checked before the next appro
    to the next explicitly approved stage after every gate passes; stop on a failed
    gate, new scope or an unidentified necessary client. Ask for further approval
    only when the next action falls outside the approved sequence. API objects
-   and the offline model alone are not task completion. No stage was executed
-   during this preparation.
+   and the offline model alone are not task completion.
 
 ### Mandatory cicd chart transition
 
@@ -260,19 +260,17 @@ require a coordinated Helm transition:
    Do not steal their ownership or delete unrelated policies. Check the planned
    Helm diff for unrelated runtime changes and stop if any exist.
 3. Retain the overlay on **every subsequent** ArgoCD install/upgrade. The ordinary
-   `f3s/argocd/Justfile` does not include it yet because cicd has not been activated.
-   The reviewed `cicd-activation.patch` adds the overlay to both standard install/
-   upgrade commands; `git apply --check` validates it without applying it. Apply
-   and commit that exact patch as part of the approved cicd stage,
-   before its Helm transition, and retain the patch until all copies of the
-   operator checkout use the updated workflow. This is mandatory: a plain
+   `f3s/argocd/Justfile` includes it in both install and upgrade commands as of
+   commit `d6687e8`, published before the approved Helm transition. The retained
+   `cicd-activation.patch` updates older operator checkouts; its applicability
+   test also recognizes an already-applied patch. This is mandatory: a plain
    upgrade with existing values otherwise recreates the allow-all policy.
    Do not run that plain workflow between activation and the persistence change.
 4. Inspect the live union: only the new scoped cicd policies must remain, then
    prove unrelated pod → Argo server/Redis/repo-server denial and required UI,
    git, controller/cache and metrics success.
 
-The overlay is local preparation, not an instruction to run an unrelated Helm
+The overlay does not authorize an unrelated Helm
 upgrade before cicd's stage. Local chart rendering confirms the current broad
 server policy exists and that the reviewed overlay emits no chart policies.
 
@@ -293,3 +291,74 @@ isolation.
 
 References: [Kubernetes NetworkPolicy semantics and node exceptions](https://kubernetes.io/docs/concepts/services-networking/network-policies/),
 [Kubernetes Service source-IP behavior](https://kubernetes.io/docs/tutorials/services/source-ip/).
+
+## Live acceptance on 2026-10-24
+
+All eleven manual Applications are pinned to published policy commit `a1112b9`.
+The live union contains exactly 55 matching task policies and the two existing
+6n3 Prometheus policies, whose UIDs and specs were preserved. Application
+synchronization/health and the namespace policy specs were checked after each
+stage. This is ingress isolation; task co3 still owns the NodePort bypass.
+
+- Each namespace had three temporary listening receivers, one per node. Six
+  ordinary clients in test/services made 18 fresh connections before activation
+  and were denied in all 18 cases after activation: 198 positive baseline cases
+  and 198 actual denials across the eleven stages. The initial test-stage native
+  REJECT counters increased on all three receiving nodes.
+- Services: 48 unrelated-client attempts to Service and Pod addresses for both
+  Postgres instances, Valkey and ML were denied. The actual Immich/Miniflux
+  containers retained eight positive connections; two wrong-app attempts failed.
+  Another 48 direct Anki/Forgejo SSH/Bridge receiver attempts were denied, and
+  infra had 24 direct Service/Pod denials.
+- Monitoring: 66 unrelated-client Service/Pod/NodePort attempts were denied.
+  Both real frontend WG sources retained their existing registry, Forgejo SSH,
+  Anki and read-proxy access. Each final gateway matrix had 24 TCP and twelve
+  read-only HTTP cases. Current and ten-day Pushgateway group counts were zero.
+- Argo chart 10.10.5 stayed at the same version, release revision 20 to 21. The
+  native server dry run changed only removal of the four old chart policies;
+  the five replacements kept their UIDs. No hooks or workload-template changes
+  ran. Ten fresh connections from real Argo components, 36 unrelated-client
+  denials and an actual successful hard refresh verified cache/repo/GitOps paths.
+- DNS returned real A answers over both UDP and TCP from all six clients.
+  All four existing Certificates remained Ready; server-side Certificate
+  admission dry runs persisted nothing. The native node metrics API worked.
+- All 55 baseline running pod UIDs/readiness/restart counts remained unchanged.
+  All 43 healthy targets and 42 rule groups remained, including Watchdog.
+  Fifty-nine TLS-verified public/LAN GET results matched baseline. Two additional
+  forced standby paths (bgtutor-mcp and gpodder via fishfinger) already had
+  certificate-name mismatches before the production policy stages and remain
+  unverified; these were never counted as successful TLS paths.
+
+The existing laptop Bridge port-forward passed pinned-certificate IMAP and SMTP
+STARTTLS/NOOP checks without authentication or sending mail. An early test
+incorrectly expected direct frontend WG access to Bridge; the corrected test
+uses the reviewed receiver contract, without widening production policies.
+Traefik keeps its existing single replica and Local NodePort: direct NodePort
+checks use its ready endpoint node, rather than assuming all nodes host Traefik.
+Anonymous direct/public requests retain their authentication challenge.
+
+Device-side traffic from laptop `.200` and phone `.201` is not claimed tested:
+the laptop profile is inactive and the phone was not available for those tests.
+Their explicit /32 policies and positive/negative model cases are in place;
+Traefik forwarded-header trust remains only `.110` and `.111`.
+
+The known co3 bypass is now also packet-observed: an ordinary r0 pod reached
+r1 Cluster NodePorts 30001, 30222, 30143, 30025 and 30800 after activation. This
+is a remaining limitation, not a successful isolation result. No NodePort
+traffic-policy redesign, application restart, storage change or host/VPN change
+was performed for this rollout.
+
+All 39 owned probes were removed with UID preconditions; the three operator SSH
+masters were closed. Two distinct normal active/passive Gogios cycles were
+observed after cleanup (10:20/10:21 and 10:25 UTC). The temporary probe CPU warning
+cleared naturally. Final views both report critical/unknown/stale zero and one
+pre-existing `KubeJobFailed` warning, with 608 OK entries. Final health still has
+55 unchanged running workload pods, 40 healthy/synced Applications, 43 healthy
+targets and 42 rule groups. No monitoring was muted and no failed Job was reset.
+
+The f3s skill update is published as dotfiles commit `ab3a381` on both active
+forges and installed in the canonical local skill checkout. Unrelated local
+working files were preserved. All 16 policy tests passed, including native
+OpenAPI validation and pinned chart rendering, with no skips. The original
+fresh preparation review passed; necessary later roaming/Helm-name fixes were
+self-reviewed and covered by the updated tests and native rollout evidence.
