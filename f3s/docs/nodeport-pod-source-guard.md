@@ -1,8 +1,8 @@
 # NodePort pod-source guard — co3
 
 Prepared locally on 2026-10-24; **not published, installed or activated**.
-Fresh expert review and explicit approval for staging, activation and temporary
-cluster probes are still required. Task 7n3 is deployed; its policies and the
+Fresh expert ROUND1 review passed with zero blockers. Explicit approval for
+staging, activation and temporary cluster probes is still required. Task 7n3 is deployed; its policies and the
 existing Prometheus boundary remain unchanged.
 
 ## Problem and current evidence
@@ -110,6 +110,12 @@ host reboot or recovery boot in this procedure.
   the generated r-node descriptions are included. An actual controller plan
   has ten operations, correct owners/modes, `nft -c`/Bash validation and only
   the two inert staging commands.
+
+Fresh expert ROUND1 independently reran both isolated native scripts, Bash
+syntax, ShellCheck and diff checks: all passed, with zero blocking or actionable
+nonblocking findings. It reviewed the native preflight/staging/cleanup evidence
+without new host operations or heavy Go checks. Real host PID1 rollback and
+Kubernetes endpoint-transition acceptance remain unexecuted until approval.
 
 Run the local checks from this checkout:
 
