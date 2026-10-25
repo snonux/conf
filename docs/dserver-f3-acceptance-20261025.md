@@ -83,7 +83,7 @@ wrong-pin checks also passed. This establishes the observed steady state,
 not guaranteed successful reads at the instant a new daemon starts. No reboot
 was performed as a test.
 
-## Health comparison and concurrent guest changes
+## Health comparison and owner-confirmed guest changes
 
 Before and after the repair, all three Kubernetes nodes were Ready, all 54
 non-Job application pods ready, all 40 applications Healthy/Synced and all 43
@@ -94,10 +94,15 @@ K3sVersionCheckCoverage warning began clearing on the normal monitoring cycle.
 The extra f3 guest-state comparison **did not pass**: at preflight, rocky was
 running and freebsd stopped; afterward rocky was stopped and hfs-test0,
 hfs-test1 and hfs-test2 were running. No VM-management command was part of this
-repair. These concurrent changes have been raised with the owner; their intent
-is pending confirmation. No claim of an unchanged guest inventory is made,
-and no guest is started/stopped to make the comparison pass. Cluster/monitoring
-health and DTail acceptance above are recorded separately from that difference.
+repair. The owner subsequently confirmed these changes were intentional, then explicitly
+requested that all FreeBSD guests be stopped and Rocky started again. The three
+hfs-test guests were shut down gracefully; freebsd was already stopped. The
+final inventory shows all four FreeBSD guests stopped and rocky running
+(PID 28967), with strict SSH and normal sudo verified inside rocky. This resolves
+the pending guest-state clarification. The historical comparison remains a
+recorded change, not an unchanged-inventory pass. No guest was stopped/started
+without the owner's new instruction. Cluster/monitoring health and DTail
+acceptance above are recorded separately from that intentional difference.
 
 ## Remaining work and retained material
 
@@ -122,7 +127,8 @@ Private controller receipts and operational scripts:
 `migration-state.json` records exact backup/quarantine paths;
 `native-acceptance.json`, `final-native-acceptance.json`,
 `native-startup-acceptance.json`, `post-startup-repeated-reads.json`,
-`f3-convergence-preview.txt` and the pre/post health receipts record the checks.
+`f3-convergence-preview.txt`, `owner-restored-guest-state.json` and the pre/post
+health receipts record the checks.
 The failed guest comparison and startup observation are retained, not rewritten
 as passing runs. Reviewed core code was unchanged; only this acceptance report
 and links were added after deployment, so no new build/full-suite claim is made.
