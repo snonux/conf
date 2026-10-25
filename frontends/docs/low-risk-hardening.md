@@ -176,6 +176,29 @@ remains unchanged pending separate runtime-bootstrap approval. Its replacement
 ARM64 binary and a backup/rollback procedure are prepared. No failed preview is
 counted as deployment or worked around with an implicit bootstrap.
 
+## Pi3 completion in progress (2026-10-25)
+
+The owner approved the combined 1g3/dn3 Pi3 maintenance. The single approved
+logind repair restored prompt SSH/sudo, and the reviewed atomic Gonf bootstrap
+installed 0.25.2 with verified schema 31/strict-preview capability 1. The old
+executable is retained root-private at `/var/backups/dn3-gonf.3Gsuvm` on Pi3.
+Pi-hole upgrade and its independent acceptance are recorded in
+[the recovery record](../../f3s/pihole/pi3-recovery-plan.md).
+
+Pi3's strict uploader preview reported only the script update. The unit-dir
+ensure notice referred to existing `/etc/systemd/system`, verified 0755 root:root.
+Apply made exactly one change and installed the reviewed uploader SHA-256
+`9fe4886cff918846145d488836c2fa817a10d8f143656ca3669b7bc087d6c05f`, root:root 0755.
+Reapply reported zero changes. No token, environment, unit, service or schedule
+changed. The old public script is retained privately with the deployment receipt.
+
+The normal hourly timer next fires at 17:00 UTC. A dedicated read-only observer
+is running; acceptance is pending its ordinary HTTP204 records upload and
+advancing nonempty records file. No upload was forced. The existing server pod
+has one restart from 08:23 UTC, before this maintenance; that is the observer's
+fresh baseline, not a new zero-restart claim. The original nine-host acceptance
+below remains valid. DN3 remains open until Pi3's ordinary-cycle acceptance.
+
 ## Live status (2026-10-24)
 
 Both frontend cutovers are deployed and verified: protected marker/helper,
