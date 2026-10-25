@@ -1,76 +1,47 @@
-#	$OpenBSD: pf.conf,v 1.55 2017/12/03 20:40:04 sthen Exp $
-#
-# See pf.conf(5) and /etc/examples/pf.conf
-
-# NAT for WireGuard clients to access internet (IPv4)
-# This allows roaming clients (earth, pixel7pro) to route all traffic
-# through the VPN and access the internet via the gateway's public IP
-match out on vio0 from 192.168.2.0/24 to any nat-to (vio0)
-
-# NAT66 for WireGuard clients to access internet (IPv6)
-# This allows roaming clients to route IPv6 traffic through the VPN
-# Uses NPTv6 (Network Prefix Translation) to translate ULA to public IPv6
-match out on vio0 inet6 from fd42:beef:cafe:2::/64 to any nat-to (vio0)
-
+# Frontend inbound default-deny. Rendered per host by frontends_pf.
 set skip on lo
 
-block return	# block stateless traffic
-pass		# establish keep-state
+table <bruteforce> persist
 
-# Recursive crawler saturated fishfinger's TLS workers (2026-10-19).
-# Stop it before relayd; quick prevents the accounting passes overriding it.
+# Keep roaming clients' existing IPv4 NAT and stateful IPv6 NAT.
+match out on vio0 inet from 192.168.2.0/24 to any nat-to (vio0)
+match out on vio0 inet6 from fd42:beef:cafe:2::/64 to any nat-to (vio0)
+
+block return
+# Outbound connections and mesh transit create reply states as before.
+pass out
+
+# These quick blocks must precede every public allow rule.
 block drop in quick on vio0 from 185.177.72.38 label "abusive_crawler"
+block drop in quick on vio0 proto tcp from <bruteforce> to (vio0) port 2 label "ssh_bruteforce"
+block return out log quick proto { tcp udp } user _pbuild
+block return in quick on vio0 proto tcp to port 6000:6010
 
-# By default, do not permit remote connections to X11
-block return in on ! lo0 proto tcp to port 6000:6010
+# dhcpleased on both live hosts uses UDP68. Initial broadcast replies may
+# arrive before an outbound state exists; this does not expose a daemon port.
+pass in on vio0 inet proto udp from any port 67 to any port 68 label "dhcp_client"
 
-# Port build user does not need network
-block return out log proto {tcp udp} user _pbuild
+# IPv4 PMTU/errors and diagnostics; IPv6 errors, PMTU, RA and ND are needed
+# for public addressing and on-link reachability. Permit no redirects.
+pass in on vio0 inet proto icmp icmp-type { echoreq unreach timex paramprob } label "icmp_in"
+pass in on vio0 inet6 proto icmp6 icmp6-type { unreach toobig timex paramprob echoreq } label "icmp6_in"
+pass in on vio0 inet6 proto icmp6 icmp6-type { routersol routeradv neighbrsol neighbradv } label "ipv6_nd"
 
-# Allow inbound traffic on WireGuard interface
-# This permits traffic from VPN clients to access services on this host
-pass in on wg0
-
-# Allow all UDP traffic on WireGuard port (IPv4 and IPv6)
-# This is required for WireGuard's encrypted tunnel communication
-pass in inet proto udp from any to any port 56709
-pass in inet6 proto udp from any to any port 56709
-
-# ---------------------------------------------------------------------------
-# Per-service traffic accounting.
-#
-# These rules exist to COUNT, not to filter: the bare `pass` above already
-# permits all of this, so the policy is unchanged and every rule here is a
-# `pass` too. What they buy is attribution -- `pfctl -sl` reports
-# evaluations/packets/bytes per label, which a cron job scrapes into the
-# node_exporter textfile collector (see rc.conf.local + scripts/pf-labels).
-#
-# Why this is needed at all: Traefik's Prometheus metrics only cover HTTP
-# that relayd forwards into the k3s ingress. Gemini, git+ssh, the pi0/pi1
-# static sites and the NodePort relays (anki, garage, registry)
-# all bypass Traefik entirely, so it reports zero for them however busy
-# they are. pf sits underneath everything and sees the lot.
-#
-# Placement and form both matter:
-#   - They are LAST in the file on purpose. pf is last-match-wins (absent
-#     `quick`), so these override the earlier bare `pass` and become the
-#     state-creating rule for their ports -- which is what makes the byte
-#     counters accumulate. Labelling a `match` rule would not work: `match`
-#     does not create state, so its byte counters stay at zero.
-#   - No address family is specified, so each rule covers IPv4 and IPv6.
-#     That is deliberate: an v4-only fault is otherwise invisible, and the
-#     two families have already been shown to behave differently here.
-#
-# Adding a service? Append a labelled rule; the exporter picks it up with no
-# further change, as the scrape config already targets both gateways.
-pass in on vio0 proto tcp to port 443   label "svc_https"
-pass in on vio0 proto tcp to port 80    label "svc_http"
-pass in on vio0 proto tcp to port 1965  label "svc_gemini"
-pass in on vio0 proto tcp to port 2443  label "svc_forgejo_web_alt"
-pass in on vio0 proto tcp to port 2022  label "svc_forgejo_ssh"
-pass in on vio0 proto tcp to port 2222  label "svc_dserver"
-pass in on vio0 proto tcp to port 2     label "svc_ssh_admin"
-pass in on vio0 proto udp to port 56709 label "svc_wireguard"
+# Public services. Family-neutral rules provide IPv4/IPv6 parity. Labels
+# create the states scraped by pf-labels-exporter.sh, including reply bytes.
+# Limits count completed TCP connections, per source per rule. Keep HTTPS
+# separate from the SSH overload table so a busy NAT cannot ban SSH users.
+pass in on vio0 proto tcp to (vio0) port 2 keep state (max-src-conn 100, max-src-conn-rate 30/60, overload <bruteforce> flush global) label "svc_ssh_admin"
+pass in on vio0 proto tcp to (vio0) port 25 label "svc_smtp"
+pass in on vio0 proto { tcp udp } to (vio0) port 53 label "svc_dns"
+pass in on vio0 proto tcp to (vio0) port 80 label "svc_http"
+pass in on vio0 proto tcp to (vio0) port 443 keep state (max-src-conn 200, max-src-conn-rate 100/10) label "svc_https"
+pass in on vio0 proto tcp to (vio0) port 1965 label "svc_gemini"
+pass in on vio0 proto tcp to (vio0) port 2443 label "svc_forgejo_web_alt"
+pass in on vio0 proto tcp to (vio0) port 2022 label "svc_forgejo_ssh"
+pass in on vio0 proto udp to (vio0) port 56709 label "svc_wireguard"
+# No public 8080 (httpd), 873 (rsync), 2222 (dserver), or 4242 (ZNC).
+# ZNC is bound to WireGuard by frontends_wg_znc.
 
 # Backend leg, over the WireGuard mesh.
 #
@@ -94,7 +65,5 @@ pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 
 pass out on wg0 proto tcp to { 192.168.2.120 192.168.2.121 192.168.2.122 } port 30222 label "dst_forgejo_ssh"
 pass out on wg0 proto tcp to { 192.168.2.130 192.168.2.131 192.168.2.132 } port 3900  label "dst_garage"
 
-# Everything arriving from the mesh (f-hosts, r-nodes, Pis, roaming clients).
-# This replaces the bare `pass in on wg0` earlier in the file -- same policy,
-# but attributed instead of anonymous.
+# Authenticated mesh access, including rsync and administrative monitoring.
 pass in on wg0 label "wg_mesh_in"

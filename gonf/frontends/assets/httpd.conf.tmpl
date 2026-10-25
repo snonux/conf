@@ -25,7 +25,8 @@ server "{{.ServerFQDN}}" {
 }
 
 server "{{.ServerFQDN}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     root "/htdocs/buetow.org/self"
@@ -35,7 +36,8 @@ server "{{.ServerFQDN}}" {
 
 # f3s cluster fallback page on port 8080 when cluster is down
 server "f3s.buetow.org" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   no log
   location * {
     request rewrite "/index.html"
@@ -44,7 +46,8 @@ server "f3s.buetow.org" {
 }
 
 server "*.f3s.buetow.org" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   no log
   location * {
     request rewrite "/index.html"
@@ -54,7 +57,8 @@ server "*.f3s.buetow.org" {
 
 # Gemtexter hosts
 {{range .Gemtexter}}server "{{.Name}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location "/.git*" {
     block return 302 "https://{{.Name}}"
@@ -67,7 +71,8 @@ server "*.f3s.buetow.org" {
 }
 {{end -}}
 {{range .Redirects}}server "{{.BuetowOrg}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     block return 302 "https://paul.buetow.org$REQUEST_URI"
@@ -75,7 +80,8 @@ server "*.f3s.buetow.org" {
 }
 
 server "{{.BlogBuetowOrg}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     block return 302 "https://foo.zone$REQUEST_URI"
@@ -83,7 +89,8 @@ server "{{.BlogBuetowOrg}}" {
 }
 
 server "{{.SnonuxFoo}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
 {{if .IsWWW}}    block return 302 "https://snonux.foo$REQUEST_URI"
@@ -93,7 +100,8 @@ server "{{.SnonuxFoo}}" {
 }
 
 server "{{.PaulBuetowOrg}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     block return 302 "https://foo.zone/about$REQUEST_URI"
@@ -101,7 +109,8 @@ server "{{.PaulBuetowOrg}}" {
 }
 {{end -}}
 {{range .DtailHosts}}server "{{.}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     block return 302 "https://github.com/snonux/dtail"
@@ -109,7 +118,8 @@ server "{{.PaulBuetowOrg}}" {
 }
 {{end -}}
 {{range .RootHosts}}server "{{.Name}}" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     root "{{.Root}}"
@@ -130,7 +140,8 @@ server "{{.PaulBuetowOrg}}" {
 }
 
 server "{{.}}-port8080" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   location * {
     request rewrite "/index.html"
@@ -146,7 +157,8 @@ server "default" {
 }
 
 server "default" {
-  listen on * port 8080
+  listen on 127.0.0.1 port 8080
+  listen on ::1 port 8080
   log style forwarded
   block return 302 "https://foo.zone$REQUEST_URI"
 }

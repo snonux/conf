@@ -83,3 +83,7 @@ func (Web) DescACMEInvoke() string { return "Requests and renews frontend ACME c
 func (Web) DescInetd() string { return "Installs and converges frontend inetd" }
 
 func (Web) DescPF() string { return "Validates and reloads frontend PF plus its node_exporter metrics" }
+
+func (Web) DescWgZNC() string {
+	return "Binds the existing TLS IRC bouncer to WireGuard without exporting secrets"
+}

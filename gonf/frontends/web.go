@@ -43,9 +43,9 @@ func (Web) DescHTTPD() string { return "Render, validate, and converge frontend 
 
 // HTTPD renders each host's configuration on the controller. The core File
 // validation (WithValidation) checks a private candidate with `httpd -n`
-// before every non-dry-run live reconciliation, while OnChange limits a
-// restart to a changed live config; a changed rc flag (WithFlags("") keeps
-// the httpd_flags= line rcctl writes) restarts it too. A render failure
+// before every non-dry-run live reconciliation. A successful-activation
+// fingerprint retries failed restarts even after the file has converged.
+// WithFlags("") keeps the httpd_flags= line rcctl writes. A render failure
 // refuses the File (WithContentFrom) instead of declaring it with empty
 // content, which fails the record.
 func (Web) HTTPD() {
@@ -55,14 +55,15 @@ func (Web) HTTPD() {
 			RootOwned,
 			WithValidation("httpd", List("-n", "-f", CandidatePath)))
 		fallbackIndex := htdocs(server)
-		Service("httpd", WithFlags(""), WithRestart, DependsOn(fallbackIndex), OnChange(config))
+		service := Service("httpd", WithFlags(""), DependsOn(fallbackIndex, config))
+		activateFrontend("httpd", service)
 	})
 }
 
 // Inetd installs and converges frontend inetd.
 //
-// Inetd renders no host-specific content, but still treats its login class as
-// a change input because the daemon must re-exec to receive revised limits.
+// Inetd binds rsync to each host's WireGuard IPv4 and IPv6 addresses. Its
+// login class is an activation input: inetd must re-exec for revised limits.
 // WithFlags("") keeps the inetd_flags= line that enables it.
 // LoginClass installs the root:wheel 0644 fragment under an OpenBSD-only plan
 // requirement; OpenBSD reads /etc/login.conf.d/<class> directly, so no
@@ -72,8 +73,17 @@ func (Web) HTTPD() {
 // it builds on the full stock daemon class and is kept as is.
 func (Web) Inetd() {
 	class := LoginClass("inetd", legacyFrontendAsset("etc/login.conf.d/inetd"))
-	config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"), RootOwned)
-	Service("inetd", WithFlags(""), WithRestart, OnChange(class, config))
+	EachHost(func(server Server) {
+		peer, err := wireGuardAddressFor(server.Name)
+		if err != nil {
+			Refuse("File", "/etc/inetd.conf", err)
+			return
+		}
+		config := InstallFile("/etc/inetd.conf", legacyFrontendAsset("etc/inetd.conf"),
+			WithTemplateData(peer), RootOwned)
+		service := Service("inetd", WithFlags(""), DependsOn(class, config))
+		activateFrontend("inetd", service)
+	})
 }
 
 // DescRelayd returns the description for the TLS relay recipe.
@@ -123,12 +133,12 @@ func (Web) Relayd() {
 //
 // PF validates a new ruleset with `pfctl -n` against a private candidate
 // (core WithValidation) before it replaces /etc/pf.conf, so an invalid
-// ruleset never becomes the live file and pf-reload never loads it. The
-// reload, node_exporter restart, and exporter cron entry are all declarative
-// and change-gated. node_exporter's flags carry each host's own WireGuard
-// address, so the task iterates the hosts.
+// ruleset never becomes the live file or reaches the activation helper. The
+// reload records success persistently, so a failed load is retried on the
+// next apply without flushing states. node_exporter's flags carry each host's
+// own WireGuard address, so the task iterates the hosts.
 func (Web) PF() {
-	EachHost(func(server Server) { pfAndExporter(server.Name) })
+	EachHost(func(server Server) { pfAndExporter(server) })
 }
 
 // pfAndExporter declares host's validated PF ruleset and reload, and the
@@ -137,10 +147,14 @@ func (Web) PF() {
 // node_exporter: its Service is refused as a declaration error (which fails
 // the record) and not declared; the PF and exporter resources, which do not
 // need the address, are still declared and checked.
-func pfAndExporter(host string) {
+func pfAndExporter(server Server) {
 	config := InstallFile("/etc/pf.conf", legacyFrontendAsset("etc/pf.conf.tpl"),
-		RootPrivate, WithValidation("pfctl", List("-n", "-f", CandidatePath)))
-	Sh("pfctl -f /etc/pf.conf", OnChange(config), WithName("pf-reload"))
+		WithTemplateData(server), RootPrivate,
+		WithValidation("pfctl", List("-n", "-f", CandidatePath)))
+	activateFrontend("pf", config)
+	// Bound accidental shared-NAT bans; table timestamps survive rule reloads.
+	CronAt("frontend-ssh-bruteforce-expire", "*/5 * * * *",
+		"-ns /sbin/pfctl -t bruteforce -T expire 3600", DependsOn(config))
 
 	collector := Dir("/var/node_exporter", RootOwned)
 	exporter := InstallFile("/usr/local/bin/pf-labels-exporter.sh", legacyFrontendAsset("scripts/pf-labels-exporter.sh"),
@@ -148,12 +162,25 @@ func pfAndExporter(host string) {
 	// pfctl needs root, so the exporter runs from root's crontab.
 	CronAt("frontend-pf-labels-exporter", "* * * * *", "-ns /usr/local/bin/pf-labels-exporter.sh",
 		DependsOn(collector, exporter))
-	flags, err := nodeExporterFlags(host)
+	flags, err := nodeExporterFlags(server.Name)
 	if err != nil {
 		Refuse("Service", "node_exporter", err)
 		return
 	}
 	Service("node_exporter", WithFlags(flags), WithRestart, DependsOn(collector, exporter), OnChange(exporter))
+}
+
+// activateFrontend tracks successful activation separately from file publication.
+// The helper fingerprints configuration, its own code and daemon flags; its
+// check guard skips only a healthy, successfully activated version. File and
+// service dependencies block activation after any failed prerequisite.
+func activateFrontend(name string, prerequisite Resource) {
+	EnsureDir("/usr/local/sbin", RootOwned)
+	script := InstallFile("/usr/local/sbin/frontend-activate.sh",
+		legacyFrontendAsset("scripts/frontend-activate.sh"), RootExec)
+	Command("/usr/local/sbin/frontend-activate.sh", List("apply", name),
+		WithName("frontend-activate-"+name), DependsOn(script, prerequisite),
+		Unless("/usr/local/sbin/frontend-activate.sh", List("check", name)))
 }
 
 // nodeExporterFlags returns node_exporter's rc flags, set with `rcctl set
