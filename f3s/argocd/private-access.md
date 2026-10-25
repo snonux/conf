@@ -2,7 +2,10 @@
 
 Prepared 2026-10-25 from conf `6738ecd`. Owner selected LAN/WireGuard-only;
 this is a rollout proposal, not a record of deployment. Review and separate
-live-change approval are required before the commands below. Do not run during
+live-change approval are required before the commands below. That proposed
+approval includes restoring the captured pre-cutover baseline during the rollout
+window if acceptance fails, including temporary restoration of public ArgoCD
+access and its existing password-only exposure. Do not run during
 another live lane. Publish only after the parent review/publication gate.
 
 ## Intended boundary and scope
@@ -154,13 +157,19 @@ keys/configurations. The original working tree's untracked cmd.sh is untouched.
 
 Keep private access available. If only the URL change fails, restore only the
 old `data.url`; do not roll back Helm release 21 or the deployed policy overlay.
-If public access must temporarily be restored, obtain explicit approval because
-this reopens the security finding: reapply only the saved public ingress and old
-URL, restore the two site entries and Pi-hole exception from the previous source,
+If acceptance fails during the approved rollout window, restore public access
+as part of that same approval; no second permission request is needed. The
+approval explicitly accepts temporarily returning to the captured password-only
+public exposure while the private-access failure is resolved. Reapply only the
+saved public ingress and old URL, restore the two site entries and Pi-hole
+exception from the previous source,
 then redeploy only the corresponding validated frontend configuration and DNS
 publication. Use retained public certificate files. Never restore whole older
 Gogios/relayd configurations across intervening changes, or roll back unrelated
-policy/permission fixes. Verify health and monitoring after any rollback.
+policy/permission fixes. Verify health and monitoring after any rollback, report the restored public
+exposure, and leave the security finding open. This rollback authority is limited
+to the captured baseline and the approved rollout window; it does not authorize
+a later reopening after successful acceptance.
 
 
 ## Local validation
