@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: motioneye
+  namespace: services
+spec:
+  selector:
+    app: motioneye
+  ports:
+    - name: http
+      port: 8765
+      targetPort: http

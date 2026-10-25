@@ -1,0 +1,5 @@
+apiVersion: v2
+name: motioneye
+description: motionEye network camera management
+version: 0.1.0
+appVersion: "0.43.1"
