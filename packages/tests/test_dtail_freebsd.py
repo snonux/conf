@@ -1,5 +1,6 @@
 """Real Git/Go build tests; native pkg integration runs separately on FreeBSD."""
 import hashlib
+import copy
 import importlib.util
 import io
 import json
@@ -159,11 +160,28 @@ class PinnedBuild(unittest.TestCase):
             manifest['files'][path]=manifest['files'].pop(path+'.sample')
         elif mutation=='extra':payload['/unrelated-file']=b'not allowed'
         elif mutation=='duplicate':duplicate='/usr/local/bin/dserver'
+        compact=copy.deepcopy({key:value for key,value in manifest.items() if key != 'files'})
+        if mutation=='compact-version':compact['version']='4.3.2-ng_99'
+        elif mutation=='compact-source':compact['annotations']['dtail_source_commit']='f'*40
+        elif mutation=='compact-deps':compact['deps']={'unexpected':{'version':'1'}}
+        elif mutation=='compact-scripts':compact['scripts']={'post-install':'false'}
         archive=self.base/name
         with tarfile.open(archive,'w') as tar:
             for path,data in {'+MANIFEST':json.dumps(manifest).encode(),
-                              '+COMPACT_MANIFEST':json.dumps(manifest).encode(),**payload}.items():
-                entry=tarfile.TarInfo(path);entry.size=len(data);tar.addfile(entry,io.BytesIO(data))
+                              '+COMPACT_MANIFEST':json.dumps(compact).encode(),**payload}.items():
+                entry=tarfile.TarInfo(path);entry.size=len(data)
+                entry.uname='root';entry.gname='wheel'
+                entry.uid=entry.gid=0 if path in VERIFY.METADATA else 65534
+                executable=path in {VERIFY.PATHS[key] for key in (*BINS,'dserver.rc','dserver-update-key-cache.sh')}
+                entry.mode=0o755 if executable else 0o644
+                if path=='/usr/local/bin/dserver-update-key-cache.sh':
+                    if mutation=='archive-owner':entry.uname='nobody';entry.gname='nogroup'
+                    elif mutation=='archive-mode':entry.mode=0o777
+                    elif mutation=='archive-id':entry.uid=entry.gid=1234
+                    elif mutation in ('archive-symlink','archive-hardlink'):
+                        entry.type=tarfile.SYMTYPE if mutation=='archive-symlink' else tarfile.LNKTYPE
+                        entry.linkname='/unrelated';entry.size=0
+                tar.addfile(entry,io.BytesIO(data))
             if duplicate:
                 entry=tarfile.TarInfo(duplicate);entry.size=len(payload[duplicate]);tar.addfile(entry,io.BytesIO(payload[duplicate]))
         return archive
@@ -176,7 +194,12 @@ class PinnedBuild(unittest.TestCase):
         self.assertTrue(result['actual_host_config_not_shipped'])
 
     def test_package_verifier_rejects_changed_or_extra_content(self):
-        for mutation in ['payload','owner','deps','scripts','source','version','live-config','extra','duplicate']:
+        for duplicate in [b'{"version":"bad","version":"good"}',
+                          b'{"annotations":{"source":"bad","source":"good"}}']:
+            with self.assertRaises(ValueError):VERIFY.load_json(duplicate)
+        for mutation in ['payload','owner','deps','scripts','source','version','live-config','extra','duplicate',
+                         'archive-owner','archive-mode','archive-id','archive-symlink','archive-hardlink',
+                         'compact-version','compact-source','compact-deps','compact-scripts']:
             with self.subTest(mutation=mutation):
                 archive=self.fixture_archive(mutation+'.tar',mutation)
                 with self.assertRaises(ValueError):VERIFY.verify(self.base/'a',archive)
@@ -189,6 +212,41 @@ class PinnedBuild(unittest.TestCase):
             p=subprocess.run(['sh',str(NATIVE),*args],capture_output=True)
             self.assertNotEqual(p.returncode,0)
         self.assertFalse((self.base/'bad-output').exists())
+
+
+# With this explicit environment, mutation tests use the actual native .pkg;
+# no native-host access or package installation is performed by this class.
+if os.environ.get('DTAIL_FREEBSD_NATIVE_BUNDLE'):
+    class NativeArchiveMutation(unittest.TestCase):
+        def test_actual_native_package_and_independent_header_metadata_mutations(self):
+            bundle=Path(os.environ['DTAIL_FREEBSD_NATIVE_BUNDLE'])
+            artifacts=list((bundle/'package').glob('*.pkg'))
+            self.assertEqual(len(artifacts),1)
+            artifact=artifacts[0]
+            self.assertTrue(VERIFY.verify(bundle,artifact)['archive_headers_and_compact_metadata_match'])
+            with tempfile.TemporaryDirectory(prefix='mp3-native-archive-',dir='/var/tmp') as folder:
+                for mutation in ['owner','mode','symlink','compact-version','compact-source','compact-scripts','compact-deps']:
+                    with self.subTest(mutation=mutation):
+                        path=Path(folder)/'mutated.tar'
+                        with tarfile.open(artifact,'r:*') as source,tarfile.open(path,'w',format=tarfile.PAX_FORMAT) as output:
+                            for original in source.getmembers():
+                                entry=copy.deepcopy(original)
+                                data=source.extractfile(original).read()
+                                if entry.name=='/usr/local/bin/dserver-update-key-cache.sh':
+                                    if mutation=='owner':entry.uname='nobody';entry.gname='nogroup'
+                                    elif mutation=='mode':entry.mode=0o777
+                                    elif mutation=='symlink':entry.type=tarfile.SYMTYPE;entry.linkname='/unrelated';data=b''
+                                if entry.name=='+COMPACT_MANIFEST' and mutation.startswith('compact-'):
+                                    compact=json.loads(data)
+                                    if mutation=='compact-version':compact['version']='4.3.2-ng_99'
+                                    elif mutation=='compact-source':compact['annotations']['dtail_source_commit']='f'*40
+                                    elif mutation=='compact-scripts':compact['scripts']={'post-install':'false'}
+                                    elif mutation=='compact-deps':compact['deps']={'unexpected':{'version':'1'}}
+                                    data=json.dumps(compact).encode()
+                                entry.size=len(data);entry.pax_headers.pop('size',None)
+                                output.addfile(entry,io.BytesIO(data))
+                        with self.assertRaises(ValueError):VERIFY.verify(bundle,path)
+                        path.unlink()
 
 
 if __name__ == '__main__':

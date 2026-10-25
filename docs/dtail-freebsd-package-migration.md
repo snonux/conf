@@ -11,6 +11,9 @@ DTail commit `673c237bf495d898b8a5d92a964ef556b02a564d`:
 
 `SHA256 5a66d78126b2b1f46ac14e4b3ec211ec0d5bd15356263185765cbf9ab11ed97f`
 
+Controller archive verification requires Python 3.14 with Zstandard support
+(verified with 3.14.3 on earth); the native f0 scripts require no Python.
+
 The six static/nozstd binaries were built with Go 1.26.8 and an explicit amd64
 v1 profile. A clean detached source clone excludes the original checkout's WIP.
 Go embeds the actual VCS revision and clean status. The installed
@@ -29,7 +32,12 @@ Preparation exercised actual Git and Go builds, original WIP exclusion, embedded
 VCS data and negative input/output guards. The real f0 pkg tool assembled the
 archive as an ordinary user in a private temporary directory. All packaged file
 bytes, root:wheel ownership declarations and modes were checked against the local
-bundle. Executables/helper/rc are 0755; sample/provenance are 0644. No private keys,
+bundle, including actual tar member types/ownership/modes and consistent full and
+compact metadata. Native pkg stores numeric payload UID/GID 65534 for
+[reproducibility](https://github.com/freebsd/pkg/blob/2.8.4/libpkg/packing.c#L216);
+root/wheel names remain required, as do exact 0755/0644 modes. The verifier
+checks those native IDs and names independently of the manifest declarations.
+Executables/helper/rc are 0755; sample/provenance are 0644. No private keys,
 runtime/cache directories or live host configuration are package members.
 
 An unprivileged native integration test used a separate `pkg -r` filesystem and
