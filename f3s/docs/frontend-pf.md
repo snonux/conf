@@ -225,3 +225,35 @@ the migration: stop ZNC, `cp -p BACKUP/znc.conf /var/znc/configs/znc.conf`, then
 start ZNC and check its listener/TLS handshake. Always stop before restoring,
 because ZNC writes config on shutdown. The pre-change PF backup must also be
 restored if restoring public access. Never print or download the private backup.
+
+## ZNC-only acceptance (2026-10-25, 17:35–17:36 UTC)
+
+The approved fishfinger-only `frontends_wg_znc` task was applied from the exact
+reviewed helper/recipe content of canonical `a7cc252` (isolated `47a0ca0`). Two
+independent port-2 administration channels were checked beforehand. Gonf applied
+8 operations: two helper assets and the migration changed; no other frontend
+task was selected. No PF, HTTPD, relayd, inetd, Gogios or DTail change occurred.
+
+- ZNC is healthy and listens only on IPv4 `192.168.2.111:4242`; no IPv6 listener
+  was added. The destination helper's `check` succeeds.
+- From blowfish, WireGuard TCP4242 and a TLS connection carrying only an
+  unauthenticated IRC `CAP LS 302` negotiation succeeded, returning a CAP
+  response. No credentials or user IRC messages were sent.
+- From both blowfish and the external controller, new connections to fishfinger
+  public IPv4 `46.23.94.99:4242` and IPv6 `[2a03:6000:6f67:624::99]:4242` failed.
+  The external controller reported connection refused on both families; its
+  direct WireGuard route is unavailable, so the positive mesh test used blowfish.
+- A silent on-host comparison of the transformed post-stop backup against the
+  entire current config matched exactly: only the intended listener Host change
+  was introduced. Credentials and remaining private configuration were preserved.
+  Config remains `_znc:_znc` mode0600. The backup directory is mode0700, root-owned:
+  `/var/znc/configs/.wg-backup.1dGxI2ou`. Its contents remain only on fishfinger.
+- A second scoped apply reported `4 ok, 0 changed, 1 skipped`: the migration
+  command was skipped and ZNC was not restarted.
+
+Rollback was not needed. If required within the approved scope, stop ZNC before
+copying that directory's `znc.conf` back to `/var/znc/configs/znc.conf`, then start
+and verify ZNC. Do not print the config. PF remains unchanged at this stage.
+Full wm3 remains pending the coordinated default-deny/rsync rollout and its
+acceptance; working frontend DTail WireGuard checks from task3n3 still gate
+public2222 denial.
