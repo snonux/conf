@@ -101,9 +101,13 @@ DTAIL_SRC      := /home/paul/git/dtail
 # The version is read from that same commit, not the working tree, so a
 # rebuild of an older release (e.g. make dtail-openbsd DTAIL_REF=e76e0e6, the
 # source of the published 4.3.2-ng) gets its matching version string.
-# Only dtail-openbsd honors it; the cross-compiled targets build the checkout.
+# OpenBSD and FreeBSD honor it; the other cross-compiled targets build the checkout.
 DTAIL_REF      ?= HEAD
 DTAIL_VERSION   = $(shell git -C $(DTAIL_SRC) show $(DTAIL_REF):internal/version/version.go 2>/dev/null | grep 'Version string' | sed 's/.*"\(.*\)"/\1/')
+# FreeBSD revisions distinguish repackaged builds when upstream keeps its label.
+# Increment after source/toolchain/assets change; publication never overwrites a version.
+DTAIL_FREEBSD_REVISION ?= 1
+DTAIL_FREEBSD_BUNDLE ?= /tmp/dtail-freebsd-binaries
 DTAIL_BINARIES := dserver dcat dgrep dmap dtail dtailhealth
 # NetBSD package versions must not contain dashes (dash separates name from
 # version in pkg naming), so 4.3.2-ng becomes 4.3.2ng
@@ -284,26 +288,45 @@ dtail-openbsd: check-dtail-version /tmp/dtail-binaries/.built
 	rm -rf /tmp/dtail-binaries /tmp/dtail-openbsd-$(DTAIL_VERSION).tgz
 	@echo "OpenBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
 
-# Cross-compile dtail for FreeBSD/amd64 (CGO_ENABLED=0, nozstd), package on f0, upload to PV.
-# .zst log files are not supported in this binary; gzip still works.
-dtail-freebsd: check-dtail-version
-	@echo "Building DTail $(DTAIL_VERSION) for FreeBSD/amd64..."
-	rm -rf /tmp/dtail-freebsd-binaries
-	mkdir -p /tmp/dtail-freebsd-binaries
-	cd $(DTAIL_SRC) && for bin in $(DTAIL_BINARIES); do \
-		echo "  Cross-compiling $$bin for FreeBSD..."; \
-		CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -tags nozstd \
-			-o /tmp/dtail-freebsd-binaries/$$bin ./cmd/$$bin/main.go || exit 1; \
-	done
-	cp $(CONF_FRONTENDS)/etc/dserver/dtail-freebsd.json.tpl /tmp/dtail-freebsd-binaries/dtail.json
-	cp $(CONF_FRONTENDS)/scripts/dserver-update-key-cache-freebsd.sh.tpl /tmp/dtail-freebsd-binaries/dserver-update-key-cache.sh
-	cp $(CONF_FRONTENDS)/etc/rc.d/dserver-freebsd.tpl /tmp/dtail-freebsd-binaries/dserver.rc
-	@echo "Packaging dtail $(DTAIL_VERSION) for FreeBSD..."
-	$(FREEBSD_SCP) -r /tmp/dtail-freebsd-binaries $(FREEBSD_HOST):/tmp/dtail-freebsd-binaries
-	$(FREEBSD_SCP) $(SCRIPTS)/pkg-dtail-freebsd.sh $(FREEBSD_HOST):/tmp/pkg-dtail-freebsd.sh
-	$(FREEBSD_SSH) $(FREEBSD_HOST) "/bin/sh /tmp/pkg-dtail-freebsd.sh '$(DTAIL_VERSION)' '$(PV_BASE)/$(FREEBSD_REPO)'"
-	rm -rf /tmp/dtail-freebsd-binaries
-	@echo "FreeBSD package dtail-$(DTAIL_VERSION) uploaded to repo"
+# FreeBSD stages are explicit so an artifact can be inspected before publication.
+.PHONY: dtail-freebsd-build dtail-freebsd-package dtail-freebsd-publish
+
+dtail-freebsd-build:
+	@python3 $(SCRIPTS)/build-dtail-freebsd.py --source "$(DTAIL_SRC)" \
+		--ref "$(DTAIL_REF)" --revision "$(DTAIL_FREEBSD_REVISION)" \
+		--output "$(DTAIL_FREEBSD_BUNDLE)"
+
+# Native assembly uses only a new unprivileged scratch directory on f0.
+# It never installs a package, changes a service, or publishes to the repository.
+dtail-freebsd-package:
+	@test -f "$(DTAIL_FREEBSD_BUNDLE)/SHA256"
+	job=$$($(FREEBSD_SSH) -oBatchMode=yes -oStrictHostKeyChecking=yes $(FREEBSD_HOST) "umask 077; mktemp -d /tmp/dtail-freebsd.XXXXXXXXXX")
+	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes -r "$(DTAIL_FREEBSD_BUNDLE)" "$(FREEBSD_HOST):$$job/bundle"
+	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes $(SCRIPTS)/pkg-dtail-freebsd.sh "$(FREEBSD_HOST):$$job/pkg-dtail-freebsd.sh"
+	$(FREEBSD_SSH) -oBatchMode=yes -oStrictHostKeyChecking=yes $(FREEBSD_HOST) "sh '$$job/pkg-dtail-freebsd.sh' assemble '$$job/bundle' '$$job/out'"
+	mkdir "$(DTAIL_FREEBSD_BUNDLE)/package"
+	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes "$(FREEBSD_HOST):$$job/out/*.pkg" "$(DTAIL_FREEBSD_BUNDLE)/package/"
+	printf '%s\n' "$$job" > "$(DTAIL_FREEBSD_BUNDLE)/native-job"
+	artifacts=("$(DTAIL_FREEBSD_BUNDLE)/package/"*.pkg)
+	test "$${#artifacts[@]}" -eq 1
+	python3 $(SCRIPTS)/verify-dtail-freebsd.py "$(DTAIL_FREEBSD_BUNDLE)" "$${artifacts[0]}" > "$(DTAIL_FREEBSD_BUNDLE)/package/verification.json"
+	@echo "Package assembled, retrieved and verified; publication/install have not run."
+
+# Explicit production publication, including a full repository catalog rebuild.
+dtail-freebsd-publish:
+	artifacts=("$(DTAIL_FREEBSD_BUNDLE)/package/"*.pkg)
+	test "$${#artifacts[@]}" -eq 1 && test -f "$${artifacts[0]}"
+	python3 $(SCRIPTS)/verify-dtail-freebsd.py "$(DTAIL_FREEBSD_BUNDLE)" "$${artifacts[0]}"
+	job=$$($(FREEBSD_SSH) -oBatchMode=yes -oStrictHostKeyChecking=yes $(FREEBSD_HOST) "umask 077; mktemp -d /tmp/dtail-freebsd-publish.XXXXXXXXXX")
+	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes "$${artifacts[0]}" "$(FREEBSD_HOST):$$job/artifact.pkg"
+	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes $(SCRIPTS)/pkg-dtail-freebsd.sh "$(FREEBSD_HOST):$$job/pkg-dtail-freebsd.sh"
+	$(FREEBSD_SSH) -oBatchMode=yes -oStrictHostKeyChecking=yes $(FREEBSD_HOST) "doas sh '$$job/pkg-dtail-freebsd.sh' publish '$$job/artifact.pkg' '$(PV_BASE)/$(FREEBSD_REPO)'"
+
+# Build and assemble for review; publication is always a separate command.
+# Recursive calls keep these stages serial even with make -j.
+dtail-freebsd:
+	@$(MAKE) --no-print-directory dtail-freebsd-build
+	@$(MAKE) --no-print-directory dtail-freebsd-package
 
 # Cross-compile dtail for NetBSD/aarch64 (CGO_ENABLED=0, nozstd), package with
 # pkg_create on the matching native host, upload the package via f0, then

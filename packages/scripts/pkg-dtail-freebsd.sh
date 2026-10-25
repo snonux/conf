@@ -1,56 +1,46 @@
 #!/bin/sh
-# Build a FreeBSD dtail package from pre-compiled binaries and upload to the repo PV.
-# Run on f0 via SSH. Called by the Makefile.
-#
-# Arguments:
-#   $1 — version (e.g. 4.3.2-ng)
-#   $2 — PV destination (e.g. /data/nfs/k3svolumes/pkgrepo/freebsd/FreeBSD:15:amd64/latest)
+# Assemble without privilege/install/publication; publish is an explicit action.
+set -eu
 
-set -e
+fail() { printf '%s\n' "$*" >&2; exit 1; }
 
-VERSION="$1"
-if [ -z "$VERSION" ]; then
-    echo "Error: version argument missing (would build dtail-.tgz)" >&2
-    exit 1
-fi
-PV_DEST="$2"
-NAME="dtail"
-COMMENT="Distributed log tail and grep tool"
-DESC="DTail is a distributed DevOps tool for tailing, grepping, catting, and mapping across many remote machines at once via SSH."
-MAINTAINER="paul@buetow.org"
-WWW="https://github.com/snonux/dtail"
-
-WORKDIR="/tmp/${NAME}-freebsd-pkg"
-rm -rf "$WORKDIR"
-mkdir -p \
-    "$WORKDIR/stage/usr/local/bin" \
-    "$WORKDIR/stage/usr/local/etc/rc.d" \
-    "$WORKDIR/stage/usr/local/etc/dserver" \
-    "$WORKDIR/out/All"
-
-# Binaries (cross-compiled linux→freebsd with nozstd; .zst logs not supported)
-for bin in dserver dcat dgrep dmap dtail dtailhealth; do
-    cp "/tmp/dtail-freebsd-binaries/${bin}" "$WORKDIR/stage/usr/local/bin/${bin}"
-    chmod 755 "$WORKDIR/stage/usr/local/bin/${bin}"
-done
-
-# Key cache helper (sh-compatible; walks /home/ on FreeBSD)
-cp "/tmp/dtail-freebsd-binaries/dserver-update-key-cache.sh" \
-    "$WORKDIR/stage/usr/local/bin/dserver-update-key-cache.sh"
-chmod 555 "$WORKDIR/stage/usr/local/bin/dserver-update-key-cache.sh"
-
-# rc.d script (FreeBSD rc.subr style; config at /usr/local/etc/dserver/dtail.json)
-cp "/tmp/dtail-freebsd-binaries/dserver.rc" \
-    "$WORKDIR/stage/usr/local/etc/rc.d/dserver"
-chmod 555 "$WORKDIR/stage/usr/local/etc/rc.d/dserver"
-
-# Config
-cp "/tmp/dtail-freebsd-binaries/dtail.json" \
-    "$WORKDIR/stage/usr/local/etc/dserver/dtail.json"
-chmod 644 "$WORKDIR/stage/usr/local/etc/dserver/dtail.json"
-
-# Packing list — paths relative to /usr/local prefix
-cat > "$WORKDIR/plist" <<'PLIST'
+assemble() {
+    bundle=$1
+    output=$2
+    test -d "$bundle" && test ! -L "$bundle" || fail 'Invalid bundle directory'
+    test -f "$bundle/SHA256" && test ! -L "$bundle/SHA256" || fail 'Missing bundle checksums'
+    expected='dserver dcat dgrep dmap dtail dtailhealth dtail.json.sample dserver-update-key-cache.sh dserver.rc build-info.json +MANIFEST'
+    count=0
+    while read -r digest name extra; do
+        case " $expected " in *" $name "*) ;; *) fail 'Unexpected bundle member';; esac
+        test -n "$name" && test -z "$extra" || fail 'Invalid checksum record'
+        test ! -L "$bundle/$name" && test -f "$bundle/$name" || fail "Unsafe bundle member $name"
+        test "$(sha256 -q "$bundle/$name")" = "$digest" || fail "Checksum mismatch: $name"
+        count=$((count+1))
+    done < "$bundle/SHA256"
+    test "$count" -eq 11 || fail 'Incomplete bundle checksums'
+    # Each required member must occur exactly once, not just any eleven records.
+    for name in $expected; do
+        test "$(awk -v name="$name" '$2 == name {n++} END {print n+0}' "$bundle/SHA256")" -eq 1 || fail "Missing/duplicate bundle member $name"
+    done
+    mkdir -m 700 "$output" || fail 'Output must be a new directory'
+    work=$(mktemp -d /tmp/dtail-freebsd-pkg.XXXXXXXXXX)
+    trap 'rm -rf "$work"' EXIT
+    trap 'exit 1' HUP INT TERM
+    mkdir -p "$work/stage/usr/local/bin" "$work/stage/usr/local/etc/rc.d" \
+        "$work/stage/usr/local/etc/dserver" "$work/stage/usr/local/share/doc/dtail" \
+        "$work/meta"
+    for bin in dserver dcat dgrep dmap dtail dtailhealth; do
+        install -m 755 "$bundle/$bin" "$work/stage/usr/local/bin/$bin"
+    done
+    install -m 755 "$bundle/dserver-update-key-cache.sh" "$work/stage/usr/local/bin/dserver-update-key-cache.sh"
+    install -m 755 "$bundle/dserver.rc" "$work/stage/usr/local/etc/rc.d/dserver"
+    install -m 644 "$bundle/dtail.json.sample" "$work/stage/usr/local/etc/dserver/dtail.json.sample"
+    install -m 644 "$bundle/build-info.json" "$work/stage/usr/local/share/doc/dtail/build-info.json"
+    cp "$bundle/+MANIFEST" "$work/meta/+MANIFEST"
+    cat > "$work/plist" <<'PLIST'
+@owner root
+@group wheel
 bin/dserver
 bin/dcat
 bin/dgrep
@@ -59,25 +49,47 @@ bin/dtail
 bin/dtailhealth
 bin/dserver-update-key-cache.sh
 etc/rc.d/dserver
-etc/dserver/dtail.json
+etc/dserver/dtail.json.sample
+share/doc/dtail/build-info.json
 PLIST
+    pkg create -m "$work/meta" -p "$work/plist" -r "$work/stage" -o "$output"
+}
 
-# Package manifest (UCL)
-cat > "$WORKDIR/+MANIFEST" <<MANIFEST
-name: "${NAME}"
-version: "${VERSION}"
-origin: "local/${NAME}"
-comment: "${COMMENT}"
-desc: "${DESC}"
-maintainer: "${MAINTAINER}"
-www: "${WWW}"
-prefix: /usr/local
-MANIFEST
+publish() {
+    artifact=$1
+    destination=$2
+    test ! -L "$artifact" && test -f "$artifact" || fail 'Invalid artifact'
+    test -d "$destination" && test ! -L "$destination" || fail 'Repository must already exist'
+    test -d "$destination/All" && test ! -L "$destination/All" || fail 'Repository All directory must already exist'
+    name=$(pkg query -F "$artifact" '%n')
+    version=$(pkg query -F "$artifact" '%v')
+    test "$name" = dtail || fail 'Not a DTail package'
+    case "$version" in ''|*[!A-Za-z0-9.+_-]*) fail 'Invalid package version';; esac
+    case "$version" in *_*) ;; *) fail 'An explicit package revision is required';; esac
+    revision=${version##*_}
+    case "$revision" in ''|0*|*[!0-9]*) fail 'Invalid package revision';; esac
+    final="$destination/All/dtail-$version.pkg"
+    test ! -e "$final" && test ! -L "$final" || fail 'This package version is already published; increment DTAIL_FREEBSD_REVISION'
+    lock="$destination/.dtail-publish.lock"
+    mkdir "$lock" || fail 'Another DTail publication is running'
+    temporary=''
+    trap 'test -z "$temporary" || rm -f "$temporary"; rmdir "$lock"' EXIT
+    trap 'exit 1' HUP INT TERM
+    temporary=$(mktemp "$destination/All/.dtail-publish.XXXXXXXXXX")
+    cp "$artifact" "$temporary"
+    test "$(sha256 -q "$artifact")" = "$(sha256 -q "$temporary")" || fail 'Copied artifact checksum mismatch'
+    chmod 644 "$temporary"
+    # Exclusive same-filesystem publication; never overwrite an existing version.
+    ln "$temporary" "$final" || fail 'Package version appeared during publication'
+    rm "$temporary"
+    temporary=''
+    # Index the entire existing repository, retaining all unrelated packages.
+    pkg repo "$destination"
+    printf 'Published %s\n' "$final"
+}
 
-# Build package, regenerate repo metadata, copy to PV
-doas pkg create -M "$WORKDIR/+MANIFEST" -p "$WORKDIR/plist" -r "$WORKDIR/stage" -o "$WORKDIR/out/All"
-doas pkg repo "$WORKDIR/out"
-doas cp -Rf "$WORKDIR/out/"* "$PV_DEST/"
-
-rm -rf "$WORKDIR" /tmp/dtail-freebsd-binaries /tmp/pkg-dtail-freebsd.sh
-echo "FreeBSD package ${NAME}-${VERSION} uploaded to repo"
+case "${1:-}" in
+    assemble) test "$#" -eq 3 || fail 'Usage: assemble BUNDLE NEW_OUTPUT_DIR'; assemble "$2" "$3";;
+    publish) test "$#" -eq 3 || fail 'Usage: publish ARTIFACT REPOSITORY'; publish "$2" "$3";;
+    *) fail 'Usage: pkg-dtail-freebsd.sh assemble|publish ...';;
+esac
