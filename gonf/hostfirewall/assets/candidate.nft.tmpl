@@ -17,7 +17,7 @@ table inet f3s_guard {
         meta l4proto { icmp, ipv6-icmp } return
         # IPv6 autoconfiguration; do not expose a service in this exception.
         ip6 saddr fe80::/10 udp sport 547 udp dport 546 return
-{{if .WireGuardPort}}        # Live wg0 ListenPort; encrypted peer traffic enters via wg0 and
+{{if .EnableWireGuard}}        # Live wg0 ListenPort; encrypted peer traffic enters via wg0 and
         # does not hit this LAN-only chain. Flannel uses the trusted mesh.
         udp dport {{.WireGuardPort}} return
 {{end}}        counter drop

@@ -85,7 +85,7 @@ python3 - "$repo/gonf/hostfirewall/assets/candidate.nft.tmpl" <<'PY'
 from pathlib import Path
 import sys
 rules = Path(sys.argv[1]).read_text().replace('{{.Interface}}', 'enp0s5')
-rules = rules.replace('{{if .WireGuardPort}}', '').replace('{{end}}', '')
+rules = rules.replace('{{if .EnableWireGuard}}', '').replace('{{end}}', '')
 rules = rules.replace('{{.WireGuardPort}}', '56709')
 Path('/etc/f3s-firewall/candidate.nft').write_text(rules)
 PY

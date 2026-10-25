@@ -144,7 +144,7 @@ import pathlib
 import sys
 rules = pathlib.Path(sys.argv[1]).read_text()
 rules = rules.replace('{{.Interface}}', 'enp0s5')
-rules = rules.replace('{{if .WireGuardPort}}', '').replace('{{end}}', '')
+rules = rules.replace('{{if .EnableWireGuard}}', '').replace('{{end}}', '')
 rules = rules.replace('{{.WireGuardPort}}', '56709')
 pathlib.Path(sys.argv[2]).write_text(rules)
 PY
@@ -186,7 +186,7 @@ import pathlib
 import re
 import sys
 rules = pathlib.Path(sys.argv[1]).read_text().replace('{{.Interface}}', 'eth0')
-rules = re.sub(r'{{if .WireGuardPort}}.*?{{end}}', '', rules, flags=re.S)
+rules = re.sub(r'{{if .EnableWireGuard}}.*?{{end}}', '', rules, flags=re.S)
 pathlib.Path(sys.argv[2]).write_text(rules)
 PY
 nft -c -f "$scratch/pi.nft"

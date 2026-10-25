@@ -89,7 +89,7 @@ python3 - "$repo/f3s/r-nodes/nodeport-guard/candidate.nft" <<'PY'
 from pathlib import Path
 import sys
 rules = Path(sys.argv[1]).read_text().replace('{{.Interface}}', 'enp0s5')
-rules = rules.replace('{{if .WireGuardPort}}', '').replace('{{end}}', '')
+rules = rules.replace('{{if .EnableWireGuard}}', '').replace('{{end}}', '')
 rules = rules.replace('{{.WireGuardPort}}', '56709')
 Path('/etc/f3s-nodeport-guard/candidate.nft').write_text(rules)
 PY

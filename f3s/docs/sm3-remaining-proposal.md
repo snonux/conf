@@ -1,10 +1,17 @@
 # Remaining sm3 proposal — 2026-10-25
 
-Preparation only, based on conf `4bd4860`. The completed r0/r1/r2 source
-firewall approvals explicitly excluded Pi firewall activation and rpcbind
-cleanup. Neither operation below has approval. No live files were staged,
-service state changed, rules loaded, or source pushed in this preparation.
-The existing reviewed helper/profile remains unchanged.
+Owner approved both remaining proposals on 2026-10-25: the existing
+IPv4/ULA-only Pi firewall (Pi3 then Pi2, explicitly denying GUA-source and
+link-local services), and serial r0/r1/r2 rpcbind cleanup with timed rollback.
+Execution preparation is rebased onto conf `5ec0fa3`. Earlier r-node firewall
+approvals did not cover this scope; this is the subsequent explicit approval.
+Per-host production-lane release is still required from the parent coordinator
+before mutation because DTail and ArgoCD route work are in progress.
+No live files were staged, service state changed, rules loaded, or source
+pushed during the read-only preparation recorded below.
+The reviewed helper and boot unit remain unchanged. The profile now uses
+an explicit boolean to preserve the exact approved rendered policy, as
+recorded below.
 
 Private read-only receipts are in
 `~/.local/state/conf-worktrees/sm3-remaining-prep-20261025/evidence/`.
@@ -209,3 +216,43 @@ watchdog alteration, package removal or firewall policy change is included.
 The transient rollback command has been prepared as text, not installed or
 armed. No rpcbind stop/restore or post-stop workload acceptance has run.
 Full sm3 remains open, including actual device-side WireGuard checks.
+
+
+## Destination-render correction before activation — 2026-10-25
+
+After owner approval and Pi3 lane release, native Gonf staging installed the
+candidate/helper/unit and reloaded systemd. The controller stopped before
+activation because its exact installed-policy hash gate failed. The typed
+standalone Go render omitted the optional WireGuard branch, but the actual
+Gonf serialized-template renderer treated `json.Number("0")` as truthy and
+rendered an unintended `udp dport 0 return` exception. That staged candidate
+had SHA256 `9a6d8e2bd2ae834cef754dee732057a6555e27882ef0474bcc5f5ed18d623707`.
+It was never applied: native inspection confirmed no source table, pending
+state, confirmed policy, rollback timer or boot enablement. Both owned admin
+channels were closed; Pi-hole, firewalld and the newly accepted DTail listener
+were unchanged.
+
+The narrow correction uses an explicit `EnableWireGuard` boolean for the
+conditional; only the r-node profile enables it. The existing numeric port
+remains 56709 for r-nodes. This restores the exact approved Pi candidate
+SHA256 `4276353bd7ef3e92aeaa46975b89d235f0ac5756426566f022f9ad9e90b42df1`
+and preserves the deployed r-node rendered policy SHA256
+`794a9c28c4bbfa174eaa7f0edb77e958568e490f701ffc08eede45641ea435e7`.
+Helper and boot-unit bytes are unchanged. No library semantic change or
+Gonf version upgrade is included; numeric-template behavior is a separate
+library follow-up.
+
+`f3s/tests/linux-firewall-render.sh` records the actual two recipe plans,
+keeps their serialized template bytes/data, redirects just the candidate
+file's destination/ownership to a local temporary directory, and applies
+through the real Gonf destination renderer. It asserts both exact policy
+hashes and absence of UDP port0. This covers the failed transport/render
+path; standalone typed rendering or textual template substitution alone did
+not. Native packet/lifecycle suites continue to check rule behavior and
+ownership, with only their conditional-token spelling updated.
+
+Private failed-stage/native-state evidence:
+`live/pi3-rollout/` and `live/pi3-stage-inspection/` under the worktree parent.
+These paths preserve the initial attempt; a corrected rollout records its
+own receipts. Corrected native staging must match the approved Pi hash before
+any activation. Staging alone is not rollout acceptance.

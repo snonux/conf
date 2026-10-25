@@ -8,9 +8,12 @@ import (
 )
 
 // Profile describes the common ingress path of one host group.
+// EnableWireGuard is explicit because serialized template numbers retain
+// their text representation; numeric zero is not a boolean false there.
 type Profile struct {
-	Interface     string
-	WireGuardPort uint16
+	Interface       string
+	EnableWireGuard bool
+	WireGuardPort   uint16
 }
 
 // Stage installs candidates and the guarded activation helper. It neither loads
