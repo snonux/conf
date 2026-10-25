@@ -2,7 +2,7 @@
 # Following f3s cluster patterns: non-HA, single instance deployment
 
 global:
-  domain: argocd.f3s.buetow.org
+  domain: argocd.f3s.lan.buetow.org
 
 # Disable HA mode - following cluster pattern
 redis-ha:

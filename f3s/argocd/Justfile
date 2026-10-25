@@ -19,7 +19,7 @@ install:
     kubectl apply -f ingress.yaml
     @echo ""
     @echo "ArgoCD deployed successfully!"
-    @echo "Access UI at: https://argocd.f3s.buetow.org (LAN: https://argocd.f3s.lan.buetow.org)"
+    @echo "Access UI over LAN/WireGuard at: https://argocd.f3s.lan.buetow.org"
     @echo ""
     @echo "Get initial admin password with:"
     @echo "  just get-password"
@@ -29,6 +29,12 @@ install:
 upgrade:
     helm upgrade {{RELEASE_NAME}} argo/argo-cd --version {{CHART_VERSION}} --namespace {{NAMESPACE}} -f values.yaml -f ../network-policies/cicd-chart-values.yaml
     kubectl apply -f ingress.yaml
+
+# Explicit migration after frontend preparation and rollout approval; no Helm upgrade.
+private-access:
+    kubectl apply -f ingress.yaml
+    kubectl -n {{NAMESPACE}} patch configmap argocd-cm --type merge --patch-file private-url.patch.yaml
+    kubectl -n {{NAMESPACE}} delete ingress argocd-server-ingress --ignore-not-found
 
 uninstall:
     kubectl delete -f ingress.yaml || true
@@ -41,7 +47,7 @@ uninstall:
 status:
     kubectl get pods -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
     kubectl get svc -n {{NAMESPACE}} -l app.kubernetes.io/name=argocd-server
-    kubectl get ingress -n {{NAMESPACE}} argocd-server-ingress argocd-server-ingress-lan
+    kubectl get ingress -n {{NAMESPACE}} argocd-server-ingress-lan
     kubectl get pvc -n {{NAMESPACE}} argocd-repo-server-pvc
 
 logs:

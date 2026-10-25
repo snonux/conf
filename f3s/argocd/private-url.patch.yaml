@@ -1,0 +1,3 @@
+# Narrow live migration; global.domain in values.yaml owns future Helm upgrades.
+data:
+  url: https://argocd.f3s.lan.buetow.org

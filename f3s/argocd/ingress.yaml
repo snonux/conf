@@ -1,29 +1,4 @@
-# ArgoCD UI Ingress
-# Exposes ArgoCD web interface at argocd.f3s.buetow.org
-# Following f3s cluster ingress pattern (Traefik)
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: argocd-server-ingress
-  namespace: cicd
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: argocd.f3s.buetow.org
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: argocd-server
-                port:
-                  number: 80
----
-# ArgoCD UI LAN Ingress
+# ArgoCD UI: LAN/WireGuard HTTPS only; preserve the existing wildcard certificate.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

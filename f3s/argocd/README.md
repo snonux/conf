@@ -2,11 +2,13 @@
 
 GitOps controller for the f3s k3s cluster. Helm release `argocd` (chart
 `argo/argo-cd`) in namespace `cicd`, single non-HA instance, Dex disabled.
-UI at `argocd.f3s.buetow.org` (Traefik ingress, server runs `--insecure`
-behind it) and on the LAN at `argocd.f3s.lan.buetow.org`
-(`argocd-server-ingress-lan`, `web,websecure`, wildcard `f3s-lan-tls` from the
-cicd `f3s-lan-wildcard` Certificate), the same public + `-ingress-lan` pair
-every other f3s service has. Metrics via ServiceMonitor.
+UI at `https://argocd.f3s.lan.buetow.org` over LAN/WireGuard only.
+`argocd-server-ingress-lan` uses `websecure` and the existing wildcard
+`f3s-lan-tls` from the cicd `f3s-lan-wildcard` Certificate. The server runs
+`--insecure` behind TLS termination. Metrics remain available via ServiceMonitor.
+See [the staged migration and rollback](private-access.md) before deploying this
+change to an existing installation; applying ingress.yaml does not delete the
+old public ingress.
 
 The chart version is pinned in the Justfile (`CHART_VERSION`, currently
 `10.10.5` = Argo CD v3.5.5, as shown by `helm list -n cicd`). Bump it on purpose;
@@ -44,7 +46,7 @@ just uninstall      # also deletes the PV/PVC objects; NFS data stays
 
 UI password changes survive `helm upgrade`.
 
-CLI login: `argocd login argocd.f3s.buetow.org --insecure`.
+CLI login: `argocd login argocd.f3s.lan.buetow.org --grpc-web --server-crt /path/to/f3s-lan-ca.crt`.
 
 ## Git source
 
@@ -73,7 +75,7 @@ kubectl get pods -n cicd
 kubectl get pv argocd-repo-server-pv; kubectl get pvc -n cicd argocd-repo-server-pvc
 kubectl logs -n cicd -l app.kubernetes.io/name=argocd-repo-server
 kubectl logs -n cicd -l app.kubernetes.io/name=argocd-application-controller
-kubectl describe ingress -n cicd argocd-server-ingress argocd-server-ingress-lan
+kubectl describe ingress -n cicd argocd-server-ingress-lan
 ```
 
 Reset a lost admin password:
