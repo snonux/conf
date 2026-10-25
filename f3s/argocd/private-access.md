@@ -32,7 +32,7 @@ Changes are deliberately limited to:
   Gogios continues importing those alerts. No replacement public UI probe is
   appropriate; private UI/CLI checks are explicit acceptance gates below.
 
-No changes to passwords, SSO, SSH, VPN peers/routes, NetworkPolicies, node
+The ArgoCD commit makes no changes to passwords, SSO, SSH, VPN peers/routes, NetworkPolicies, node
 firewalls, storage, workloads, or Application revisions. Keep the cicd chart
 policy overlay in both install and upgrade. Preserve Gogios 0640 permissions
 and its protected cluster-down marker. No broad frontend aggregate deployment.
@@ -59,7 +59,58 @@ still pending; phone return routing is a concrete unresolved prerequisite.
 The clients' documented public DNS resolvers also do not establish private
 name resolution. Before withdrawing public access, verify private DNS/CA and
 both devices; if repair is needed, propose that exact network change separately.
-No phone routing, DNS, or certificate installation is silently included here.
+The companion routing proposal below addresses the phone prerequisite; client DNS and CA setup remain explicit device gates.
+
+## Companion phone return-route proposal
+
+The existing generator at `~/git/wireguardmeshgenerator` (origin
+`git@github.com:snonux/wireguardmeshgenerator.git`, base `19279ea`) already
+supports `reachable_via`; earth uses `fishfinger`. The isolated companion branch
+`agent/8n3-phone-return-20261025` adds only `pixel7pro.reachable_via: fishfinger`
+and a comment. Both phone address families are confirmed in inventory and the
+live fishfinger peer: `192.168.2.201/32` and `fd42:beef:cafe:2::201/128`.
+No keys, generated files, gateway configurations, or phone tunnels change.
+
+After separate review and approval as part of this rollout, first stage only
+r0/r1/r2: add those two exact prefixes to their existing fishfinger peer and
+matching host routes, retaining every current AllowedIPs prefix (especially
+laptop `.200`/`::200`), key, PSK, endpoint and keepalive. Capture the current
+peer prefix set and route state privately before each host; use two independent
+SSH transports and a bounded automatic rollback before activation. Use a
+scoped live update plus the persistent wg0 configuration; do not run the
+whole-mesh generator installer or restart wg0. Resolve each gateway peer by its
+existing public identity without exposing private keys. A fresh live diff must
+show only the phone prefixes/routes before each host is activated.
+
+The generator's existing semantics will add these prefixes to fishfinger peers
+on other infrastructure hosts on future regeneration too. That is a declared
+source-level consequence, not authorization to deploy them now. No arbitrary
+source ranges or new NetworkPolicy allowances are added. Rollback removes only
+the two added phone prefixes/routes from the three changed hosts and removes the
+new YAML field; preserve all existing laptop mappings and other concurrent edits.
+
+Private cluster access on the phone requires **p7p-fishfinger** active. Its
+p7p-blowfish tunnel remains selectable for internet access, but private cluster
+return traffic cannot be symmetric through both gateways using the same client
+address; this proposal does not claim to support private access through blowfish.
+Do not delete or replace phone profiles or its unrelated tunnel.
+
+Before removing the public ingress, on laptop and phone with the intended
+fishfinger tunnel active: confirm the private hostname resolves to a reachable
+WG HTTPS endpoint (currently r0 `.120`, not an unreachable LAN VIP), open
+`https://argocd.f3s.lan.buetow.org`, verify the LAN CA is trusted and log in/read
+applications. Confirm fresh gateway handshake and increasing counters for that
+actual device, and no new public route. Test the laptop still works after the
+phone route change. Public DNS resolvers in the phone profile are not proof of
+private DNS: configure an existing trusted client DNS/override only after
+identifying its available mechanism; do not publish a new public alias or alter
+VPN defaults to work around this gate. Record device tests as pending until
+actually performed; keep public removal gated on success.
+
+Offline generator method checks on r0/r1/r2 confirmed that the only fishfinger
+AllowedIPs additions are phone /32 and /128; blowfish mappings and both laptop
+prefixes remain unchanged. The checks did not instantiate KeyTool or generate
+keys/configurations. The original working tree's untracked cmd.sh is untouched.
 
 ## Staged rollout after approval
 
