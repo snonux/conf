@@ -7,8 +7,8 @@ Relayd depends on the firewall task. The `freebsd` aggregate includes it.
 
 **PF deployed to f0–f2, 2026-10-22.** User approved the guarded f1/f0/f2 rollout
 and CARP tests. On 2026-10-23 the user authorized ordinary power-on of f3s;
-all four hosts booted and f3 was inspected. **PF deployment to f3 is still
-pending explicit approval.** The rm3 safety annotation requires
+all four hosts booted and f3 was inspected. **The owner approved the f3-only rollout on 2026-10-25;
+see its acceptance record below.** The rm3 safety annotation requires
 explicit user approval before **any live change**, including deployment,
 module loads, firewall activation, rollback preparation and CARP failover.
 Obtain approval for the concrete procedure below before running it. Do not
@@ -432,3 +432,56 @@ test was performed. Gogios initially reported 48 startup criticals; the
 next report at 08:05:11 UTC had 0 critical, 0 explicit warning, 0 unknown,
 1 stale and 538 OK (the CLI counts the stale result as one warning).
 This is not an all-green monitoring claim.
+
+
+## f3-only rollout — 2026-10-25
+
+The owner approved the remaining f3 firewall deployment with a 15-minute
+rollback guard and connectivity/replication tests. The guarded apply at
+13:26:29 UTC loaded the reviewed rules, enabled PF and pflog, and persisted
+boot configuration. No other host was deployed. The runtime source and PF
+bytes are unchanged from reviewed 812eee5; the isolated current-base merge
+passes full Gonf generate/build/test/vet/errcheck and renders the same
+13-operation redacted plan as the deployed checkout.
+
+Observed acceptance:
+
+- New, non-multiplexed LAN IPv4 and WG-via-blowfish SSH/root access passed.
+  Both pre-activation control sockets later disappeared; do not claim old
+  connection survival. The independent rollback guard remained running.
+- Public IPv6 SSH was reachable immediately before deployment. Fresh probes
+  from blowfish through vio0 to ports 22/111/2049/2222 all failed afterward;
+  f3 pflog0 captured each corresponding SYN. Host PF therefore accounts for
+  the denial, rather than relying on an ISP gateway result.
+- PF/pflog boot enables are YES; the deployed rules hash is
+  cd8aec0e41adabaa03fd211a8f3186542362019bc162b1d9319b63e43515461d.
+  A same-task reapply reported 5 OK, 0 changed, 5 skipped. Read-only checks
+  on f0/f1/f2 also found PF enabled with the identical file hash.
+- Both bridge filtering hooks remain 0. Rocky retains PID 28967 and fresh
+  guest SSH/sshd checks pass. freebsd and hfs-test0/1/2 remain stopped.
+  dserver retains PID 42478; all f3 pools are healthy.
+- Cross-host link-local TCP22 from f2 passes. The existing detached ULA
+  remains a pre-existing limitation; no end-to-end ULA success is claimed.
+  WireGuard handshakes continued after activation. Laptop/phone WireGuard
+  configuration was untouched; actual phone-origin testing was not performed.
+- All three k3s nodes remain Ready; their hard NFSv4.2 mount/stat checks pass.
+  Miniflux's configured flux.f3s.lan.buetow.org URL returns HTTP200 and the
+  frontend WG Garage3900 connection passes. An initial probe mistakenly used
+  miniflux.f3s.lan.buetow.org and received404; that was a wrong-hostname probe.
+  f0 remains MASTER and f1 BACKUP. No new CARP test, VM restart, storage
+  restart, remount or package action was performed.
+
+The normal post-activation f3-to-f2 cycle ran 13:32:15–13:32:18 UTC.
+All six current filesystems completed (freebsd, homelabfs-lab and its three
+hfs-test children, rocky), with no plan/step errors and both pruning stages
+Done without errors. The 15-minute guard was accepted at 13:32:32 UTC;
+its retained timer will exit without rollback. The backup remains available.
+The f3 firewall rollout is accepted; PF is now deployed on all four hosts.
+
+Private controller receipts are under
+/home/paul/.local/state/conf-worktrees/rm3-f3-preflight-20261023/live-20261025/.
+The root-only rollback backup is /root/pf-rm3-rollback on f3.
+
+The earlier CARP/NFS ESTALE limitation remains unresolved. The owner closed
+its follow-up ao3 as skipped and excluded further failover tests; rm3's
+firewall acceptance does not establish transparent NFS failover.
