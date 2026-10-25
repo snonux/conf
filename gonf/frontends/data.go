@@ -89,6 +89,7 @@ var f3sHosts = []string{
 	"syncthing.f3s.buetow.org",
 	"koreader.f3s.buetow.org",
 	"filebrowser.f3s.buetow.org",
+	"eye.f3s.buetow.org",
 	"webdav.f3s.buetow.org",
 	"pkgrepo.f3s.buetow.org",
 	"goprecords.f3s.buetow.org",

@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: motioneye
+  namespace: services
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: motioneye
+  template:
+    metadata:
+      labels:
+        app: motioneye
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+      - name: nfs-check
+        image: busybox:1.36.1
+        command:
+        - sh
+        - -ec
+        - test -f /config/.nfs-sentinel && test -f /media/.nfs-sentinel && test -s
+          /config/motion.conf
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: media
+          mountPath: /media
+          readOnly: true
+      containers:
+      - name: motioneye
+        image: ghcr.io/motioneye-project/motioneye:0.43.1@sha256:45b671af537bec4e715cc5cb7071ec293a602e0a1900d1cbd12ba55946147ba6
+        ports:
+        - name: http
+          containerPort: 8765
+        env:
+        - name: TZ
+          value: Europe/Sofia
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - SETUID
+            - SETGID
+            - CHOWN
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 1Gi
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - test -f /etc/motioneye/.nfs-sentinel && test -f /var/lib/motioneye/.nfs-sentinel && curl -fsS --max-time 3 -o /dev/null http://127.0.0.1:8765/
+          periodSeconds: 30
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: config
+          mountPath: /etc/motioneye
+        - name: media
+          mountPath: /var/lib/motioneye
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: motioneye-config-pvc
+      - name: media
+        persistentVolumeClaim:
+          claimName: motioneye-media-pvc
