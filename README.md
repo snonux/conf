@@ -27,7 +27,6 @@ Helm charts, host scripts.
 | `f3s/` | f3s homelab: k3s apps and Helm charts, ArgoCD apps, FreeBSD host scripts, Pi setup, docs |
 | `packages/` | `make` targets that build and upload custom packages (gogios, f3sctl, dtail) to `pkgrepo.f3s.buetow.org` |
 | `docs/archive/` | incident reports, plans, test results and other records ([README](docs/archive/README.md)) |
-| `babylon5/` | old Docker start scripts of a retired server |
 | `playground/` | scratch scripts |
 | `rcm/` | Rakefile for the rcm task runner (`~/git/rcm`) |
 | `AGENTS.md` | rules for coding agents working in this repo |
