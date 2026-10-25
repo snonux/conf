@@ -52,7 +52,7 @@ var (
 
 // f2 receives f3's VM datasets below zdata/sink. The sink moved off zroot
 // on 2026-10-17 after backup snapshots filled the OS/active-VM pool.
-// Both raw-received VM datasets are unlocked at boot with f3's bhyve key;
+// Raw-received VM datasets are unlocked at boot with f3's bhyve key;
 // the local snapshot job excludes the sink so only the push job prunes it.
 var (
 	f2Zrepl = freebsd.ZreplJobs{
@@ -68,28 +68,46 @@ var (
 	}
 	f2Keys = freebsd.KeyDatasets{
 		Datasets: []string{"zdata/enc", "zroot/bhyve", "zroot/garage",
-			"zdata/sink/f3/zroot/bhyve/freebsd", "zdata/sink/f3/zroot/bhyve/rocky"},
+			"zdata/sink/f3/zroot/bhyve/freebsd", "zdata/sink/f3/zroot/bhyve/rocky",
+			"zdata/sink/f3/zroot/bhyve/homelabfs-lab",
+			"zdata/sink/f3/zroot/bhyve/homelabfs-lab/hfs-test0",
+			"zdata/sink/f3/zroot/bhyve/homelabfs-lab/hfs-test1",
+			"zdata/sink/f3/zroot/bhyve/homelabfs-lab/hfs-test2"},
 		// Both f3 VM sinks are their own encryption roots, keyed with f3's
 		// bhyve key (verified with zfs load-key -n on 2026-09-25). The rocky
 		// sink was keylocation=prompt and never unlocked at boot until then.
+		// Each lab dataset is also a separate raw-received encryption root
+		// (2026-10-25); new descendants need inventory entries after receipt.
 		SinkKeys: []freebsd.SinkKey{{
 			Dataset: "zdata/sink/f3/zroot/bhyve/freebsd",
 			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
 		}, {
 			Dataset: "zdata/sink/f3/zroot/bhyve/rocky",
 			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
+		}, {
+			Dataset: "zdata/sink/f3/zroot/bhyve/homelabfs-lab",
+			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
+		}, {
+			Dataset: "zdata/sink/f3/zroot/bhyve/homelabfs-lab/hfs-test0",
+			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
+		}, {
+			Dataset: "zdata/sink/f3/zroot/bhyve/homelabfs-lab/hfs-test1",
+			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
+		}, {
+			Dataset: "zdata/sink/f3/zroot/bhyve/homelabfs-lab/hfs-test2",
+			KeyFile: "/keys/f3.lan.buetow.org:bhyve.key",
 		}},
 	}
 )
 
-// f3 pushes the freebsd and rocky VM datasets to f2 every 10 minutes.
+// f3 pushes development VMs and the complete HomelabFS lab to f2 every 10 minutes.
 var (
 	f3Zrepl = freebsd.ZreplJobs{
 		Push: &freebsd.ZreplPush{
 			Name:        "f3_to_f2_freebsd",
 			Peer:        "f2",
 			Address:     "192.168.2.132:8888",
-			Filesystems: []string{"zroot/bhyve/freebsd", "zroot/bhyve/rocky"},
+			Filesystems: []string{"zroot/bhyve/freebsd", "zroot/bhyve/rocky", "zroot/bhyve/homelabfs-lab<"},
 			Interval:    "10m",
 			Grid:        "24x1h | 14x1d",
 		},
@@ -97,6 +115,7 @@ var (
 			zreplLocalSnap,
 			{Pattern: "zroot/bhyve/freebsd", Include: false},
 			{Pattern: "zroot/bhyve/rocky", Include: false},
+			{Pattern: "zroot/bhyve/homelabfs-lab<", Include: false},
 		},
 	}
 	f3Keys = freebsd.KeyDatasets{Datasets: []string{"zroot/bhyve"}}
