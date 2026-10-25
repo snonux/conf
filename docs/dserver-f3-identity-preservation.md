@@ -1,6 +1,6 @@
 # Preserve f3's dserver identity before cache hardening
 
-Task 3n3 preparation only, 2026-10-24. Nothing in this document authorizes a
+Task 3n3 preparation, refreshed for kp3 on 2026-10-25. Nothing in this document authorizes a
 production write, key copy, service action, source publication or reboot. The
 separate seven-BSD proposal still excludes f3. Keep that distinction until the
 f3-specific procedure and runtime acceptance have been approved.
@@ -19,7 +19,11 @@ assumptions about inode numbers or process IDs.
 The external public SSH handshake and a loopback handshake obtained through the
 already trusted administrator SSH connection agree on this served RSA identity:
 
-`2048 SHA256:+GxEYRg/z4WeXPHXtTyRLtOV+p4fsgEQmwgu2h4p680`
+`2048 SHA256:D45UZ7edwGAk4FCtxdxAuIFpwrYnb+AG0QQU2c/9E+Y`
+
+This is the refreshed 25 October identity after the owner-authorized normal
+shutdown/startup. The earlier volatile identity did not survive. Refresh it
+again immediately before any approved preservation; no private key was copied.
 
 The controller had no pre-existing global dserver pin for f3. A private test pin
 was therefore derived from the public handshake only after comparing it with the
@@ -41,20 +45,27 @@ read. The dserver account could read and hash the first 4096 bytes of that OS
 file through the normal administrator channel, so the test did not rely on an
 unreadable or empty source. Client and native server report DTail 4.3.2-ng /
 protocol 4.1; those labels alone do not prove identical builds or compatibility.
-The cause remains unproven and is tracked by task **kp3**. No log payload
+Task **kp3** now reproduces the old-server/current-client acknowledgement
+compatibility failure in a controlled matrix, corroborated by installed f3
+handler disassembly. Its exact source revision remains unproven. See
+[dserver-f3-read-investigation.md](dserver-f3-read-investigation.md). No log payload
 was retained or printed.
 
-Do not accept exit status alone, claim successful DTail access, restart the
-service, or quarantine its only key while this baseline is unresolved. Diagnose
-this separately and require a pinned real-content read before the f3 migration.
-This blocker does not authorize a server/package upgrade or a host-key rotation.
+Do not accept exit status alone or claim successful DTail access. After the
+normal startup the user authorization cache is also absent; the old rc hook
+never refreshes it. No successful pre-repair read is currently possible. The
+separate kp3 proposal explicitly requests a coordinated f3-only binary repair
+and this safe cache/identity migration, with pinned actual-content acceptance
+afterward. Neither document authorizes that operation or a key rotation alone.
 
 ## Proposed approved procedure
 
 1. Refresh the service/configuration/listener states, account IDs, parent-path
    metadata, updater schedule and public identity above. Establish two trusted
-   administrator sessions. Require a real pinned client log read first. Record
-   the initial enabled/running state and keep the ordinary system SSH path.
+   administrator sessions. Record the actual pre-repair read/auth failure; only
+   the separately approved coordinated kp3 repair supersedes the earlier
+   successful-read prerequisite. Record the initial enabled/running state and
+   keep the ordinary system SSH path.
 2. With explicit approval, create fresh root-private staging and backup
    directories on f3. Back up only root-controlled config, helper and rc files.
    Retain old logs in quarantine. Never send the private host key to the laptop,
@@ -123,6 +134,7 @@ as root. Agree retention before deleting any old key/log material.
 Private preflight receipts are in
 `~/.local/state/conf-worktrees/3n3-f3-identity-20261024/evidence/`.
 Key staging/publication, service migration and production acceptance remain
-**unperformed**. The successful-empty client baseline requires separate diagnosis
-before asking to execute the f3 migration. Laptop/phone WireGuard device packets
+**unperformed**. The kp3 diagnosis and coordinated repair proposal now explain
+the successful-empty baseline and missing startup cache; native f3 repair
+acceptance remains pending explicit approval. Laptop/phone WireGuard device packets
 are not established by these LAN/admin checks.
