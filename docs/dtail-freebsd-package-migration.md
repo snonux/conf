@@ -1,8 +1,10 @@
 # FreeBSD DTail package revision and f3 canary (mp3)
 
-Preparation only. Production package installation, source publication, repository
-publication and service actions require explicit approval. The earlier f3 binary
-repair approval did not include a package upgrade. Other 3n3 hosts remain pending.
+The owner approved the reviewed source publication and f3-only package canary on
+2026-10-25. The canary passed: f3 now runs the distinct, checksummed package below,
+ending its temporary binary override. Source and this report are published to
+GitHub and Forgejo. Normal package-repository publication and other 3n3 hosts
+remain excluded from this approval.
 
 ## Candidate and preparation evidence
 
@@ -82,7 +84,7 @@ isolated-root migration test verifies that procedure. Future revisions do not
 own the live file. The package includes the exact already-reviewed 3n3 safe helper
 and startup hook; its sample uses persistent identity and log-only permissions.
 
-## Proposed approved canary — f3 only
+## Approved canary procedure — f3 only
 
 1. Refresh installed package/version and the current working binary hash, config,
    protected cache metadata, service enabled/running state and LAN listener.
@@ -97,8 +99,13 @@ and startup hook; its sample uses persistent identity and log-only permissions.
    metadata/source revision, ABI, newer version and absence of dependencies or
    installation scripts. No repository refresh or unrelated package action.
 4. Stop only dserver. Redirect service command stdin/output away from the SSH
-   transport and bound observation; a timeout requires read-only state inspection,
-   not blindly retrying the operation. Install the local artifact using
+   transport and bound observation separately from the daemon lifetime. On FreeBSD,
+   default `timeout` becomes a descendant reaper and kills a successfully detached
+   daemon when its deadline expires. Use a detached launcher with a private exit
+   receipt and independent bounded observation; `timeout -f` bounds only the
+   command itself when that is appropriate. An observation timeout requires
+   read-only state inspection before any further action. Install the local artifact
+   using
    `pkg -o HANDLE_RC_SCRIPTS=false -o RUN_SCRIPTS=false add ARTIFACT`.
 5. Restore the saved host-specific config as root:wheel 0644 and verify its exact
    saved hash before any start. Preserve its LAN-only binding, log-only rules and
@@ -129,7 +136,7 @@ DTail stopped and report it; no other service or guest recovery is implied.
 
 ## Normal repository publication gate
 
-Normal repository publication is **not part of the proposed f3-only canary**.
+Normal repository publication was **not part of the approved f3-only canary**.
 Read-only checks on f0/f1/f2 show `dtail-4.3.2-ng`, ownership of the old live config
 path and no package locks. Publishing revision 1 into their normal catalog can
 therefore expose them to an automatic upgrade before config-preserving migration.
@@ -137,10 +144,75 @@ First prepare/approve those hosts' 3n3 cache/identity migration and explicit pac
 upgrades with backup/restore, or a separately reviewed package-hold strategy. Do
 not silently lock packages or upgrade the other hosts to make publication possible.
 
-Task mp3 remains open for its production steps; local artifact preparation does
-not establish installed-package or fleet acceptance. Task lp3 in project dtail
-owns generic protocol compatibility; its completion is not needed to prepare or
-canary this known newer server source. No signing-key/VM migration is performed.
+## Native f3 acceptance — 2026-10-25
+
+The installed package is `dtail-4.3.2-ng_1`. Native `pkg check -s dtail` passes for
+all packaged files; installed provenance exactly matches the reviewed artifact.
+The running executable SHA256 is
+`e4662ad00e583b14573c7b1bfd7c5a9032e27afc05cc393b188ef17fb0f31906`.
+Its source is the full DTail commit recorded above. The package database and
+actual executable agree; the old temporary override is no longer active.
+
+The saved host config was restored byte for byte before startup. The existing
+persistent RSA host fingerprint remains
+`SHA256:D45UZ7edwGAk4FCtxdxAuIFpwrYnb+AG0QQU2c/9E+Y`. It was checked through
+trusted administrator access and a pinned current client. No private key was
+copied or rotated. The only listener is `192.168.1.133:2222`. Packaged binaries,
+helper and rc script are root:wheel 0755; sample/provenance files are root:wheel
+0644. The daemon's persistent key remains dserver:dserver 0600.
+
+Startup itself recreated the deliberately absent volatile runtime/cache as
+root:dserver 0750 and its user key cache as root:dserver 0640. The daemon can read
+the cache but cannot create a symlink there. A root-private synthetic sentinel
+stayed unchanged across two successful refreshes.
+
+The first actual log read after the corrected startup returned 325,858 bytes in
+1.003 seconds. Three more current-client reads passed stable, same-user native
+4096-byte prefix comparisons. A separate `dcat` and `dgrep -regex .` also matched
+their native OS prefix oracles. OS-readable `/etc/fstab` and an OS-readable
+synthetic nonlog file were both refused by policy (client exit 2 and exactly one
+new native permission-denial record each), without returning their payloads.
+An intentionally wrong host pin failed with exit 1 and returned no log prefix.
+Production log contents were compared only in memory; the real private key stayed
+on f3.
+
+Fresh strict administrator SSH/doas access passed. All three k3s nodes were
+Ready, 54 non-Job pods were ready, all 40 Argo applications Healthy/Synced and all
+43 Prometheus targets up. Both Gogios reports returned to zero critical, unknown
+and stale checks, with only the pre-existing KubeJobFailed warning. Rocky remains
+running and all FreeBSD guests remain stopped, matching the owner's requested
+state. No other service or guest was changed.
+
+### First attempt, rollback and harness correction
+
+The first package installation succeeded, but the operational harness wrapped
+`service dserver start` in default FreeBSD `timeout 30`. That wrapper waited for
+the detached server and killed it at its deadline, returning 124. Read-only
+inspection preceded recovery. The approved rollback restored all six actual
+pre-canary binaries and verified pinned log access; package checksum drift was
+explicitly recorded during that temporary rollback.
+
+An isolated synthetic-key loopback fixture reproduced the cause: normal daemon
+startup returned immediately, default `timeout 3 daemon ...` started the server
+then killed it with exit 124, and `timeout -f 3 daemon ...` returned 0 immediately
+with the listener alive. The installed FreeBSD timeout(1) manual documents its
+reaper behavior. A parse-only probe under the daemon account also read and parsed
+the existing RSA key without exporting it. These results did not establish an
+application defect. A previously filtered last key-log line was insufficient to
+infer a key-read hang.
+
+After this diagnosis, the exact same reviewed local package was reinstalled,
+config restored and volatile cache quarantined again. A detached service launcher
+recorded exit 0, while independent observation and the acceptance checks above
+confirmed the service. No application source or artifact bytes changed. The
+initial timeout and rollback remain part of the record; the final package
+checksum check passes. Only the owned synthetic fixtures/probe were removed.
+Root-private production backups and both runtime quarantines remain on f3.
+
+Task mp3's distinct-version packaging and f3 replacement are complete. Fleet
+cache/identity migration remains task 3n3; normal repository publication retains
+the gate above. Task lp3 in project dtail owns generic protocol compatibility.
+No signing-key/VM migration was performed.
 
 Private build/native test receipts and the reviewable artifact are under
 `~/.local/state/conf-worktrees/mp3-freebsd-package-20261025/evidence/`.
