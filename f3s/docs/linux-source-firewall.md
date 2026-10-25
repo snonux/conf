@@ -1,8 +1,8 @@
 # Rocky source firewall — sm3
 
-2026-10-25: **r0 and r1 deployed and confirmed** using published `a54265e`
-runtime assets, preserving the deployed co3 NodePort guard. r2 and both
-Pis remain pending separate approval. No rpcbind stop, network restart,
+2026-10-25: **r0, r1 and r2 deployed and confirmed** using published `a54265e`
+runtime assets, preserving the deployed co3 NodePort guard. Both Pis
+remain outside these completed r-node rollouts. No rpcbind stop, network restart,
 mount change or SSH authentication change was performed. The rollout
 procedure below requires explicit approval for each further host. The ISP
 gateway
@@ -375,7 +375,7 @@ Pi2/Pi3, separately scoped rpcbind cleanup and device-side acceptance.
 Private receipts: ~/.local/state/conf-worktrees/sm3-r1-20261025/live/.
 
 
-### Next host: r2 preparation only
+### R2 preparation before approval
 
 Read-only native r2 preflight on October 25 passed candidate nft validation,
 confirmed source-table/assets absence and co3 boot enablement, and read the
@@ -389,3 +389,56 @@ source-node protected-NodePort denials and local API/DNS positives, plus a
 separate unprivileged probe on r1 for cross-node DNS into r2. Delete each by
 its recorded UID after testing. Do not claim that r2-local DNS proves a
 cross-node path. Keep r2/Pi/rpcbind/device acceptance distinct from r1's result.
+
+
+## Approved r2 rollout — 2026-10-25
+
+The owner approved r2 in the consolidated proposal. The isolated rollout used
+reviewed assets from reconciled conf `1a3cee1`, byte-identical to the accepted
+candidate/helper/unit. Two independent normal SSH/sudo channels initialized
+in 0.799 seconds before activation. Destination Gonf strict preview and staging
+passed; installed hashes, root ownership and modes matched. Staging loaded no
+source table and enabled no boot service.
+
+The real PID-1 five-minute rollback was armed at 15:54:33 UTC. Channel B
+confirmed after all guarded gates at 15:54:58 UTC, in 25.529 seconds, within
+the 240-second cutoff. The confirmed policy remains mode 0600 with SHA256
+794a9c28c4bbfa174eaa7f0edb77e958568e490f701ffc08eede45641ea435e7;
+boot is enabled, pending state absent and the rollback timer stopped.
+
+- Blowfish public IPv6 via vio0 reached six known listeners before activation.
+  All ten probes were denied while guarded and after confirmation; the native
+  source-table drop counter increased by ten.
+- Fresh LAN and ULA SSH passed within the guarded window. Fresh normal
+  SSH/sudo passed after confirmation in 0.413 seconds. Both frontend WG
+  sources retained registry, Prometheus, Forgejo SSH and Anki access.
+- Direct LAN r2 ports 22/6443/9100/30222 remained reachable. Ports
+  30001/30090/30800 were already refused before staging and remained refused;
+  these are preserved baseline limitations, not successful service tests.
+  The initial baseline harness stopped on its inherited r1 registry assumption,
+  cleaned both probes/admin channels, and made no firewall change. The
+  corrected run compared the measured r2 baseline. Registry HTTP 200 was
+  positively verified through both frontend WG paths and r2 loopback.
+- Separate unprivileged probes on r2 and r1 each retained all 30 protected
+  NodePort denials. Both passed host/API, ClusterIP and UDP/TCP DNS checks.
+  The r1 probe explicitly verified direct cross-node CoreDNS on r2; r2-local
+  DNS was recorded separately and is not evidence of cross-node traffic.
+- API readiness, etcd leader, NFS public-index read (636 bytes, unchanged
+  checksum), and normal Player LAN ingress with verified TLS/HTTP 401 passed.
+  The co3 normalized policy and boot enablement, k3s PID/start time, and both
+  rpcbind unit states were unchanged.
+- Three nodes remained Ready; all 55 baseline production pod UIDs/readiness/
+  restart counts, 41 Healthy/Synced applications, 58 NetworkPolicies and 43
+  healthy targets were unchanged. Seven r2 targets scraped successfully after
+  activation. Destination strict restaging reported zero changes.
+
+Both temporary probes were deleted with UID preconditions and both owned admin
+channels closed. Normal Gogios reports refreshed after activation: blowfish at
+15:55:10 UTC and fishfinger at 15:56:02 UTC, each with zero critical, unknown
+or stale checks, 608 OK and only the existing KubeJobFailed warning. No report
+cache was edited or monitoring forced. R2 acceptance is complete.
+
+Private evidence: ~/.local/state/conf-worktrees/sm3-r2-20261025/live/.
+Full sm3 remains open for Pi firewall work, separately scoped rpcbind cleanup
+and real laptop/phone tunnel tests. No reboot, actual timer expiry, CARP,
+remount, SSH/PAM change or Pi firewall operation was performed.
