@@ -21,7 +21,7 @@ CONFIG = '''Version = 1.9
 </User>
 '''
 STUB = '''#!/usr/bin/env python3
-import os, pathlib, sys
+import os, pathlib, signal, subprocess, sys
 r = pathlib.Path(os.environ['ZNC_TEST_ROOT'])
 c = r / 'configs/znc.conf'
 name = pathlib.Path(sys.argv[0]).name
@@ -32,12 +32,26 @@ if name == 'rcctl':
     if a[0] == 'stop':
         (r/'running').unlink(missing_ok=True)
         c.write_text(c.read_text() + '# saved on stop\\n')
+        if (r/'fail-stop').exists():
+            (r/'fail-stop').unlink(); sys.exit(1)
         if (r/'bad-stop').exists(): c.write_text(c.read_text().replace('Port = 4242','Port = 4243'))
     if a[0] == 'start':
         if (r/'fail-start').exists():
             (r/'fail-start').unlink(); sys.exit(1)
         (r/'running').touch()
         (r/'bound').write_text('192.168.2.111' if 'Host = 192.168.2.111' in c.read_text() else '*')
+if name == 'mv':
+    result = subprocess.call(['/bin/mv'] + a)
+    if result == 0 and (r/'interrupt-post-rename').exists():
+        os.kill(os.getppid(), signal.SIGTERM)
+    sys.exit(result)
+if name == 'cp':
+    count = int((r/'copies').read_text()) + 1 if (r/'copies').exists() else 1
+    (r/'copies').write_text(str(count))
+    if count == 2 and (r/'interrupt-post-stop').exists():
+        os.kill(os.getppid(), signal.SIGTERM)
+        sys.exit(1)
+    sys.exit(subprocess.call(['/bin/cp'] + a))
 if name == 'netstat' and (r/'fail-netstat').exists(): sys.exit(1)
 if name == 'netstat' and a[-1] == 'inet' and (r/'running').exists():
     print('tcp 0 0 ' + (r/'bound').read_text() + '.4242 *.* LISTEN')
@@ -56,7 +70,7 @@ class ZNC(unittest.TestCase):
         (self.root/'bound').write_text('*')
         stub = self.root/'bin/stub'
         stub.write_text(STUB); stub.chmod(0o755)
-        for name in ['rcctl', 'netstat', 'chown']:
+        for name in ['rcctl', 'netstat', 'chown', 'cp', 'mv']:
             (self.root/'bin'/name).symlink_to(stub)
         self.helper = self.root/'helper'
         self.helper.write_text((SCRIPTS/'znc-wireguard.sh').read_text()
@@ -84,6 +98,29 @@ class ZNC(unittest.TestCase):
         self.assertEqual(self.config.read_text(), CONFIG+'# saved on stop\n')
         self.assertTrue((self.root/'running').exists())
         self.run_helper()
+
+    def test_initial_stop_save_then_failure_preserves_current_config(self):
+        (self.root/'fail-stop').touch()
+        self.run_helper(success=False)
+        self.assertEqual(self.config.read_text(), CONFIG+'# saved on stop\n')
+        self.assertTrue((self.root/'running').exists())
+        self.assertEqual((self.root/'events').read_text().count('rcctl:stop'), 1)
+        self.assertEqual((self.root/'copies').read_text(), '1')
+
+    def test_signal_after_stop_before_backup_preserves_current_config(self):
+        (self.root/'interrupt-post-stop').touch()
+        self.run_helper(success=False)
+        self.assertEqual(self.config.read_text(), CONFIG+'# saved on stop\n')
+        self.assertTrue((self.root/'running').exists())
+        self.assertEqual((self.root/'events').read_text().count('rcctl:stop'), 1)
+        self.assertEqual((self.root/'copies').read_text(), '2')
+
+    def test_signal_after_atomic_install_restores_post_stop_backup(self):
+        (self.root/'interrupt-post-rename').touch()
+        self.run_helper(success=False)
+        self.assertEqual(self.config.read_text(), CONFIG+'# saved on stop\n')
+        self.assertTrue((self.root/'running').exists())
+        self.assertEqual((self.root/'copies').read_text(), '3')
 
     def test_changed_layout_refused_before_stop(self):
         for changed in [CONFIG*2, CONFIG.replace('SSL = true','SSL = false'), CONFIG.replace('IPv6 = false','IPv6 = true')]:

@@ -40,15 +40,21 @@ awk -v address="$address" -f "$transform" "$config" >/dev/null
 rcctl check znc >/dev/null
 backup=$(mktemp -d /var/znc/configs/.wg-backup.XXXXXXXX)
 cp -p "$config" "$backup/znc.conf"
-stopped=no
+stop_attempted=no
+replace_started=no
 committed=no
 _cleanup() {
     status=$?
     trap - EXIT HUP INT TERM
-    if [ "$stopped" = yes ] && [ "$committed" = no ]; then
-        # A started daemon must stop before restoration or its exit write
-        # could overwrite the restored config.
-        if rcctl stop znc; then
+    if [ "$stop_attempted" = yes ] && [ "$committed" = no ]; then
+        # Before installation, preserve the daemon's latest shutdown save.
+        # The candidate disappears only after the atomic rename succeeds;
+        # checking it also covers a signal immediately after mv returns.
+        if [ "$replace_started" = no ] || [ -f "$backup/candidate" ]; then
+            rcctl check znc >/dev/null || rcctl start znc || status=1
+            echo 'ZNC migration interrupted before installation; kept current config' >&2
+        elif rcctl stop znc; then
+            # A started daemon must stop before restoring the post-stop backup.
             cp -p "$backup/znc.conf" "$config"
             rcctl start znc || status=1
             echo 'ZNC bind change failed; restored private backup' >&2
@@ -63,12 +69,14 @@ _cleanup() {
 trap _cleanup EXIT
 trap 'exit 1' HUP INT TERM
 # ZNC saves configuration on exit. Edit only after that write completes.
-stopped=yes
+stop_attempted=yes
 rcctl stop znc
 cp -p "$config" "$backup/znc.conf"
 awk -v address="$address" -f "$transform" "$config" > "$backup/candidate"
 chown _znc:_znc "$backup/candidate"
 chmod 600 "$backup/candidate"
+# This flag is set only after the post-stop backup and candidate are complete.
+replace_started=yes
 mv "$backup/candidate" "$config"
 rcctl start znc
 _bound
