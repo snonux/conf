@@ -176,7 +176,7 @@ remains unchanged pending separate runtime-bootstrap approval. Its replacement
 ARM64 binary and a backup/rollback procedure are prepared. No failed preview is
 counted as deployment or worked around with an implicit bootstrap.
 
-## Pi3 completion in progress (2026-10-25)
+## Pi3 ordinary-cycle acceptance (2026-10-25)
 
 The owner approved the combined 1g3/dn3 Pi3 maintenance. The single approved
 logind repair restored prompt SSH/sudo, and the reviewed atomic Gonf bootstrap
@@ -192,14 +192,15 @@ Apply made exactly one change and installed the reviewed uploader SHA-256
 Reapply reported zero changes. No token, environment, unit, service or schedule
 changed. The old public script is retained privately with the deployment receipt.
 
-The normal hourly timer next fires at 17:00 UTC. A dedicated read-only observer
-is running; acceptance is pending its ordinary HTTP204 records upload and
-advancing nonempty records file. No upload was forced. The existing server pod
-has one restart from 08:23 UTC, before this maintenance; that is the observer's
-fresh baseline, not a new zero-restart claim. The original nine-host acceptance
-below remains valid. DN3 remains open until Pi3's ordinary-cycle acceptance.
+The next ordinary hourly upload completed at 17:00 UTC without a forced upload.
+Private receipt
+`/home/paul/.local/state/conf-worktrees/pi3-combined-20261025/live/normal-uploads-accepted.json`
+records HTTP 204, advancing nonempty records (767 B), the reviewed uploader
+SHA above, and server pod UID `73320094-88d4-4f66-a7f9-48dcde6fbf38` unchanged.
+The original nine-host acceptance below remains valid. All ten managed uploader
+hosts are accepted; DN3 live acceptance is complete.
 
-## Live status (2026-10-24)
+## Live status (2026-10-24, Pi3 closed 2026-10-25)
 
 Both frontend cutovers are deployed and verified: protected marker/helper,
 all 82 Gogios path references, 0640 root:_gogios configuration, and active/future
@@ -213,15 +214,13 @@ its private rollback archive/listing/hash checked. Package-owned unused
 `check_nrpe` and `update-cfg.pl` were removed; unrelated monitoring plugins remain.
 Scoped frontend tasks and uploader tasks reapply with zero changes.
 
-The exact revised uploader is installed on both frontends, f0-f3, Pi0/Pi1 and
-Pi2. Only the script changed; credentials, services and schedules were preserved.
-All nine changed hosts have completed normal HTTP204 records uploads with
-advancing nonempty files: both frontends at 15:15 UTC, both NetBSD Pis at
-15:17 UTC, and f0-f3/Pi2 at the normal 16:00 UTC hourly run. The read-only
-observer finished successfully; no upload was forced and no schedule changed.
-Pi3 still runs Gonf0.25.0 and is unchanged: its separately prepared 0.25.2
-runtime bootstrap requires the outstanding explicit approval. DN3 remains open
-until that host's deployment and required acceptance are resolved.
+The exact revised uploader is installed on both frontends, f0-f3, Pi0/Pi1, Pi2
+and Pi3. Only the script changed; credentials, services and schedules were
+preserved. All ten changed hosts have completed normal HTTP204 records uploads
+with advancing nonempty files: both frontends at 15:15 UTC, both NetBSD Pis at
+15:17 UTC, f0-f3/Pi2 at the normal 16:00 UTC hourly run, and Pi3 at 17:00 UTC
+after its approved Gonf 0.25.2 bootstrap. No upload was forced and no schedule
+changed. DN3 live acceptance is complete.
 
 Six fishfinger TLS checks became critical in the 15:15 normal cycle and cleared
 on the next active cycle without configuration/service changes; the passive
