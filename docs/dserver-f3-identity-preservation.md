@@ -1,5 +1,9 @@
 # Preserve f3's dserver identity before cache hardening
 
+Deployment update: the owner approved the f3-only repair; see
+[dserver-f3-acceptance-20261025.md](dserver-f3-acceptance-20261025.md) for actual
+native results and limitations. The preparation evidence below remains historical.
+
 Task 3n3 preparation, refreshed for kp3 on 2026-10-25. Nothing in this document authorizes a
 production write, key copy, service action, source publication or reboot. The
 separate seven-BSD proposal still excludes f3. Keep that distinction until the

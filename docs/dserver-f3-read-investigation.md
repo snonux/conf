@@ -1,5 +1,9 @@
 # f3 DTail reads: diagnosis and proposed repair
 
+Deployment update: the owner approved the f3-only repair; see
+[dserver-f3-acceptance-20261025.md](dserver-f3-acceptance-20261025.md) for actual
+native results and limitations. The preparation evidence below remains historical.
+
 Task kp3, 2026-10-25. **Diagnosis and preparation only.** No production binary,
 configuration, key, cache, service or package changes have been performed. This
 proposal requires explicit approval for publication and the f3-only operation.
