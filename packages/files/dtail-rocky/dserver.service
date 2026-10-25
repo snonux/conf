@@ -11,6 +11,9 @@ ExecStart=/usr/local/bin/dserver -cfg /etc/dserver/dtail.json
 WorkingDirectory=/var/lib/dserver
 ExecStartPre=+/usr/bin/test -s /var/lib/dserver/ssh_host_key
 ExecStartPre=+/usr/local/bin/dserver-update-key-cache.sh
+# Cache refresh runs su-to-user reads; some Rocky hosts (pi2) take ~2 minutes
+# per PAM session via pam_systemd, exceeding the default 90s start timeout.
+TimeoutStartSec=600
 StateDirectory=dserver
 StateDirectoryMode=0700
 LogsDirectory=dserver

@@ -219,8 +219,24 @@ undeployed `eye.f3s.*` checks; those were reverted immediately so this task does
 not publish unrelated inventory. Native `dtailhealth` against both WG targets
 returns OK.
 
-## Remaining
+## Pi2 Linux completion (2026-10-25)
 
-Pi2 still needs the approved Linux identity provision and drop-in quarantine.
-Its Gonf is now 0.25.2 / plan 31; the retired local plan-version-21 inject is no
-longer used. PAM/sudo on Pi2 remains multi-minute.
+Pi2 received an approved new on-host RSA DTail identity after the bounded recovery
+search found none. Legacy ownership drop-ins were quarantined. The managed unit
+now sets `TimeoutStartSec=600` because each `su`-to-user cache read hits ~2 minutes
+of `pam_systemd` latency on this host (default 90s start timed out once).
+
+Accepted: LAN-only `192.168.1.127:2222`, fingerprint
+`SHA256:v7s1bGtbQ8rzyf8qouQRKYuR7QXNYkyAEv+P+kvSPxM`, protected cache, dcat/dgrep
+251216 B with stable native prefixes, policy denials, wrong-pin rejection,
+startup recreation with a distinct runtime inode, key-cache timer restored,
+controller port-2222 trust updated, global known_hosts client PASS, and
+convergence preview with only the expected unconditional refresh/key checks
+(no file updates). Fresh admin SSH/sudo after closing owned masters PASS.
+
+## Fleet status
+
+All planned remaining-fleet hosts for this 3n3 scope are accepted: OpenBSD
+frontends, FreeBSD f0–f2, NetBSD pi0/pi1, Linux r0–r2/pi2/pi3, plus the earlier
+f3 work. Phone/laptop WireGuard device-packet tests were not part of this
+acceptance path where SSH local-forwards were used.
