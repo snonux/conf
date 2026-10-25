@@ -226,7 +226,10 @@ start ZNC and check its listener/TLS handshake. Always stop before restoring,
 because ZNC writes config on shutdown. The pre-change PF backup must also be
 restored if restoring public access. Never print or download the private backup.
 
-## ZNC-only acceptance (2026-10-25, 17:35–17:36 UTC)
+## ZNC-only acceptance (2026-10-25, 16:35–16:36 UTC)
+
+Remote Gonf logs reported 17:35–17:36 CET (UTC+01:00), verified against
+fishfinger's Europe/Amsterdam timezone; the UTC interval above is corrected.
 
 The approved fishfinger-only `frontends_wg_znc` task was applied from the exact
 reviewed helper/recipe content of canonical `a7cc252` (isolated `47a0ca0`). Two
