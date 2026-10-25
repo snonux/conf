@@ -6,7 +6,9 @@ inventory). The configuration-management **library** lives separately at
 
 ## Where is more information about this setup
 
-See f3s skill, it has got tons of info about this infra.
+Use the `iq` skill and start with `~/git/iq/AGENTS.md`. Follow its Infra → f3s
+indexes to load only the relevant topic. Homelab reference documentation and
+IP inventory live in IQ; deployment recipes remain here.
 
 ## Where tests belong
 
