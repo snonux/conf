@@ -1,7 +1,7 @@
 # Rocky source firewall — sm3
 
-2026-10-24: **r0 canary deployed and confirmed** from published `a54265e`
-(base `7e8e97f`), preserving the deployed co3 NodePort guard. r1/r2 and both
+2026-10-25: **r0 and r1 deployed and confirmed** using published `a54265e`
+runtime assets, preserving the deployed co3 NodePort guard. r2 and both
 Pis remain pending separate approval. No rpcbind stop, network restart,
 mount change or SSH authentication change was performed. The rollout
 procedure below requires explicit approval for each further host. The ISP
@@ -261,7 +261,7 @@ canonical pending changes or other repositories were published with it.
 
 No reboot, real timer expiry/rollback, CARP failover, remount, SSH-policy
 change or rpcbind cleanup was performed. Laptop/phone f3s tunnel packets
-remain untested as described above. Full sm3 is **not complete**: r1/r2,
+remain untested as described above. At the r0 checkpoint, full sm3 was **not complete**: r1/r2,
 Pi2/Pi3, separately approved rpcbind cleanup and device checks remain.
 Private receipts are under
 `~/.local/state/conf-worktrees/sm3-integration-20261024/live/`.
@@ -303,3 +303,89 @@ Private receipts are under
   findings). The current integration retains both task registrations and
   adds the co3 lifecycle assertions above. Further fleet acceptance remains;
   the separately approved r0 canary is recorded above.
+
+
+## Approved r1 rollout — 2026-10-25
+
+The owner separately approved r1, with two normal pre-authenticated admin
+channels, a five-minute independent rollback and a 240-second confirmation
+cutoff. The exact previously reviewed candidate/helper/unit were staged
+through destination Gonf after its strict preview; native syntax, hashes,
+root ownership and modes passed. Staging did not load the source table or
+boot-enable it. No package/runtime bootstrap was needed.
+
+Both independent SSH/sudo channels initialized in 0.669 seconds this time;
+the earlier 240-second PAM delay did not recur. No authentication, PAM or
+logind configuration was changed. Fresh LAN and ULA SSH passed before and
+within the guarded window; a fresh ordinary LAN SSH plus sudo passed after
+confirmation in 0.395 seconds.
+
+The real PID-1 five-minute rollback timer was armed. All required guarded
+checks passed, then channel B confirmed the policy at 14:22:04 UTC, 15.403
+seconds after activation began. The source policy is mode 0600, boot-enabled,
+with no pending transaction or active rollback timer. Candidate/confirmed
+SHA256 remains 794a9c28c4bbfa174eaa7f0edb77e958568e490f701ffc08eede45641ea435e7.
+
+- Public IPv6 tests used blowfish's vio0 route. Six known-listening services
+  (22/111/6443/9100/10250/10257) connected before activation; all ten probes
+  failed while guarded and again after confirmation. The source-table drop
+  counter increased. This distinguishes filtering from absent listeners.
+- The co3 table, with counters normalized, and its boot enablement were
+  preserved. All 30 ordinary-r1-pod attempts to protected NodePorts across
+  the three LAN and three WG node addresses remained denied. Pod host/API
+  and ClusterIP access, UDP/TCP DNS and direct cross-node CoreDNS on r2 passed.
+- LAN port behavior matched its measured baseline. Both frontend WG clients
+  retained registry/Prometheus/Forgejo SSH/Anki access. NFS public-index
+  checksum, API readiness, etcd leader, registry and verified-TLS Player
+  ingress checks passed. No device-side laptop/phone tunnel test is claimed.
+- k3s PID/start time and rpcbind states are unchanged. Three nodes remain
+  Ready, 40 Argo apps Healthy/Synced, and 43 targets healthy. Seven r1 targets
+  have successful scrapes after activation.
+- The guarded inventory matched all 54 baseline production pods and all 57
+  NetworkPolicies. The post-cleanup exact-equality assertion failed because
+  a separate MotionEye Deployment/pod and motioneye-web ingress policy were
+  created at 14:22:16 UTC, after confirmation. Reconciliation proves every
+  baseline pod UID/readiness/restart count and policy stayed unchanged;
+  the added MotionEye pod is Ready on r1 with zero restarts. Final totals are
+  55 pods and 58 policies. The firewall rollout did not create or edit those
+  MotionEye objects. Do not report the final inventory as byte-identical.
+- A final native check confirms persisted policy, stopped timer/no pending,
+  unchanged co3/k3s/rpcbind and zero-change strict stage preview. The sole
+  temporary probe was deleted using its UID precondition, and both owned
+  SSH/sudo channels closed successfully.
+
+The first post-activation fishfinger report (14:26:06 UTC) contained five
+HTTPS 502 criticals for Joern, ecat, Gogios and dory frontend sites. Observed
+fishfinger httpd processes started at 14:22:58 and relayd at 14:25:17 UTC;
+this rollout did not restart either. All five affected hostnames subsequently
+returned HTTP 200 when pinned to fishfinger's actual HTTPS address. The timing
+suggests a concurrent frontend restart. An initial diagnostic incorrectly
+used 127.0.0.1:443, which is not a listener; the corrected probe used vio0.
+All five exact Nagios checks subsequently returned exit 0, including dory
+IPv6. The failed results have epochs 14:25:20–24 UTC, shortly after the
+relayd restart; later report timestamps initially retained those cached
+results. A bounded seven-minute observer ended without claiming recovery;
+fishfinger's normal report cleared at 14:36:01 UTC, and blowfish's mirror
+cleared at 14:40:11 UTC. Both reports are newer than activation, with zero
+critical/unknown/stale checks and only the unchanged KubeJobFailed warning.
+The r1 rollout is accepted. No report cache was edited or monitoring forced.
+No reboot, real rollback expiry, CARP, remount, rpcbind stop, SSH-policy
+change or other-host rollout was performed. Full sm3 remains open for r2,
+Pi2/Pi3, separately scoped rpcbind cleanup and device-side acceptance.
+Private receipts: ~/.local/state/conf-worktrees/sm3-r1-20261025/live/.
+
+
+### Next host: r2 preparation only
+
+Read-only native r2 preflight on October 25 passed candidate nft validation,
+confirmed source-table/assets absence and co3 boot enablement, and read the
+same public NFS index with matching checksum. No r2 assets or rules changed.
+The existing one-host procedure and five-minute rollback apply after separate
+approval. Keep two normal SSH/sudo channels ready before activation, enforce
+the 240-second confirmation cutoff, and preserve the co3 table.
+
+CoreDNS currently runs on r2. For r2 acceptance, use an ordinary r2 probe for
+source-node protected-NodePort denials and local API/DNS positives, plus a
+separate unprivileged probe on r1 for cross-node DNS into r2. Delete each by
+its recorded UID after testing. Do not claim that r2-local DNS proves a
+cross-node path. Keep r2/Pi/rpcbind/device acceptance distinct from r1's result.
