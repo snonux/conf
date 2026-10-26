@@ -1,12 +1,18 @@
 # ArgoCD private access migration (8n3)
 
-Prepared 2026-10-25 from conf `6738ecd`. Owner selected LAN/WireGuard-only;
-this is a rollout proposal, not a record of deployment. Review and separate
-live-change approval are required before the commands below. That proposed
-approval includes restoring the captured pre-cutover baseline during the rollout
-window if acceptance fails, including temporary restoration of public ArgoCD
-access and its existing password-only exposure. Do not run during
-another live lane. Publish only after the parent review/publication gate.
+**Rolled out 2026-10-26:** public `argocd.f3s.buetow.org` retired; UI is
+`https://argocd.f3s.lan.buetow.org` only. Frontend relayd/gogios/acme/NSD
+updated (fishfinger then blowfish); `just private-access` deleted the public
+ingress and patched `argocd-cm` URL. LAN ingress UID
+`226048a6-c4b5-4bce-8d88-c4949c462483` retained. Authoritative DNS NXDOMAIN
+for the public name; public Host/SNI probes return relayd 403. Private LAN
+UI and mesh `/healthz` remain 200. Baseline:
+`~/.local/state/conf-worktrees/8n3-private-20261025/live/baseline/`.
+
+Prepared 2026-10-25 from conf `6738ecd`. Owner selected LAN/WireGuard-only.
+The staged approval included restoring the captured pre-cutover baseline
+during the rollout window if acceptance failed. Procedure below remains the
+reference for rollback.
 
 ## Intended boundary and scope
 
