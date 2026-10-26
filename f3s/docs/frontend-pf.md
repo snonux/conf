@@ -1,10 +1,12 @@
-# Frontend PF hardening (wm3): prepared, rollout pending
+# Frontend PF hardening (wm3): rolled out 2026-10-26
 
-This change is prepared for blowfish and fishfinger. No production configuration,
-PF table, service or authentication setting was changed during preparation.
-The owner approved this scope and its rollback on 2026-10-25. The parent
-orchestrator releases the serial deployment lane after task 3n3 is ready.
-Do not reboot, change SSH authentication, or restart WireGuard/relayd for this task.
+Default-deny PF plus internal httpd 8080 / inetd rsync 873 was applied serially
+to fishfinger then blowfish on 2026-10-26 (CET). Fishfinger ZNC WireGuard-only
+landed earlier the same calendar day. Acceptance evidence:
+`~/.local/state/conf-worktrees/wm3-approved-20261025/live/wm3-acceptance-20261026.md`.
+Owner approval and rollback procedure below remain authoritative. Do not reboot,
+change SSH authentication, or restart WireGuard/relayd for this task.
+Per-host rollback backups remain at `/root/wm3-before` until cleaned up.
 
 ## Policy and outstanding decision
 
