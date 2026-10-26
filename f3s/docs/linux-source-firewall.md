@@ -1,15 +1,15 @@
 # Rocky source firewall — sm3
 
 2026-10-25: **r0, r1 and r2 deployed and confirmed** using published `a54265e`
-runtime assets, preserving the deployed co3 NodePort guard. Both Pis
-remain outside these completed r-node rollouts. No rpcbind stop, network restart,
-mount change or SSH authentication change was performed. The rollout
-procedure below requires explicit approval for each further host. The ISP
-gateway
-192.168.1.1 is ISP-managed; there is no permission to administer it. OpenWrt
-192.168.1.101 is an AP and cannot supply the missing perimeter firewall.
-FreeBSD PF is separate. Never fail over CARP, reboot into recovery mode,
-restart k3s/networking or remount NFS to test this change.
+runtime assets, preserving the deployed co3 NodePort guard.
+2026-10-26: **pi3 and pi2 deployed and confirmed** on the IPv4/ULA-only profile
+(`EnableWireGuard=false`, candidate SHA256
+`4276353bd7ef3e92aeaa46975b89d235f0ac5756426566f022f9ad9e90b42df1`). No rpcbind stop, network
+restart, mount change or SSH authentication change was performed for the Pi
+stage. The ISP gateway 192.168.1.1 is ISP-managed; there is no permission to
+administer it. OpenWrt 192.168.1.101 is an AP and cannot supply the missing
+perimeter firewall. FreeBSD PF is separate. Never fail over CARP, reboot into
+recovery mode, restart k3s/networking or remount NFS to test this change.
 
 ## Observed packet paths and scope
 
