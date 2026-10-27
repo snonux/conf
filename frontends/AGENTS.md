@@ -60,6 +60,9 @@ native `pkg_add -Iun` audit using signed `quirks` metadata plus the official
 and fleet repos, not a CVE scanner. Clean runs are only logged; findings and
 failures mail root and exit non-zero. Never let the audit fall back to
 official packages alone: that would silently omit the fleet packages.
+An unavailable fleet repo is expected: log `package audit SKIPPED` quietly
+and defer the full audit without mail. Package-update fallback notices are
+also log-only; other package changes and failures still produce cron mail.
 Reference: `docs/unattended-upgrades.md`.
 
 ## Mail and authoritative DNS

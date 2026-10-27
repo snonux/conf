@@ -11,6 +11,9 @@ The custom repo `pkgrepo.f3s.buetow.org` sits on k3s, which is often powered
 off. relayd then serves an HTTP 200 "Server turned off" page. Every update
 script probes for it, skips the fleet packages (dtail, gogios, f3sctl) with a
 WARNING and still applies official updates. That is expected, not a failure.
+Repository-unavailable notices stay in the local log and do not generate
+cron email. OpenBSD defers its full package audit until the repository is
+available; a skipped audit is logged explicitly and is never marked clean.
 
 | Hosts | Script | Trigger | gonf |
 |---|---|---|---|
@@ -38,14 +41,15 @@ jitter: `ssh -p 2 -tt rex@<host> 'doas -n /usr/local/sbin/unattended-upgrade <mo
 |---|---|---|---|
 | `base` | 06:10 | 22:10 | `syspatch`, re-run after syspatch updates itself |
 | `pkgs` | 06:40 | 22:40 | `pkg_add -Iu`, custom repo probe-gated, restarts listed daemons unless only `quirks` changed |
-| `audit` | 07:05 | 23:05 | read-only `pkg_add -Iun` against fresh metadata; clean result logged quietly; findings, custom repo down or errors mail root and exit non-zero |
+| `audit` | 07:05 | 23:05 | read-only `pkg_add -Iun` against fresh metadata; clean or custom-repo-unavailable skips logged quietly; findings or errors mail root and exit non-zero |
 | `reboot` | 07:35 | 23:35 | reboots only when `what /bsd` differs from `sysctl -n kern.version` |
 
 Hours come from `openbsd.UnattendedSchedule` (host data) in `gonf/cluster/cluster.go`.
 `base`, `pkgs` and `reboot` run only while the partner frontend passes the
 `https://<partner>.buetow.org/index.txt` "Welcome to <partner>" check over
 IPv4 and IPv6 (same as `dns-failover.ksh`); `audit` is never gated. Output is
-mailed to root by cron: silence means nothing happened. Restart list: relayd
+mailed to root by cron; expected custom-repository outages are log-only.
+Restart list: relayd
 httpd nsd smtpd sshd inetd uptimed node_exporter dserver.
 
 | Log line | Meaning |
@@ -54,8 +58,9 @@ httpd nsd smtpd sshd inetd uptimed node_exporter dserver.
 | `syspatch applied base patches:` | patched; a kernel patch reboots at the next `reboot` slot |
 | `pkg_add -u updated:` | packages updated, restarts follow |
 | `package audit clean` | fine, not mailed |
+| `package audit SKIPPED` | custom repo unavailable; full audit deferred, not mailed |
 | `package audit found ...` / `package audit FAILED ...` | investigate |
-| `WARNING: https://pkgrepo... not operational` (+ `rc=1 with the custom repo skipped`) | k3s asleep, official updates applied |
+| `WARNING: https://pkgrepo... not operational` (+ `rc=1 with the custom repo skipped`) | k3s asleep, custom packages deferred; log-only unless other changes or errors need reporting |
 | `skipped <mode>: partner <host> not operational` | retried next window |
 | `pkg_add -u FAILED` / `syspatch FAILED` | investigate |
 | `rebooting to activate the patched kernel` | check uptime and kernel afterwards |

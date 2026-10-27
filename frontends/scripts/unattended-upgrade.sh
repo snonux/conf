@@ -9,7 +9,8 @@
 #
 # Intended for root's crontab. Everything it prints is mailed to root by
 # cron AND appended to /var/log/unattended-upgrade.log (rotated via
-# newsyslog(8)). Silence = clean no-op; mail = change or failure.
+# newsyslog(8)). Expected custom-repository outages are logged without mail.
+# Silence = no reportable change or failure.
 # Companion doc: frontends/docs/unattended-upgrades.md
 #
 # Update and reboot modes are gated on the partner frontend being operational
@@ -51,6 +52,12 @@ esac
 # Emit to stdout (cron mails it) and append the same lines to the log file.
 log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
+}
+
+# Keep expected repository deferrals visible without producing cron mail.
+# A failed append still writes stderr, so a broken log is not hidden.
+log_only() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$LOG"
 }
 
 # A clean audit is evidence worth retaining but not a daily mail: cron's
@@ -277,20 +284,27 @@ pkgs)
         PKG_PATH="installpath:${custom}"
         export PKG_PATH
     else
-        log "WARNING: ${custom} not operational — skipping custom-repo packages this window"
+        log_only "WARNING: ${custom} not operational — skipping custom-repo packages this window" || exit 1
         PKG_PATH="installpath"
         export PKG_PATH
         customSkipped=1
     fi
     out=$(pkg_add -Iu 2>&1)
     rc=$?
+    # Ignore only the signed quirks timestamp and missing fleet packages.
+    # Other output (official updates or errors) must remain visible in mail,
+    # even when the custom repository is unavailable at the same time.
+    reportable=$(audit_findings "$out")
+    if [ -n "$customSkipped" ]; then
+        reportable=$(printf '%s\n' "$reportable" | sed -E \
+            "/^Couldn't find updates for ((dtail|gogios|dserver|f3sctl)-[^[:space:]]+[[:space:]]*)+$/d")
+    fi
     if [ "$rc" -ne 0 ]; then
-        if [ -n "$customSkipped" ] \
-            && printf '%s\n' "$out" | grep -q "Couldn't find updates"; then
-            # Expected with the custom repo skipped: the unresolvable stems
-            # are the custom packages (dtail, gogios, dserver, ...).
-            log "WARNING: pkg_add -u rc=$rc with the custom repo skipped — official updates applied, custom packages deferred"
-            printf '%s\n' "$out" | tee -a "$LOG"
+        if [ "$rc" -eq 1 ] && [ -n "$customSkipped" ] \
+            && [ -z "$reportable" ] \
+            && printf '%s\n' "$out" | grep -q "Couldn't find updates for "; then
+            log_only "WARNING: pkg_add -u rc=$rc with the custom repo skipped — custom packages deferred" || exit 1
+            printf '%s\n' "$out" >>"$LOG" || exit 1
             exit 0
         fi
         log "pkg_add -u FAILED (rc=$rc) — investigate"
@@ -298,6 +312,7 @@ pkgs)
         exit 1
     fi
     [ -z "$out" ] && exit 0     # nothing to update
+    [ -n "$customSkipped" ] && [ -z "$reportable" ] && exit 0
     log "pkg_add -u updated:"
     printf '%s\n' "$out" | tee -a "$LOG"
     # quirks-only bumps happen regularly; they are no reason to bounce daemons.
@@ -313,14 +328,14 @@ audit)
     # packages with security issues which cannot be updated. Run this after
     # the normal pkgs job so its mandatory quirks refresh has already run.
     #
-    # Unlike pkgs, an unavailable custom repo is a failure here. Falling back
-    # to installpath would hide the status of dserver, dtail, gogios, and
-    # other fleet packages, which is not an auditable all-packages result.
+    # An unavailable custom repo defers the full audit without cron mail.
+    # Do not fall back to installpath and label a partial audit clean: that
+    # would hide the status of dserver, dtail, gogios and other fleet packages.
     ver=$(uname -r)
     custom="https://pkgrepo.f3s.buetow.org/openbsd/${ver}/packages/amd64/"
     if ! pkgrepo_up; then
-        log "package audit FAILED: ${custom} not operational; custom packages cannot be audited"
-        exit 1
+        log_only "package audit SKIPPED: ${custom} not operational; custom packages cannot be audited" || exit 1
+        exit 0
     fi
     PKG_PATH="installpath:${custom}"
     export PKG_PATH
