@@ -2,5 +2,5 @@ apiVersion: v2
 name: player
 description: Player media app for f3s
 type: application
-version: 0.1.10
-appVersion: "9b78dc2"
+version: 0.1.11
+appVersion: "cec9cb8"
