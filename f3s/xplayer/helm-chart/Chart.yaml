@@ -2,5 +2,5 @@ apiVersion: v2
 name: xplayer
 description: Extra Player media app instance for f3s
 type: application
-version: 0.1.12
-appVersion: "c3e46f5"
+version: 0.1.13
+appVersion: "15a9502"
