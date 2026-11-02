@@ -33,7 +33,9 @@ ports from that inventory, without config, credentials or environment values.
 | `kube-system` | Pods in all namespaces → CoreDNS TCP/UDP 53; Prometheus → CoreDNS 9153 and Traefik 9100; host API servers → metrics-server 10250; frontends/LAN relays/ServiceLB → Traefik web ports, scoped below. |
 
 Web ports use the destination container/endpoint port, not the Service port:
-Forgejo 3000, pkgrepo 8080, koreader 17200 and opodsync 8081 are examples.
+Forgejo 3000, pkgrepo 8080 and koreader 17200 are examples.
+The retired opodsync backend and its ingress allowance were removed (task a04);
+its retained volume is outside this policy set.
 Traefik is scoped by **both** its kube-system namespace and workload labels.
 Database allows select the owning app within services: an unrelated services
 pod, another app, Traefik or a matching label in another namespace cannot use them.
