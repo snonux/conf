@@ -20,3 +20,8 @@ no local copy and no connected source; their global versions originate from
 the disconnected Galaxy Tab S10 FE. They need that source to reconnect.
 The user asked to ignore these pending files for now on task qf3; replication
 is not fully complete. No files or database records were deleted or reset.
+
+Monitoring: `tools/check_syncthing` (Nagios/Gogios plugin) reports
+out-of-sync folders via the REST API. Give it an ignore file with the rule
+`Galaxy Tab S10 FE DCIM; max-items=4; max-bytes=20226448` for this case,
+so only a further backlog in that folder alerts.

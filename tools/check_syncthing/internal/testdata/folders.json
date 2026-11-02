@@ -1,0 +1,24 @@
+[
+  {
+    "id": "docs-1234",
+    "label": "Documents",
+    "filesystemType": "basic",
+    "path": "/var/syncthing/data/Documents",
+    "type": "sendreceive",
+    "devices": [{"deviceID": "AAAAAAA-AAAAAAA-AAAAAAA-AAAAAAA-AAAAAAA-AAAAAAA-AAAAAAA-AAAAAAA", "introducedBy": "", "encryptionPassword": ""}],
+    "rescanIntervalS": 3600,
+    "fsWatcherEnabled": true,
+    "paused": false
+  },
+  {
+    "id": "sm-x526b-photos",
+    "label": "Galaxy Tab S10 FE DCIM",
+    "filesystemType": "basic",
+    "path": "/var/syncthing/data/GalaxyTabDCIM",
+    "type": "receiveonly",
+    "devices": [],
+    "rescanIntervalS": 3600,
+    "fsWatcherEnabled": true,
+    "paused": false
+  }
+]
