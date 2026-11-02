@@ -27,6 +27,12 @@ alias still points to its matching full chain. Native `relayd -n`, reload and
 service checks passed. DNS, ACME configuration, fishfinger's files and other
 certificate pairs were unchanged.
 
+All 18 configured strict legacy HTTPS checks on each frontend passed as
+`_gogios` (36 checks total), including chain/name validation and HTTP 200 over
+IPv4 and IPv6. A deliberately wrong fingerprint was rejected by the staging
+validator. Subsequent normal Gogios runs cleared both warnings; both frontend
+state reports show the repaired checks as OK.
+
 ## Future renewal
 
 This was a targeted manual repair, not automatic certificate replication.
