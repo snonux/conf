@@ -114,13 +114,14 @@ done`),
 //
 // Gogios renders the old embedded-Perl configuration from the shared Go
 // topology, retaining stable check names because peer state keys use them.
-// A missing check_shuriken_age plugin source (shurikenAgePlugin) is reported
-// as a declaration error before anything is declared, which fails the
-// recording with its actionable message; the Gogios resources, whose
-// schedules depend on the plugin, are then not declared at all.
+// A missing check_shuriken_age plugin source (shurikenAgePlugin) or
+// check_syncthing binary (syncthingPlugin) is reported as a declaration
+// error before anything is declared, which fails the recording with its
+// actionable message; the Gogios resources, whose schedules depend on the
+// plugins, are then not declared at all.
 func (Monitoring) Gogios() {
-	pluginSource := shurikenAgePlugin()
-	if pluginSource == "" {
+	pluginSource, syncthingSource := shurikenAgePlugin(), syncthingPlugin()
+	if pluginSource == "" || syncthingSource == "" {
 		return
 	}
 	EachHost(func(server Server) {
@@ -132,20 +133,25 @@ func (Monitoring) Gogios() {
 		runDir := Dir("/var/run/gogios", Perm(0o755, "_gogios:_gogios"), DependsOn(account))
 		mute := installMuteControl(account)
 		config := File("/etc/gogios.json", WithContent(renderGogios(server)), Perm(0o640, "root:_gogios"), DependsOn(plugins, gogios, statusDir, runDir, mute))
+		syncthing := installSyncthingPlugin(syncthingSource, account)
+		if syncthing == nil {
+			return
+		}
 		plugin := InstallFile("/usr/local/bin/check_shuriken_age", pluginSource, RootExec)
+		cronDeps := DependsOn(append([]Dependency{config, plugin}, syncthing...)...)
 		removeStaleDNSRoleFiles()
 		gogiosUser := WithCronUser("_gogios")
 		// -renotify and -force run at minute 2, off the */5 grid: Gogios
 		// (1.6.0+) serialises runs with a lock in /var/run/gogios, where a
 		// plain run skips and these two wait, so the offset keeps them from
 		// waiting on (or re-running right after) a plain run.
-		CronAt("gogios-renotify", "2 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		CronAt("gogios-renotify", "2 7 * * *", "/usr/local/bin/gogios -renotify >/dev/null 2>&1", gogiosUser, cronDeps)
 		// Checks run around the clock (audit item 23): an 08-22 window let an
 		// overnight outage go unnoticed until the morning. Gogios has no
 		// notification quiet hours, so overnight CRITICAL changes mail too;
 		// WARNING/UNKNOWN changes still wait for the 07:02 renotify.
-		CronAt("gogios-checks", "*/5 * * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
-		CronAt("gogios-force", "2 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, DependsOn(config, plugin))
+		CronAt("gogios-checks", "*/5 * * * *", "/usr/local/bin/gogios >/dev/null 2>&1", gogiosUser, cronDeps)
+		CronAt("gogios-force", "2 3 * * 0", "/usr/local/bin/gogios -force >/dev/null 2>&1", gogiosUser, cronDeps)
 		File("/etc/rc.local",
 			WithLine("if [ ! -d /var/run/gogios ]; then mkdir /var/run/gogios; fi"),
 			WithLine("chown _gogios /var/run/gogios"),
@@ -350,6 +356,7 @@ func gogiosChecks(server Server) map[string]gogiosCheck {
 	addFrontendServiceChecks(checks)
 	addSystemChecks(checks, server)
 	addShurikenChecks(checks)
+	addSyncthingChecks(checks)
 	return checks
 }
 

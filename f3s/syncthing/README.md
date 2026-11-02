@@ -21,7 +21,14 @@ the disconnected Galaxy Tab S10 FE. They need that source to reconnect.
 The user asked to ignore these pending files for now on task qf3; replication
 is not fully complete. No files or database records were deleted or reset.
 
-Monitoring: `tools/check_syncthing` (Nagios/Gogios plugin) reports
-out-of-sync folders via the REST API. Give it an ignore file with the rule
+Monitoring: Gogios check `Check Syncthing` on the frontends runs
+`tools/check_syncthing` against https://syncthing.f3s.buetow.org every 30
+minutes (paused while f3s is taken down). It pages (CRITICAL) on a stuck
+folder, a transfer out of sync for over 1h, or a missing/rejected API key.
+Its ignore list `/etc/check_syncthing/ignore` holds
 `Galaxy Tab S10 FE DCIM; max-items=4; max-bytes=20226448` for this case,
-so only a further backlog in that folder alerts.
+so only a further backlog in that folder alerts. Deployed by
+`./gonf.sh cluster frontends frontends_gogios` (`gonf/frontends/syncthing.go`)
+after `mage buildOpenBSD` in `tools/check_syncthing`; the API key comes from
+`gonf/secrets/frontends/etc/check_syncthing/api.key` (untracked; copy of
+`<apikey>` in the config PV's `config.xml`).

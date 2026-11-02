@@ -64,6 +64,13 @@ func PiholeAsset(relativePath string) string {
 	return filepath.Join(Pihole, relativePath)
 }
 
+// ToolAsset returns the controller-local path of a file under the
+// repository's tools/ tree, such as the controller-built
+// check_syncthing/check_syncthing.openbsd-amd64.
+func ToolAsset(relativePath string) string {
+	return filepath.Join(Conf, "tools", relativePath)
+}
+
 // RNodeAsset returns the controller-local path of a source-controlled r-node
 // asset such as nfs-mount-monitor/nfs-mount-monitor.service.
 func RNodeAsset(relativePath string) string {
