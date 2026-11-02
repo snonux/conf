@@ -17,21 +17,31 @@ const (
 	syncthingConfDir    = "/etc/check_syncthing"
 	syncthingKeyFile    = syncthingConfDir + "/api.key"
 	syncthingIgnoreFile = syncthingConfDir + "/ignore"
-	// syncthingStateDir keeps when each folder first went out of sync, for
-	// the WARNING-to-CRITICAL escalation. It is under /var/db, not
-	// /var/run, so the durations survive a frontend reboot.
+	// syncthingStateDir holds both checks' state (one file each): when
+	// each folder first went out of sync, and the freshness counters and
+	// clocks. It is under /var/db, not /var/run, so the durations survive
+	// a frontend reboot.
 	syncthingStateDir = "/var/db/check_syncthing"
 	syncthingURL      = "https://syncthing.f3s.buetow.org"
 )
 
-// syncthingIgnore lists known out-of-sync folders that must not alert.
-// Galaxy Tab S10 FE DCIM has 4 pending files whose source device is
-// disconnected (f3s/syncthing/README.md); the limits make it alert again if
-// that backlog grows.
+// syncthingIgnore lists known out-of-sync folders and devices that must not
+// alert. Galaxy Tab S10 FE DCIM has 4 pending files whose source device,
+// the Galaxy Tab S10 FE, is disconnected (f3s/syncthing/README.md); the
+// limits make the folder alert again if that backlog grows, and the device
+// rule keeps the tablet out of the freshness check.
 const syncthingIgnore = `# check_syncthing ignore list, managed by gonf (frontends_gogios).
 # <folder ID or label>[; max-items=N][; max-bytes=N]
 Galaxy Tab S10 FE DCIM; max-items=4; max-bytes=20226448
+# device: <device ID or name>
+device: Galaxy Tab S10 FE
 `
+
+// syncthingPeers are the devices expected to sync regularly, with how long
+// each may stay unseen before Check Syncthing Freshness warns. They are the
+// peers connected when the check was added (2026-11-02); adjust when a
+// device is replaced.
+var syncthingPeers = List("earth.lan.buetow.org=72h", "Pixel 7 Pro Google=72h")
 
 // syncthingPlugin is the controller-built OpenBSD binary of check_syncthing.
 // It is not committed: build it with `mage buildOpenBSD` in
@@ -62,21 +72,31 @@ func installSyncthingPlugin(source string, account Resource) []Dependency {
 }
 
 // addSyncthingChecks adds "Check Syncthing", which pages on stuck folders
-// and on transfers that stay out of sync for over an hour. It runs every
-// 30 minutes, off the */5 grid, because /rest/db/status is expensive; the
-// 8s timeout stays under CheckTimeoutS (10s). It pauses while f3s is taken
-// down and depends on the Syncthing HTTPS checks, so an unreachable cluster
-// reports there instead of here.
+// and on transfers that stay out of sync for over an hour, and "Check
+// Syncthing Freshness", which warns when no peer sent data for 24h (paging
+// after 24h more) or a syncthingPeers device stays unseen. Both run every
+// 30 minutes, off the */5 grid (/rest/db/status is expensive; the freshness
+// escalation wants steady sampling); the 8s timeout stays under
+// CheckTimeoutS (10s). They pause while f3s is taken down and depend on the
+// Syncthing HTTPS checks, so an unreachable cluster reports there instead.
 func addSyncthingChecks(checks map[string]gogiosCheck) {
 	host := strings.TrimPrefix(syncthingURL, "https://")
-	checks["Check Syncthing"] = gogiosCheck{
-		Plugin: syncthingPluginPath,
-		Args: List("-url", syncthingURL, "-api-key-file", syncthingKeyFile,
-			"-ignore-file", syncthingIgnoreFile, "-state-dir", syncthingStateDir,
-			"-escalate-after", "1h", "-timeout", "8s"),
-		OnlyIfNotExists: f3sTakenDown,
-		RandomSpread:    10,
-		RunInterval:     1800,
-		DependsOn:       List("Check HTTPS IPv4 "+host, "Check HTTPS IPv6 "+host),
+	common := List("-url", syncthingURL, "-api-key-file", syncthingKeyFile,
+		"-ignore-file", syncthingIgnoreFile, "-state-dir", syncthingStateDir, "-timeout", "8s")
+	check := func(args ...string) gogiosCheck {
+		return gogiosCheck{
+			Plugin:          syncthingPluginPath,
+			Args:            append(append([]string(nil), common...), args...),
+			OnlyIfNotExists: f3sTakenDown,
+			RandomSpread:    10,
+			RunInterval:     1800,
+			DependsOn:       List("Check HTTPS IPv4 "+host, "Check HTTPS IPv6 "+host),
+		}
 	}
+	checks["Check Syncthing"] = check("-escalate-after", "1h")
+	freshness := List("-mode", "freshness", "-period", "24h", "-escalate-after", "24h")
+	for _, peer := range syncthingPeers {
+		freshness = append(freshness, "-device", peer)
+	}
+	checks["Check Syncthing Freshness"] = check(freshness...)
 }

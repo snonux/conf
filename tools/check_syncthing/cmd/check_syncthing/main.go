@@ -25,8 +25,17 @@ func main() {
 	fs.StringVar(&cfg.APIKeyEnv, "api-key-env", "SYNCTHING_API_KEY", "environment variable holding the API key")
 	fs.StringVar(&cfg.IgnoreFile, "ignore-file", "", "file of known out-of-sync folders to ignore")
 	fs.StringVar(&cfg.StateDir, "state-dir", "", "writable directory for out-of-sync durations; empty disables escalation")
-	fs.DurationVar(&cfg.EscalateAfter, "escalate-after", time.Hour, "escalate a WARNING lasting this long to CRITICAL (needs -state-dir; 0 disables)")
+	fs.DurationVar(&cfg.EscalateAfter, "escalate-after", time.Hour, "escalate a lasting WARNING (folders) or stale transfer (freshness) to CRITICAL after this long (needs -state-dir; 0 disables)")
 	fs.DurationVar(&cfg.Timeout, "timeout", 30*time.Second, "timeout for all API calls")
+	fs.StringVar(&cfg.Mode, "mode", internal.ModeFolders, "folders: out-of-sync folders; freshness: data received from a peer within -period and -device peers seen")
+	fs.DurationVar(&cfg.Period, "period", 24*time.Hour, "freshness: warn when no peer sent data for this long")
+	fs.Func("device", "freshness: warn when <device ID or name>=<duration> was not seen for that long (repeatable)", func(s string) error {
+		rule, err := internal.ParseDeviceRule(s)
+		if err == nil {
+			cfg.Devices = append(cfg.Devices, rule)
+		}
+		return err
+	})
 	version := fs.Bool("version", false, "print the version and exit")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {

@@ -12,12 +12,14 @@ import (
 // noLimit marks an ignore rule limit that was not set.
 const noLimit int64 = -1
 
-// IgnoreRule accepts an out-of-sync folder as known. Folder matches the
-// folder ID or label exactly. MaxItems/MaxBytes, when set, bound the
-// accepted needTotalItems/needBytes: a folder that falls further behind
-// than the recorded case alerts again.
+// IgnoreRule accepts an out-of-sync folder or a device as known. Folder
+// matches the folder ID or label exactly. MaxItems/MaxBytes, when set,
+// bound the accepted needTotalItems/needBytes: a folder that falls further
+// behind than the recorded case alerts again. A device rule (Device set,
+// Folder empty) keeps that device out of the freshness checks.
 type IgnoreRule struct {
 	Folder   string
+	Device   string
 	MaxItems int64
 	MaxBytes int64
 }
@@ -42,6 +44,7 @@ func LoadIgnoreFile(path string) ([]IgnoreRule, error) {
 // ParseIgnoreRules parses one rule per line:
 //
 //	<folder ID or label>[; max-items=<n>][; max-bytes=<n>]
+//	device: <device ID or name>
 //
 // Blank lines and lines starting with # are skipped.
 func ParseIgnoreRules(r io.Reader) ([]IgnoreRule, error) {
@@ -66,7 +69,7 @@ func ParseIgnoreRules(r io.Reader) ([]IgnoreRule, error) {
 
 // Matches reports whether the rule covers folder in its current status.
 func (r IgnoreRule) Matches(folder Folder, status FolderStatus) bool {
-	if r.Folder != folder.ID && r.Folder != folder.Label {
+	if r.Folder == "" || (r.Folder != folder.ID && r.Folder != folder.Label) {
 		return false
 	}
 	if r.MaxItems != noLimit && status.NeedTotalItems > r.MaxItems {
@@ -75,7 +78,19 @@ func (r IgnoreRule) Matches(folder Folder, status FolderStatus) bool {
 	return r.MaxBytes == noLimit || status.NeedBytes <= r.MaxBytes
 }
 
+// MatchesDevice reports whether the rule ignores device.
+func (r IgnoreRule) MatchesDevice(device Device) bool {
+	return r.Device != "" && (r.Device == device.ID || r.Device == device.Name)
+}
+
 func parseIgnoreLine(line string) (IgnoreRule, error) {
+	if rest, ok := strings.CutPrefix(line, "device:"); ok {
+		rule := IgnoreRule{Device: strings.TrimSpace(rest), MaxItems: noLimit, MaxBytes: noLimit}
+		if rule.Device == "" || strings.Contains(rule.Device, ";") {
+			return rule, fmt.Errorf("device rule needs one device ID or name and no conditions")
+		}
+		return rule, nil
+	}
 	parts := strings.Split(line, ";")
 	rule := IgnoreRule{Folder: strings.TrimSpace(parts[0]), MaxItems: noLimit, MaxBytes: noLimit}
 	if rule.Folder == "" {

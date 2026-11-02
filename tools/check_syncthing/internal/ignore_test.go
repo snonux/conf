@@ -29,6 +29,16 @@ func TestParseIgnoreRules(t *testing.T) {
 		{name: "negative", in: "x; max-bytes=-1", wantErr: "non-negative integer"},
 		{name: "not a number", in: "x; max-items=four", wantErr: "non-negative integer"},
 		{name: "unknown key", in: "\nx; max-files=1", wantErr: "line 2: unknown condition"},
+		{
+			name: "device rule next to a folder rule",
+			in:   "device:  Galaxy Tab S10 FE \nGalaxy Tab S10 FE DCIM\n",
+			want: []IgnoreRule{
+				{Device: "Galaxy Tab S10 FE", MaxItems: noLimit, MaxBytes: noLimit},
+				{Folder: "Galaxy Tab S10 FE DCIM", MaxItems: noLimit, MaxBytes: noLimit},
+			},
+		},
+		{name: "device rule without device", in: "device:", wantErr: "device rule needs"},
+		{name: "device rule with conditions", in: "device: x; max-items=1", wantErr: "no conditions"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -59,11 +69,12 @@ func TestIgnoreRuleMatches(t *testing.T) {
 		status FolderStatus
 		want   bool
 	}{
-		{"label within limits", IgnoreRule{"Galaxy Tab S10 FE DCIM", 4, 20226448}, galaxy, known, true},
-		{"id without limits", IgnoreRule{"sm-x526b-photos", noLimit, noLimit}, galaxy, FolderStatus{NeedTotalItems: 999}, true},
-		{"more items than recorded", IgnoreRule{"Galaxy Tab S10 FE DCIM", 4, noLimit}, galaxy, FolderStatus{NeedTotalItems: 5}, false},
-		{"more bytes than recorded", IgnoreRule{"Galaxy Tab S10 FE DCIM", noLimit, 20226448}, galaxy, FolderStatus{NeedBytes: 20226449}, false},
-		{"other folder", IgnoreRule{"Galaxy", noLimit, noLimit}, galaxy, known, false},
+		{"label within limits", IgnoreRule{Folder: "Galaxy Tab S10 FE DCIM", MaxItems: 4, MaxBytes: 20226448}, galaxy, known, true},
+		{"id without limits", IgnoreRule{Folder: "sm-x526b-photos", MaxItems: noLimit, MaxBytes: noLimit}, galaxy, FolderStatus{NeedTotalItems: 999}, true},
+		{"more items than recorded", IgnoreRule{Folder: "Galaxy Tab S10 FE DCIM", MaxItems: 4, MaxBytes: noLimit}, galaxy, FolderStatus{NeedTotalItems: 5}, false},
+		{"more bytes than recorded", IgnoreRule{Folder: "Galaxy Tab S10 FE DCIM", MaxItems: noLimit, MaxBytes: 20226448}, galaxy, FolderStatus{NeedBytes: 20226449}, false},
+		{"other folder", IgnoreRule{Folder: "Galaxy", MaxItems: noLimit, MaxBytes: noLimit}, galaxy, known, false},
+		{"device rule never matches a folder", IgnoreRule{Device: "Galaxy Tab S10 FE DCIM", MaxItems: noLimit, MaxBytes: noLimit}, galaxy, known, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // maxBodyBytes bounds every REST response the plugin reads.
@@ -32,6 +33,26 @@ type FolderStatus struct {
 	NeedBytes      int64  `json:"needBytes"`
 	PullErrors     int64  `json:"pullErrors"`
 	Errors         int64  `json:"errors"`
+}
+
+// Device is the subset of a /rest/config/devices entry the check uses.
+type Device struct {
+	ID   string `json:"deviceID"`
+	Name string `json:"name"`
+}
+
+// Connection is the subset of a /rest/system/connections entry the check
+// uses. InBytesTotal sums the bytes received over the device's current
+// connections, protocol traffic included: it is 0 while the device is
+// disconnected and drops whenever it reconnects.
+type Connection struct {
+	Connected    bool  `json:"connected"`
+	InBytesTotal int64 `json:"inBytesTotal"`
+}
+
+// DeviceStats is the subset of a /rest/stats/device entry the check uses.
+type DeviceStats struct {
+	LastSeen time.Time `json:"lastSeen"`
 }
 
 // Client queries a Syncthing REST API. The API key only ever leaves the
@@ -62,6 +83,36 @@ func (c Client) FolderStatus(ctx context.Context, id string) (FolderStatus, erro
 	var status FolderStatus
 	err := c.get(ctx, "/rest/db/status", url.Values{"folder": {id}}, &status)
 	return status, err
+}
+
+// Devices lists the configured devices, including this instance itself.
+func (c Client) Devices(ctx context.Context) ([]Device, error) {
+	var devices []Device
+	if err := c.get(ctx, "/rest/config/devices", nil, &devices); err != nil {
+		return nil, err
+	}
+	return devices, nil
+}
+
+// Connections returns the connection state of every remote device, keyed
+// by device ID.
+func (c Client) Connections(ctx context.Context) (map[string]Connection, error) {
+	var body struct {
+		Connections map[string]Connection `json:"connections"`
+	}
+	if err := c.get(ctx, "/rest/system/connections", nil, &body); err != nil {
+		return nil, err
+	}
+	return body.Connections, nil
+}
+
+// DeviceStats returns when each device was last seen, keyed by device ID.
+func (c Client) DeviceStats(ctx context.Context) (map[string]DeviceStats, error) {
+	var stats map[string]DeviceStats
+	if err := c.get(ctx, "/rest/stats/device", nil, &stats); err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
 
 // get fetches path and decodes the JSON body into out. Errors carry the

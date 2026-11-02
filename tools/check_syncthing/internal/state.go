@@ -23,28 +23,44 @@ type State struct {
 // an unreadable directory is an error. A corrupt file is discarded (an
 // empty state that the next save overwrites) so it cannot wedge the check.
 func LoadState(dir string) (State, error) {
-	empty := State{FirstSeen: map[string]time.Time{}}
-	data, err := os.ReadFile(filepath.Join(dir, stateFileName))
-	if errors.Is(err, fs.ErrNotExist) {
-		return empty, nil
+	st, err := readStateFile[State](dir, stateFileName)
+	if st.FirstSeen == nil {
+		st.FirstSeen = map[string]time.Time{}
 	}
-	if err != nil {
-		return empty, fmt.Errorf("read state: %w", err)
-	}
-	var st State
-	if json.Unmarshal(data, &st) != nil || st.FirstSeen == nil {
-		return empty, nil
-	}
-	return st, nil
+	return st, err
 }
 
-// Save writes the state atomically (temporary file plus rename) to dir.
+// Save writes the state atomically to dir.
 func (s State) Save(dir string) error {
-	data, err := json.Marshal(s)
+	return writeStateFile(dir, stateFileName, s)
+}
+
+// readStateFile decodes dir/name. A missing or corrupt file gives the zero
+// value and no error, so it cannot wedge the check; only a read failure is
+// an error.
+func readStateFile[T any](dir, name string) (T, error) {
+	var zero, v T
+	data, err := os.ReadFile(filepath.Join(dir, name))
+	if errors.Is(err, fs.ErrNotExist) {
+		return zero, nil
+	}
+	if err != nil {
+		return zero, fmt.Errorf("read state: %w", err)
+	}
+	if json.Unmarshal(data, &v) != nil {
+		return zero, nil
+	}
+	return v, nil
+}
+
+// writeStateFile writes v to dir/name atomically (temporary file plus
+// rename).
+func writeStateFile(dir, name string, v any) error {
+	data, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("encode state: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, stateFileName+".*")
+	tmp, err := os.CreateTemp(dir, name+".*")
 	if err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
@@ -56,7 +72,7 @@ func (s State) Save(dir string) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
-	if err := os.Rename(tmp.Name(), filepath.Join(dir, stateFileName)); err != nil {
+	if err := os.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 	return nil

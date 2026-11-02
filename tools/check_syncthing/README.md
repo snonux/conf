@@ -34,6 +34,9 @@ check_syncthing -url https://syncthing.f3s.buetow.org \
 | `-state-dir` | | writable directory for `check_syncthing.json`; empty disables durations and escalation |
 | `-escalate-after` | `1h` | a WARNING that lasts this long becomes CRITICAL; `0` disables |
 | `-timeout` | `30s` | total time for all API calls |
+| `-mode` | `folders` | `folders` (above) or `freshness` (below) |
+| `-period` | `24h` | freshness: WARNING when no peer sent data for this long |
+| `-device` | | freshness: `<device ID or name>=<duration>`, WARNING when that device was neither connected nor seen for longer; repeatable |
 | `-version` | | print the version |
 
 The API key is sent only in the `X-API-Key` header and never printed;
@@ -52,6 +55,8 @@ One rule per line, `#` comments:
 ```
 # <folder ID or label>[; max-items=<n>][; max-bytes=<n>]
 Galaxy Tab S10 FE DCIM; max-items=4; max-bytes=20226448
+# device: <device ID or name>   (freshness mode only)
+device: Galaxy Tab S10 FE
 ```
 
 A folder whose ID or label matches is reported as `ignored` and keeps the
@@ -59,6 +64,36 @@ check OK, as long as its `needTotalItems`/`needBytes` stay within the
 limits. If it falls further behind, or enters state `error`, it alerts
 again. The rule above is the known case from `f3s/syncthing/README.md`:
 four photos whose only source, the Galaxy Tab S10 FE, is disconnected.
+
+A `device:` rule keeps that device out of the freshness mode: its bytes
+do not count as received data and a `-device` rule for it never fires.
+
+## Freshness mode
+
+`-mode freshness -state-dir DIR` proves that Syncthing actually receives
+data, which the folder mode cannot see (an idle folder is normally healthy):
+
+- **Transfer:** each run stores every peer's `inBytesTotal` from
+  `/rest/system/connections` in `DIR/check_syncthing_freshness.json`. Data
+  arrived when a counter grew since the last run. The counter covers the
+  peer's current connections only (0 while disconnected, lower after a
+  reconnect or a Syncthing restart), so a counter that shrank, or a new
+  peer, only sets a baseline. No data for `-period` is WARNING, and
+  CRITICAL once that lasted `-escalate-after` more. The counters include
+  protocol traffic, so in practice this alerts when no peer was connected
+  for the period. A peer that connects, syncs and disconnects entirely
+  between two runs is not seen.
+- **Baseline:** the first run, and the first after a pause of more than 2h
+  between runs (check paused during an f3s takedown, frontend failover),
+  only records a baseline and reports OK, so stale state never alerts.
+- **Peers:** each `-device` peer must be connected or have a `lastSeen`
+  (`/rest/stats/device`) within its duration, else WARNING. An unknown
+  device name is UNKNOWN.
+
+```
+SYNCTHING FRESHNESS OK: last data from a peer 12m ago
+SYNCTHING FRESHNESS CRITICAL: no data from any peer for 49h00m (limit 24h00m) (escalated); Pixel 7 Pro not seen for 80h00m (limit 72h00m)
+```
 
 ## Escalation state
 

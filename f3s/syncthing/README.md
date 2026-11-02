@@ -27,7 +27,11 @@ minutes (paused while f3s is taken down). It pages (CRITICAL) on a stuck
 folder, a transfer out of sync for over 1h, or a missing/rejected API key.
 Its ignore list `/etc/check_syncthing/ignore` holds
 `Galaxy Tab S10 FE DCIM; max-items=4; max-bytes=20226448` for this case,
-so only a further backlog in that folder alerts. Deployed by
+so only a further backlog in that folder alerts. `Check Syncthing
+Freshness` (same plugin, `-mode freshness`, every 30 minutes) warns when no
+peer sent any data for 24h and pages after 24h more, and warns when
+`earth.lan.buetow.org` or `Pixel 7 Pro Google` stays unseen for 72h; the
+ignore list's `device: Galaxy Tab S10 FE` keeps the tablet out. Deployed by
 `./gonf.sh cluster frontends frontends_gogios` (`gonf/frontends/syncthing.go`)
 after `mage buildOpenBSD` in `tools/check_syncthing`; the API key comes from
 `gonf/secrets/frontends/etc/check_syncthing/api.key` (untracked; copy of

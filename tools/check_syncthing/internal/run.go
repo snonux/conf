@@ -20,6 +20,13 @@ type Config struct {
 	StateDir      string
 	EscalateAfter time.Duration
 	Timeout       time.Duration
+	// Mode is ModeFolders or ModeFreshness.
+	Mode string
+	// Period and Devices configure ModeFreshness: data must arrive from
+	// some peer within Period, and each device must be seen within its
+	// MaxAge.
+	Period  time.Duration
+	Devices []DeviceRule
 }
 
 // Result is the plugin outcome: one summary line and its exit level.
@@ -28,11 +35,23 @@ type Result struct {
 	Line  string
 }
 
-// Run performs one check. A missing or rejected API key is CRITICAL, so a
-// broken key pages at once instead of waiting for a renotify; other API,
-// configuration and decode failures are UNKNOWN. The state is only touched
-// once the API answered completely.
+// Modes select what one run checks.
+const (
+	ModeFolders   = "folders"
+	ModeFreshness = "freshness"
+)
+
+// Run performs one check in cfg.Mode. A missing or rejected API key is
+// CRITICAL, so a broken key pages at once instead of waiting for a
+// renotify; other API, configuration and decode failures are UNKNOWN. The
+// state is only touched once the API answered completely.
 func Run(ctx context.Context, cfg Config, now time.Time) Result {
+	if cfg.Mode == "" {
+		cfg.Mode = ModeFolders
+	}
+	if cfg.Mode != ModeFolders && cfg.Mode != ModeFreshness {
+		return unknown(fmt.Errorf("unknown mode %q (want %s or %s)", cfg.Mode, ModeFolders, ModeFreshness))
+	}
 	key, err := readAPIKey(cfg)
 	if err != nil {
 		return critical(err)
@@ -51,31 +70,51 @@ func Run(ctx context.Context, cfg Config, now time.Time) Result {
 	httpClient := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	entries, err := fetchEntries(ctx, NewClient(cfg.URL, key, httpClient))
-	if errors.Is(err, ErrKeyRejected) {
-		return critical(err)
+	client := NewClient(cfg.URL, key, httpClient)
+	if cfg.Mode == ModeFreshness {
+		return runFreshness(ctx, client, rules, cfg, now)
 	}
+	return runFolders(ctx, client, rules, cfg, now)
+}
+
+// runFolders reports out-of-sync folders, escalating a lasting WARNING
+// through the state in cfg.StateDir when set.
+func runFolders(ctx context.Context, client Client, rules []IgnoreRule, cfg Config, now time.Time) Result {
+	entries, err := fetchEntries(ctx, client)
 	if err != nil {
-		return unknown(err)
+		return apiFailure(err)
 	}
 	report := Classify(entries, rules)
 	if cfg.StateDir == "" {
 		return Result{Level: report.Level(), Line: report.Summary()}
 	}
 	report, stateErr := applyState(report, cfg, now)
-	result := Result{Level: report.Level(), Line: report.Summary()}
+	return withStateError(Result{Level: report.Level(), Line: report.Summary()}, stateErr)
+}
+
+// withStateError folds a state error into result: escalation cannot work
+// without state, so it never passes as OK or WARNING, while a CRITICAL
+// that is already known is kept.
+func withStateError(result Result, stateErr error) Result {
 	switch {
 	case stateErr == nil:
+		return result
 	case result.Level == Critical:
-		// Keep a CRITICAL that is already known.
 		result.Line += "; " + stateErr.Error()
+		return result
 	default:
-		// Escalation cannot work without state: never let that pass as OK
-		// or WARNING.
-		result = Result{Level: Unknown, Line: "SYNCTHING UNKNOWN: " + stateErr.Error() +
+		return Result{Level: Unknown, Line: "SYNCTHING UNKNOWN: " + stateErr.Error() +
 			"; was " + strings.TrimPrefix(result.Line, "SYNCTHING ")}
 	}
-	return result
+}
+
+// apiFailure maps a failed API call: a rejected key is CRITICAL, anything
+// else UNKNOWN.
+func apiFailure(err error) Result {
+	if errors.Is(err, ErrKeyRejected) {
+		return critical(err)
+	}
+	return unknown(err)
 }
 
 func fetchEntries(ctx context.Context, client Client) ([]Entry, error) {
