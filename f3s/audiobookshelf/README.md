@@ -30,11 +30,11 @@ renewal configuration on both frontends.
 ## Rollback data
 
 No new snapshot was created, as requested. The held snapshot from the
-Jellyfin migration already covers the original Audiobookshelf paths:
+Jellyfin migration covered the original Audiobookshelf paths:
 `zdata/enc/nfsdata@jellyfin-retirement-20261017T101941Z` on f0, with hold
-`jellyfin-retirement`. Existing cleanup task `rf3`, due 2026-10-31
-10:19:41 UTC, must verify both migrations before releasing that hold and
-deleting the snapshot.
+`jellyfin-retirement`. Cleanup task `rf3` verified both migrations on
+2026-11-02, released that hold and destroyed the snapshot; it no longer
+exists.
 
 Current Player data and Audiobookshelf configuration were separately backed
 up while both applications were stopped. The private backup and migration
@@ -51,8 +51,8 @@ in its own database.
 
 To roll back, stop Player, restore the two trees to their original paths,
 restore the archived Audiobookshelf tree, and restore the chart/Application
-and frontend site entry from git history. Restore individual paths from the
-held snapshot only if necessary; do not roll back the shared NFS dataset.
+and frontend site entry from git history. The held snapshot is gone, so the
+archive and the backups above are the only rollback data.
 
 ## Verification and remaining format limitations
 
@@ -87,8 +87,7 @@ shares on all three clients. Private verification records are under
 
 One source-data limitation remains: an MP4 fails FFprobe with invalid data and
 is not indexed. Its original is retained; the private `unindexed-files.json`
-records its path. Audiobookshelf remains retired; this update does not alter
-the held migration snapshot or cleanup task `rf3`.
+records its path. Audiobookshelf remains retired.
 
 Both frontend configurations validate and all services remain running.
 Authoritative DNS no longer serves the Audiobookshelf name or its www/standby

@@ -30,11 +30,11 @@ upstream and PF rule have also been removed on both frontends.
 
 All three applications were stopped before the held snapshot on f0:
 `zdata/enc/nfsdata@jellyfin-retirement-20261017T101941Z`, hold tag
-`jellyfin-retirement`. Task `rf3` releases and deletes only this snapshot
-on or after 2026-10-31 10:19:41 UTC, after checking the migration remains
-healthy. The snapshot is protected from ordinary retention pruning. It also covers the
-Audiobookshelf retirement; task `rf3` must verify both migrations before
-cleanup (see [Audiobookshelf](../audiobookshelf/README.md)).
+`jellyfin-retirement`. It also covered the Audiobookshelf retirement (see
+[Audiobookshelf](../audiobookshelf/README.md)). After the 14-day rollback
+window, task `rf3` verified both migrations on 2026-11-02, released the hold
+and destroyed this snapshot. The snapshot no longer exists; the archive
+below remains.
 
 Jellyfin's remaining configuration/data tree is retained privately at
 `/data/nfs/retired/jellyfin/20261017/`. No Jellyfin users, history, or database
@@ -45,8 +45,8 @@ verification records are at
 
 To roll back, stop Player/Xplayer, move the five library trees back, restore
 the Jellyfin tree and its chart/Application from git history, and restore
-frontend site/routing configuration. Restore individual paths from the held
-snapshot if needed; do not roll back the whole shared NFS dataset. Update
+frontend site/routing configuration. The held snapshot is gone, so restore
+from the retained archive, the backups above and git history. Update
 PV/PVC bindings through new resources rather than editing bound PV paths.
 
 Earlier deployment and library notes remain in
