@@ -67,8 +67,8 @@ After publishing the disabled Application and the frontend/policy changes:
    triggerfish inventory and hosts changes are excluded from this retirement.
 
    Deploy `frontends_nsd`, `frontends_acme`, `frontends_httpd`,
-   `frontends_relayd` and `frontends_dtail_checks` with the gonf frontend recipes.
-   Despite its historical task name, `frontends_dtail_checks` publishes only
+   `frontends_relayd` and `frontends_d_tail_checks` with the gonf frontend recipes.
+   Despite its historical task name, `frontends_d_tail_checks` publishes only
    `/etc/gogios.json`, avoiding unrelated package/plugin/account updates from
    the full `frontends_gogios` task. Review the targeted remote preview for
    any incidental recipe resources before applying; stop on unrelated drift.
