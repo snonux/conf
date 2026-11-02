@@ -21,7 +21,7 @@ from the vault; everything else comes from files below this directory.
 | `paths.FHostSecret("carp/vhid1.pass")` (`freebsd.CarpPassSecret`), f0/f1 | `Infra/carp-vhid1-pass` | none (imported from the hosts' `ifconfig_re0_alias0` in `/etc/rc.conf`, task gk2; rotated 2026-09-25, task 1l2) |
 | `paths.FrontendSecret("etc/rsync/shuriken.password")` | `Infra/rsync-shuriken` | none; task 9n3 preparation, provision only during an approved rollout |
 | `paths.FrontendSecret("etc/foostats/ip-hmac.key")` | `Infra/foostats-ip-hmac` | none; task an3 preparation, provision only during an approved rollout |
-| `paths.FrontendSecret("etc/check_syncthing/api.key")` | (none yet) | `gonf/secrets/frontends/etc/check_syncthing/api.key`, the `<apikey>` from Syncthing's `config.xml` (task 504) |
+| `paths.FrontendSecret("etc/check_syncthing/api.key")` | `Infra/syncthing-api-key` | `gonf/secrets/frontends/etc/check_syncthing/api.key`, the `<apikey>` from Syncthing's `config.xml` (task 504); migrated to the vault the same day |
 
 A frontend added later has no vault row and reads the file. Migrating another
 secret is one more table row; recipes keep the same logical path.

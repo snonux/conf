@@ -63,6 +63,7 @@ func setSecretProvider() error {
 		secret.Ref(freebsd.CarpPassSecret()):                            foostore.Field("Infra/carp-vhid1-pass", "Password"),
 		secret.Ref(paths.FrontendSecret("etc/rsync/shuriken.password")): foostore.Field("Infra/rsync-shuriken", "Password"),
 		secret.Ref(paths.FrontendSecret("etc/foostats/ip-hmac.key")):    foostore.Field("Infra/foostats-ip-hmac", "Password"),
+		secret.Ref(paths.FrontendSecret("etc/check_syncthing/api.key")): foostore.Field("Infra/syncthing-api-key", "Password"),
 	})
 	if err != nil {
 		return err
