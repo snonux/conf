@@ -8,8 +8,8 @@ It prints one summary line and exits with the Nagios code.
 |---|---|
 | 0 OK | every unpaused folder has nothing to pull, or matches an ignore rule |
 | 1 WARNING | a folder still pulls (`syncing`, `scanning`, ... with need > 0) or has pull errors |
-| 2 CRITICAL | a folder is stuck (`idle` with `needTotalItems` > 0), in state `error`, or a WARNING lasted `-escalate-after` |
-| 3 UNKNOWN | bad flags, no API key, bad ignore file, API unreachable, timeout, HTTP error (redirects are not followed, so the key never leaves for another host), bad JSON, or a state-dir error (unless already CRITICAL) |
+| 2 CRITICAL | a folder is stuck (`idle` with `needTotalItems` > 0), in state `error`, or a WARNING lasted `-escalate-after`; also a missing, empty or rejected API key (HTTP 401/403), so a broken key pages at once |
+| 3 UNKNOWN | bad flags, bad ignore file, API unreachable, timeout, HTTP error (redirects are not followed, so the key never leaves for another host), bad JSON, or a state-dir error (unless already CRITICAL) |
 
 ```
 SYNCTHING CRITICAL: 2 of 12 folders out of sync: Galaxy Tab S10 FE DCIM idle need=4 (20.2 MB) pullErrors=4, Sync with earth syncing need=273 (157.3 MB)

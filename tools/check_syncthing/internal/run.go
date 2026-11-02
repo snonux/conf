@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,12 +28,14 @@ type Result struct {
 	Line  string
 }
 
-// Run performs one check. API, configuration and decode failures are
-// UNKNOWN; the state is only touched once the API answered completely.
+// Run performs one check. A missing or rejected API key is CRITICAL, so a
+// broken key pages at once instead of waiting for a renotify; other API,
+// configuration and decode failures are UNKNOWN. The state is only touched
+// once the API answered completely.
 func Run(ctx context.Context, cfg Config, now time.Time) Result {
 	key, err := readAPIKey(cfg)
 	if err != nil {
-		return unknown(err)
+		return critical(err)
 	}
 	rules, err := LoadIgnoreFile(cfg.IgnoreFile)
 	if err != nil {
@@ -49,6 +52,9 @@ func Run(ctx context.Context, cfg Config, now time.Time) Result {
 		return http.ErrUseLastResponse
 	}}
 	entries, err := fetchEntries(ctx, NewClient(cfg.URL, key, httpClient))
+	if errors.Is(err, ErrKeyRejected) {
+		return critical(err)
+	}
 	if err != nil {
 		return unknown(err)
 	}
@@ -126,4 +132,8 @@ func readAPIKey(cfg Config) (string, error) {
 
 func unknown(err error) Result {
 	return Result{Level: Unknown, Line: "SYNCTHING UNKNOWN: " + err.Error()}
+}
+
+func critical(err error) Result {
+	return Result{Level: Critical, Line: "SYNCTHING CRITICAL: " + err.Error()}
 }

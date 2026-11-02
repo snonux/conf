@@ -14,6 +14,9 @@ import (
 // maxBodyBytes bounds every REST response the plugin reads.
 const maxBodyBytes = 8 << 20
 
+// ErrKeyRejected marks an HTTP 401/403 answer: Syncthing refused the API key.
+var ErrKeyRejected = errors.New("API key rejected")
+
 // Folder is the subset of a /rest/config/folders entry the check uses.
 type Folder struct {
 	ID     string `json:"id"`
@@ -79,7 +82,11 @@ func (c Client) get(ctx context.Context, path string, query url.Values, out any)
 		return fmt.Errorf("GET %s: %w", path, redactURLError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("GET %s: HTTP %d: %w", path, resp.StatusCode, ErrKeyRejected)
+	default:
 		return fmt.Errorf("GET %s: HTTP %d", path, resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))

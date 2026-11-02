@@ -126,13 +126,19 @@ func TestRun(t *testing.T) {
 			wantLine:  "SYNCTHING UNKNOWN: GET /rest/config/folders: HTTP 500",
 		},
 		{
-			name:   "wrong API key is UNKNOWN",
+			name:   "wrong API key is CRITICAL",
 			server: liveLike,
 			configure: func(t *testing.T, cfg *Config) {
 				cfg.APIKeyFile = writeFile(t, "wrong-key")
 			},
-			wantLevel: Unknown,
-			wantLine:  "HTTP 403",
+			wantLevel: Critical,
+			wantLine:  "SYNCTHING CRITICAL: GET /rest/config/folders: HTTP 403: API key rejected",
+		},
+		{
+			name:      "HTTP 401 is CRITICAL",
+			server:    func(*testing.T) fakeSyncthing { return fakeSyncthing{code: http.StatusUnauthorized} },
+			wantLevel: Critical,
+			wantLine:  "SYNCTHING CRITICAL: GET /rest/config/folders: HTTP 401: API key rejected",
 		},
 		{
 			name: "bad folders JSON is UNKNOWN",
@@ -163,21 +169,21 @@ func TestRun(t *testing.T) {
 			wantLine:  "SYNCTHING UNKNOWN: folder docs-1234: GET /rest/db/status: HTTP 404",
 		},
 		{
-			name:   "missing API key is UNKNOWN",
+			name:   "missing API key is CRITICAL",
 			server: liveLike,
 			configure: func(t *testing.T, cfg *Config) {
 				cfg.APIKeyFile = ""
 			},
-			wantLevel: Unknown,
-			wantLine:  "SYNCTHING UNKNOWN: no API key: pass -api-key-file or set $CHECK_SYNCTHING_TEST_KEY",
+			wantLevel: Critical,
+			wantLine:  "SYNCTHING CRITICAL: no API key: pass -api-key-file or set $CHECK_SYNCTHING_TEST_KEY",
 		},
 		{
-			name:   "empty API key file is UNKNOWN",
+			name:   "empty API key file is CRITICAL",
 			server: liveLike,
 			configure: func(t *testing.T, cfg *Config) {
 				cfg.APIKeyFile = writeFile(t, " \n")
 			},
-			wantLevel: Unknown,
+			wantLevel: Critical,
 			wantLine:  "is empty",
 		},
 		{
@@ -284,6 +290,24 @@ func TestRunDoesNotFollowRedirects(t *testing.T) {
 	case key := <-leaked:
 		t.Fatalf("redirect target was contacted (X-API-Key present: %t)", key != "")
 	default:
+	}
+}
+
+// TestRunStatusKeyRejected covers a key refused only by the per-folder
+// status endpoint: it must page like a refused folder listing.
+func TestRunStatusKeyRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/config/folders" {
+			_, _ = w.Write([]byte(`[{"id":"music-1","label":"Music","paused":false}]`))
+			return
+		}
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	}))
+	defer srv.Close()
+	got := Run(context.Background(), baseConfig(t, srv.URL), time.Now())
+	want := "SYNCTHING CRITICAL: folder music-1: GET /rest/db/status: HTTP 403: API key rejected"
+	if got.Level != Critical || got.Line != want {
+		t.Fatalf("got %v %q, want CRITICAL %q", got.Level, got.Line, want)
 	}
 }
 
