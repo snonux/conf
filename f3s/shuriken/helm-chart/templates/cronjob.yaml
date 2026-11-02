@@ -30,12 +30,26 @@
 #   - concurrencyPolicy: Forbid -- a long generate run (large photo library,
 #     single image job) must not stack a second worker on top of it; shuriken's
 #     staging directories would race and the NFS write load would double.
-#   - backoffLimit: 0 -- a failed run surfaces in the Job history; the
-#     schedule-level retry is the .last-generate-fail marker (4h backoff,
-#     see the gate script), and spamming in-pod retries would just re-burn
-#     ImageMagick CPU on a persistent failure (e.g. NFS down).
-#   - activeDeadlineSeconds: 6h -- caps a runaway first-run backfill of a large
-#     library; steady state is far shorter.
+#   - backoffLimit: 1 -- one pod retry, so a run killed by an f3s power-off
+#     does not leave a failed Job, a Degraded ArgoCD app and KubeJobFailed
+#     behind. After boot containerd reports such a container as exit 255,
+#     reason Unknown (graceful node shutdown is off, so there is no
+#     DisruptionTarget condition to match). The retry passes the same
+#     marker gate: within 4h of the killed attempt its .last-generate-fail
+#     marker makes it exit 0, after a longer outage it regenerates.
+#   - podFailurePolicy -- a clean generation failure (any exit but
+#     137/143/255) fails the Job at once, as backoffLimit 0 did, so it stays
+#     visible instead of being "retried" into a Complete Job by the marker
+#     gate. Kills get the one retry: power-off (255, or 137 when the kubelet
+#     lost the container), deadline expiry and OOM (137; 143 on SIGTERM). A
+#     deadline kill's retry is > 4h after the stamp, so it regenerates: at
+#     most 2x6h, then the Job fails.
+#   - activeDeadlineSeconds: 6h per POD (not per Job, which counts from Job
+#     creation and would kill the retry pod at once after a long outage) --
+#     caps a runaway first-run backfill of a large library; steady state is
+#     far shorter. Real-world test: the next deliberate f3s power-off
+#     during a run should show a retry pod after boot, no Degraded app and
+#     no failed Job.
 #   - runAsUser: 0 -- the syncthing source tree is mode 750 root:wheel on the
 #     NFS server, and the dist output is written as root to match the existing
 #     irregular.ninja layout.
@@ -69,8 +83,14 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
-      activeDeadlineSeconds: 21600
+      backoffLimit: 1
+      podFailurePolicy:
+        rules:
+          - action: FailJob
+            onExitCodes:
+              containerName: shuriken
+              operator: NotIn
+              values: [137, 143, 255]
       template:
         metadata:
           labels:
@@ -81,6 +101,7 @@ spec:
             cronjob: shuriken
         spec:
           restartPolicy: Never
+          activeDeadlineSeconds: 21600
           initContainers:
             - name: nfs-check
               image: busybox:1.36.1

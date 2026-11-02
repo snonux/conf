@@ -5,8 +5,10 @@ Daily CronJob running `beets` over the Navidrome library: fetches
 scan (`ND_SCANSCHEDULE: "1h"`) picks it up. Namespace `services`, ArgoCD app
 `beets-art`, pod pinned to r1.
 
-Schedule 12:00 Europe/Sofia, `activeDeadlineSeconds` 6h. One pod, three
-idempotent steps:
+Schedule 12:00 Europe/Sofia, `activeDeadlineSeconds` 6h per pod, and one
+pod retry (`backoffLimit: 1`) so a run killed by an f3s power-off is
+retried after boot instead of failing the Job (see the comments in
+`templates/cronjob.yaml`). One pod, three idempotent steps:
 
 1. `beet import -A -q --quiet-fallback=asis /music` (`incremental: yes`;
    `auto: yes` on fetchart/embedart handles new albums).
@@ -40,6 +42,11 @@ Knobs in `templates/configmap.yaml`: `embedart.maxwidth` (1200),
 
 - Non-zero Job: `just logs`. Usually NFS or Cover Art Archive rate limits;
   the next run clears it.
+- A failed Job keeps KubeJobFailed firing until three newer Jobs fail
+  (`failedJobsHistoryLimit`); successful runs do not prune it.
+  `kubectl delete job -n services <job>` clears it. ArgoCD shows the app
+  Degraded until a Job owned by the CronJob succeeds; `just run-now`
+  (`create job --from=cronjob`) counts.
 - Wrong art: `just shell`, then `beet mbsync album:"X"`, or drop a
   `cover.jpg` in the folder and `beet embedart -f cover.jpg -- album:"X"`.
 - Corrupt DB: delete `beets-art-state-pvc`; the next run rebuilds it.

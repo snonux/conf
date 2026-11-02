@@ -40,11 +40,17 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
-      activeDeadlineSeconds: 3600
+      # One pod retry so an f3s power-off mid-publish does not leave a
+      # failed Job (Degraded app, KubeJobFailed); see cronjob.yaml. Any
+      # failure (e.g. a frontend down) is retried once; that is safe, as
+      # publishing is idempotent per site status snapshot.
+      backoffLimit: 1
       template:
         spec:
           restartPolicy: Never
+          # Per pod, not per Job, so a retry after a long outage gets its
+          # own hour.
+          activeDeadlineSeconds: 3600
           hostAliases:
             # The frontends are reached over the WireGuard mesh (.wg0); cluster
             # DNS does not resolve *.wg0 names, so pin them to the mesh IPs.

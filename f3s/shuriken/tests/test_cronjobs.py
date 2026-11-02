@@ -121,6 +121,29 @@ class CronJobTests(unittest.TestCase):
         self.assertEqual(self.calls(), ["generate", "generate"])
         self.assertFalse((self.data / ".last-generate-fail").exists())
 
+    def test_power_off_kill_retries_but_clean_failure_does_not(self):
+        # A pod killed by an f3s power-off must get one retry with a fresh
+        # deadline: per-pod deadline only, since a Job-level one counts from
+        # Job creation and would kill the retry after a long outage.
+        for name in ("shuriken", "shuriken-sync"):
+            with self.subTest(job=name):
+                job = self.resources[name]["spec"]["jobTemplate"]["spec"]
+                self.assertEqual(job["backoffLimit"], 1)
+                self.assertNotIn("activeDeadlineSeconds", job)
+                self.assertGreater(job["template"]["spec"]["activeDeadlineSeconds"], 0)
+        # Generation: a clean failure (exit 1) fails the Job at once instead
+        # of being retried into a Complete Job by the fail-marker gate;
+        # kills are retried: 255 (containerd after a power-off reboot), 137
+        # (deadline/OOM/kubelet-lost container), 143 (SIGTERM).
+        job = self.resources["shuriken"]["spec"]["jobTemplate"]["spec"]
+        container = job["template"]["spec"]["containers"][0]["name"]
+        [rule] = job["podFailurePolicy"]["rules"]
+        codes = rule["onExitCodes"]
+        self.assertEqual((rule["action"], codes["containerName"], codes["operator"]),
+                         ("FailJob", container, "NotIn"))
+        self.assertNotIn(1, codes["values"])
+        self.assertTrue({137, 143, 255} <= set(codes["values"]))
+
     def test_sync_publishes_reshuffle_with_identical_source_statistics(self):
         for site in ("irregular.ninja", "alt.irregular.ninja"):
             status, backup = self.status(self.NOW - 259200, site)

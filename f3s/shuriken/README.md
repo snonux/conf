@@ -28,6 +28,14 @@ silently no-ops whenever the nodes are down at that hour, while the
 hourly tick just catches the first hour the cluster is back up (12:00
 is skipped so a run doesn't start on top of the daily beets-art sweep).
 
+Both CronJobs allow one pod retry (`backoffLimit: 1`, deadline per pod)
+so a pod killed by an f3s power-off is retried after boot instead of
+leaving a failed Job, a Degraded ArgoCD app and a KubeJobFailed alert.
+A clean generation failure still fails the Job at once (podFailurePolicy,
+see `cronjob.yaml`). A failed Job (and its KubeJobFailed alert) stays
+until three newer Jobs fail (`failedJobsHistoryLimit`); successful runs
+do not prune it. Clear it with `kubectl delete job -n services <job>`.
+
 ## Image
 
 ```sh

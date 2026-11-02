@@ -34,16 +34,27 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      # Do not auto-retry: art-fetch failures are usually rate-limit or
-      # network blips that resolve by the next nightly run. Spamming
-      # retries would just hammer Cover Art Archive.
-      backoffLimit: 0
-      # Cap a runaway run at 6h. The first backfill of a 200 GB library
-      # may take a few hours; steady state is minutes.
-      activeDeadlineSeconds: 21600
+      # One retry, for f3s power-offs: a run killed by a cluster shutdown
+      # comes back after boot as a failed pod (containerd: exit 255, reason
+      # Unknown; graceful node shutdown is off, shutdownGracePeriod 0s, so
+      # no DisruptionTarget condition a podFailurePolicy could match).
+      # With backoffLimit 0 that failed the Job, left ArgoCD Degraded until
+      # the next success and fired KubeJobFailed (2026-10-31). The retry
+      # does not hammer Cover Art Archive: the script below swallows every
+      # step's non-zero exit, so only a killed or crashed pod fails. Pod
+      # deadline expiry also gets one retry (at most 2x6h), acceptable for
+      # this idempotent sweep.
+      backoffLimit: 1
       template:
         spec:
           restartPolicy: Never
+          # Cap a runaway run at 6h per POD, not per Job: a Job-level
+          # deadline counts from Job creation and would kill the retry pod
+          # at once after an outage longer than 6h. A full sweep takes
+          # ~2.5h. Real-world test: the next deliberate f3s power-off across
+          # the 12:00 run should show a retry pod after boot, no Degraded
+          # app and no failed Job.
+          activeDeadlineSeconds: 21600
           # Not pinned to any node: the music library is RWX NFS (shared
           # across r0/r1/r2) and the state PVC is now NFS-backed too, so the
           # job may land on any r-node. Letting the scheduler spread it avoids
