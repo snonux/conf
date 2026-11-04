@@ -12,6 +12,7 @@ import (
 	"github.com/snonux/conf/gonf/pihole"
 	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
+	"github.com/snonux/conf/gonf/triggerfish"
 	"github.com/snonux/conf/gonf/wireguard"
 	"github.com/snonux/conf/gonf/workstation"
 	. "github.com/snonux/gonf/api"
@@ -30,6 +31,7 @@ import (
 func Register() {
 	workstation.Register()
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
+	RegisterMethods(triggerfish.Profiles{}, WithPrefix("triggerfish_profiles_"), OnCluster(cluster.NameTriggerfish))
 	RegisterGroup([]any{
 		openbsd.Unattended{}, frontends.Maintenance{}, frontends.Monitoring{},
 		frontends.Web{}, frontends.MailDNS{},

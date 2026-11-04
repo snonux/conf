@@ -2,6 +2,10 @@
 
 package triggerfish
 
+func (Profiles) DescCandidates() string {
+	return "Stages four inactive network, firewall and service configuration bundles"
+}
+
 func (Unattended) DescCron() string {
 	return "Schedules daily base updates, package updates and an audit in local time"
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/snonux/conf/gonf/openbsd"
 	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
+	"github.com/snonux/conf/gonf/triggerfish"
 	. "github.com/snonux/gonf/api"
 )
 
@@ -27,15 +28,16 @@ import (
 //	NameRockyPis     → rocky_kernel_audit / rocky_kernel_audit_* (also in rocky)
 //	NameFreeBSD      → freebsd / freebsd_*
 const (
-	NameFrontends  = "frontends"
-	NameNetBSDPis  = "netbsd-pis"
-	NameRockyPis   = "rocky-pis"
-	NamePis        = "pis"
-	NameRockyK3s   = "rocky-k3s"
-	NameRockyAll   = "rocky-all"
-	NameRockyDtail = "rocky-dtail"
-	NameFreeBSD    = "freebsd-hosts"
-	NameGarage     = "garage"
+	NameFrontends   = "frontends"
+	NameNetBSDPis   = "netbsd-pis"
+	NameRockyPis    = "rocky-pis"
+	NamePis         = "pis"
+	NameRockyK3s    = "rocky-k3s"
+	NameRockyAll    = "rocky-all"
+	NameRockyDtail  = "rocky-dtail"
+	NameFreeBSD     = "freebsd-hosts"
+	NameGarage      = "garage"
+	NameTriggerfish = "triggerfish"
 )
 
 // Per-host recipe data is attached with WithData, one small struct type per
@@ -65,6 +67,9 @@ const (
 // order, so the host and cluster registration order stays stable.
 func Register() {
 	registerFrontends()
+	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
+		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true}))
+	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()
 	registerRockyK3s(pi2, pi3)
 	registerFreeBSD()
