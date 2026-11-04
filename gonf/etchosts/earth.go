@@ -5,10 +5,10 @@ import (
 )
 
 var earthLAN = []lanHost{
-	{name: "shelly1", ip: "192.168.1.28"},
-	{name: "shelly2", ip: "192.168.1.29"},
+	{name: "shelly1", ip: "192.168.1.28", migration: migrationHost{zone: wifiZone}},
+	{name: "shelly2", ip: "192.168.1.29", migration: migrationHost{zone: wifiZone}},
 	{name: "zen", ip: "192.168.1.13"},
-	{name: "freebsd", ip: "192.168.1.139", aliases: []string{"fbsd"}},
+	{name: "freebsd", ip: "192.168.1.139", aliases: []string{"fbsd"}, migration: migrationHost{zone: labZone, recovery: true}},
 }
 
 var earthWireGuard = []frontends.WireGuardAddress{
