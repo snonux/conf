@@ -11,7 +11,7 @@ pending recovery journal. The configuration comes from per-host inventory;
 NetworkManager's accepted keyfile is the persistent stage authority. No recipe
 continually forces the promoted addresses back over a recovered profile.
 
-Before activation, task v14 must exercise a bounded native canary: timer expiry
+Before production activation, task v14 must exercise a bounded native canary: timer expiry
 with the originating session gone, repeated restore, explicit confirmation,
 unconfirmed reboot, then fresh authenticated literal old/new access and gonf
 reapply. Review the host/NodePort source guards, listeners, DNS, storage and
@@ -30,10 +30,16 @@ A second hook restores physical runtime state after NetworkManager and before
 k3s. Failure leaves the journal and blocks k3s startup. The timer uses wall time;
 clock changes can affect its deadline and must be included in canary review.
 
-After native proofs, the operator may explicitly create mode-0600 root-owned
-files in `/var/lib/gonf-network-migration/`:
+Within its existing user-approved scope, v14 may provision short-lived,
+canary-specific authorization after verifying the watchdog, boot hooks and
+prerequisites. This permits the bounded tests needed to establish native proof;
+it neither asserts that those tests passed nor authorizes production rollout.
+Production authorization follows successful expiry, reboot, fresh reconnect
+and reapply acceptance. Authorization uses mode-0600 root-owned files in
+`/var/lib/gonf-network-migration/`:
 
-- `activation-approved`: native expiry/boot/reapply proofs and prerequisites.
+- `activation-approved`: bounded v14 canary authorization, or production
+  authorization after native expiry/boot/reconnect/reapply proofs and prerequisites.
 - `stage-approved`: fresh old-IP access and explicit approval for this stage.
 - `promote-approved`: fresh old/new management and source/service checks.
 - `serial-k3s-approved`: contains exactly this node's `hostname -s`; issue to
