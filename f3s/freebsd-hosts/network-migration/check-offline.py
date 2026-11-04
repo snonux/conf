@@ -2,13 +2,14 @@
 """Exercise the shell transaction with disposable command fixtures, never SSH."""
 import json
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import tempfile
 
 HERE = Path(__file__).resolve().parent
 MOCK = r'''#!/usr/bin/env python3
-import json, os, sys
+import json, os, re, shlex, sys
 from pathlib import Path
 p=Path(os.environ['FIXTURE_DB'])
 s=json.loads(p.read_text())
@@ -23,17 +24,25 @@ elif cmd == 'pgrep': rc=1
 elif cmd == 'sync': pass
 elif cmd == 'netstat': print('fixture evidence')
 elif cmd == 'sysrc':
+    rcfile=Path(os.environ['FIXTURE_RC'])
+    lines=rcfile.read_text().splitlines()
+    def write_key(key, value=None):
+        global lines
+        lines=[line for line in lines if not re.match(re.escape(key)+r'=.*',line)]
+        if value is not None: lines.append(key+'='+shlex.quote(value))
+        rcfile.write_text('\n'.join(lines)+'\n')
     if a[:1] == ['-f']: a=a[2:]
     if a[:1] == ['-n']:
         key=a[1]
         if key in s['keys']: print(s['keys'][key])
         else: rc=1
     elif a[:1] == ['-x']:
-        if a[1] in s['keys']: del s['keys'][a[1]]
+        if a[1] in s['keys']:
+            del s['keys'][a[1]]; write_key(a[1])
         else: rc=1
     else:
         for item in a:
-            k,v=item.split('=',1); s['keys'][k]=v
+            k,v=item.split('=',1); s['keys'][k]=v; write_key(k,v)
 elif cmd == 'ifconfig':
     assert a[0] == 're0', a
     if len(a)==1 or len(a)==2:
@@ -107,7 +116,7 @@ def main():
         source = source.replace('/usr/local/sbin/gonf-endpoint-rollback', str(tmp / 'endpoint-hook'))
         helper.write_text(source)
         helper.chmod(0o755)
-        env = dict(os.environ, FIXTURE_DB=str(db))
+        env = dict(os.environ, FIXTURE_DB=str(db), FIXTURE_RC=str(rcconf))
         initial = dict(keys={'ifconfig_re0': 'inet 192.168.1.130/24',
                              'ifconfig_re0_alias0': 'CARP owned separately',
                              'vm_enable': 'YES', 'static_routes': 'other',
@@ -118,12 +127,37 @@ def main():
                        return_=None, now=1000, calls=[])
         initial['return'] = initial.pop('return_')
         db.write_text(json.dumps(initial))
+        rcconf.write_text(''.join(f'{key}={shlex.quote(value)}\n'
+                                 for key, value in initial['keys'].items()))
 
         def run(*args, ok=True):
             result = subprocess.run([str(helper), *args], env=env,
                                     capture_output=True, text=True)
             assert (result.returncode == 0) == ok, (args, result.stdout, result.stderr)
             return json.loads(db.read_text())
+
+        def boot_with_cached_rc(expected):
+            # Emulate /etc/rc's parent: source unconfirmed keys, execute the
+            # rollback child, then source again as its ALRM handler does.
+            # This deliberately keeps removed variables alive across reload
+            # unless the generated unset statement clears them in the parent.
+            checks = []
+            for key in ('ifconfig_re0', 'ifconfig_re0_alias200',
+                        'ifconfig_re0_alias201', 'ifconfig_re0_alias202',
+                        'ifconfig_re0_alias0', 'route_gonfmigration',
+                        'ipv6_defaultrouter', 'vm_enable'):
+                if key in expected['keys']:
+                    checks.append(f'test "${{{key}}}" = {shlex.quote(expected["keys"][key])}')
+                else:
+                    checks.append(f'test "${{{key}+present}}" != present')
+            script = '. "$1"; "$2" boot; . "$1"; ' + '; '.join(checks)
+            script += "; set | awk '/^ifconfig_re0_alias[0-9]+=/ {print}'"
+            result = subprocess.run(['sh', '-ec', script, 'cached-rc', str(rcconf), str(helper)],
+                                    env=env, capture_output=True, text=True)
+            assert result.returncode == 0, (result.stdout, result.stderr, rcconf.read_text())
+            aliases = {line.split('=', 1)[0] for line in result.stdout.splitlines()}
+            expected_aliases = {key for key in expected['keys'] if key.startswith('ifconfig_re0_alias')}
+            assert aliases == expected_aliases, (aliases, expected_aliases)
 
         def assert_restored():
             current = json.loads(db.read_text())
@@ -142,6 +176,11 @@ def main():
         assert_restored()
         run('rollback')  # Restore retries are harmless after completion.
         run('stage')
+        boot_with_cached_rc(initial)  # Absent alias201 must disappear in parent.
+        assert not (state / 'pending').exists()
+        # Simulate initial netif configuration after the proved cached reload.
+        db.write_text(json.dumps(initial))
+        run('stage')
         run('confirm')
         accepted = json.loads(db.read_text())
         run('promote')
@@ -156,7 +195,7 @@ def main():
         for field in ('keys', 'v4', 'v6', 'default4', 'return'):
             assert current[field] == accepted[field], field
         run('promote')
-        run('boot')  # Boot restores persistence, before network initialization.
+        boot_with_cached_rc(accepted)  # Clear alias200; preserve accepted alias201.
         current = json.loads(db.read_text())
         assert current['keys'] == accepted['keys']
         assert not (state / 'pending').exists()
@@ -171,7 +210,8 @@ def main():
         calls = json.loads(db.read_text())['calls']
         assert not any('netif' in ' '.join(call) or 'bridge' in ' '.join(call) for call in calls)
         print('PASS: activation gates, dual-address stage, explicit confirm, primary promotion,')
-        print('timer rollback, repeat rollback, boot persistence, endpoint fail-closed, CARP/bhyve preservation')
+        print('timer rollback, repeated rollback, cached parent rc reload/alias enumeration,')
+        print('endpoint fail-closed, CARP/bhyve preservation')
 
 
 if __name__ == '__main__':

@@ -42,17 +42,35 @@ save_key() {
     fi
 }
 
+# rc has already sourced the unconfirmed keys into its parent shell. Merely
+# deleting an assignment does not clear that cached variable on ALRM reload.
+# A tagged unset statement acts in the sourcing parent's environment; empty
+# alias assignments are unsafe because network.subr stops at an empty alias.
+rewrite_absent_keys() {
+    absent_keys=$1
+    candidate=$(mktemp /etc/rc.conf.gonf-migration.XXXXXX)
+    cp -p /etc/rc.conf "$candidate"
+    awk '!/^unset .* # gonf-network-migration absent keys$/' /etc/rc.conf > "$candidate"
+    if [ -n "$absent_keys" ]; then
+        printf 'unset%s # gonf-network-migration absent keys\n' "$absent_keys" >> "$candidate"
+    fi
+    mv "$candidate" /etc/rc.conf
+}
+
 restore_keys() {
+    absent_keys=
     for key in $keys; do
         if [ -f "$pending/$key.exists" ]; then
             sysrc -f /etc/rc.conf "$key=$(cat "$pending/$key")" >/dev/null
         else
+            absent_keys="$absent_keys $key"
             # sysrc -x returns nonzero when a key is already absent.
             if sysrc -f /etc/rc.conf -n "$key" >/dev/null 2>&1; then
                 sysrc -f /etc/rc.conf -x "$key" >/dev/null
             fi
         fi
     done
+    rewrite_absent_keys "$absent_keys"
 }
 
 # p24 must install this root-owned hook before an endpoint-changing transaction.
@@ -129,12 +147,15 @@ arm() {
     fi
     mv "$state/preparing" "$pending"
     sync
+    # A previous rollback's absent keys are now represented by absent
+    # assignments. Remove its reload-only cleanup before sysrc adds new ones.
+    rewrite_absent_keys ""
 }
 
 set_return_route() {
     gateway=$shared_gateway
     if [ "$profile" = isolated ]; then gateway=10.98.0.1; fi
-    routes=$(sysrc -n static_routes)
+    routes=$(sysrc -n static_routes 2>/dev/null || :)
     case " $routes " in *' gonfmigration '*) :;; *) routes="$routes gonfmigration";; esac
     sysrc -f /etc/rc.conf "static_routes=$routes" "route_gonfmigration=-host 10.99.0.2 $gateway" >/dev/null
     if route -n get -inet 10.99.0.2 | grep -Eq 'destination: 10\.99\.0\.2$'; then

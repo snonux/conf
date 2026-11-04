@@ -25,7 +25,12 @@ a 900-second transaction before changing persistent or running state. Root's
 independent minute cron rolls it back within a minute of its deadline. A
 persistent pending journal causes rollback before netif at boot regardless
 of the deadline; the rc hook signals rc's documented ALRM handler to reload
-rc.conf. No timer is a child of the migration SSH process. Clock jumps can
+rc.conf. Deleting a key alone leaves rc's cached variable alive: rollback
+therefore appends a tagged `unset` statement for only its snapshot-absent
+keys. The parent executes that statement on reload before netif enumerates
+aliases; CARP alias0 is excluded. The next armed transaction removes the old
+cleanup statement before adding new sysrc assignments. No timer is a child
+of the migration SSH process. Clock jumps can
 change the wall-clock deadline; choose the window accordingly and prove the
 native cron path before relying on it.
 
@@ -97,5 +102,10 @@ FreeBSD source references used for boot ordering and alias semantics:
 [rc](https://github.com/freebsd/freebsd-src/blob/releng/15.0/libexec/rc/rc),
 [rc.subr](https://github.com/freebsd/freebsd-src/blob/releng/15.0/libexec/rc/rc.subr),
 [network.subr](https://github.com/freebsd/freebsd-src/blob/releng/15.0/libexec/rc/network.subr).
-Run `python3 check-offline.py` for the disposable command-fixture check; it
-executes no host network commands and is not a native FreeBSD acceptance test.
+Run `python3 check-offline.py` for the disposable command-fixture check. Its
+boot regression sources unconfirmed configuration in a real shell, runs the
+rollback child, reloads configuration in that same parent, then verifies
+absent keys and the actual enumerated alias variables. It covers clearing
+Stage alias201 and clearing Promote alias200 while retaining accepted Stage
+alias201. It executes no host network commands and is not a native FreeBSD
+acceptance test.
