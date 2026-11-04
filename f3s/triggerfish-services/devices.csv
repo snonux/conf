@@ -1,0 +1,7 @@
+name,device_id,mac,retained_current_ipv4,target_ipv4,attachment
+shelly1,,08:92:72:5e:36:6c,192.168.1.28,10.30.0.28,rack-fans
+shelly2,,08:92:72:5f:8a:04,192.168.1.29,10.30.0.29,f-host-AC
+jetkvm-46793b0d4c8d45d,46793b0d4c8d45d,30:52:53:03:57:38,192.168.1.248,10.20.0.151,f2-historical
+jetkvm-e10a0883debf7d4a,e10a0883debf7d4a,30:52:53:08:97:97,192.168.1.241,10.20.0.158,unknown
+jetkvm-f72978d7f87aa969,f72978d7f87aa969,30:52:53:06:8b:21,192.168.1.244,10.20.0.191,unknown
+jetkvm-cee6ab4df2f88754,cee6ab4df2f88754,30:52:53:04:a4:4b,192.168.1.245,10.20.0.198,unknown
