@@ -1,0 +1,23 @@
+#!/bin/sh
+# PROVIDE: gonf_network_rollback
+# REQUIRE: FILESYSTEMS
+# BEFORE: netif routing
+# KEYWORD: nojail
+# shellcheck source=/dev/null
+. /etc/rc.subr
+# shellcheck disable=SC2034
+name=gonf_network_rollback
+rollback_start()
+{
+    rollback_status=0
+    /usr/local/sbin/gonf-network-migration boot || rollback_status=$?
+    # /etc/rc sources executable rc scripts in a subshell; $$ remains the
+    # parent rc PID. Its ALRM handler reloads the restored global rc.conf.
+    if [ -n "${autoboot:-}" ]; then kill -ALRM "$$"; fi
+    return "$rollback_status"
+}
+# shellcheck disable=SC2034
+start_cmd=rollback_start
+# shellcheck disable=SC2034
+stop_cmd=':'
+run_rc_command "$1"
