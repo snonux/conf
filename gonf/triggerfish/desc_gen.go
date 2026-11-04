@@ -2,8 +2,56 @@
 
 package triggerfish
 
+func (Base) DescDoas() string { return "Enables passwordless administration for wheel members" }
+
+func (Base) DescHostname() string {
+	return "Sets the persistent and running LAN hostname and its local mapping"
+}
+
+func (Base) DescNetwork() string {
+	return "Configures the temporary LAN alias, IPv4 forwarding and upstream NAT"
+}
+
+func (Base) DescUpload() string {
+	return "Installs the API token, upload client and hourly root cron job"
+}
+
+func (Base) DescUptimed() string {
+	return "Installs uprecords and enables persistent uptime collection"
+}
+
 func (Profiles) DescCandidates() string {
 	return "Stages four inactive network, firewall and service configuration bundles"
+}
+
+func (Rollback) DescActivate() string {
+	return "Applies only the frozen, armed and explicitly reviewed trial"
+}
+
+func (Rollback) DescArm() string {
+	return "Captures saved and running state and arms the independent recovery deadline"
+}
+
+func (Rollback) DescConfirm() string {
+	return "Accepts a trial only after separate fresh management proof receipts"
+}
+
+func (Rollback) DescProof() string {
+	return "Records a fresh authenticated management connection's measured socket"
+}
+
+func (Rollback) DescRestore() string {
+	return "Reapplies the saved persistent and running state idempotently"
+}
+
+func (Rollback) DescSetup() string { return "Installs the durable timer and early boot recovery hook" }
+
+func (Rollback) DescStage() string {
+	return "Validates and freezes a selected inactive profile without applying it"
+}
+
+func (Rollback) DescStatus() string {
+	return "Reports the journal and timer without exposing saved configuration"
 }
 
 func (Unattended) DescCron() string {

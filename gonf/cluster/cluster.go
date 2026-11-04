@@ -68,7 +68,8 @@ const (
 func Register() {
 	registerFrontends()
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
-		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true}))
+		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true}),
+		WithData(triggerfish.RouterTrial{})) // Trials refuse mutation until explicitly configured.
 	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()
 	registerRockyK3s(pi2, pi3)
