@@ -106,8 +106,25 @@ _snapshot() {
         _endpoint snapshot
     fi
 }
+_return_routes() {
+    local uuid=$1 return_gateway=$2 current route destination result=''
+    current=$(nmcli --escape no -g ipv4.routes connection show uuid "$uuid")
+    local -a routes=()
+    IFS=',' read -r -a routes <<< "$current"
+    for route in "${routes[@]}"; do
+        route="${route#"${route%%[![:space:]]*}"}"
+        [[ -n $route ]] || continue
+        destination=${route%%[[:space:]]*}
+        [[ $destination =~ ^[0-9.]+/[0-9]+$ ]] ||
+            _fail 'Unrecognized NM route serialization; refusing route replacement'
+        # Own this exact /32 only; keep every unrelated route and attribute.
+        [[ $destination == 10.99.0.2/32 ]] && continue
+        result+="$route,"
+    done
+    printf '%s10.99.0.2/32 %s' "$result" "$return_gateway"
+}
 _activate() {
-    local action=$1 topology=$2 uuid addresses gateway dns
+    local action=$1 topology=$2 uuid addresses gateway dns return_routes
     _gate activation-approved
     _gate "$action-approved"
     if [[ $topology == isolated ]]; then
@@ -143,12 +160,13 @@ _activate() {
         addresses+=",$recovery/24"
         return_gateway=10.98.0.1
     fi
+    return_routes=$(_return_routes "$uuid" "$return_gateway")
     # No network mutation occurs until the complete private journal exists and
     # PID1 watchdog/boot recovery are armed. Keep existing DNS and other routes.
     nmcli connection modify uuid "$uuid" ipv4.method manual \
         ipv4.addresses "$addresses" ipv4.gateway "$gateway" \
         ipv4.dns "$dns" ipv4.ignore-auto-dns yes \
-        +ipv4.routes "10.99.0.2/32 $return_gateway" \
+        ipv4.routes "$return_routes" \
         ipv6.method manual ipv6.addresses "$ula/64" ipv6.gateway '' \
         ipv6.routes '' ipv6.never-default yes ipv6.ignore-auto-routes yes \
         ipv6.ignore-auto-dns yes ipv6.dns ''
@@ -185,7 +203,7 @@ case ${1:-} in
             _fail 'request stage|promote shared|isolated, or request rollback'
         # PID1 starts the worker after this process releases its flock. A lost
         # SSH session cannot interrupt activation or its independent watchdog.
-        systemd-run --unit="gonf-network-change-$(date +%s)-$$" \
+        systemd-run --no-block --unit="gonf-network-change-$(date +%s)-$$" \
             --property=Type=oneshot --property=TimeoutStartSec=180 \
             "$helper" "${@}"
         ;;

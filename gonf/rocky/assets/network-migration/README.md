@@ -43,8 +43,9 @@ files in `/var/lib/gonf-network-migration/`:
 
 Recipes never create these assertions. Keep all current cabling, the AP's old
 management/SSID/DHCP service and the controller's old address during shared
-staging. Stage and Promote queue activation as a PID1-owned oneshot so a lost
-SSH session cannot interrupt the worker. Inspect its journal/status. Confirm
+staging. Stage and Promote queue activation as a PID1-owned oneshot using
+`systemd-run --no-block`: the request releases its lock before the worker
+acquires it. A lost SSH session cannot interrupt the worker. Inspect its journal/status. Confirm
 Stage before Promote; each action gets a separate rollback snapshot. Approval
 files for the action and serial restart are consumed after successful use.
 Never issue Promote to a cluster or use an aggregate parallel service restart:
@@ -69,6 +70,8 @@ dedicated test-device recovery proof and coordinated host/cable transition.
 That profile retains 10.98.0.N and returns laptop traffic via 10.98.0.1. Take
 only current-cabling snapshots after recovery has been tested: never arm an
 old shared-wire rollback after moving the rack. No retirement command exists.
+Each transition replaces all entries for the owned laptop /32 with exactly one
+current-topology route, preserving unrelated NM routes and their attributes.
 
 The helper requires exactly one persistent NM keyfile for the physical active
 UUID and fails closed for legacy ifcfg or ambiguous profiles. Resolve those

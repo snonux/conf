@@ -2,8 +2,10 @@
 """Run the real dispatch/state code with disposable OS command fixtures only."""
 from pathlib import Path
 import os
+import json
 import subprocess
 import tempfile
+import time
 
 source = Path(__file__).with_name('migrate.sh').read_text()
 with tempfile.TemporaryDirectory(prefix='rocky-migration-fixture-') as directory:
@@ -24,6 +26,7 @@ with tempfile.TemporaryDirectory(prefix='rocky-migration-fixture-') as directory
                       .replace('[[ $EUID == 0 ]] || exit 1', ': # fixture identity')
                       .replace('/etc/NetworkManager/system-connections', str(root) + '/profiles')
                       .replace('/etc/rancher/k3s/config.yaml.d', str(root) + '/dropins')
+                      .replace('/usr/local/sbin/gonf-network-migration', str(script))
                       .replace('/usr/local/sbin/gonf-endpoint-rollback', str(fixtures / 'endpoint')))
     # All network/service commands are replaced, with no host network access.
     fake = '''#!/usr/bin/env bash
@@ -51,7 +54,8 @@ esac
         command = fixtures / name
         command.write_text(fake)
         command.chmod(0o755)
-    env = dict(os.environ, FIXTURE_LOG=str(log), FIXTURE_FAIL=str(root / 'fail'))
+    env = dict(os.environ, FIXTURE_LOG=str(log), FIXTURE_FAIL=str(root / 'fail'),
+               FIXTURE_ROOT=str(root))
 
     def run(*args, success=True):
         result = subprocess.run(['bash', str(script), *args], env=env,
@@ -81,6 +85,86 @@ esac
     run('confirm', success=False)
     assert pending.exists(), 'Expired confirmation cleared recovery'
     run('watchdog')
+    # Model systemd-run's startup semantics using a real subprocess: the
+    # worker gets fresh descriptors and must acquire the request's real flock.
+    # A blocking Type=oneshot client waits for completion and deadlocks here.
+    (fixtures / 'systemd-run').write_text('''#!/usr/bin/env python3
+import os, subprocess, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+args = sys.argv[1:]
+worker = next(i for i, arg in enumerate(args) if not arg.startswith('--'))
+code = """import subprocess, sys
+from pathlib import Path
+result = subprocess.run(['bash', *sys.argv[2:]])
+Path(sys.argv[1]).write_text(str(result.returncode))
+"""
+with (root / 'worker-log').open('w') as output:
+    child = subprocess.Popen([sys.executable, '-c', code,
+        str(root / 'worker-result'), *args[worker:]], close_fds=True,
+        start_new_session=True, stdout=output, stderr=output)
+if '--no-block' not in args:
+    try:
+        sys.exit(child.wait(timeout=1))
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+        sys.exit(124)
+''')
+    # Negatively prove the fixture catches the exact previous deadlock.
+    fixed = script.read_text()
+    script.write_text(fixed.replace('systemd-run --no-block', 'systemd-run'))
+    blocked = subprocess.run(['bash', str(script), 'request', 'rollback'],
+                             env=env, capture_output=True, timeout=3)
+    assert blocked.returncode == 124, 'Old request failed without reproducing the startup timeout'
+    assert not (root / 'worker-result').exists()
+    script.write_text(fixed)
+    run('request', 'rollback')
+    for _ in range(100):
+        if (root / 'worker-result').exists():
+            break
+        time.sleep(0.02)
+    assert (root / 'worker-result').read_text() == '0', 'Queued worker did not acquire flock'
+
+    def request(*args):
+        (root / 'worker-result').unlink(missing_ok=True)
+        run('request', *args)
+        for _ in range(100):
+            if (root / 'worker-result').exists():
+                break
+            time.sleep(0.02)
+        assert (root / 'worker-result').read_text() == '0', (args, (root / 'worker-log').read_text())
+
+    # Stateful NM route fixture: reads current routes and models list replace
+    # versus append. Preserve a route with metric and attributes byte-for-byte.
+    routes_file = root / 'routes.json'
+    unrelated = '203.0.113.0/24 192.0.2.9 77 table=200 onlink=true'
+    routes_file.write_text(json.dumps([unrelated]))
+    (fixtures / 'nmcli').write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+args = sys.argv[1:]
+with Path(os.environ['FIXTURE_LOG']).open('a') as log:
+    log.write('nmcli ' + ' '.join(args) + '\\n')
+routes_file = root / 'routes.json'
+routes = json.loads(routes_file.read_text())
+if args[:2] == ['--escape', 'no']:
+    print(', '.join(routes))
+elif args[:2] == ['-g', 'GENERAL.CON-UUID']:
+    print('00000000-0000-0000-0000-000000000000')
+elif args[:2] == ['-g', 'IP4.GATEWAY']:
+    print('192.0.2.1')
+elif args[:2] == ['-g', 'IP4.DNS']:
+    print('192.0.2.53')
+elif args[:2] == ['connection', 'modify']:
+    for key in ('ipv4.routes', '+ipv4.routes'):
+        if key in args:
+            value = args[args.index(key) + 1]
+            new = [r.strip() for r in value.split(',') if r.strip()]
+            routes = routes + new if key.startswith('+') else new
+            routes_file.write_text(json.dumps(routes))
+''')
     assert not pending.exists()
     assert (root / 'profiles' / 'test.nmconnection').read_text() == 'original physical profile'
     calls = log.read_text()
@@ -110,11 +194,11 @@ esac
     profile.write_text('uuid=00000000-0000-0000-0000-000000000000\n')
     for name in ('activation-approved', 'stage-approved'):
         (state / name).touch()
-    run('stage', 'shared')
+    request('stage', 'shared')
     assert pending.exists()
     calls = log.read_text()
     assert 'ipv4.addresses 192.0.2.120/24,198.51.100.120/24' in calls
-    assert '+ipv4.routes 10.99.0.2/32 192.0.2.2' in calls
+    assert json.loads(routes_file.read_text()) == [unrelated, '10.99.0.2/32 192.0.2.2']
     assert '10.98.0.1' not in calls
     assert 'ipv6.method manual' in calls and 'ipv6.gateway  ' in calls
     assert 'systemctl restart k3s' not in calls
@@ -123,12 +207,42 @@ esac
     (state / 'promote-approved').touch()
     (state / 'serial-k3s-approved').write_text(subprocess.check_output(
         ['hostname', '-s'], text=True).strip())
-    run('promote', 'shared')
+    request('promote', 'shared')
     calls = log.read_text()
     assert 'ipv4.addresses 198.51.100.120/24,192.0.2.120/24' in calls
     assert 'ipv4.gateway 10.20.0.1' in calls
     assert calls.count('systemctl restart k3s') == 1
-    run('rollback')
+    request('rollback')
     assert not pending.exists()
     assert log.read_text().count('systemctl restart k3s') == 2
-    print('PASS: closed activation, expiry, idempotent rollback, boot ordering, endpoint failures, confirm')
+    # Shared acceptance followed by the later explicitly gated isolated stage.
+    # Include duplicate stale owned /32s with distinct metrics to prove exact
+    # destination ownership rather than one hardcoded gateway/value deletion.
+    shared_routes = [unrelated, '10.99.0.2/32 192.0.2.2',
+                     '10.99.0.2/32 192.0.2.2 99']
+    (state / 'stage-approved').touch()
+    (state / 'igc1-approved').touch()
+    routes_file.write_text(json.dumps(shared_routes))
+    # Old append behavior must fail the same post-transition assertion.
+    bad = fixed.replace('ipv4.routes "$return_routes"',
+                        '+ipv4.routes "10.99.0.2/32 $return_gateway"')
+    script.write_text(bad)
+    run('stage', 'isolated')
+    def assert_isolated_routes():
+        assert json.loads(routes_file.read_text()) == [unrelated, '10.99.0.2/32 10.98.0.1']
+
+    try:
+        assert_isolated_routes()
+    except AssertionError:
+        pass  # The exact fixed-code assertion rejects the original append.
+    else:
+        raise AssertionError('Route regression check did not reject old append behavior')
+    run('rollback')
+    script.write_text(fixed)
+    routes_file.write_text(json.dumps(shared_routes))
+    (state / 'stage-approved').touch()
+    run('stage', 'isolated')
+    assert_isolated_routes()
+    run('rollback')
+    print('PASS: request flock dispatch (negative old deadlock), owned /32 replacement '
+          '(negative old append), stage/promote, expiry/boot/endpoint/confirm recovery')
