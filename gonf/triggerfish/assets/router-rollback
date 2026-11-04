@@ -16,7 +16,7 @@ SERVICES='dhcpd unbound ntpd rad'
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in shared-igc0|post-rack|post-ap) return 0;; *) return 1;; esac; }
+profile_ok() { case $1 in vpn-bootstrap|shared-igc0|post-rack|post-ap) return 0;; *) return 1;; esac; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  if [[ -d $LOCK ]]; then
@@ -46,6 +46,27 @@ checksum() {
 # Stage validation never invokes hostname files, netstart, reload or ifconfig writes.
 validate() {
  typeset d=$1 p=$2 f
+ if [[ $p == vpn-bootstrap ]]; then
+  [[ $(find "$d" -mindepth 1 | wc -l | tr -d ' ') == 1 ]] || fail 'bootstrap candidate must contain only hostname.wg2'
+  check_private "$d/hostname.wg2"
+  awk '
+   function key(k) {return length(k)==44 && k ~ /^[A-Za-z0-9+\/]+=+$/}
+   $0=="inet 10.99.0.1 255.255.255.0" {address++; next}
+   $0=="wgport 51822" {port++; next}
+   $1=="wgkey" && NF==2 && key($2) {private++; next}
+   $1=="wgpeer" && NF==4 && key($2) && $3=="wgaip" {
+    if ($4=="10.99.0.2/32") laptop++;
+    else if ($4=="10.99.0.3/32") phone++;
+    else exit 1;
+    if (seen[$2]++) exit 1;
+    next
+   }
+   $0=="up" {up++; next}
+   {exit 1}
+   END {if (address!=1 || port!=1 || private!=1 || laptop!=1 || phone!=1 || up!=1) exit 1}
+  ' "$d/hostname.wg2" || fail 'invalid bounded wg2 bootstrap candidate'
+  return
+ fi
  for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 mygate pf.conf dhcpd.conf ntpd.conf unbound.conf sysctl.conf.fragment services.conf ACTIVATION.txt; do
   [[ -s $d/$f && ! -L $d/$f ]] || fail 'incomplete candidate'
  done
@@ -120,13 +141,19 @@ check_hook() {
 
 ready() {
  typeset review digest
+ if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
+  [[ ! -e /etc/hostname.wg2 && ! -L /etc/hostname.wg2 ]] || fail 'wg2 persistent input already exists'
+  ! ifconfig wg2 >/dev/null 2>&1 || fail 'wg2 interface already exists'
+  validate "$STATE/candidate" vpn-bootstrap
+  return
+ fi
  review=$BASE/router-readiness/$(cat "$STATE/profile")
  check_private "$review"
  # Exact receipt set; no unchecked unknown-client or dependency defaults.
  digest=$(checksum "$STATE/candidate")
  [[ $(cat "$review") == "candidate-sha256=$digest
-provisioning-clients=reviewed-none-unlisted
-dependencies=r14-reviewed-none-unlisted
+provisioning-clients=captured-inventory-no-known-clients
+dependencies=r14-reviewed-current-stage-only
 wg2=provisioned-and-tested
 old-management=fresh-authenticated
 current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bound readiness receipt'
@@ -177,6 +204,11 @@ snapshot() {
  typeset s=$STATE/saved f i family service
  rm -rf "$s"
  mkdir -p "$s/files" "$s/addresses" "$s/flags" "$s/services" "$s/tables"
+ if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
+  print /etc/hostname.wg2 > "$s/absent"
+  atomic "$STATE/snapshot-digest" "$(checksum "$s")"
+  return
+ fi
  for f in $FILES; do
   mkdir -p "$s/files${f%/*}"
   if [[ -e $f ]]; then
@@ -336,6 +368,16 @@ activate() {
  # Mark first: partial writes, failures, disconnects and reboots all restore.
  atomic "$STATE/status" activating
  sync
+ if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
+  install -m 600 "$STATE/candidate/hostname.wg2" /etc/hostname.wg2.gonf-next
+  mv -f /etc/hostname.wg2.gonf-next /etc/hostname.wg2
+  ifconfig wg2 create description "gonf-vpn-$(cat "$STATE/token")"
+  sh /etc/netstart wg2
+  atomic "$STATE/status" active-unconfirmed
+  sync
+  print 'wg2 active and UNCONFIRMED; recovery remains armed'
+  return
+ fi
  for service in $SERVICES; do rcctl stop "$service"; done
  persist_candidate
  clear_physical yes
@@ -354,6 +396,16 @@ activate() {
 restore_files() {
  typeset f
  [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'snapshot integrity failed'
+ if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
+  grep -qxF /etc/hostname.wg2 "$STATE/saved/absent" || fail 'incomplete wg2 snapshot'
+  if [[ -e /etc/hostname.wg2 || -L /etc/hostname.wg2 ]]; then
+   [[ -f /etc/hostname.wg2 && ! -L /etc/hostname.wg2 ]] || fail 'wg2 file ownership changed'
+   cmp -s /etc/hostname.wg2 "$STATE/candidate/hostname.wg2" || fail 'wg2 file changed outside the trial'
+  fi
+  rm -f /etc/hostname.wg2 /etc/hostname.wg2.gonf-next
+  sync
+  return
+ fi
  for f in $FILES; do
   if [[ -f $STATE/saved/files$f ]]; then
    cp -p "$STATE/saved/files$f" "$f.gonf-restore"
@@ -367,6 +419,13 @@ restore_files() {
 }
 restore_runtime() {
  typeset i family address mask destination gateway flags priority f service
+ if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
+  if ifconfig wg2 >/dev/null 2>&1; then
+   ifconfig wg2 | grep -q "^[[:space:]]*description: gonf-vpn-$(cat "$STATE/token")$" || fail 'wg2 interface ownership changed'
+   ifconfig wg2 destroy
+  fi
+  return
+ fi
  for service in $SERVICES; do rcctl stop "$service"; done
  typeset keep=no
  if grep -q '^inet 10.98.0.1 ' "$STATE/saved/addresses/igc1"; then keep=yes; fi
@@ -457,9 +516,10 @@ $connection
 END
  [[ $client == +([0-9.]) && $cport == +([0-9]) && $sport == 22 ]] || fail 'invalid SSH connection receipt'
  case $role:$server in
- old:192.168.1.2|new:10.20.0.1|recovery:10.98.0.1) :;;
+ old:192.168.1.2|new:10.20.0.1|recovery:10.98.0.1|vpn:10.99.0.1) :;;
  *) fail 'receipt is for the wrong management address';;
  esac
+ [[ $role != vpn || $client == 10.99.0.2 ]] || fail 'VPN proof must use the authenticated laptop address'
  # Verify a currently ESTABLISHED socket matching the submitted 4-tuple.
  netstat -n -f inet | awk -v a="$server.$sport" -v b="$client.$cport" \
   '$4==a && $5==b && $6=="ESTABLISHED" {ok=1} END {exit !ok}' || fail 'fresh connection socket not found'
@@ -474,6 +534,15 @@ confirm() {
  pending && [[ $(cat "$STATE/status") == active-unconfirmed ]] || fail 'trial is not active'
  [[ $(date +%s) -lt $(cat "$STATE/deadline") ]] || fail 'trial expired'
  typeset role
+ if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
+  for role in old vpn; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/VPN receipts missing'; done
+  [[ ${2:-} == services-checked ]] || fail 'controller handshake check required'
+  atomic "$STATE/status" confirmed
+  rm -f "$STATE/pending"
+  sync
+  print 'wg2 confirmed; bootstrap rollback cancelled'
+  return
+ fi
  for role in old new; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/new receipts missing'; done
  if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
   [[ -s $STATE/proof.recovery ]] || fail 'fresh igc1 recovery receipt missing'

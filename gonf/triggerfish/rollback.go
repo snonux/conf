@@ -17,14 +17,19 @@ type Rollback struct{ RequiresRoot }
 // RouterTrial selects one reviewed canary. Its zero value refuses mutations.
 // Token identifies a single trial and is never a password or tunnel key.
 type RouterTrial struct {
-	Profile       string
-	Token         string
-	WindowSeconds uint
+	Profile       string `json:"profile"`
+	Token         string `json:"token"`
+	WindowSeconds uint   `json:"window_seconds"`
 	// ServicesVerified is supplied by the guarded controller after service checks.
-	ServicesVerified bool
+	ServicesVerified bool `json:"services_verified"`
 	// ProofRole and SSHConnection are measured by the controller on a fresh
 	// authenticated session; the helper verifies its live socket and trial.
-	ProofRole, SSHConnection string
+	ProofRole     string `json:"proof_role"`
+	SSHConnection string `json:"ssh_connection"`
+	// ReadinessReviewed records the controller's bounded inventory review.
+	// CandidateSHA256 must come from Stage's frozen candidate, never a template.
+	ReadinessReviewed bool   `json:"readiness_reviewed"`
+	CandidateSHA256   string `json:"candidate_sha256"`
 }
 
 // OptsSetup excludes recovery installation from routine deployment.
@@ -49,6 +54,33 @@ func (Rollback) OptsStage() TaskOptions {
 
 // Stage validates and freezes a selected inactive profile without applying it.
 func (Rollback) Stage() { trialCommand("stage", true) }
+
+// OptsReadiness excludes inventory acceptance from routine deployment.
+func (Rollback) OptsReadiness() TaskOptions { return TaskOptions{Operational()} }
+
+// Readiness binds the measured VPN and inventory review to the frozen candidate.
+func (Rollback) Readiness() {
+	EachHost(func(t RouterTrial) {
+		if !t.ReadinessReviewed || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(t.CandidateSHA256) {
+			Refuse("File", "router-readiness", fmt.Errorf("reviewed inventory and measured frozen digest required"))
+			return
+		}
+		switch t.Profile {
+		case "shared-igc0", "post-rack", "post-ap":
+		default:
+			Refuse("File", "router-readiness", fmt.Errorf("physical migration profile required"))
+			return
+		}
+		EnsureDir("/etc/gonf/router-readiness", RootPrivate)
+		File("/etc/gonf/router-readiness/"+t.Profile, WithContent(
+			"candidate-sha256="+t.CandidateSHA256+"\n"+
+				"provisioning-clients=captured-inventory-no-known-clients\n"+
+				"dependencies=r14-reviewed-current-stage-only\n"+
+				"wg2=provisioned-and-tested\n"+
+				"old-management=fresh-authenticated\n"+
+				"current-cabling="+t.Profile+"\n"), RootPrivate)
+	})
+}
 
 // OptsArm excludes arming from routine deployment.
 func (Rollback) OptsArm() TaskOptions { return TaskOptions{Operational()} }
@@ -95,7 +127,7 @@ func trialCommand(action string, profile bool) {
 		args := List(action, t.Token)
 		if profile {
 			switch t.Profile {
-			case "shared-igc0", "post-rack", "post-ap":
+			case "vpn-bootstrap", "shared-igc0", "post-rack", "post-ap":
 			default:
 				Refuse("Command", action, fmt.Errorf("a retained-recovery migration profile is required"))
 				return
@@ -108,7 +140,7 @@ func trialCommand(action string, profile bool) {
 		}
 		if action == "proof" {
 			switch t.ProofRole {
-			case "old", "new", "recovery":
+			case "old", "new", "recovery", "vpn":
 			default:
 				Refuse("Command", action, fmt.Errorf("management proof role is required"))
 				return

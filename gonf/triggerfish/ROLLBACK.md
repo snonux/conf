@@ -5,6 +5,34 @@ Task l14 implements recovery; t14/u14 own installation and bounded live proof.
 The inactive profile renderer supplies configuration input. Physical cable and
 recovery-path acceptance gates remain in the IQ router plan.
 
+`VPN.Candidate`, registered separately as an operational task, reads the private
+logical secret `paths.TriggerfishSecret("hostname.wg2")` and stages only
+`router-profiles/vpn-bootstrap/hostname.wg2`. This candidate contains the router
+10.99.0.1/24 address, UDP51822, one private key and distinct authenticated laptop
+10.99.0.2/32 and reserved phone 10.99.0.3/32 peers. The phone remains dormant
+until separately configured and tested. Keys and client configurations stay
+outside Git; staging does not create an interface.
+
+The `vpn-bootstrap` trial resolves the initial dependency on an already tested
+wg2 before physical-profile activation. It uses this same journal, timer and
+early boot hook, but snapshots only the absence of `/etc/hostname.wg2` and wg2.
+Arming and activation refuse either pre-existing object. Activation installs
+only that file and creates a trial-tagged wg2; physical interfaces, PF, services
+and existing tunnels stay unchanged. Restoration removes only the introduced
+file/interface; unexpected file drift or a foreign interface description refuses
+destruction and leaves recovery pending. Boot restoration removes the pending
+hostname file before netstart; the previous kernel's interface cannot survive
+the reboot. Fresh `old` and `vpn` socket receipts plus controller transport
+acceptance are required for confirmation. The VPN receipt requires server
+10.99.0.1 and client 10.99.0.2. The laptop must also independently verify the
+actual route and recent WireGuard handshake before setting service acceptance.
+
+First exercise expiry, fresh old-LAN reconnect and wg2 removal, then repeat and
+confirm with measured receipts. Only an accepted bootstrap can supply the real
+wg2 readiness dependency for `shared-igc0`. A disposable fixture exercises the
+boot-file restore; it does not establish actual reboot recovery. Keep such
+unperformed acceptance explicitly recorded.
+
 Register `Rollback{}` with prefix `triggerfish_rollback_` on the triggerfish
 cluster, and attach `RouterTrial{}` to its inventory. All methods are operational;
 no normal aggregate selects them. Empty trial data refuses stage/arm/activation.
@@ -14,6 +42,17 @@ inserted after local filesystems/root become writable and before sysctl, PF or
 network startup. It restores files and explicitly clears/reparses cached rc
 service variables. `rc.local` and `rc.firsttime` are too late for this contract.
 The native anchor is checked each time; an upstream rc change must be reviewed.
+
+The intended controller entrypoint parses `GONF_ROUTER_TRIAL` with `TrialFromEnvironment` before
+registering inventory. Input is nonsecret JSON; missing input keeps the zero
+default, while unknown fields, trailing data and invalid profile/token/window or
+proof tuples return a payload-free error. The composition root supplies that
+value through `RegisterWithRouterTrial`; ordinary `Register` stays unchanged.
+That composition-root integration and VPN task registration remain pending in
+the 2026-11-04 preparation checkpoint; this does not yet expose a live workflow.
+For example, a trial starts with `{"profile":"vpn-bootstrap","token":"t14-vpn-expiry-20261104","window_seconds":180}`.
+Proof calls add `proof_role` and the measured `ssh_connection` from a fresh held
+session. Confirmation sets `services_verified` only after controller checks.
 
 `Stage` accepts `shared-igc0`, `post-rack` or `post-ap`, freezes its files and
 validates PF, Unbound and ntpd natively. Enabled DHCP uses OpenBSD's actual
@@ -36,14 +75,21 @@ human gate. That workflow installs a root-owned mode-600 file at
 
 ```
 candidate-sha256=THE_DIGEST_RETURNED_BY_STAGE
-provisioning-clients=reviewed-none-unlisted
-dependencies=r14-reviewed-none-unlisted
+provisioning-clients=captured-inventory-no-known-clients
+dependencies=r14-reviewed-current-stage-only
 wg2=provisioned-and-tested
 old-management=fresh-authenticated
 current-cabling=PROFILE
 ```
 
-Do not create readiness while clients/dependencies remain unknown. The receipt
+`Rollback.Readiness` writes this receipt only with explicit `readiness_reviewed`
+and `candidate_sha256` input. That assertion means the controller has measured
+the accepted wg2 transport, fresh old management, captured provisioning-client
+inventory and dependencies for this precise stage. "No known clients" is bounded
+by the captured host/controller/ARP inventory; it is not proof about unseen
+devices. Keep .11.2 and revisit readiness if any client/dependency is discovered.
+
+Do not create readiness with unresolved clients/dependencies in the inventory. The receipt
 binds the exact frozen candidate; it does not discover dependencies or claim
 they have passed. The controller never copies a wg2 template, creates a key, or
 alters wg0/wg1/wg2. Missing real-form wg2 private/two peer keys or a running

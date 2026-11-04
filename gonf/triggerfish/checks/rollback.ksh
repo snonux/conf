@@ -31,6 +31,12 @@ ifconfig() {
  typeset i=$1 family=$2
  shift 2
  case $family in
+ create)
+  [[ ! -f $file ]] || return 1
+  print -- "$i: flags=<UP>" > "$file"
+  [[ ${1:-} != description ]] || print -- " description: $2" >> "$file"
+  return 0;;
+ destroy) rm -f "$file"; return 0;;
  up|down) return 0;;
  inet|inet6)
   [[ $* == -autoconf || $* == autoconf ]] && return 0
@@ -71,6 +77,10 @@ rcctl() {
 }
 crontab() { print -- "* * * * * $SELF tick"; }
 netstat() { cat "$BASE/sockets"; }
+sh() {
+ [[ $1 == "${BASE%/gonf}/netstart" && $2 == wg2 ]] || return 1
+ print ' inet 10.99.0.1 netmask 0xffffff00' >> "$BASE/interfaces/wg2"
+}
 sync() { :; }
 MOCKS
 # Each invocation is a separate native shell with errexit enabled, so a parent
@@ -125,8 +135,8 @@ expect_fail arm trial0001 shared-igc0 180
 # The fixture root is mode 700 and the review is owned by the invoking root.
 {
  print -- "candidate-sha256=$(cat "$base/router-state/digest")"
- print 'provisioning-clients=reviewed-none-unlisted'
- print 'dependencies=r14-reviewed-none-unlisted'
+ print 'provisioning-clients=captured-inventory-no-known-clients'
+ print 'dependencies=r14-reviewed-current-stage-only'
  print 'wg2=provisioned-and-tested'
  print 'old-management=fresh-authenticated'
  print 'current-cabling=shared-igc0'
@@ -221,8 +231,8 @@ mv "$fixture/etc/wg2.next" "$fixture/etc/hostname.wg2"
 "$fixture/run" stage trial0006 post-rack 180
 {
  print -- "candidate-sha256=$(cat "$base/router-state/digest")"
- print 'provisioning-clients=reviewed-none-unlisted'
- print 'dependencies=r14-reviewed-none-unlisted'
+ print 'provisioning-clients=captured-inventory-no-known-clients'
+ print 'dependencies=r14-reviewed-current-stage-only'
  print 'wg2=provisioned-and-tested'
  print 'old-management=fresh-authenticated'
  print 'current-cabling=post-rack'
@@ -235,4 +245,62 @@ chmod 600 "$base/router-readiness/post-rack"
 "$fixture/run" restore
 if grep -E 'ifconfig igc1 inet 10[.]98[.]0[.]1 delete|ifconfig igc[023].*10[.]98[.]0[.]1' "$base/operations"; then exit 1; fi
 grep -q 'inet 10.98.0.1 ' "$base/interfaces/igc1"
+# wg2 bootstrap shares only the durable journal and hook with physical trials.
+# It must not alter physical interfaces, PF, routes or service state.
+rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
+mkdir "$base/router-profiles/vpn-bootstrap"
+{
+ print 'inet 10.99.0.1 255.255.255.0'
+ print 'wgport 51822'
+ printf 'wgkey %043d=\n' 1
+ printf 'wgpeer %043d= wgaip 10.99.0.2/32\n' 2
+ printf 'wgpeer %043d= wgaip 10.99.0.3/32\n' 3
+ print up
+} > "$base/router-profiles/vpn-bootstrap/hostname.wg2"
+chmod 600 "$base/router-profiles/vpn-bootstrap/hostname.wg2"
+"$fixture/run" stage vpntrial1 vpn-bootstrap 180
+touch "$base/router-profiles/vpn-bootstrap/unknown-input"
+expect_fail stage vpntrial1 vpn-bootstrap 180
+rm "$base/router-profiles/vpn-bootstrap/unknown-input"
+touch "$fixture/etc/hostname.wg2"
+expect_fail arm vpntrial1 vpn-bootstrap 180
+rm "$fixture/etc/hostname.wg2"
+print 'wg2: flags=<UP>' > "$base/interfaces/wg2"
+expect_fail arm vpntrial1 vpn-bootstrap 180
+rm "$base/interfaces/wg2"
+"$fixture/run" arm vpntrial1 vpn-bootstrap 180
+: > "$base/operations"
+"$fixture/run" activate vpntrial1
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ ! -e $fixture/etc/hostname.wg2 && ! -e $base/interfaces/wg2 ]]
+if grep -Ev '^(ifconfig wg2 (create description gonf-vpn-vpntrial1|destroy)|rcctl check cron)$' "$base/operations"; then exit 1; fi
+"$fixture/run" restore
+"$fixture/run" stage vpntrial2 vpn-bootstrap 180
+"$fixture/run" arm vpntrial2 vpn-bootstrap 180
+"$fixture/run" activate vpntrial2
+expect_fail confirm vpntrial2 services-checked
+print '' > "$base/router-state/preexisting-connections"
+print 'tcp 0 0 192.168.1.2.22 192.168.1.236.45671 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof old vpntrial2 '192.168.1.236 45671 192.168.1.2 22'
+print 'tcp 0 0 10.99.0.1.22 10.99.0.2.45672 ESTABLISHED' > "$base/sockets"
+expect_fail proof vpn vpntrial2 '192.168.1.236 45672 10.99.0.1 22'
+"$fixture/run" proof vpn vpntrial2 '10.99.0.2 45672 10.99.0.1 22'
+"$fixture/run" confirm vpntrial2 services-checked
+expect_fail restore
+# Boot file restoration is exercised without booting or touching native state.
+rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
+"$fixture/run" stage vpntrial3 vpn-bootstrap 180
+"$fixture/run" arm vpntrial3 vpn-bootstrap 180
+"$fixture/run" activate vpntrial3
+"$fixture/run" boot_restore
+[[ ! -e $fixture/etc/hostname.wg2 && ! -e $base/router-state/pending ]]
+# An externally replaced interface must never be destroyed by this journal.
+rm "$base/interfaces/wg2"
+"$fixture/run" stage vpntrial4 vpn-bootstrap 180
+"$fixture/run" arm vpntrial4 vpn-bootstrap 180
+"$fixture/run" activate vpntrial4
+print 'wg2: flags=<UP>\n description: external-owner' > "$base/interfaces/wg2"
+expect_fail restore
+[[ -f $base/interfaces/wg2 && -f $base/router-state/pending ]]
 print 'rollback fixture: passed (mocked mutations; real native config parsers)'
