@@ -58,6 +58,10 @@ func (Maintenance) DescNFSClientIdmapd() string {
 	return "Sets the NFSv4 id-mapping Domain in /etc/idmapd.conf"
 }
 
+func (Maintenance) DescNFSClientMigrationCandidate() string {
+	return "Stages transport changes without touching mounts"
+}
+
 func (Maintenance) DescNFSClientPackages() string {
 	return "Installs the NFS client packages (stunnel, nfs-utils)"
 }

@@ -20,6 +20,10 @@ func (System) DescFishShell() string {
 
 func (System) DescHosts() string { return "Manages the fleet block of /etc/hosts (earth)" }
 
+func (System) DescNFSClientMigrationCandidate() string {
+	return "Stages earth's existing mutual-TLS client path"
+}
+
 func (System) DescTimezone() string { return "Points /etc/localtime at Europe/Sofia (earth, zen)" }
 
 func (System) DescUptimed() string { return "Installs and enables the uptimed daemon (earth, zen)" }
