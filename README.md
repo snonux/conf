@@ -284,3 +284,37 @@ print secret values.
 
 Most app directories have the same `Justfile`: `status`, `logs`,
 `port-forward`, `sync` (ArgoCD refresh), `argocd-status`, `restart`.
+
+## Workstation system configuration
+
+Root-owned recipes previously in dotfiles now live in `gonf/workstation`.
+Their public names remain `pkg_*` and `system_*`; they never join the Rocky,
+frontend or other server aggregates. The `workstation` aggregate applies all
+ten tasks, using each task's destination guards. It manages no user dotfiles.
+
+```sh
+# On earth or zen (Fedora); root operations use the selected privilege mode:
+./gonf.sh -privilege=sudo workstation
+# Only the existing fish login-shell task targets standalone rocky:
+./gonf.sh push root@rocky.lan system_fish_shell
+```
+
+| Tasks | Destination scope |
+|-------|-------------------|
+| `pkg_opendoas`, `pkg_fish_tools`, `pkg_taskwarrior`, `pkg_helix`, `pkg_fedora` | Fedora profile only |
+| `system_hosts`, `system_wireguard` | earth only |
+| `system_uptimed`, `system_timezone` | earth and zen |
+| `system_fish_shell` | earth, zen and rocky |
+
+The package set includes desktop packages and removes legacy Rex; it is not
+a server baseline. `system_hosts` changes only the GONF fleet block, sharing
+`gonf/etchosts` inventory with the server recipes and adding earth-only names.
+Unmanaged loopback and hyperstack wg1 rows remain outside that block.
+`system_wireguard` manages directory/config permissions and enables existing
+tunnels at boot only; config contents, keys and running tunnels retain their
+existing owners. `system_fish_shell` installs fish and manages only paul's
+login shell on an existing account. `system_timezone` links Europe/Sofia.
+
+Apply `system_uptimed` here before running dotfiles' unprivileged
+`home_goprecords_upload`; user units, client scripts and token paths stay in
+dotfiles. The shared uptimed asset is `gonf/goprecords/assets/uptimed.conf`.

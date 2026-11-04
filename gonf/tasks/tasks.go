@@ -13,6 +13,7 @@ import (
 	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
 	"github.com/snonux/conf/gonf/wireguard"
+	"github.com/snonux/conf/gonf/workstation"
 	. "github.com/snonux/gonf/api"
 )
 
@@ -27,6 +28,7 @@ import (
 // (package_type_) is their task prefix; RegisterMethods with WithPrefix
 // keeps the prefixes that differ from it.
 func Register() {
+	workstation.Register()
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
 	RegisterGroup([]any{
 		openbsd.Unattended{}, frontends.Maintenance{}, frontends.Monitoring{},
