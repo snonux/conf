@@ -261,7 +261,7 @@ func profileActivation(s routerStage) string {
 	return fmt.Sprintf(`INACTIVE CANDIDATE: %s
 This bundle is configuration input for the separately gated rollback/activation task l14.
 Do not copy files or run netstart directly. No activation command is provided here.
-Required: native pfctl -nf and dhcpd -ncf (when enabled), unbound-checkconf,
+Required: native pfctl -nf and dhcpd -n -c (when enabled), unbound-checkconf,
 verified wg2 keys/peers, independent timed + persistent + boot rollback, and
 fresh old/new management tests. Preserve /etc/sysctl.conf unrelated keys.
 Remove moved IPv4 AND ULA addresses/connected routes from the old interface

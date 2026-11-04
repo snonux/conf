@@ -1,0 +1,550 @@
+#!/bin/ksh
+# OpenBSD router trial journal. Installed only by triggerfish.Rollback.Setup.
+# No shell fragments, keys or saved configuration are written to stdout.
+set -eu
+set -o pipefail
+umask 077
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+BASE=/etc/gonf
+STATE=$BASE/router-state
+SELF=$BASE/router-rollback
+LOCK=$BASE/router-lock
+FILES='/etc/hostname.igc0 /etc/hostname.igc1 /etc/hostname.igc2 /etc/hostname.igc3 /etc/mygate /etc/pf.conf /etc/dhcpd.conf /etc/ntpd.conf /var/unbound/etc/unbound.conf /etc/sysctl.conf /etc/rc.conf.local'
+SERVICES='dhcpd unbound ntpd rad'
+
+fail() { print -u2 -- "router-rollback: $*"; exit 1; }
+atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
+token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
+profile_ok() { case $1 in shared-igc0|post-rack|post-ap) return 0;; *) return 1;; esac; }
+need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
+lock() {
+ if [[ -d $LOCK ]]; then
+  typeset owner
+  owner=$(cat "$LOCK/pid" 2>/dev/null || print 0)
+  if [[ $owner == +([0-9]) ]] && kill -0 "$owner" 2>/dev/null; then
+   fail 'journal is busy (timer can recover expired activation)'
+  fi
+  rm -rf "$LOCK"
+ fi
+ mkdir "$LOCK" 2>/dev/null || fail 'journal is busy'
+ print -- $$ > "$LOCK/pid"
+ trap 'rm -rf "$LOCK"' EXIT
+ trap 'exit 1' HUP INT TERM
+}
+pending() { [[ -f $STATE/pending ]]; }
+check_private() {
+ [[ -f $1 && ! -L $1 && $(stat -f %u "$1") == 0 ]] || fail 'expected root-owned regular input'
+ [[ $(stat -f %Lp "$1") == 600 ]] || fail 'review input must have mode 600'
+}
+checksum() {
+ (cd "$1" && find . -type f | sort | while read -r file; do
+  print -r -- "$file"; sha256 -q "$file"
+ done) | sha256 -q
+}
+
+# Stage validation never invokes hostname files, netstart, reload or ifconfig writes.
+validate() {
+ typeset d=$1 p=$2 f
+ for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 mygate pf.conf dhcpd.conf ntpd.conf unbound.conf sysctl.conf.fragment services.conf ACTIVATION.txt; do
+  [[ -s $d/$f && ! -L $d/$f ]] || fail 'incomplete candidate'
+ done
+ [[ $(cat "$d/sysctl.conf.fragment") == 'net.inet.ip.forwarding=1
+net.inet6.ip6.forwarding=0' ]] || fail 'unexpected sysctl fragment'
+ grep -qx 'set state-policy floating' "$d/pf.conf" || fail 'PF policy must remain floating'
+ [[ $(cat "$d/mygate") == 192.168.1.1 ]] || fail 'upstream gateway changed'
+ grep -qx 'inet 192.168.1.2 255.255.255.0' "$d/hostname.igc0" || fail 'missing old management address'
+ grep -qx 'inet alias 10.98.0.1 255.255.255.0' "$d/hostname.igc1" || fail 'missing igc1 recovery address'
+ for f in igc0 igc2 igc3; do
+  ! grep -q '10.98.0.' "$d/hostname.$f" || fail 'recovery moved from igc1'
+ done
+ # Restrict hostname inputs to the renderer vocabulary: no !commands, DHCP,
+ # shell expansion, extra routes, external files or autoconfiguration.
+ awk '
+  /^up$/ {next}
+  /^inet( alias)? [0-9.]+ 255\.255\.255\.0$/ {next}
+  /^inet6 alias fd02:ca0b:f1cb:20::1 64$/ {next}
+  {exit 1}' "$d"/hostname.igc[0-3] || fail 'unsupported hostname directive'
+ [[ $(awk '$1=="inet6" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
+ for f in 10.20.0.1 10.30.0.1 10.40.0.1; do
+  [[ $(awk -v a="$f" '$1=="inet" && $3==a {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing zone prefix'
+ done
+ case $p in
+ shared-igc0) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
+ post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
+ post-ap) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
+ esac
+ pfctl -nf "$d/pf.conf"
+ [[ $p == shared-igc0 ]] || dhcpd -n -c "$d/dhcpd.conf"
+ unbound-checkconf "$d/unbound.conf" >/dev/null
+ ntpd -n -f "$d/ntpd.conf"
+}
+
+install_boot() {
+ pending && fail 'cannot replace recovery machinery during a trial'
+ # Exact standalone call occurs once on this native rc version. Refuse upstream
+ # changes so an upgrade cannot silently move recovery after network loading.
+ typeset target=/etc/rc next=/etc/rc.gonf-next
+ if grep -q '^# BEGIN gonf router recovery$' "$target"; then
+  check_hook
+  return
+ fi
+ [[ $(grep -cx 'rootdisk_nodes' "$target") == 1 ]] || fail 'unsupported rc anchor'
+ awk '
+  /^rootdisk_nodes$/ {
+   print "# BEGIN gonf router recovery"
+   print "if /etc/gonf/router-rollback boot-needed; then"
+   print " /etc/gonf/router-rollback boot-restore || exit 1"
+   print " unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf"
+   print " _rc_parse_conf"
+   print "fi"
+   print "# END gonf router recovery"
+  }
+  {print}' "$target" > "$next"
+ /bin/ksh -n "$next"
+ chmod "$(stat -f %Lp "$target")" "$next"
+ chown root:wheel "$next"
+ mv -f "$next" "$target"
+ check_hook
+}
+check_hook() {
+ awk '
+  /^mount -uw \/$/ {mounted=NR}
+  /^# BEGIN gonf router recovery$/ {hook=NR; count++}
+  /^sysctl_conf$/ {sys=NR}
+  /^sh \/etc\/netstart$/ {net=NR}
+  END {exit !(count==1 && mounted<hook && hook<sys && hook<net)}' /etc/rc || fail 'early boot hook missing or moved'
+ grep -qx ' unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf' /etc/rc || fail 'cached rc state would survive rollback'
+ grep -qx ' /etc/gonf/router-rollback boot-restore || exit 1' /etc/rc || fail 'boot restore invocation missing'
+}
+
+ready() {
+ typeset review digest
+ review=$BASE/router-readiness/$(cat "$STATE/profile")
+ check_private "$review"
+ # Exact receipt set; no unchecked unknown-client or dependency defaults.
+ digest=$(checksum "$STATE/candidate")
+ [[ $(cat "$review") == "candidate-sha256=$digest
+provisioning-clients=reviewed-none-unlisted
+dependencies=r14-reviewed-none-unlisted
+wg2=provisioned-and-tested
+old-management=fresh-authenticated
+current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bound readiness receipt'
+ # The candidate template is never installed. A later VPN task must provision
+ # a real authenticated interface first; do not generate, read out or replace keys.
+ [[ -s /etc/hostname.wg2 && ! -L /etc/hostname.wg2 ]] || fail 'wg2 keys/peers not provisioned'
+ awk '
+  function key(k) {return length(k)==44 && k ~ /^[A-Za-z0-9+\/]+=+$/}
+  $1=="wgkey" {if (NF!=2 || !key($2)) exit 1; private++}
+  $1=="wgpeer" {if (!key($2)) exit 1; peers++}
+  END {if (private!=1 || peers!=2) exit 1}' /etc/hostname.wg2 || fail 'wg2 requires one real-form private key and two peer keys'
+ ! grep -Eq 'TEMPLATE|INACTIVE|PLACEHOLDER' /etc/hostname.wg2 || fail 'wg2 template is not activatable'
+ ifconfig wg2 | awk '$1=="inet" && $2=="10.99.0.1" && $4=="0xffffff00" {ok=1} END {exit !ok}' || fail 'wg2 IPv4 gateway not running'
+ # Must already have upstream and current-cabling recovery before post-rack
+ # trials. Never synthesize a shared-wire rollback after the rack has moved.
+ if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
+  ifconfig igc1 | grep -q 'inet 10.98.0.1 netmask 0xffffff00' || fail 'current-cabling recovery not active'
+  grep -qx 'inet alias 10.98.0.1 255.255.255.0' /etc/hostname.igc1 || fail 'current-cabling recovery not persistent'
+ fi
+}
+
+stage() {
+ typeset token=$1 profile=$2 window=$3 f
+ token_ok "$token" || fail 'invalid stage token'
+ profile_ok "$profile" || fail 'invalid stage profile'
+ [[ $window == +([0-9]) && $window -ge 180 && $window -le 1800 ]] || fail 'window must be 180–1800 seconds'
+ pending && fail 'restore or confirm the pending trial first'
+ validate "$BASE/router-profiles/$profile" "$profile"
+ rm -rf "$STATE.next"
+ mkdir -p "$STATE.next/candidate"
+ cp -Rp "$BASE/router-profiles/$profile/." "$STATE.next/candidate/"
+ print -r -- "$token" > "$STATE.next/token"
+ print -r -- "$profile" > "$STATE.next/profile"
+ print -r -- "$window" > "$STATE.next/window"
+ print staged > "$STATE.next/status"
+ # Retain the previous journal until all stage validation/copying succeeds.
+ rm -rf "$STATE.previous"
+ [[ ! -d $STATE ]] || mv "$STATE" "$STATE.previous"
+ mv "$STATE.next" "$STATE"
+ atomic "$STATE/digest" "$(checksum "$STATE/candidate")"
+ print 'staged (inactive); candidate-sha256:'
+ cat "$STATE/digest"
+}
+
+# Capture structured address/route records, not executable shell text. The
+# persistent hostname files may differ from running aliases: retain both.
+snapshot() {
+ typeset s=$STATE/saved f i family service
+ rm -rf "$s"
+ mkdir -p "$s/files" "$s/addresses" "$s/flags" "$s/services" "$s/tables"
+ for f in $FILES; do
+  mkdir -p "$s/files${f%/*}"
+  if [[ -e $f ]]; then
+   [[ -f $f && ! -L $f ]] || fail 'unsupported persistent symlink'
+   cp -p "$f" "$s/files$f"
+  else
+   print -r -- "$f" >> "$s/absent"
+  fi
+ done
+ for i in igc0 igc1 igc2 igc3; do
+  ifconfig "$i" > "$s/flags/$i"
+  awk '$1=="inet" {print "inet", $2, $4}
+       $1=="inet6" && $2 !~ /^fe80:/ {print "inet6", $2, $4}' \
+   "$s/flags/$i" > "$s/addresses/$i"
+ done
+ for family in inet inet6; do
+  route -n show -"$family" > "$s/routes.$family.raw"
+  awk '$3 ~ /S/ && $NF ~ /^igc[0-3]$/ {print $1, $2, $3, $(NF-1)}' \
+   "$s/routes.$family.raw" > "$s/routes.$family"
+ done
+ sysctl -n net.inet.ip.forwarding > "$s/forward4"
+ sysctl -n net.inet6.ip6.forwarding > "$s/forward6"
+ for service in $SERVICES; do
+  if rcctl check "$service" >/dev/null 2>&1; then
+   print running > "$s/services/$service"
+   [[ -f /var/run/rc.d/$service ]] || fail 'running service has no rc runtime state'
+   sed -n 's/^daemon_flags=//p' "/var/run/rc.d/$service" > "$s/services/$service.flags"
+  else
+   print stopped > "$s/services/$service"
+  fi
+ done
+ # Preserve running PF rules independently of the file, including dynamic
+ # table contents. Reject anchors: this controller does not own their loaders.
+ pfctl -s Anchors > "$s/anchors"
+ [[ ! -s $s/anchors ]] || fail 'PF anchors need a separately scoped recovery implementation'
+ pfctl -s info > "$s/pf.info"
+ pfctl -s Interfaces -v > "$s/pf.interfaces"
+ awk '$2=="(skip)" && $1!="lo" && $1!="lo0" {exit 1}' "$s/pf.interfaces" || fail 'unexpected skipped PF interface'
+ # A non-floating loaded state policy is unsupported. All managed profiles
+ # use floating, and baseline without a declaration uses the native default.
+ ! grep -Eq '^[[:space:]]*set[[:space:]]+state-policy[[:space:]]+if-bound' /etc/pf.conf || fail 'unsupported PF state policy'
+ pfctl -nvf /etc/pf.conf > "$s/pf.parsed" 2> "$s/pf.parse-errors"
+ # These are the only global PF options a profile changes. The profile is
+ # constrained to floating state policy; retain the existing skip interface set.
+ print 'set state-policy floating' > "$s/pf.runtime"
+ # shellcheck disable=SC2129
+ awk '$2=="(skip)" {print "set skip on " $1}' "$s/pf.interfaces" >> "$s/pf.runtime"
+ awk '/^table / {print}' "$s/pf.parsed" >> "$s/pf.runtime"
+ pfctl -sr >> "$s/pf.runtime"
+ pfctl -s Tables | while read -r f; do
+  [[ $f == +([a-zA-Z0-9_]) ]] || fail 'unsupported PF table name'
+  grep -Eq "^table <$f>( |$)" "$s/pf.parsed" || fail 'runtime-only PF table needs explicit recovery support'
+  pfctl -t "$f" -T show > "$s/tables/$f"
+ done
+ pfctl -nf "$s/pf.runtime"
+ atomic "$STATE/snapshot-digest" "$(checksum "$s")"
+}
+
+arm() {
+ need_token "$1"
+ [[ $(cat "$STATE/profile") == "$2" && $(cat "$STATE/window") == "$3" ]] || fail 'stage arguments changed'
+ [[ $(cat "$STATE/status") == staged ]] || fail 'trial is not staged'
+ check_hook
+ rcctl check cron >/dev/null || fail 'cron is not running'
+ crontab -l | awk -v helper="$SELF" '$1=="*" && $2=="*" && $3=="*" && $4=="*" && $5=="*" && $6==helper && $7=="tick" {ok=1} END {exit !ok}' || fail 'OS timer is not installed'
+ [[ $(checksum "$STATE/candidate") == $(cat "$STATE/digest") ]] || fail 'candidate changed after staging'
+ validate "$STATE/candidate" "$(cat "$STATE/profile")"
+ ready
+ snapshot
+ # Snapshot and expiry are durable before pending authorizes any change.
+ atomic "$STATE/deadline" "$(($(date +%s) + $(cat "$STATE/window")))"
+ atomic "$STATE/status" armed
+ atomic "$BASE/router-owner" recovery-controller
+ touch "$STATE/pending"
+ sync
+ print 'armed; no network change yet'
+}
+
+# Only modify the two owned sysctls. Keep unrelated keys, comments and policy.
+persist_candidate() {
+ typeset d=$STATE/candidate f
+ for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 mygate pf.conf ntpd.conf; do
+  install -m 600 "$d/$f" "/etc/$f.gonf-next"
+  mv -f "/etc/$f.gonf-next" "/etc/$f"
+ done
+ # Keep the old DHCP config on shared wire: the service is stopped, and the
+ # intentionally subnet-less staging file is not an enabled DHCP config.
+ if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
+  install -m 600 "$d/dhcpd.conf" /etc/dhcpd.conf.gonf-next
+  mv -f /etc/dhcpd.conf.gonf-next /etc/dhcpd.conf
+ fi
+ install -m 600 "$d/unbound.conf" /var/unbound/etc/unbound.conf.gonf-next
+ mv -f /var/unbound/etc/unbound.conf.gonf-next /var/unbound/etc/unbound.conf
+ [[ -f /etc/sysctl.conf ]] || touch /etc/sysctl.conf
+ awk '!/^[ \t]*net\.inet\.ip\.forwarding[ \t]*=/ && !/^[ \t]*net\.inet6\.ip6\.forwarding[ \t]*=/' \
+  /etc/sysctl.conf > /etc/sysctl.conf.gonf-next
+ cat "$d/sysctl.conf.fragment" >> /etc/sysctl.conf.gonf-next
+ chmod 600 /etc/sysctl.conf.gonf-next
+ mv -f /etc/sysctl.conf.gonf-next /etc/sysctl.conf
+ rcctl disable rad
+ rcctl enable unbound ntpd
+ rcctl set unbound flags "-c /var/unbound/etc/unbound.conf"
+ rcctl set ntpd flags ""
+ case $(cat "$STATE/profile") in
+ shared-igc0) rcctl disable dhcpd;;
+ post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
+ post-ap) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
+ esac
+}
+
+# Remove addresses and their connected routes before transferring prefixes.
+# Upstream .1.2 and link-local IPv6 are kept throughout; wg0/wg1/wg2 untouched.
+clear_physical() {
+ typeset keep=${1:-no} i family address mask rest
+ for i in igc0 igc1 igc2 igc3; do
+  ifconfig "$i" inet6 -autoconf
+  route -n flush -inet -iface "$i" >/dev/null
+  route -n flush -inet6 -iface "$i" >/dev/null
+  ifconfig "$i" | awk -v keep="$keep" '
+   $1=="inet" && $2!="192.168.1.2" && !(keep=="yes" && $2=="10.98.0.1") {print "inet", $2}
+   $1=="inet6" && $2 !~ /^fe80:/ {print "inet6", $2}' > "$STATE/remove-addresses"
+  while read -r family address; do
+   ifconfig "$i" "$family" "$address" delete
+  done < "$STATE/remove-addresses"
+ done
+}
+apply_addresses() {
+ typeset i family alias address mask rest
+ for i in igc0 igc1 igc2 igc3; do
+  while read -r family alias address mask rest; do
+   case $family in
+   up) ifconfig "$i" up;;
+   inet)
+    if [[ $alias == alias ]]; then
+     if ! ifconfig "$i" | awk -v a="$address" '$1=="inet" && $2==a {ok=1} END {exit !ok}'; then
+      ifconfig "$i" inet alias "$address" netmask "$mask"
+     fi
+    else
+     ifconfig "$i" inet "$alias" netmask "$address"
+    fi;;
+   inet6) ifconfig "$i" inet6 alias "$address" prefixlen "$mask";;
+   esac
+  done < "$STATE/candidate/hostname.$i"
+ done
+ route -n add -inet default 192.168.1.1 >/dev/null
+}
+activate() {
+ need_token "$1"
+ pending && [[ $(cat "$STATE/status") == armed ]] || fail 'trial is not armed'
+ [[ $(date +%s) -lt $(cat "$STATE/deadline") ]] || fail 'trial expired'
+ check_hook
+ rcctl check cron >/dev/null || fail 'rollback cron is not running'
+ crontab -l | awk -v helper="$SELF" '$1=="*" && $2=="*" && $3=="*" && $4=="*" && $5=="*" && $6==helper && $7=="tick" {ok=1} END {exit !ok}' || fail 'OS timer is not installed'
+ ready
+ [[ $(checksum "$STATE/candidate") == $(cat "$STATE/digest") ]] || fail 'candidate changed'
+ [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'snapshot changed'
+ # Mark first: partial writes, failures, disconnects and reboots all restore.
+ atomic "$STATE/status" activating
+ sync
+ for service in $SERVICES; do rcctl stop "$service"; done
+ persist_candidate
+ clear_physical yes
+ apply_addresses
+ pfctl -f "$STATE/candidate/pf.conf"
+ pfctl -F states >/dev/null
+ if ! pfctl -s info | grep -q '^Status: Enabled'; then pfctl -e; fi
+ sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0 >/dev/null
+ rcctl start unbound ntpd
+ [[ $(cat "$STATE/profile") == shared-igc0 ]] || rcctl start dhcpd
+ atomic "$STATE/status" active-unconfirmed
+ sync
+ print 'active and UNCONFIRMED; recovery remains armed'
+}
+
+restore_files() {
+ typeset f
+ [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'snapshot integrity failed'
+ for f in $FILES; do
+  if [[ -f $STATE/saved/files$f ]]; then
+   cp -p "$STATE/saved/files$f" "$f.gonf-restore"
+   mv -f "$f.gonf-restore" "$f"
+  else
+   grep -qxF "$f" "$STATE/saved/absent" || fail 'incomplete saved file manifest'
+   rm -f "$f"
+  fi
+ done
+ sync
+}
+restore_runtime() {
+ typeset i family address mask destination gateway flags priority f service
+ for service in $SERVICES; do rcctl stop "$service"; done
+ typeset keep=no
+ if grep -q '^inet 10.98.0.1 ' "$STATE/saved/addresses/igc1"; then keep=yes; fi
+ clear_physical "$keep"
+ for i in igc0 igc1 igc2 igc3; do
+  while read -r family address mask; do
+   if [[ $family == inet ]]; then
+    if [[ $address == 192.168.1.2 ]]; then
+     ifconfig "$i" inet "$address" netmask "$mask"
+    else
+     if ! ifconfig "$i" | awk -v a="$address" '$1=="inet" && $2==a {ok=1} END {exit !ok}'; then
+      ifconfig "$i" inet alias "$address" netmask "$mask"
+     fi
+    fi
+   else
+    ifconfig "$i" inet6 alias "$address" prefixlen "$mask"
+   fi
+  done < "$STATE/saved/addresses/$i"
+  if grep -q 'AUTOCONF6[>,]' "$STATE/saved/flags/$i"; then ifconfig "$i" inet6 autoconf; fi
+  if grep -q '<UP,' "$STATE/saved/flags/$i"; then ifconfig "$i" up; else ifconfig "$i" down; fi
+ done
+ for family in inet inet6; do
+  while read -r destination gateway flags priority; do
+   # Learned route status and priority are part of the captured route record;
+   # connected/local routes are recreated by ifconfig, never globally flushed.
+   if [[ $flags == *H* ]]; then
+    route -n add -"$family" -host "$destination" "$gateway" -priority "$priority" >/dev/null
+   else
+    route -n add -"$family" "$destination" "$gateway" -priority "$priority" >/dev/null
+   fi
+  done < "$STATE/saved/routes.$family"
+ done
+ pfctl -f "$STATE/saved/pf.runtime"
+ pfctl -F states >/dev/null
+ # Runtime tables may differ from their original declarations. Const tables
+ # already use the saved declaration; dynamic ones must restore saved contents.
+ for f in "$STATE/saved/tables/"*; do
+  [[ -f $f ]] || continue
+  if ! grep -Eq "^table <${f##*/}> const" "$STATE/saved/pf.parsed"; then
+   pfctl -t "${f##*/}" -T replace -f "$f" >/dev/null
+  fi
+ done
+ if grep -q '^Status: Enabled' "$STATE/saved/pf.info"; then
+  if ! pfctl -s info | grep -q '^Status: Enabled'; then pfctl -e; fi
+ else
+  if pfctl -s info | grep -q '^Status: Enabled'; then pfctl -d; fi
+ fi
+ sysctl "net.inet.ip.forwarding=$(cat "$STATE/saved/forward4")" \
+  "net.inet6.ip6.forwarding=$(cat "$STATE/saved/forward6")" >/dev/null
+ for service in $SERVICES; do
+  if [[ $(cat "$STATE/saved/services/$service") == running ]]; then
+   rcctl set "$service" flags "$(cat "$STATE/saved/services/$service.flags")"
+   rcctl -f start "$service"
+  fi
+ done
+ # Starting with saved runtime flags must not overwrite persistent flag drift.
+ if [[ -f $STATE/saved/files/etc/rc.conf.local ]]; then
+  cp -p "$STATE/saved/files/etc/rc.conf.local" /etc/rc.conf.local.gonf-restore
+  mv -f /etc/rc.conf.local.gonf-restore /etc/rc.conf.local
+ else
+  rm -f /etc/rc.conf.local
+ fi
+}
+restore() {
+ [[ -f $STATE/snapshot-digest ]] || fail 'no saved trial exists'
+ # Explicit restore after confirmation is intentionally refused: it could undo
+ # a later accepted stage. Repeating an already completed restore is allowed.
+ [[ $(cat "$STATE/status") != confirmed ]] || fail 'confirmed trial cannot be restored'
+ atomic "$STATE/status" restoring
+ restore_files
+ restore_runtime
+ atomic "$STATE/status" restored
+ rm -f "$STATE/pending"
+ sync
+ print 'restored saved persistent and running state'
+}
+
+# Fresh SSH receipts are explicit acceptance inputs, never inferred from a
+# successful apply. The caller passes its remote-shell SSH_CONNECTION through
+# doas as one argument; the journal rejects connections predating activation.
+proof() {
+ typeset role=$1 token=$2 connection=$3 client cport server sport
+ need_token "$token"
+ pending && [[ $(cat "$STATE/status") == active-unconfirmed ]] || fail 'no active trial'
+ [[ $(date +%s) -lt $(cat "$STATE/deadline") ]] || fail 'trial expired'
+ read -r client cport server sport <<END
+$connection
+END
+ [[ $client == +([0-9.]) && $cport == +([0-9]) && $sport == 22 ]] || fail 'invalid SSH connection receipt'
+ case $role:$server in
+ old:192.168.1.2|new:10.20.0.1|recovery:10.98.0.1) :;;
+ *) fail 'receipt is for the wrong management address';;
+ esac
+ # Verify a currently ESTABLISHED socket matching the submitted 4-tuple.
+ netstat -n -f inet | awk -v a="$server.$sport" -v b="$client.$cport" \
+  '$4==a && $5==b && $6=="ESTABLISHED" {ok=1} END {exit !ok}' || fail 'fresh connection socket not found'
+ # Baseline sockets are captured just before activation, so an old SSH session
+ # cannot stand in for a reconnect after the change.
+ ! grep -qxF "$connection" "$STATE/preexisting-connections" || fail 'connection predates activation'
+ atomic "$STATE/proof.$role" "$connection"
+ print -- "$role connection recorded; service acceptance still required"
+}
+confirm() {
+ need_token "$1"
+ pending && [[ $(cat "$STATE/status") == active-unconfirmed ]] || fail 'trial is not active'
+ [[ $(date +%s) -lt $(cat "$STATE/deadline") ]] || fail 'trial expired'
+ typeset role
+ for role in old new; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/new receipts missing'; done
+ if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
+  [[ -s $STATE/proof.recovery ]] || fail 'fresh igc1 recovery receipt missing'
+ fi
+ [[ ${2:-} == services-checked ]] || fail 'controller service checks must pass before confirmation'
+ atomic "$STATE/status" confirmed
+ rm -f "$STATE/pending"
+ sync
+ print 'confirmed; rollback cancelled (retained addresses stay configured)'
+}
+
+boot_restore() {
+ pending || return 0
+ # No previous-boot PID can own the journal. Run before any network services.
+ rm -rf "$LOCK"
+ restore_files
+ atomic "$STATE/status" restored-at-boot
+ rm -f "$STATE/pending"
+ sync
+}
+tick() {
+ pending || return 0
+ [[ $(date +%s) -ge $(cat "$STATE/deadline") ]] || return 0
+ if [[ -f $LOCK/pid ]]; then
+  typeset pid state
+  pid=$(cat "$LOCK/pid")
+  state=$(cat "$STATE/status")
+  if kill -0 "$pid" 2>/dev/null; then
+   [[ $state == activating ]] || return 0
+   ps -p "$pid" -o args= | grep -F "$SELF activate " >/dev/null || fail 'activation lock process identity changed'
+   # An overrun activation must not exclude the independent timer indefinitely.
+   kill -TERM "$pid" 2>/dev/null || :
+   sleep 2
+   kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || :
+  fi
+  rm -rf "$LOCK"
+ fi
+ lock
+ restore
+}
+status() {
+ if [[ ! -f $STATE/status ]]; then print 'no staged trial'; return; fi
+ print -- "status=$(cat "$STATE/status") profile=$(cat "$STATE/profile")"
+ if pending; then
+  print -- "armed deadline=$(cat "$STATE/deadline") (cron granularity: 60 seconds)"
+  rcctl check cron >/dev/null || fail 'rollback cron is not running'
+  check_hook
+ else print 'no pending rollback'; fi
+}
+
+# Dispatch: fixture checks source the functions above this line in isolation.
+[[ $(id -u) == 0 ]] || fail 'root required'
+[[ $(uname -s) == OpenBSD ]] || fail 'OpenBSD required'
+mkdir -p "$BASE"
+case ${1:-} in
+install-boot) install_boot;;
+boot-needed) pending;;
+boot-restore) boot_restore;;
+tick) tick;;
+status) status;;
+stage) [[ $# == 4 ]] || fail 'stage TOKEN PROFILE SECONDS'; lock; stage "$2" "$3" "$4";;
+arm) [[ $# == 4 ]] || fail 'arm TOKEN PROFILE SECONDS'; lock; arm "$2" "$3" "$4";;
+activate)
+ [[ $# == 2 ]] || fail 'activate TOKEN'; lock
+ netstat -n -f inet | awk '$6=="ESTABLISHED" && $4 ~ /\.22$/ {
+  a=$5; sub(/\.[0-9]+$/, "", a); b=$4; sub(/\.22$/, "", b)
+  c=$5; sub(/^.*\./, "", c); print a, c, b, 22
+ }' > "$STATE/preexisting-connections"
+ activate "$2";;
+proof) [[ $# == 4 ]] || fail 'proof ROLE TOKEN SSH_CONNECTION'; lock; proof "$2" "$3" "$4";;
+confirm) [[ $# == 3 ]] || fail 'confirm TOKEN services-checked'; lock; confirm "$2" "$3";;
+restore) lock; restore;;
+*) fail 'use stage, arm, activate, status, proof, confirm or restore';;
+esac
