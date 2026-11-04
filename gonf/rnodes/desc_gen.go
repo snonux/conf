@@ -22,6 +22,10 @@ func (Base) DescSelinuxWireguard() string {
 	return "Keeps SELinux enforcing with only wireguard_t permissive (semanage permissive -a)"
 }
 
+func (Firewall) DescMigrationStage() string {
+	return "Installs a dormant physical-source migration policy without loading rules"
+}
+
 func (Firewall) DescRpcbindOff() string {
 	return "Stops and masks rpcbind only after checking every NFS mount uses NFSv4"
 }
@@ -84,6 +88,10 @@ func (Maintenance) DescPersistentJournal() string {
 
 func (Maintenance) DescRetiredNFSCron() string {
 	return "Removes the legacy per-minute check-nfs-mount.sh root cron line (the timer runs it)"
+}
+
+func (NodePortGuard) DescMigrationStage() string {
+	return "Installs a dormant pod-source policy covering migration aliases"
 }
 
 func (NodePortGuard) DescStage() string {
