@@ -21,17 +21,16 @@ log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
 }
 
-# /var/run may survive reboot on OpenBSD. Reclaim abandoned locks after
-# two hours; scheduled modes otherwise fail visibly instead of overlapping.
-if ! mkdir "$LOCK" 2>/dev/null; then
-    if [ -n "$(find "$LOCK" -mmin +120 2>/dev/null)" ]; then
-        rmdir "$LOCK" && mkdir "$LOCK" || exit 1
-    else
-        log "FAILED $mode: another unattended-upgrade job holds $LOCK"
-        exit 1
-    fi
+# Retain fd 9 in this shell and its update subprocesses. OpenBSD flock(2)
+# shares the lock across fork/dup, so Perl can acquire it through stdin and
+# exit while this shell keeps it held. The kernel releases it after the
+# last holder exits, including after a crash. Never unlink the lock file:
+# another process may already have opened the same inode to acquire it.
+exec 9>>"$LOCK" || { log "FAILED $mode: cannot open $LOCK"; exit 1; }
+if ! /usr/bin/perl -MFcntl=:flock -e 'flock(STDIN, LOCK_EX | LOCK_NB) or exit 1' <&9; then
+    log "FAILED $mode: cannot acquire $LOCK (another job may hold it)"
+    exit 1
 fi
-trap 'rmdir "$LOCK"' EXIT
 trap 'exit 1' HUP INT TERM
 
 case $mode in

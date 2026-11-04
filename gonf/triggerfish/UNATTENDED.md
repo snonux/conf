@@ -21,8 +21,11 @@ Changes, failures and restart reminders go to root's normal cron mail and
 `/var/log/unattended-upgrade-triggerfish.log` (0600; five compressed rotated
 logs, 1024 KB threshold). A clean package audit is logged without mail.
 An audit checks pending package updates and quirks advisories; it is not a
-complete CVE database scan. Overlapping jobs fail visibly. Abandoned lock
-directories are reclaimed after two hours.
+complete CVE database scan. Overlapping jobs fail visibly. An OS-held file
+lock remains exclusive regardless of job duration and is released when the
+last holder exits, including after a crash. The persistent lock file is
+never removed; its age does not control whether a job may start. Locking uses
+the Perl included in OpenBSD base and needs no additional package.
 
 This recipe uses the existing Triggerfish host inventory and baseline
 registration in `gonf/cluster` and `gonf/tasks`.
