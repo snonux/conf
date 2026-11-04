@@ -27,6 +27,7 @@ import (
 // (package_type_) is their task prefix; RegisterMethods with WithPrefix
 // keeps the prefixes that differ from it.
 func Register() {
+	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
 	RegisterGroup([]any{
 		openbsd.Unattended{}, frontends.Maintenance{}, frontends.Monitoring{},
 		frontends.Web{}, frontends.MailDNS{},

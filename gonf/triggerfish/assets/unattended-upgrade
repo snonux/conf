@@ -1,0 +1,104 @@
+#!/bin/ksh
+# Official OpenBSD updates for the single LAN router. No automatic reboot,
+# release upgrade, custom package repo or network-service restart.
+# Output goes to the private log and root's normal cron mail.
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
+export PATH
+PKG_PATH=installpath
+export PKG_PATH
+unset TRUSTED_PKG_PATH PKG_CACHE
+umask 077
+
+LOG=/var/log/unattended-upgrade-triggerfish.log
+LOCK=/var/run/unattended-upgrade-triggerfish.lock
+mode=${1:-}
+case $mode in
+base|pkgs|audit) ;;
+*) print -u2 "usage: $0 base|pkgs|audit"; exit 64 ;;
+esac
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$LOG"
+}
+
+# /var/run may survive reboot on OpenBSD. Reclaim abandoned locks after
+# two hours; scheduled modes otherwise fail visibly instead of overlapping.
+if ! mkdir "$LOCK" 2>/dev/null; then
+    if [ -n "$(find "$LOCK" -mmin +120 2>/dev/null)" ]; then
+        rmdir "$LOCK" && mkdir "$LOCK" || exit 1
+    else
+        log "FAILED $mode: another unattended-upgrade job holds $LOCK"
+        exit 1
+    fi
+fi
+trap 'rmdir "$LOCK"' EXIT
+trap 'exit 1' HUP INT TERM
+
+case $mode in
+base)
+    before=$(syspatch -l) || { log "FAILED: cannot list installed base patches"; exit 1; }
+    # A first syspatch may update only itself. A second invocation clears
+    # the remaining backlog with the updated tool (2 means no patches).
+    for attempt in 1 2; do
+        out=$(syspatch 2>&1)
+        rc=$?
+        case $rc in
+        0|2) ;;
+        *) log "syspatch FAILED (rc=$rc): $out"; exit 1 ;;
+        esac
+        [ -z "$out" ] || log "$out"
+    done
+    after=$(syspatch -l) || { log "FAILED: cannot list installed base patches"; exit 1; }
+    if [ "$before" != "$after" ]; then
+        log "Base patches applied; operator must restart affected daemons or reboot to activate them. Router services were left running."
+    fi
+    # Compare kernel build strings, not mtimes: KARL relinks /bsd at boot.
+    booted=$(sed -n '1{s/[[:space:]]*$//;p;}' /var/run/dmesg.boot)
+    ondisk=$(what /bsd 2>/dev/null | grep -m1 OpenBSD | sed 's/^[[:space:]]*//')
+    if [ -n "$booted" ] && [ -n "$ondisk" ] && [ "$booted" != "$ondisk" ]; then
+        log "Patched kernel pending: schedule a manual router reboot."
+    fi
+    ;;
+pkgs)
+    for mp in / /usr /var; do
+        avail=$(df -k "$mp" | awk 'NR==2 {print $4}')
+        if [ "${avail:-0}" -lt 262144 ]; then
+            log "pkgs FAILED: only ${avail:-0}KB free on $mp (need 256MB)"
+            exit 1
+        fi
+    done
+    before=$(pkg_info -q) || { log "FAILED: cannot list installed packages"; exit 1; }
+    out=$(pkg_add -Iu 2>&1)
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log "pkg_add FAILED (rc=$rc): $out"
+        exit 1
+    fi
+    after=$(pkg_info -q) || { log "FAILED: cannot list installed packages"; exit 1; }
+    if [ "$before" != "$after" ]; then
+        log "Packages updated: $out"
+        # uptimed is the router's current package daemon. Base/network
+        # services stay running; future package daemons need operator review.
+        if rcctl check uptimed >/dev/null 2>&1; then
+            rcctl restart uptimed || { log "FAILED: cannot restart uptimed"; exit 1; }
+        fi
+        log "Review updated packages for other running daemons requiring a manual restart."
+    fi
+    ;;
+audit)
+    out=$(pkg_add -Iun 2>&1)
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log "Package audit FAILED (rc=$rc): $out"
+        exit 1
+    fi
+    # The signed quirks timestamp is expected metadata, not a finding.
+    findings=$(printf '%s\n' "$out" | sed '/^quirks-[^[:space:]]* signed on [^[:space:]]*$/d')
+    if [ -n "$findings" ]; then
+        log "Package audit found pending updates or quirks advisories: $findings"
+        exit 1
+    fi
+    printf '[%s] Package audit clean: no pending updates or quirks advisories\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" >>"$LOG" || exit 1
+    ;;
+esac
