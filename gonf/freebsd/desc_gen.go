@@ -52,6 +52,30 @@ func (Monitoring) DescPackage() string { return "Installs node_exporter" }
 
 func (NFS) DescStunnelPackage() string { return "Installs stunnel on f0/f1" }
 
+func (NetworkMigration) DescConfirm() string {
+	return "Accepts a transaction after separate fresh management/service checks"
+}
+
+func (NetworkMigration) DescPrepare() string {
+	return "Installs dormant rollback tooling without changing network state"
+}
+
+func (NetworkMigration) DescPromote() string {
+	return "Selects the lab primary and gateway while retaining old management"
+}
+
+func (NetworkMigration) DescRollback() string {
+	return "Restores the pending transaction without restarting netif or guests"
+}
+
+func (NetworkMigration) DescStage() string {
+	return "Adds the lab address and local ULA on the unchanged shared wire"
+}
+
+func (NetworkMigration) DescStatus() string {
+	return "Reports the persistent rollback deadline and current transaction"
+}
+
 func (Periodic) DescTimes() string {
 	return "Runs periodic daily/weekly/monthly in each host's afternoon hour (hosts are off at night)"
 }

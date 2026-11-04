@@ -232,6 +232,7 @@ func registerFreeBSD() {
 		WithPlatform("freebsd/amd64"),
 	)
 	f0 := Host("f0", fhost,
+		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.130", LabIPv4: "10.20.0.130", RecoveryIPv4: "10.98.0.130", ULA: "fd02:ca0b:f1cb:20::130", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.130", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
@@ -245,6 +246,7 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
+		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.131", LabIPv4: "10.20.0.131", RecoveryIPv4: "10.98.0.131", ULA: "fd02:ca0b:f1cb:20::131", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.131", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
@@ -258,6 +260,7 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
 	f2 := Host("f2", fhost,
+		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.132", LabIPv4: "10.20.0.132", RecoveryIPv4: "10.98.0.132", ULA: "fd02:ca0b:f1cb:20::132", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.132", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
@@ -270,6 +273,7 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
 	f3 := Host("f3", fhost,
+		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.133", LabIPv4: "10.20.0.133", RecoveryIPv4: "10.98.0.133", ULA: "fd02:ca0b:f1cb:20::133", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.133", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
