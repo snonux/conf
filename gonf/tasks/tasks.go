@@ -58,6 +58,7 @@ func Register() {
 
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Base{}, rnodes.K3s{}, rnodes.WireGuard{})
+	RegisterOnCluster(cluster.NameRockyK3s, rocky.NetworkMigration{})
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.NodePortGuard{})
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Firewall{})
 

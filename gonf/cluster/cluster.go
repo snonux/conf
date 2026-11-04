@@ -187,16 +187,19 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 		WithPlatform("linux/amd64"),
 	)
 	r0 := Host("r0", rnode,
+		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.120", LabIPv4: "10.20.0.120", RecoveryIPv4: "10.98.0.120", ULA: "fd02:ca0b:f1cb:20::120", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.120", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.120"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
 	r1 := Host("r1", rnode,
+		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.121", LabIPv4: "10.20.0.121", RecoveryIPv4: "10.98.0.121", ULA: "fd02:ca0b:f1cb:20::121", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.121", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.121"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
 	r2 := Host("r2", rnode,
+		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.122", LabIPv4: "10.20.0.122", RecoveryIPv4: "10.98.0.122", ULA: "fd02:ca0b:f1cb:20::122", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.122", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),

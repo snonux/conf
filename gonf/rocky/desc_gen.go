@@ -26,6 +26,30 @@ func (KernelAudit) DescUnits() string {
 	return "Installs rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
 }
 
+func (NetworkMigration) DescConfirm() string {
+	return "Accepts independently verified fresh management and service checks"
+}
+
+func (NetworkMigration) DescPrepare() string {
+	return "Installs dormant NetworkManager transaction and PID1 rollback tools"
+}
+
+func (NetworkMigration) DescPromote() string {
+	return "Requests new physical primary selection and a serial k3s refresh"
+}
+
+func (NetworkMigration) DescRollback() string {
+	return "Requests restoration through PID1 independently of the SSH session"
+}
+
+func (NetworkMigration) DescStage() string {
+	return "Requests a guarded PID1-owned shared-wire dual-address transaction"
+}
+
+func (NetworkMigration) DescStatus() string {
+	return "Reports pending state without exposing NetworkManager credentials"
+}
+
 func (Unattended) DescGonfLink() string {
 	return "Symlinks /usr/bin/gonf → /usr/local/bin/gonf (sudo secure_path)"
 }
