@@ -24,7 +24,14 @@ func main() {
  relay, err := os.ReadFile("../f3s/freebsd-hosts/relayd/relayd.conf"); if err != nil { panic(err) }
  got, err := sm.Server(string(server)); must(err == nil, "server render")
  must(strings.ReplaceAll(got, sm.LabVIP, sm.OldVIP) == string(server), "server changed unrelated policy")
- for _, bad := range []string{"", got, string(server)+string(server)} {
+ for _, bad := range []string{"", got, string(server)+string(server),
+  "accept = "+sm.OldVIP+":23230\n",
+  "# accept = "+sm.OldVIP+":2323\naccept = 127.0.0.1:2323\n",
+  "; accept = "+sm.OldVIP+":2323\n",
+  "accept = 127.0.0.1:2323\n",
+  string(server)+"\naccept = 127.0.0.1:2323\n",
+  string(server)+"\nAccept = 127.0.0.1:2323\n",
+  "accept = "+sm.OldVIP+":2323\naccept = "+sm.OldVIP+":2323\n"} {
   _, err = sm.Server(bad); must(err != nil, "server accepted drift")
  }
  got, err = sm.Relayd(string(relay)); must(err == nil, "relayd render")
@@ -37,6 +44,32 @@ func main() {
   got, err = sm.Client(original); must(err == nil, "client render")
   must(strings.ReplaceAll(got, sm.LabVIP, sm.OldVIP) == original, "client identity drift")
   _, err = sm.Client(got); must(err != nil, "client accepted already promoted source")
+ }
+ // Exercise the real public client renderer against complete directive failures.
+ for _, bad := range []string{
+  "connect = "+sm.OldVIP+":23230\n",
+  "# connect = "+sm.OldVIP+":2323\nconnect = 127.0.0.1:2323\n",
+  "# connect = "+sm.OldVIP+":2323\n",
+  "connect = 127.0.0.1:2323\n",
+  "connect = "+sm.OldVIP+":2323\nconnect = "+sm.OldVIP+":2323\n",
+  "connect = "+sm.OldVIP+":2323\nconnect = 127.0.0.1:2323\n",
+  "connect = "+sm.OldVIP+":2323\nConnect = 127.0.0.1:2323\n"} {
+  _, err = sm.Client(bad); must(err != nil, "client accepted malformed active endpoint")
+ }
+ for _, directive := range []string{"accept", "connect"} {
+  original := "# "+directive+" = "+sm.OldVIP+":2323\n  "+directive+" = "+sm.OldVIP+":2323\ncert = existing.pem\nkey = existing-key.pem\n"
+  var rendered string
+  if directive == "accept" { rendered, err = sm.Server(original) } else { rendered, err = sm.Client(original) }
+  must(err == nil, "active endpoint after comment rejected")
+  expected := strings.Replace(original, "  "+directive+" = "+sm.OldVIP, "  "+directive+" = "+sm.LabVIP, 1)
+  must(rendered == expected, "comment, indentation or credentials path changed")
+ }
+ for _, bad := range []string{
+  strings.Replace(string(relay), "port 80", "port 800", 1),
+  strings.Replace(string(relay), "listen on", "# listen on", 1),
+  strings.Replace(string(relay), "listen on "+sm.OldVIP, "listen on 127.0.0.1", 1),
+  string(relay)+"\nlisten on "+sm.OldVIP+" port 80\n"} {
+  _, err = sm.Relayd(bad); must(err != nil, "relayd accepted malformed active listener")
  }
  cluster.Register(); tasks.Register()
  api.Task("offline_storage_probe", "", func() { api.Noop("storage-probe") })

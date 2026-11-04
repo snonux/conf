@@ -20,12 +20,12 @@ const (
 
 // Server preserves every server setting except the exact TLS listener.
 func Server(source string) (string, error) {
-	return replace(source, "accept = "+OldVIP+":2323", "accept = "+LabVIP+":2323", 1)
+	return endpoint(source, "accept")
 }
 
 // Client preserves the client identity, loopback listener and TLS policy.
 func Client(source string) (string, error) {
-	return replace(source, "connect = "+OldVIP+":2323", "connect = "+LabVIP+":2323", 1)
+	return endpoint(source, "connect")
 }
 
 // Relayd changes only the two VIP listeners and the existing backend table.
@@ -61,16 +61,59 @@ func Relayd(source string) (string, error) {
 		seen[mapped] = true
 		next[i] = mapped
 	}
-	result, err := replace(source, table, prefix+strings.Join(next, " ")+" }", 1)
-	if err != nil {
-		return "", err
+	// Replace the complete active table line, never matching a comment.
+	lines := strings.SplitAfter(source, "\n")
+	for i, line := range lines {
+		if strings.TrimSuffix(line, "\n") == table {
+			lines[i] = strings.Replace(line, table, prefix+strings.Join(next, " ")+" }", 1)
+		}
 	}
-	return replace(result, "listen on "+OldVIP+" port ", "listen on "+LabVIP+" port ", 2)
+	return listeners(strings.Join(lines, ""))
 }
 
-func replace(source, old, next string, count int) (string, error) {
-	if strings.Count(source, old) != count {
-		return "", fmt.Errorf("unexpected storage source; expected %d occurrences of %q", count, old)
+// endpoint requires exactly one complete active directive. It deliberately
+// refuses extra services or inline comments rather than guessing their intent.
+func endpoint(source, directive string) (string, error) {
+	lines := strings.SplitAfter(source, "\n")
+	count := 0
+	for i, line := range lines {
+		active := strings.TrimSpace(line)
+		if strings.HasPrefix(active, "#") || strings.HasPrefix(active, ";") {
+			continue
+		}
+		key, value, found := strings.Cut(active, "=")
+		if !found || !strings.EqualFold(strings.TrimSpace(key), directive) {
+			continue
+		}
+		count++
+		if strings.TrimSpace(value) != OldVIP+":2323" || count != 1 {
+			return "", fmt.Errorf("unexpected or duplicate active stunnel %s endpoint", directive)
+		}
+		lines[i] = strings.Replace(line, OldVIP+":2323", LabVIP+":2323", 1)
 	}
-	return strings.ReplaceAll(source, old, next), nil
+	if count != 1 {
+		return "", fmt.Errorf("missing active stunnel %s endpoint", directive)
+	}
+	return strings.Join(lines, ""), nil
+}
+
+func listeners(source string) (string, error) {
+	lines := strings.SplitAfter(source, "\n")
+	seen := make(map[string]bool)
+	for i, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || fields[0] != "listen" {
+			continue
+		}
+		if len(fields) != 5 || fields[1] != "on" || fields[2] != OldVIP || fields[3] != "port" ||
+			(fields[4] != "80" && fields[4] != "443") || seen[fields[4]] {
+			return "", fmt.Errorf("unexpected or duplicate active relayd listener")
+		}
+		seen[fields[4]] = true
+		lines[i] = strings.Replace(line, OldVIP, LabVIP, 1)
+	}
+	if len(seen) != 2 {
+		return "", fmt.Errorf("missing active relayd listeners")
+	}
+	return strings.Join(lines, ""), nil
 }
