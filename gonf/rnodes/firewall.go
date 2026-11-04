@@ -2,6 +2,7 @@ package rnodes
 
 import (
 	"github.com/snonux/conf/gonf/hostfirewall"
+	"github.com/snonux/conf/gonf/paths"
 	. "github.com/snonux/gonf/api"
 )
 
@@ -14,6 +15,17 @@ func (Firewall) OptsStage() TaskOptions { return TaskOptions{Operational()} }
 // Stage installs a candidate and guarded firewall activation tools without loading rules.
 func (Firewall) Stage() {
 	hostfirewall.Stage(hostfirewall.Profile{Interface: "enp0s5", EnableWireGuard: true, WireGuardPort: 56709})
+}
+
+// OptsMigrationStage keeps future source permissions out of routine deployments.
+func (Firewall) OptsMigrationStage() TaskOptions { return TaskOptions{Operational()} }
+
+// MigrationStage installs a dormant physical-source migration policy without loading rules.
+func (Firewall) MigrationStage() {
+	EnsureDir("/etc/f3s-firewall", RootPrivate)
+	InstallFile("/etc/f3s-firewall/migration.nft",
+		paths.RNodeAsset("source-guard/migration.nft"), RootPrivate,
+		WithValidation("/usr/sbin/nft", List("-c", "-f", CandidatePath)))
 }
 
 // OptsRpcbindOff keeps the NFS-adjacent cleanup an explicitly named operation.
