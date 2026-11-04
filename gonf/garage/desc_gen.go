@@ -5,3 +5,7 @@ package garage
 func (Deployment) DescConfig() string {
 	return "Renders private admin/metrics settings and installs Garage TOML on f0, f1, and f2 (config only; Garage must already be installed and provisioned)"
 }
+
+func (Deployment) DescMigrationCandidate() string {
+	return "Stages Garage TOML with its reserved lab RPC address"
+}

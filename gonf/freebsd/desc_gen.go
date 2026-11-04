@@ -2,6 +2,10 @@
 
 package freebsd
 
+func (Apcupsd) DescMigrationCandidate() string {
+	return "Stages UPS configuration without rebinding or restarting"
+}
+
 func (Base) DescDoas() string {
 	return "Installs doas.conf (nopass :wheel + f3sctl agent rules), validated with doas -C first"
 }
@@ -23,6 +27,10 @@ func (Carp) DescFailbackNewsyslog() string {
 }
 
 func (Debug) DescGdb() string { return "Installs gdb (kgdb for /var/crash/vmcore.N)" }
+
+func (F3sctl) DescMigrationCandidate() string {
+	return "Stages additive Pi source pins, retaining old LAN and wg0"
+}
 
 func (F3sctl) DescPackage() string {
 	return "Installs the f3sctl package (the agent binary /usr/local/bin/f3sctl) from the custom pkg repo"
@@ -82,6 +90,10 @@ func (Periodic) DescTimes() string {
 
 func (RootMail) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
+}
+
+func (ShellyFans) DescMigrationCandidate() string {
+	return "Stages the boot fan address override without running it"
 }
 
 func (ShellyFans) DescScripts() string {
