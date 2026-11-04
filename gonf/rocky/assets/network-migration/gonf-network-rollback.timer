@@ -1,0 +1,8 @@
+[Unit]
+Description=Independent physical network rollback watchdog
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=1s
+[Install]
+WantedBy=timers.target

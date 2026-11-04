@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore unconfirmed persistent physical network before NetworkManager
+DefaultDependencies=no
+After=local-fs.target
+Before=NetworkManager.service network-pre.target
+RequiresMountsFor=/var/lib/gonf-network-migration /usr/local/sbin
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gonf-network-migration restore-boot
+TimeoutStartSec=180
+RemainAfterExit=yes
+[Install]
+RequiredBy=NetworkManager.service

@@ -1,0 +1,13 @@
+[Unit]
+Description=Complete boot rollback before k3s
+After=NetworkManager.service gonf-network-rollback-boot.service
+Requires=NetworkManager.service gonf-network-rollback-boot.service
+Before=k3s.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gonf-network-migration restore-after-boot
+TimeoutStartSec=180
+RemainAfterExit=yes
+[Install]
+RequiredBy=k3s.service
+WantedBy=multi-user.target
