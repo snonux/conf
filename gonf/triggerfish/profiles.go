@@ -171,6 +171,8 @@ pass in on $wifi_if inet proto udp from <wifi> to 10.30.0.1 port 123 keep state
 pass in on $lab_if inet proto tcp from <lab> to 10.20.0.1 port 22 keep state
 pass in on $lab_if inet proto icmp from <lab> to 10.20.0.1 keep state
 # Distinct authenticated peers; no NAT between wg2 and the lab.
+# Pi-hole DNS contract: both peers, both DNS transports, only the resolver pair.
+pass in on wg2 inet proto { tcp udp } from { 10.99.0.2, 10.99.0.3 } to { 10.20.0.127, 10.20.0.128 } port 53 keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to <lab> port { 22, 80, 443 } keep state
 pass in on wg2 inet proto tcp from 10.99.0.3 to <lab> port 443 keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to 10.99.0.1 port 22 keep state
