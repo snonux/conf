@@ -10,7 +10,7 @@ methods are Operational and excluded from the routine `freebsd` aggregate.
 Prepare refuses to overwrite tooling while a transaction is pending. It does
 not change rc.conf addresses, routes, PF, service listeners or WireGuard.
 
-Before later activation, task v14 must validate the helper on a bounded
+Before production activation, task v14 must validate the helper on a bounded
 FreeBSD canary: fresh literal old/new SSH connections, actual cron expiry
 with the originating SSH session gone, repeated rollback, confirmation,
 unconfirmed reboot, and routine gonf reapply after recovery. Check cron runs,
@@ -18,9 +18,15 @@ unconfirmed reboot, and routine gonf reapply after recovery. Check cron runs,
 helper/state filesystem is mounted at FILESYSTEMS. Check upcoming unattended
 reboots independently; do not change task 914 or rely on its schedule.
 
-After those proofs and the coordinated service/firewall review, the operator
-may explicitly create root-only `/var/db/gonf-network-migration/activation-approved`.
-This file is intentionally never created by a recipe. Stage and Promote arm
+Task v14 may create short-lived, scoped canary authorization through the
+root-only `/var/db/gonf-network-migration/activation-approved` marker under
+its existing approved task scope, after checking the independent watcher,
+boot hook and coordinated service/firewall prerequisites. That bounded test
+authorization permits collecting the missing native evidence; it does not
+establish completed proof or authorize production rollout. Remove it after
+the bounded test. Production authorization follows actual expiry, boot,
+fresh reconnect and reapply acceptance plus the coordinated service/firewall
+review. No recipe creates the marker. Stage and Promote arm
 a 900-second transaction before changing persistent or running state. Root's
 independent minute cron rolls it back within a minute of its deadline. A
 persistent pending journal causes rollback before netif at boot regardless
