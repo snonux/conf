@@ -1,7 +1,10 @@
 # f3 primary boot recovery and final confirmation — next review slices
 
-Source preparation only. No boot or final-confirmation permission is implied.
-The third 300-second expiry trial must first finish with independent native
+The documented 600-second OLD-recovery boot slice completed; actual receipts
+and terminal acceptance are in [Y14-PRIMARY-NATIVE.md](Y14-PRIMARY-NATIVE.md).
+Final confirmation and confirmed-NEW cold-boot recovery tooling remain source
+preparation; no repeat boot or final-confirmation permission is implied.
+The preceding third 300-second expiry trial also completed independent native
 restoration, original-baseline comparison, full health and terminal cleanup.
 The two earlier failed attempts remain failures in Y14-PRIMARY-FIRST.md.
 
