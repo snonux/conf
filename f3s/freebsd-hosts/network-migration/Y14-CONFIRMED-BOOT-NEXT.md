@@ -8,7 +8,8 @@ the separate v2 retry proved native guard expiry. See
 No primary confirmation, guard activation or confirmed-NEW reboot is authorized
 by this file. Root reviews the exact native slice separately.
 
-Native retry and consumer installation are currently **on HOLD**. The former2fb helper
+The live retry remains **on HOLD**. A distinct stable-ID diagnostic bundle was
+installed dormant at22:50:11UTC; no live guard or reboot is authorized. The former2fb helper
 used estimated `kern.boottime` as identity; its one-second change in the same
 running boot refused the next installation before any object was created.
 The unchanged2fb fixture also reproduces false OLD recovery after a clock
@@ -26,9 +27,13 @@ root review, exact two-file preview and actual new-day F3 :15 completion. Both
 are root:wheel0755; native syntax and random-before-rollback-before-NETIF order
 passed. The other five resources and OLD protected/WG/PF/VM state stayed
 unchanged, unchanged reapply passed, and all markers remain absent. No guard,
-address, VM or reboot action occurred. A distinct stable-ID controller/context
-bundle and fresh native acceptance are still required; this file-only deployment
-does not accept confirmed-NEW startup or authorize a trial.
+address, VM or reboot action occurred. The separately reviewed stable-ID consumer
+bundle was then installed dormant at22:50:11UTC with zero deadlines and no
+receipts. Exact root-private context/proof, two root:wheel0555 rc hooks and
+installed causal order passed; full OLD state and marker absence stayed exact.
+See the [stable-ID handoff](Y14-CONFIRMED-NEW-BOOT-STABLE.md). Fresh native
+acceptance remains required; neither file-only deployment accepts confirmed-NEW
+startup or authorizes a trial.
 
 ## Minimal source contract
 

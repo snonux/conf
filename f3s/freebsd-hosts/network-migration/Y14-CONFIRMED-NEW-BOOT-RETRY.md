@@ -31,13 +31,17 @@ random-before-rollback-before-NETIF order and unchanged reapply passed; markers
 remain absent. No address/guard/VM/reboot action was authorized or performed.
 Private receipts are `evidence/boot-identity-file-only-*.json`.
 
-The frozen13-artifact bundle below remains historical and uninstalled. Next work
-is a distinct source-only stable-ID consumer/context proposal covering
-guard arm/admission, boot claim, watchdog, release and all controller/diagnostic
-identity consumers. Timestamp refresh, tolerance and fallback identity guesses
-are prohibited. No immutable historical context is changed, and no new consumer
-installation or live trial is authorized; opaque read failure must fail closed. Boot time may remain a diagnostic
-timestamp, but it cannot establish per-boot identity.
+The frozen13-artifact bundle below remains historical and uninstalled. A distinct
+stable-ID bundle covering guard admission/claim/watchdog/release and all
+controller/diagnostic consumers passed15 focused checks and root review. Its
+dormant diagnostic installation passed at22:50:11UTC: private context/proof and
+two0555 hooks have exact hashes/owners/modes, zero deadlines and no receipts;
+actual causal order, full OLD state, normal VM policy and marker absence passed.
+See the [stable-ID handoff](Y14-CONFIRMED-NEW-BOOT-STABLE.md). Live retry remains
+on HOLD pending separate whole-slice review and fresh scheduler/health admission.
+Historical contexts are immutable. Timestamp tolerance and fallback identity
+guesses remain prohibited; opaque read failure must fail closed. Boot time is
+diagnostic date evidence, never per-boot identity.
 
 The first actual boot attempt remains failed and fully cleaned up; see
 [its record](Y14-CONFIRMED-NEW-BOOT.md). Its original bundle, native causal
