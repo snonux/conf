@@ -25,7 +25,8 @@ run at 13:35:49 completed successfully without disturbing accepted Stage.
 
 Accepted guest state retains old primary/default 192.168.1.1, adds
 10.20.0.123/.139 and the explicit laptop 10.99.0.2/32 return via 192.168.1.2.
-Both standalone branches suppress upstream physical IPv6, keep link-local,
+Both standalone branches suppress upstream physical IPv6. FreeBSD keeps its
+physical link-local; Rocky disables physical IPv6 entirely (no link-local). Both
 allocate no guest ULA and preserve wg0 configuration. No k3s operation or
 flannel file is part of standalone Rocky migration.
 

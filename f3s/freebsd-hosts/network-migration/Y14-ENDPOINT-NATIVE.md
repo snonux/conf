@@ -205,7 +205,89 @@ with no new journal/authorization. Both owned probe UIDs were deleted. Source
 YAML stayed OLD. Reverse confirmation/outer expiry and actual f3 boot remain
 separate subsequent root slices.
 
+## Reverse direction: confirmed state and independent outer expiry
+
+Root approved exact dormant scope `y14_f3_r2_confirm_20261105` (config 8d1044…)
+with inner 120 / outer 360 seconds to allow a full native minute cadence and
+observation margin. At 15:38:49 the before-next-writer guard could no longer fit
+the full lease+cadence before r2's 15:45 updater, so no permission/record was
+created. That updater completed successfully at 15:45:02; next moved to 16:45.
+Fresh actual f3 writer idle, strict admission, four literal management paths,
+UDP arrival, unchanged source and full before-trial health then passed.
+
+Canary applied 15:46:56, inner 15:48:56, outer 15:52:56. After real bidirectional
+overlay IPv4/IPv6 and full applied health passed, it was confirmed at 15:48:15.
+Independent observation at 15:50:27 showed phase confirmed and both saved/live
+NEW, more than a full minute after inner expiry and after the 15:49/15:50 cron
+dispatches. Fresh overlay probes remained zero-loss. All SSH sessions closed.
+
+The native outer restoration's untouched record mtime was **15:53:00.075206**.
+Fresh old-management SSH independently observed restored/accepted=true at
+**15:53:46 before any manual restore**: saved file bytes exactly original,
+selected actual runtime OLD exactly captured and all runtime fields identical.
+This proves the native hard outer lease restored an actually confirmed FreeBSD
+canary. Two explicit restores, full post-health, private complete archive
+`/var/db/gonf-endpoint/archived-y14_f3_r2_confirm_20261105-1793894165`, unchanged
+dormant five-resource reapply and exact owned-UID cleanup followed. Pending was
+absent and source YAML stayed OLD.
+
+Before actual f3 boot, root added the explicit ldconfig requirement to the
+early hook in generator 9e459b6. Package Python3.12 has no ELF RPATH and needs
+its /usr/local/lib hints ready. The single dormant early-hook file changed
+from 930b9a7… to dead65c… only while no record existed; native syntax and actual
+base order passed. A native graph using the exact staged diagnostic sources
+also passed ldconfig → early helper/proof → netif/wireguard → runtime helper/
+proof → LOGIN. The actual installed proof graph and parent reboot subsequently passed in the
+separately coordinated slice below. The explicit prerequisite does not change
+the already completed timer proof results.
+
 Private evidence is under `~/.local/state/conf/y14-preparation/evidence/`;
 exact pinned installation/config manifests, original private semantic snapshots
 and read-only ownership comparisons are under its sibling `endpoint/`.
 No key/configuration contents are published here.
+
+
+## Reverse direction: actual parent boot and terminal cleanup
+
+Root approved exact scope `y14_f3_r2_boot_20261105`, configuration 7eb3f4…,
+frozen helper 0a8b54…, early hook dead65… and runtime hook c07d9d…, with inner
+480 / outer 900 seconds. The three diagnostic/private-context artifacts and
+installed native rcorder proved ldconfig before early helper/proof, before
+netif/WireGuard, and runtime helper/proof before LOGIN. No earlier receipt or
+manual proof replay was reused. All journals were absent at installation.
+
+Fresh quorum/full health, strict fields, OLD authoritative YAML, four literal
+management paths and updater idle/next windows passed. `doas vm stopall`
+gracefully stopped every running guest before arming; no forced stop was used.
+The unchanged vm_list contained only rocky, while FreeBSD retained its ordinary
+stopped policy. Canary applied **16:08:54**, inner **16:16:54**, outer
+**16:23:54**. Actual selected NEW transport and bidirectional overlay IPv4/IPv6
+passed, then the normal f3-only reboot was requested at **16:10:23**.
+
+The new kernel boot epoch was **1793895125 (16:12:05 UTC)**, distinct from the
+captured original 1793883329. Original durable early receipt at
+**16:12:15.280896**, monotonic **9.516950**, proved saved configuration already
+OLD and wg0 absent before netif/WireGuard. Original runtime receipt at
+**16:12:23.215447**, monotonic **17.451500**, proved actual selected runtime OLD,
+saved OLD and strict fields restored before LOGIN. Fresh independent old-path
+SSH returned at **16:12:52**, before inner expiry. These causal receipts prove
+boot restoration rather than a later minute-cron restoration.
+
+Full postboot cluster/storage/DNS/API/verified-TLS acceptance passed. f3 retained
+old primary/default, .20 alias, local ULA, laptop return and protected WG/PF/
+bridge/configuration values. Rocky returned automatically, Running PID6470,
+with accepted dual Stage and old default, old/new SSH/HTTPS and healthy wg0
+IPv4/IPv6. FreeBSD and other normally stopped guests remained stopped; vm_list
+was unchanged. Rocky's accepted physical IPv6 policy is disabled, without a
+physical link-local or ULA; FreeBSD's distinct disabled-upstream policy retains
+its link-local. No claim of repaired FreeBSD overlay identity is made.
+
+Two explicit restores, full private journal archive
+`/var/db/gonf-endpoint/archived-y14_f3_r2_boot_20261105-1793895490`, and removal
+of only the two owned diagnostic /etc/rc.d proof hooks followed. Original proof
+program/context/receipts remained root-private for audit. Base rcorder passed
+again; dormant helper/config/two rc hooks/system-cron reapply was unchanged.
+Both exact owned health-probe UIDs were removed. Endpoint pending was absent
+on both hosts and authoritative YAML remained OLD. Both directions have now
+passed independent inner expiry, confirmed-state outer expiry and actual boot;
+this does not authorize source fanout or physical primary confirmation.
