@@ -186,3 +186,32 @@ passed. Both exact owned probe UIDs were deleted and drained. Source YAML,
 endpoints, keys, PF and VM policy remain unchanged; f3 is OLD-primary Stage.
 This accepts expiry after ordinary confirmation, not confirmed-NEW startup or
 guard release. Private `guard-expiry-v2-*` evidence retains every original receipt.
+
+## First confirmed-NEW boot failed its postboot measurement
+
+The separately reviewed actual boot trial confirmed ordinary NEW and armed600
+at21:08:02.084, deadline21:18:01, after a graceful VM stop and the full1005-second
+writer window. A normal f3 reboot began21:08:05.347. Original receipts from new
+kernel1793912987 proved persistent NEW before netif/WG at21:09:58.344 and actual
+NEW before LOGIN at21:10:07.139; fresh OLD-path SSH returned21:10:11.745.
+
+The subsequent strict measurement failed: r1's initial IPv4 check received1/2
+replies. Its second echo, both IPv6 replies, identity and SSH passed; the other
+five peers passed, with no source-guard drop. Strict recovery restored OLD at
+21:10:28.107. No postboot NAT acceptance or guard release was reached. These valid
+startup receipts do not make the entire trial pass. A startup/session explanation
+remains a hypothesis; a future readiness round cannot erase this failed attempt.
+
+Full original protected state, routes, WG, four control paths, normal VM policy,
+strict original guest checks, all six strict peer checks and service health passed
+after recovery. Whole journals and original proof/context/receipts were archived;
+only the two owned diagnostic rc hooks and activation gate were removed. Base
+graph and unchanged scoped reapply passed, and exact probe UIDs were drained.
+f3 is OLD-primary Stage with no pending, guard or activation. See
+[the preserved first-trial protocol](Y14-CONFIRMED-NEW-BOOT.md).
+
+The failure reporter incorrectly printed private WG context into the tool
+transcript. No values are reproduced here and no keys were changed. Any retry
+requires a tested metadata-only reporter and operator output containment, plus
+its own distinct evidence and explicitly reviewed readiness/strict-measurement
+protocol. The original failed bundle and private evidence remain intact.
