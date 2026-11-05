@@ -124,6 +124,21 @@ func (Rollback) Restore() {
 		" restore </dev/null >/etc/gonf/router-restore.log 2>&1 &"))
 }
 
+// OptsRestorePrevious excludes journal recovery from routine deployment.
+func (Rollback) OptsRestorePrevious() TaskOptions { return TaskOptions{Operational()} }
+
+// RestorePrevious recovers a named restored journal after a later stage refused.
+func (Rollback) RestorePrevious() {
+	EachHost(func(t RouterTrial) {
+		if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$`).MatchString(t.Token) {
+			Refuse("Command", "recover", fmt.Errorf("the previous restored trial token is required"))
+			return
+		}
+		Command("sh", List("-c", "umask 077; /usr/bin/nohup "+rollbackCommand+
+			" recover "+t.Token+" </dev/null >/etc/gonf/router-restore.log 2>&1 &"))
+	})
+}
+
 func trialCommand(action string, profile bool) {
 	EachHost(func(t RouterTrial) {
 		if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$`).MatchString(t.Token) {

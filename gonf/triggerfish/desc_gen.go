@@ -48,6 +48,10 @@ func (Rollback) DescRestore() string {
 	return "Queues an independent restore attempt with a private diagnostic log"
 }
 
+func (Rollback) DescRestorePrevious() string {
+	return "Recovers a named restored journal after a later stage refused"
+}
+
 func (Rollback) DescSetup() string { return "Installs the durable timer and early boot recovery hook" }
 
 func (Rollback) DescStage() string {

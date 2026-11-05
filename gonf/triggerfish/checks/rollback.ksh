@@ -16,15 +16,30 @@ cat > "$fixture/mocks" <<'MOCKS'
 pfctl() {
  case $* in
  '-nf '*) /sbin/pfctl "$@";;
- '-nvf '*) print 'set skip on { lo }'; print 'pass all';;
- '-s Anchors'|'-s Tables') :;;
+ '-nvf '*) print 'set skip on { lo }'; awk '/^table / {print}' "$2"; print 'pass all';;
+ '-s Anchors') :;;
+ '-s Tables')
+  for table in "$BASE/pf-tables/"*; do
+   [[ ! -f $table ]] || print -- "${table##*/}"
+  done
+  return 0;;
  '-s info') print 'Status: Enabled';;
  '-s Interfaces -v') print 'lo (skip)'; print 'lo0 (skip)';;
  '-sr') print 'pass all';;
  '-f '*)
   print -- "pfctl $*" >> "$BASE/operations"
-  if [[ $2 == "$STATE/candidate/pf.conf" ]]; then touch "$BASE/pf-blocks-ra"
+  if [[ $2 == "$STATE/candidate/pf.conf" ]]; then
+   touch "$BASE/pf-blocks-ra"
+   mkdir -p "$BASE/pf-tables"
+   touch "$BASE/pf-tables/recorders" "$BASE/pf-tables/camera_updates"
   else rm -f "$BASE/pf-blocks-ra"; fi;;
+ '-t '*)
+  case $4 in
+  show) cat "$BASE/pf-tables/$2";;
+  kill) rm "$BASE/pf-tables/$2";;
+  replace) cp "$6" "$BASE/pf-tables/$2";;
+  *) return 1;;
+  esac;;
  *) print -- "pfctl $*" >> "$BASE/operations";;
  esac
 }
@@ -214,6 +229,31 @@ grep -qx 'rcctl -f start resolvd' "$base/operations"
 cmp -s "$fixture/resolv.expected" "$fixture/etc/resolv.conf"
 [[ -f $base/router-owner && ! -f $base/router-state/pending ]]
 rm "$base/fail-activate"
+# Persistent PF tables survive loading old rules; restore must remove only
+# candidate-created names and retain the captured table and its contents.
+print 'table <existing> persist' >> "$fixture/etc/pf.conf"
+print '192.0.2.10' > "$base/pf-tables/existing"
+"$fixture/run" stage trialtbl1 shared-igc0 180
+"$fixture/run" arm trialtbl1 shared-igc0 180
+"$fixture/run" activate trialtbl1
+print '198.51.100.10' > "$base/pf-tables/existing"
+touch "$base/pf-tables/foreign"
+expect_fail restore
+[[ -f $base/router-state/pending && -f $base/pf-tables/foreign ]]
+rm "$base/pf-tables/foreign"
+"$fixture/run" restore
+grep -qx '192.0.2.10' "$base/pf-tables/existing"
+[[ ! -e $base/pf-tables/recorders && ! -e $base/pf-tables/camera_updates ]]
+# A refused later stage must not strand the last restored snapshot. Recovery
+# checks its token/integrity and archives the inactive stage before replaying.
+"$fixture/run" stage trialtbl2 shared-igc0 180
+expect_fail recover_previous wrongtoken
+"$fixture/run" recover_previous trialtbl1
+[[ $(cat "$base/router-state/token") == trialtbl1 ]]
+[[ -d $base/router-rejected-trialtbl2 && ! -f $base/router-state/pending ]]
+rm "$base/pf-tables/existing"
+sed '/^table <existing> persist$/d' "$fixture/etc/pf.conf" > "$fixture/etc/pf.next"
+mv "$fixture/etc/pf.next" "$fixture/etc/pf.conf"
 # Unsupported resolver symlinks refuse before pending authorizes activation.
 "$fixture/run" stage trialdns1 shared-igc0 180
 mv "$fixture/etc/resolv.conf" "$fixture/resolv.saved"

@@ -239,6 +239,11 @@ launches a detached attempt, writing a root-private
 SSH session and the recovery attempt together. Require restored/no-pending
 `Status`; launch success alone does not prove completion. Failed attempts keep
 the journal armed for cron, and can be repeated.
+If a later inactive stage refused before arming, `RestorePrevious` can name
+the previous restored trial token. It verifies the snapshot, archives the
+inactive stage, and queues that original restore; it refuses a pending or
+confirmed previous transaction. It never constructs a replacement baseline
+from the partially restored live state.
 It recreates only the physical interfaces/routes it owns; no global route flush
 or tunnel reconfiguration occurs. Runtime/persistent address drift is preserved
 separately instead of assuming saved hostname files reproduce runtime state.
@@ -258,7 +263,10 @@ PF anchors and runtime-only tables are refused before arming: their independent
 loaders are outside this recovery controller. Profiles use floating state policy
 and only loopback skip; unexpected persistent if-bound policy or skipped physical
 interfaces also refuse. Table declarations come from the saved parsed file,
-while dynamic contents and live rules are captured separately. IPv6 recovery
+while dynamic contents and live rules are captured separately. Restore also
+removes persistent tables introduced by the frozen candidate but absent from
+the snapshot; reloading old rules alone leaves those tables in the kernel.
+Unfamiliar table names refuse cleanup. IPv6 recovery
 restores captured static addresses/prefix lengths and both autoconfiguration/
 temporary-address policy flags. Originally disabled physical IPv6 families are
 disabled again, removing trial-introduced link-local addresses. Captured SLAAC

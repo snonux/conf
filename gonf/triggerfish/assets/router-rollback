@@ -525,6 +525,7 @@ restore_runtime() {
   done < "$STATE/saved/routes.$family"
  done
  pfctl -f "$STATE/saved/pf.runtime"
+ restore_table_presence
  pfctl -F states >/dev/null
  # Runtime tables may differ from their original declarations. Const tables
  # already use the saved declaration; dynamic ones must restore saved contents.
@@ -570,6 +571,19 @@ restore_runtime() {
  else
   rm -f /etc/resolv.conf
  fi
+}
+restore_table_presence() {
+ typeset table
+ [[ $(checksum "$STATE/candidate") == $(cat "$STATE/digest") ]] || fail 'frozen PF candidate changed'
+ pfctl -s Tables > "$STATE/current-tables"
+ while read -r table; do
+  [[ $table == +([a-zA-Z0-9_]) ]] || fail 'unsupported PF table name'
+  [[ ! -f $STATE/saved/tables/$table ]] || continue
+  # Loading the old rules does not delete unreferenced persistent tables.
+  # Remove only names introduced by this frozen candidate, never foreign ones.
+  grep -Eq "^table <$table>( |$)" "$STATE/candidate/pf.conf" || fail 'unowned PF table appeared during trial'
+  pfctl -t "$table" -T kill >/dev/null
+ done < "$STATE/current-tables"
 }
 wait_slaac() {
  typeset i=$1 attempt
@@ -619,6 +633,22 @@ restore() {
  rm -f "$STATE/pending"
  sync
  print 'restored saved persistent and running state'
+}
+recover_previous() {
+ typeset token=$1 rejected
+ token_ok "$token" || fail 'invalid previous trial token'
+ pending && fail 'cannot replace a pending journal'
+ [[ $(cat "$STATE/status") == staged ]] || fail 'only an inactive stage can be set aside'
+ [[ ! -e $STATE.previous/pending && $(cat "$STATE.previous/status") == restored ]] || fail 'previous journal is not restored'
+ [[ $(cat "$STATE.previous/token") == "$token" ]] || fail 'previous trial token mismatch'
+ [[ $(checksum "$STATE.previous/saved") == $(cat "$STATE.previous/snapshot-digest") ]] || fail 'previous snapshot integrity failed'
+ token_ok "$(cat "$STATE/token")" || fail 'invalid inactive trial token'
+ rejected=$BASE/router-rejected-$(cat "$STATE/token")
+ [[ ! -e $rejected ]] || fail 'inactive trial archive already exists'
+ mv "$STATE" "$rejected"
+ mv "$STATE.previous" "$STATE"
+ sync
+ restore
 }
 
 # Fresh SSH receipts are explicit acceptance inputs, never inferred from a
@@ -733,5 +763,6 @@ activate)
 proof) [[ $# == 4 ]] || fail 'proof ROLE TOKEN SSH_CONNECTION'; lock; proof "$2" "$3" "$4";;
 confirm) [[ $# == 3 ]] || fail 'confirm TOKEN services-checked'; lock; confirm "$2" "$3";;
 restore) lock; restore;;
+recover) [[ $# == 2 ]] || fail 'recover PREVIOUS_TOKEN'; lock; recover_previous "$2";;
 *) fail 'use stage, arm, activate, status, proof, confirm or restore';;
 esac
