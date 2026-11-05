@@ -165,7 +165,7 @@ connections passed after reapply. Final state retains old IPv4 primary and
 192.168.1.1 default, adds the reserved lab IPv4 and local ULA, and returns the
 laptop /32 through 192.168.1.2. No pending journal or action gate remains.
 
-All-node readiness, API/etcd leaders, bounded NFS public-index reads, r1/r2
+All-node readiness, API and all three etcd members reporting a leader, bounded NFS public-index reads, r1/r2
 unprivileged cross-node UDP/TCP DNS and API Service checks, direct Pi-hole
 DNS, and verified-TLS Player ingress through the old VIP passed. Flannel
 annotations/local bindings and running wg0 endpoints were unchanged.

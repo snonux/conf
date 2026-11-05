@@ -104,7 +104,7 @@ was used. Fans and f-host AC were ON before the remote power-all-on job.
 
 The normal wired Pi power-all-on job completed with all f0–f3 and r0–r2
 accepting fresh SSH and monitoring alerting restored on both frontends.
-Post-start checks passed three Ready nodes, three etcd leaders, matching
+Post-start checks passed three Ready nodes, all three etcd members reporting a leader, matching
 bounded NFS reads, cross-node UDP/TCP DNS, API Service and verified-TLS
 Player ingress. Both accepted f3/r2 dual-address profiles survived the full
 power cycle with old primaries/defaults retained. f3's rocky guest auto-started;
