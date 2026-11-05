@@ -141,7 +141,7 @@ if '--no-block' not in args:
     unrelated = '203.0.113.0/24 192.0.2.9 77 table=200 onlink=true'
     routes_file.write_text(json.dumps([unrelated]))
     (fixtures / 'nmcli').write_text('''#!/usr/bin/env python3
-import json, os, sys
+import ipaddress, json, os, sys
 from pathlib import Path
 root = Path(os.environ['FIXTURE_ROOT'])
 args = sys.argv[1:]
@@ -156,8 +156,12 @@ elif args[:2] == ['-g', 'GENERAL.CON-UUID']:
 elif args[:2] == ['-g', 'IP4.GATEWAY']:
     print('192.0.2.1')
 elif args[:2] == ['-g', 'IP4.DNS']:
-    print('192.0.2.53')
+    # Actual NM runtime output may combine a display-delimited line and rows.
+    print('192.0.2.53 | 192.0.2.54\\n192.0.2.55')
 elif args[:2] == ['connection', 'modify']:
+    if 'ipv4.dns' in args:
+        for server in args[args.index('ipv4.dns') + 1].split(','):
+            ipaddress.IPv4Address(server)
     for key in ('ipv4.routes', '+ipv4.routes'):
         if key in args:
             value = args[args.index(key) + 1]
@@ -198,6 +202,7 @@ elif args[:2] == ['connection', 'modify']:
     assert pending.exists()
     calls = log.read_text()
     assert 'ipv4.addresses 192.0.2.120/24,198.51.100.120/24' in calls
+    assert 'ipv4.dns 192.0.2.53,192.0.2.54,192.0.2.55' in calls
     assert json.loads(routes_file.read_text()) == [unrelated, '10.99.0.2/32 192.0.2.2']
     assert '10.98.0.1' not in calls
     assert 'ipv6.method manual' in calls and 'ipv6.gateway  ' in calls

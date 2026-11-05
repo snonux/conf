@@ -170,7 +170,10 @@ _activate() {
         addresses="$lab/24,$old/24"
         gateway=10.20.0.1
     fi
-    dns=$(nmcli -g IP4.DNS device show "$iface" | paste -sd ,)
+    # NM can serialize multiple runtime DNS servers on one "a | b" line.
+    # Normalize that form as well as one-server-per-line before writing a list.
+    dns=$(nmcli -g IP4.DNS device show "$iface" |
+        sed 's/[[:space:]]*|[[:space:]]*/,/g' | paste -sd ,)
     local return_gateway=$shared_gateway
     if [[ $topology == isolated ]]; then
         addresses+=",$recovery/24"
