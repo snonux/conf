@@ -17,6 +17,7 @@ import (
 // Profile names only the helper-owned link and a narrow controller return path.
 // Cabling is a root-reviewed identifier, not inferred from reachable gateway IPs.
 type Profile struct {
+	Kind       string `json:"kind,omitempty"`
 	Device     string `json:"device"`
 	Cabling    string `json:"cabling"`
 	Parent     string `json:"parent"`
@@ -33,9 +34,12 @@ type Profile struct {
 type Link struct {
 	Exists       bool
 	Index        int
+	ParentIndex  int
 	Parent       string
 	MAC          string
 	Kind         string
+	Mode         uint16
+	ModeObserved bool
 	Up           bool
 	Addresses    []string
 	IPv6Disabled bool
@@ -47,7 +51,8 @@ type Runner interface {
 	Run(...string) error
 	Output(...string) (string, error)
 	Link(string) (Link, error)
-	Module() (bool, error)
+	Module(string) (bool, error)
+	CreateIPvlan(string, string) error
 	DisableIPv6(string) error
 }
 
@@ -114,8 +119,17 @@ func (p Profile) Validate() error {
 		return errors.New("controller must be IPv4 /32")
 	}
 	mac, err := net.ParseMAC(p.MAC)
-	if err != nil || len(mac) != 6 || mac[0]&3 != 2 {
+	if p.kind() != "macvlan" && p.kind() != "ipvlan" {
+		return errors.New("unsupported management link kind")
+	}
+	if err != nil || len(mac) != 6 || mac[0]&1 != 0 {
+		return errors.New("management MAC must be unicast")
+	}
+	if p.kind() == "macvlan" && mac[0]&2 == 0 {
 		return errors.New("management MAC must be locally administered unicast")
+	}
+	if p.kind() == "ipvlan" && mac[0]&2 != 0 {
+		return errors.New("IPvlan MAC must be the factory parent MAC")
 	}
 	// Shipped BusyBox resolves table IDs through a fixed 0..1023 name table.
 	// Rule priority has a separate uint32 parser; retain its reviewed range.
@@ -129,6 +143,29 @@ func (p Profile) Validate() error {
 	// A future igc1 profile requires an explicit reviewed implementation change.
 	if p.Cabling != "shared-igc0" || address.Masked().String() != "192.168.11.0/24" || p.Gateway != "192.168.11.2" || p.Controller != "10.99.0.2/32" {
 		return errors.New("unsupported current-cabling profile")
+	}
+	return nil
+}
+
+// kind preserves the original macvlan profile and JSON hash when omitted.
+func (p Profile) kind() string {
+	if p.Kind == "" {
+		return "macvlan"
+	}
+	return p.Kind
+}
+
+// parent verifies the expected factory MAC before any IPvlan mutation.
+func (a Adapter) parent() error {
+	if a.Profile.kind() != "ipvlan" {
+		return nil
+	}
+	parent, err := a.Runner.Link(a.Profile.Parent)
+	if err != nil {
+		return err
+	}
+	if !parent.Exists || parent.Index <= 0 || !strings.EqualFold(parent.MAC, a.Profile.MAC) {
+		return errors.New("IPvlan factory parent identity mismatch")
 	}
 	return nil
 }
@@ -193,6 +230,9 @@ func (a Adapter) Ensure() error {
 	if err := a.Profile.Validate(); err != nil {
 		return err
 	}
+	if err := a.parent(); err != nil {
+		return err
+	}
 	own, err := a.load()
 	if err != nil {
 		return err
@@ -218,7 +258,7 @@ func (a Adapter) Ensure() error {
 	}
 	priorModule := own.Module && own.Boot == a.Boot
 	own = Owned{Hash: a.Profile.Hash(), Boot: a.Boot, Module: priorModule}
-	loaded, err := a.Runner.Module()
+	loaded, err := a.Runner.Module(a.Profile.kind())
 	if err != nil {
 		return err
 	}
@@ -227,8 +267,8 @@ func (a Adapter) Ensure() error {
 		if err := a.save(own); err != nil {
 			return err
 		}
-		if err := a.Runner.Run("insmod", "/oem/usr/ko/macvlan.ko"); err != nil {
-			return errors.New("load shipped macvlan module; cleanup required")
+		if err := a.Runner.Run("insmod", "/oem/usr/ko/"+a.Profile.kind()+".ko"); err != nil {
+			return errors.New("load shipped management module; cleanup required")
 		}
 	}
 	own.Link = true
@@ -236,7 +276,13 @@ func (a Adapter) Ensure() error {
 		return err
 	}
 	p := a.Profile
-	if err := a.Runner.Run("ip", "link", "add", "link", p.Parent, "name", p.Link, "address", p.MAC, "type", "macvlan"); err != nil {
+	if p.kind() == "ipvlan" {
+		// BusyBox cannot encode mode; the shipped kernel defaults to L3.
+		err = a.Runner.CreateIPvlan(p.Parent, p.Link)
+	} else {
+		err = a.Runner.Run("ip", "link", "add", "link", p.Parent, "name", p.Link, "address", p.MAC, "type", "macvlan")
+	}
+	if err != nil {
 		return errors.New("create owned link; cleanup required")
 	}
 	link, err = a.Runner.Link(p.Link)
@@ -283,6 +329,9 @@ func (a Adapter) Probe() error {
 	if err := a.Profile.Validate(); err != nil {
 		return err
 	}
+	if err := a.parent(); err != nil {
+		return err
+	}
 	own, err := a.load()
 	if err != nil {
 		return err
@@ -307,6 +356,9 @@ func (a Adapter) Probe() error {
 // Cleanup removes exact recorded resources only. Foreign changes cause a refusal.
 func (a Adapter) Cleanup() error {
 	if err := a.Profile.Validate(); err != nil {
+		return err
+	}
+	if err := a.parent(); err != nil {
 		return err
 	}
 	own, err := a.load()
@@ -377,12 +429,12 @@ func (a Adapter) Cleanup() error {
 		}
 	}
 	if own.Module {
-		loaded, err := a.Runner.Module()
+		loaded, err := a.Runner.Module(a.Profile.kind())
 		if err != nil {
 			return err
 		}
 		if loaded {
-			if err := a.Runner.Run("rmmod", "macvlan"); err != nil {
+			if err := a.Runner.Run("rmmod", a.Profile.kind()); err != nil {
 				return errors.New("owned module busy; cleanup remains pending")
 			}
 		}
@@ -391,7 +443,13 @@ func (a Adapter) Cleanup() error {
 }
 
 func (a Adapter) matches(link Link, index int) bool {
-	return link.Exists && (index == 0 || link.Index == index) && link.Parent == a.Profile.Parent && strings.EqualFold(link.MAC, a.Profile.MAC) && link.Kind == "macvlan"
+	if a.Profile.kind() == "ipvlan" {
+		parent, err := a.Runner.Link(a.Profile.Parent)
+		if err != nil || !parent.Exists || parent.Index <= 0 || link.ParentIndex != parent.Index || !strings.EqualFold(parent.MAC, a.Profile.MAC) {
+			return false
+		}
+	}
+	return link.Exists && link.Index > 0 && (index == 0 || link.Index == index) && link.Parent == a.Profile.Parent && strings.EqualFold(link.MAC, a.Profile.MAC) && link.Kind == a.Profile.kind() && (a.Profile.kind() != "ipvlan" || (link.ModeObserved && link.Mode == 0))
 }
 func (a Adapter) load() (Owned, error) {
 	var own Owned

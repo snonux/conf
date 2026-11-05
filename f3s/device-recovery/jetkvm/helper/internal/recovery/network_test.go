@@ -11,13 +11,15 @@ import (
 )
 
 type kernel struct {
-	link   Link
-	module bool
-	routes []string
-	rules  []string
-	calls  [][]string
-	fail   string
-	after  bool
+	link         Link
+	parent       Link
+	ipvlanModule bool
+	module       bool
+	routes       []string
+	rules        []string
+	calls        [][]string
+	fail         string
+	after        bool
 }
 
 func (k *kernel) Run(args ...string) error {
@@ -39,9 +41,17 @@ func (k *kernel) Run(args ...string) error {
 	}
 	switch {
 	case args[0] == "insmod":
-		k.module = true
+		if strings.HasSuffix(args[1], "/ipvlan.ko") {
+			k.ipvlanModule = true
+		} else {
+			k.module = true
+		}
 	case args[0] == "rmmod":
-		k.module = false
+		if args[1] == "ipvlan" {
+			k.ipvlanModule = false
+		} else {
+			k.module = false
+		}
 	case hasPrefix(args, "ip", "link", "add"):
 		k.link = Link{Exists: true, Index: 17, Parent: args[4], MAC: args[8], Kind: "macvlan"}
 	case hasPrefix(args, "ip", "link", "set"):
@@ -78,8 +88,30 @@ func (k *kernel) Output(args ...string) (string, error) {
 	}
 	return "", errors.New("unexpected inspection")
 }
-func (k *kernel) Link(string) (Link, error) { return k.link, nil }
-func (k *kernel) Module() (bool, error)     { return k.module, nil }
+func (k *kernel) Link(name string) (Link, error) {
+	if name == "eth0" {
+		return k.parent, nil
+	}
+	return k.link, nil
+}
+func (k *kernel) Module(kind string) (bool, error) {
+	if kind == "ipvlan" {
+		return k.ipvlanModule, nil
+	}
+	return k.module, nil
+}
+func (k *kernel) CreateIPvlan(parent, child string) error {
+	k.calls = append(k.calls, []string{"netlink-ipvlan-l2", parent, child})
+	failed := k.fail == "netlink-ipvlan-l2"
+	if failed && !k.after {
+		return errors.New("injected create failure")
+	}
+	k.link = Link{Exists: true, Index: 17, Parent: parent, ParentIndex: k.parent.Index, MAC: k.parent.MAC, Kind: "ipvlan", ModeObserved: true, Mode: 0}
+	if failed {
+		return errors.New("failure after create")
+	}
+	return nil
+}
 func (k *kernel) DisableIPv6(link string) error {
 	if link != "jkrecover" {
 		return errors.New("foreign sysctl")

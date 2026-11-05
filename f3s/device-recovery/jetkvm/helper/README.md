@@ -32,8 +32,10 @@ reviewed ARMv7/5.10.160 ABI, and `/userdata` is mounted ext4 read-write. ARM
 execution, detached monotonic expiry and exact owned cleanup passed on the
 first device; fixed-channel reception failed. Watchdog/boot restoration and
 DHCP-owner compatibility remain unverified. `-version` skips these prerequisites.
-All network execution uses fixed BusyBox argv, with a three-second per-command
-execution timeout, no shell. No native operation runs as part of the tests.
+Network execution uses fixed BusyBox argv with a three-second per-command
+execution timeout, no shell. The explicit IPvlan L2 candidate uses one narrowly
+encoded exclusive RTM_NEWLINK request with bounded three-second send/receive;
+BusyBox cannot encode its mode. No native operation runs as part of the tests.
 
 ## Files and identities
 
@@ -65,10 +67,14 @@ The CLI has path flags for controlled packaging; use the defaults on the device.
   of permanent worker health. Replacement workers retain the original deadline.
 
 The profile schema is `device`, `cabling`, `parent`, `link`, `mac`, `address`,
-`gateway`, `controller`, `table`, `priority`. This version deliberately implements
+`gateway`, `controller`, `table`, `priority`, plus optional `kind`. Omitted `kind`
+preserves the original macvlan behavior and exact profile hash; explicit values
+are restricted to `macvlan` and `ipvlan`. This version deliberately implements
 only `cabling=shared-igc0`, `parent=eth0`, `link=jkrecover`, an allocated address in
 `192.168.11.0/24`, gateway `192.168.11.2` and controller `10.99.0.2/32`.
-The MAC must be locally administered unicast. Table must be **1000–1023**;
+For macvlan the MAC must be locally administered unicast. For explicit IPvlan
+it must be the globally administered unicast factory parent MAC, checked against
+actual eth0 before mutation. Table must be **1000–1023**;
 priority independently remains **1000–32000**, and both must be unoccupied.
 The shipped BusyBox 1.36.1 table-name parser caps IDs at 1023, while priority
 uses a separate uint32 parser. Root-reviewed read-only v11 on the first device
@@ -78,7 +84,7 @@ The future igc1/10.98 profile is rejected. It requires its own
 reviewed profile transition and physical-path acceptance. A matching gateway IP
 is never treated as proof of current cabling.
 
-The adapter uses the shipped `/oem/usr/ko/macvlan.ko`, creating the child DOWN
+The default adapter uses the shipped `/oem/usr/ko/macvlan.ko`, creating the child DOWN
 without `mode bridge` (unsupported by the installed BusyBox parser). It verifies
 RTM_GETLINK kind, parent, MAC and ifindex, disables IPv6 only on its own child,
 adds its IPv4 address, raises the child, then installs its two source-table routes
@@ -86,7 +92,7 @@ and one controller-specific source rule. The address also has its normal
 child-connected route; no parent address, parent IPv6 setting, default route,
 DHCP unit, global ARP/rp_filter policy or unrelated rule is changed. All occupied
 names/table/priority are refused; reapply probes exact owned state. Cleanup deletes
-only recorded exact routes/rule/link, preserves a pre-existing module, and refuses
+only recorded exact routes/rule/link, preserves a pre-existing selected module, and refuses
 foreign addresses/identity/policy changes or a busy module. Failed cleanup remains
 an error with its ownership journal retained. Do not run concurrent manual kernel
 network changes against these reserved resources.
@@ -244,3 +250,19 @@ worker/confirmation refusal and exact temporary developer-access cleanup.
 Do not retain an existing WebRTC session as proof. Do not operate host power.
 Keep all old allocations and the current-cabling recovery path until its separate
 retirement gate. The future igc1 transition is outside this profile's support.
+
+## Explicit IPvlan L2 candidate (source only)
+
+The optional `kind=ipvlan` selects only `/oem/usr/ko/ipvlan.ko` and its matching
+module query/unload; macvlan ownership remains separate. It inherits the actual
+factory parent MAC, without setting any parent or child MAC. The shipped kernel
+defaults IPvlan to L3, and BusyBox has no IPvlan mode parser. The helper therefore
+encodes only exclusive `eth0` → `jkrecover` creation with explicit L2 mode zero,
+validates the kernel acknowledgment, then independently observes kind, L2 mode,
+parent name/index, child MAC and positive ifindex before address/UP operations.
+A missing mode is refused rather than interpreted as zero. Other network,
+expiry, worker, authorization and boot protocols remain unchanged.
+
+Native v20 proved actual driver and module-file presence, not IPvlan loadability
+or reception. See the [candidate and installation checkpoint](../IPVLAN-L2-CANDIDATE.md).
+No IPvlan helper/profile has been installed or network operation authorized.

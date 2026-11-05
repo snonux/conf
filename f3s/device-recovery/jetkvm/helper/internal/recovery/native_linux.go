@@ -40,13 +40,105 @@ func (Native) Output(args ...string) (string, error) {
 	return string(data), nil
 }
 
-// Module reports whether macvlan is already loaded; it never unloads pre-existing modules.
-func (Native) Module() (bool, error) {
-	_, err := os.Stat("/sys/module/macvlan")
+// Module reports whether the selected management module is already loaded; it never unloads pre-existing modules.
+func (Native) Module(kind string) (bool, error) {
+	if kind != "macvlan" && kind != "ipvlan" {
+		return false, errors.New("unsupported module inspection")
+	}
+	_, err := os.Stat("/sys/module/" + kind)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// CreateIPvlan encodes L2 explicitly: shipped BusyBox cannot encode IPvlan mode.
+// It never sets a MAC or parent flags, and requests exclusive creation.
+func (Native) CreateIPvlan(parent, child string) error {
+	if parent != "eth0" || child != "jkrecover" {
+		return errors.New("refuse unrelated IPvlan creation")
+	}
+	iface, err := net.InterfaceByName(parent)
+	if err != nil {
+		return errors.New("inspect IPvlan parent index")
+	}
+	entries, err := os.ReadDir("/sys/class/net/eth0")
+	if err != nil {
+		return errors.New("inspect IPvlan parent upper links")
+	}
+	if !ipvlanParentFree(entries) {
+		return errors.New("IPvlan parent already has an upper link")
+	}
+	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW|syscall.SOCK_CLOEXEC, syscall.NETLINK_ROUTE)
+	if err != nil {
+		return errors.New("open IPvlan netlink socket")
+	}
+	defer func() { _ = syscall.Close(fd) }()
+	for _, option := range []int{syscall.SO_RCVTIMEO, syscall.SO_SNDTIMEO} {
+		if err := syscall.SetsockoptTimeval(fd, syscall.SOL_SOCKET, option, &syscall.Timeval{Sec: 3}); err != nil {
+			return errors.New("bound IPvlan netlink operation")
+		}
+	}
+	if err := syscall.Sendto(fd, ipvlanRequest(iface.Index), 0, &syscall.SockaddrNetlink{Family: syscall.AF_NETLINK}); err != nil {
+		return errors.New("send IPvlan create")
+	}
+	data := make([]byte, 4096)
+	n, from, err := syscall.Recvfrom(fd, data, 0)
+	if err != nil {
+		return errors.New("receive IPvlan acknowledgment")
+	}
+	peer, ok := from.(*syscall.SockaddrNetlink)
+	if !ok || peer.Pid != 0 {
+		return errors.New("foreign IPvlan acknowledgment")
+	}
+	return ipvlanAck(data[:n])
+}
+
+// IPvlan mode is per port; never change a foreign sibling's mode.
+func ipvlanParentFree(entries []os.DirEntry) bool {
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "upper_") {
+			return false
+		}
+	}
+	return true
+}
+
+func ipvlanRequest(parent int) []byte {
+	// Linux UAPI: LINK=5, IFNAME=3, LINKINFO=18; INFO_KIND=1,
+	// INFO_DATA=2, IPVLAN_MODE=1, L2=0. No IFLA_ADDRESS is sent.
+	index := make([]byte, 4)
+	binary.NativeEndian.PutUint32(index, uint32(parent))
+	info := append(linkAttr(1, []byte("ipvlan\x00")), linkAttr(2|0x8000, linkAttr(1, []byte{0, 0}))...)
+	attrs := append(linkAttr(5, index), linkAttr(3, []byte("jkrecover\x00"))...)
+	attrs = append(attrs, linkAttr(18|0x8000, info)...)
+	data := make([]byte, 32) // nlmsghdr + ifinfomsg, family AF_UNSPEC
+	binary.NativeEndian.PutUint32(data[:4], uint32(len(data)+len(attrs)))
+	binary.NativeEndian.PutUint16(data[4:6], syscall.RTM_NEWLINK)
+	binary.NativeEndian.PutUint16(data[6:8], syscall.NLM_F_REQUEST|syscall.NLM_F_ACK|syscall.NLM_F_CREATE|syscall.NLM_F_EXCL)
+	binary.NativeEndian.PutUint32(data[8:12], 1)
+	return append(data, attrs...)
+}
+
+func linkAttr(kind uint16, value []byte) []byte {
+	n := len(value) + 4
+	data := make([]byte, (n+3)&^3)
+	binary.NativeEndian.PutUint16(data[:2], uint16(n))
+	binary.NativeEndian.PutUint16(data[2:4], kind)
+	copy(data[4:], value)
+	return data
+}
+
+func ipvlanAck(data []byte) error {
+	messages, err := syscall.ParseNetlinkMessage(data)
+	if err != nil || len(messages) != 1 {
+		return errors.New("invalid IPvlan acknowledgment")
+	}
+	message := messages[0]
+	if message.Header.Seq != 1 || message.Header.Type != syscall.NLMSG_ERROR || len(message.Data) < 20 || binary.NativeEndian.Uint32(message.Data[:4]) != 0 || binary.NativeEndian.Uint16(message.Data[8:10]) != syscall.RTM_NEWLINK || binary.NativeEndian.Uint32(message.Data[12:16]) != 1 {
+		return errors.New("IPvlan exclusive create failed")
+	}
+	return nil
 }
 
 // DisableIPv6 changes only the validated child before it is brought up.
@@ -98,14 +190,14 @@ func (Native) Link(name string) (Link, error) {
 					if err != nil {
 						return result, errors.New("inspect parent link")
 					}
-					result.Parent = parent.Name
+					result.Parent, result.ParentIndex = parent.Name, parent.Index
 				}
 			case 18:
-				kind, err := linkKind(attr.Value)
+				kind, mode, observed, err := linkInfo(attr.Value)
 				if err != nil {
 					return result, err
 				}
-				result.Kind = kind
+				result.Kind, result.Mode, result.ModeObserved = kind, mode, observed
 			}
 		}
 	}
@@ -139,23 +231,58 @@ func serial(data []byte) (string, error) {
 	return "", errors.New("hardware device identity missing")
 }
 
-func linkKind(data []byte) (string, error) {
-	for len(data) >= 4 {
+// linkInfo parses IFLA_INFO_KIND and nested IFLA_INFO_DATA/IFLA_IPVLAN_MODE.
+// A missing mode is not equivalent to observed L2 (numeric zero).
+func linkInfo(data []byte) (string, uint16, bool, error) {
+	attrs, err := nestedAttrs(data)
+	if err != nil {
+		return "", 0, false, err
+	}
+	kind := strings.TrimRight(string(attrs[1]), "\x00")
+	if kind == "" {
+		return "", 0, false, errors.New("missing kernel link kind")
+	}
+	if kind != "ipvlan" {
+		return kind, 0, false, nil
+	}
+	info, err := nestedAttrs(attrs[2])
+	if err != nil {
+		return "", 0, false, err
+	}
+	mode, ok := info[1]
+	if !ok || len(mode) != 2 {
+		return "", 0, false, errors.New("missing or invalid IPvlan mode")
+	}
+	return kind, binary.NativeEndian.Uint16(mode), true, nil
+}
+
+func nestedAttrs(data []byte) (map[uint16][]byte, error) {
+	attrs := make(map[uint16][]byte)
+	for len(data) != 0 {
+		if len(data) < 4 {
+			return nil, errors.New("truncated nested link attribute")
+		}
 		length := int(binary.NativeEndian.Uint16(data[:2]))
 		kind := binary.NativeEndian.Uint16(data[2:4]) & 0x3fff
 		if length < 4 || length > len(data) {
-			return "", errors.New("invalid nested link attribute")
+			return nil, errors.New("invalid nested link attribute")
 		}
-		if kind == 1 {
-			return strings.TrimRight(string(data[4:length]), "\x00"), nil
+		if _, exists := attrs[kind]; exists {
+			return nil, errors.New("duplicate nested link attribute")
 		}
+		attrs[kind] = data[4:length]
 		aligned := (length + 3) &^ 3
 		if aligned > len(data) {
-			return "", errors.New("invalid link attribute alignment")
+			return nil, errors.New("invalid link attribute alignment")
 		}
 		data = data[aligned:]
 	}
-	return "", errors.New("missing kernel link kind")
+	return attrs, nil
+}
+
+func linkKind(data []byte) (string, error) {
+	kind, _, _, err := linkInfo(data)
+	return kind, err
 }
 
 // Prerequisites rejects unreviewed OS/ABI/storage before any state or network mutation.
