@@ -137,3 +137,52 @@ only the trial's empty private activation gate was removed. The whole matching
 or timeout process remained, and both exact health-probe UIDs were deleted.
 The revised observer must preserve partial evidence and enforce finite native
 and controller cleanup before a separately reviewed retry.
+
+## Confirmed-state guard expiry accepted
+
+The separate v2 retry passed after actual f1/r1 20:25 jobs, fresh service and
+six-peer checks, unchanged current-Go Prepare reapply, and the full525-second
+writer window. Its observer added a native12-second TERM deadline plus2-second
+hard-kill grace, finite readiness/drain, and partial-evidence retention. Five
+actual-AST failure controls passed; a separate traffic-free native observer
+preflight exited124 in12.667s with no remaining process. The failed first trial
+and original driver remain unchanged.
+
+V2 promoted at20:26:19, ordinary deadline20:28:18. NEW primary/default, retained
+OLD alias/ULA/controller return, four held paths, all six OLD-source transports
+and bidirectional overlays, paired native NAT SYN/PF tuples, verified NEW-source
+HTTPS200 and full health passed with guard zero. The controller copied and
+validated the original pending snapshot before confirmation. Its canonical OLD
+hash `398802f0115e9c11d1755ced69f41b4f5fb449e0bcd0228ac1696c31ea2a4d52`
+matched accepted archive `accepted-1793910425.O9Y1lA`.
+
+Ordinary confirmation followed by guard arm completed at20:27:06.5; ordinary
+pending was absent and the independent guard deadline was20:32:05. Current-Go
+Prepare correctly refused the active guard, preserving its deadline, resources,
+modes and root crontab. NEW remained at20:29:23.965, beyond the former ordinary
+deadline plus65 seconds, in the same kernel with source guard zero. The watcher
+joined, all four held SSH and both capture sessions closed, and the originating
+controller exited0 at20:29:24.866. Neither origin nor controller restored state.
+
+The native restoring marker was written at20:33:00.570241 and the native archive
+completed at20:33:01.262985. The FIRST independent read observed OLD at
+20:33:27.8683858, before any manual restore: original OLD hash/source, same kernel,
+no boot claim, old primary/default, no pending and no active guard. Its complete
+archive is `confirmed-boot-restored-1793910781.xn8dlg/guard`.
+
+The controller witness then failed on a missing explicit `importlib.util`
+import during its final rc comparisons. The successful FIRST native receipt was
+preserved byte for byte (SHA256
+`8bf4f0f6bdbf2af53c41dc2e54b3737b90f1fd60aff33338140c9df6ec5cc04d`).
+A separately reviewed read-only continuation finished all protected surfaces,
+rc semantics/unrelated bytes, routes, WG, bridge, VM state and guard-zero checks
+before manual action. It wrote separate evidence and did not replace that receipt.
+
+Two explicit guard restores were then no-ops. Both complete native/accepted
+journals were archived privately, the own activation gate removed, and scoped
+current-Go reapply changed no resources. Fresh four management paths, full
+cluster/storage/DNS/API/TLS health and all six bidirectional IPv4/IPv6 peers
+passed. Both exact owned probe UIDs were deleted and drained. Source YAML,
+endpoints, keys, PF and VM policy remain unchanged; f3 is OLD-primary Stage.
+This accepts expiry after ordinary confirmation, not confirmed-NEW startup or
+guard release. Private `guard-expiry-v2-*` evidence retains every original receipt.

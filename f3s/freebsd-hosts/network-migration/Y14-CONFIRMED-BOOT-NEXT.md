@@ -1,9 +1,10 @@
 # Confirmed-NEW boot guard — dormant installation and next native gates
 
-The reviewed dormant helper is installed; guard expiry and confirmed-NEW boot
-remain unaccepted. f3 remains OLD-primary Stage after the accepted 300-second
-expiry and 600-second OLD boot recovery. The first guard trial stopped before
-confirmation and restored OLD; see [native evidence](Y14-PRIMARY-NATIVE.md).
+The reviewed helper is installed and expiry after ordinary confirmation passed.
+Confirmed-NEW boot remains unaccepted. f3 remains OLD-primary Stage after the
+completed trial. The first attempt stopped before confirmation and restored OLD;
+the separate v2 retry proved native guard expiry. See
+[native evidence](Y14-PRIMARY-NATIVE.md).
 No primary confirmation, guard activation or confirmed-NEW reboot is authorized
 by this file. Root reviews the exact native slice separately.
 
@@ -67,9 +68,9 @@ while still lacking that Go check. Freeze its path/hash and the shell asset
 independently before installation. Never replace either during an active guard;
 prove that native scoped reapply refuses and preserves both surfaces.
 
-## Two separate proposed native slices
+## Completed expiry slice and separate proposed boot slice
 
-First prove independent guard expiry after ordinary confirmation, without a
+The completed first slice proved independent guard expiry after ordinary confirmation, without a
 reboot: start from original OLD Stage; native promote shared120, all required
 NEW-source NAT/six-peer/guard/full-health checks, ordinary confirm before expiry,
 then pin its accepted OLD snapshot and arm a300-second guard. Require confirmed
