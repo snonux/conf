@@ -97,7 +97,10 @@ It changes no key, peer, source YAML or endpoint.
 Immediately before loading the guard, capture complete `pfctl -ss -vv` output
 privately and inspect both original and translated tuples for every guarded
 destination/UDP56709. **Any relevant existing state means refuse/wait for its
-natural expiry.** Do not flush all states or assume a new filter rule overrides
+natural expiry.** Relevant means a state admitting the guarded NEW .20.133
+source tuple, including translated tuples. Preserve ordinary exact OLD .1.133
+source states; they do not admit a different source and need not expire before
+this guard loads. Do not flush all states or assume a new filter rule overrides
 state admission. The earlier 12:09 capture is stale preparation, not permission.
 Preserve unrelated PF states and bridge bypass. Native `pfctl -nf` and the
 scoped `freebsd_firewall_config` preview must pass. Apply that owner to f3 only;

@@ -7,6 +7,9 @@ both guest former-deadline observations and FreeBSD's graceful return to normal
 stopped state. This is a bounded
 canary, with no source promotion or production manifest.
 
+Subsequent native results, including task 134's resolved strict-admission
+projection, are recorded in [Y14-ENDPOINT-NATIVE.md](Y14-ENDPOINT-NATIVE.md).
+
 ## Verified read-only inputs
 
 At 13:43 UTC r2 had Python 3.9.25 owned by python3 RPM, enforcing SELinux,
