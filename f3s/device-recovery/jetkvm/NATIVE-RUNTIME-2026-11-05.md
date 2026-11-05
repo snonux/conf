@@ -365,6 +365,76 @@ FIRST device's confirmed runtime, narrow DHCP renew/reapply and explicit typed
 terminal cleanup. It does not accept rebind/carrier, native boot ordering,
 primary renumbering or the other devices.
 
+## v33 actual early-boot observation: prerequisites NEGATIVE; cleanup passed
+
+One root-reviewed normal DEVICE reboot used exact `reboot` RPC with force=false,
+acknowledged once after installer original-future/exact-auth/fresh9 completion.
+Physical host attachment was UNKNOWN; the scope was this JetKVM and its USB/video
+interruption, with no host-power or other-device operation. A separate bounded
+FAIL-OPEN userdata hook performed only read-only early observations into one
+exclusive root-private receipt. It was never manually start-executed and called
+no helper, parent setter, network operation or management guard.
+
+The complete receipt matched the fresh actual CURRENT device bootID, which
+changed from preboot, and the exact hardware CPU. At actual uptime0.82s, before
+vendor post_chk/network_init, it observed:
+
+| Early field | Actual observation |
+| --- | --- |
+| eth0 | PRESENT |
+| MAC | `8e:5b:23:67:39:ac`, DIFFERENT from factory `30:52:53:08:97:97` |
+| flags / administrative UP | `0x1002` / `0` (DOWN) |
+| IPvlan / macvlan modules | ABSENT / ABSENT |
+| unknown fields | 0 |
+
+This is actual negative evidence for the current synchronous management hook's
+prerequisites, not a native management-boot pass. Source phase text alone was
+insufficient: vendor-only invocation, normal-request record and current-boot
+binding accompanied it. The observed different MAC/DOWN state must not be
+repaired by a manual factory setter or parent-UP command. Vendor startup itself
+subsequently restored the expected factory MAC, original DHCP/default/settled
+parent semantics and old access.
+
+The observer bounded the FOREGROUND hook/startup wait with BusyBox TERM2s/KILL1s;
+actual pinned BusyBox targets one PID, not an arbitrary process group. No native
+TERM-ignored stress test is claimed. This normal receipt completed sequentially;
+actual capture PID/birth was gone, the exact timeout-argv scan found no remaining
+watchdog and no process-read unknowns remained. Partial/timeout receipt would
+have remained HOLD, never a false reader-drain claim.
+
+Normal request occurred at controller BOOTTIME122011.389s; actual HTTP outage
+was observed122012.738s, fresh identity HTTP recovery122022.766s (six polls).
+One new old-path media session then passed explicit RTP startup/decode within
+14s: first RTP0.650s/frame0.872s. No preboot200 was treated as recovery, and no
+reboot or media retry occurred. Separate actual-boot audit preserved every v32
+helper-store byte/inode, observed no helper resources, checked ORIGINAL parent
+semantics and retired the exact owned hook. Both auth scopes drained their
+ORIGINAL enable futures, restored exact false/empty-key/closed22 and passed all
+nine fresh old-access checks. All local groups, streams and native readers were
+terminal. Overall result was honestly negative (`passed=false`) because early
+factory-MAC/UP prerequisites failed; cleanup_proven=true, managementBOOT=false.
+
+## v34 final owned-directory retirement: PASS
+
+v33 installed `/userdata/init.d` because it was originally absent. Its hook was
+removed, but its empty owned root0755 parent initially remained; v33 must not be
+misreported as having restored that directory's absence. A DISTINCT reviewed
+v34 auth scope subsequently verified the exact INIT inode/root0755/nonsymlink,
+empty contents and hook absence, then ran ONLY rmdir `/userdata/init.d` plus
+fsync userdata. Absence was read back. Before and after, all seven helper-store
+files, observer folder/capture and receipt hashes/inodes/modes remained exact.
+Original enable future terminal, exact auth restoration, fresh9 and PC/process
+terminal all passed. No replay/edit of frozen v33 production code, reboot,
+helper/version, network or other-directory action occurred.
+
+Current kernel boot is the new v33 boot; the retained confirmed-and-cleaned v32
+store intentionally still contains its OLD bootID and original deadline/bytes.
+It was not expired/reclassified, cleaned or repaired by a helper call. The private
+observer folder/receipt remain inert for audit; the originally absent init parent
+is absent again and no observational or management hook remains installed.
+Management boot/persistence remains HOLD pending a source-owned ordering design
+that allows normal vendor MAC/UP/DHCP/app startup before additive Ensure.
+
 ## Remaining gates
 
 [Confirmed runtime and owner/boot plan](CONFIRMED-NEXT.md) describes the next

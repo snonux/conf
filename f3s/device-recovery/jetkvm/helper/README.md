@@ -287,6 +287,13 @@ runtime with explicit producer-startup9s plus decode5s inside14s, all three fixe
 media phases, owner renew before/after keep, keep/repeat and actual typed cleanup
 twice/native21. Current default is v32 confirmed-and-cleaned; boot/fleet remain
 open and v28/v29 failures remain preserved.
+v33 performed only a separate fail-open normal-device-boot observation, with no
+helper invocation: early uptime0.82s had differentMAC/DOWN; normal vendor startup
+later restored the old path. Its hook was removed; distinct v34 also retired the
+created empty init parent with exact auth/fresh9 and protected-data preservation.
+The v32 terminal store remains byte/inode unchanged with OLD bootID under the
+new kernel; do not reclassify it or run helper cleanup to repair that mismatch.
+Management-boot ordering/persistence remains HOLD.
 It takes the existing Store lock, refuses a pending or
 invalid primary state, requires matching profile/current boot and a confirmed OR
 expired additive record, then invokes existing typed `Adapter.Cleanup`. It never

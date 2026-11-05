@@ -78,6 +78,11 @@ now passed. Current default again holds a confirmed-and-cleaned SEVEN-file v32
 terminal store; preserve it and its original deadline/boot/evidence. Do not
 reuse fresh-two-file or expired-state admission without a reviewed transition.
 
+Source clarification: `StartCanary` permits a different generation after a
+confirmed or expired record. The v31 whole-store archive was an operator choice
+to preserve evidence, not a CLI requirement. A later authorization still needs
+current-boot admission and must not borrow stale ownership or rewrite history.
+
 ## Reviewed v28 runtime protocol and remaining acceptance
 
 Use exact actual CPU/ABI/profile/module pins and original parent baseline.
@@ -163,6 +168,25 @@ including first postformer RTP5.721s/frame5.908s. Original/auth cleanup and nati
 cleanup twice/21 passed. V28/v29 failures remain preserved; no boot proof follows. No setter/IDR/control RPC or decoder/network repair
 is authorized by these diagnostics.
 
+## Actual v33 early-boot result and v34 retirement
+
+The normal force=false device reboot/old-path recovery passed, but at native
+uptime0.82s the vendor userdata boundary had eth0 MAC `8e:5b:23:67:39:ac`,
+flags0x1002/UP0, both management modules absent. Current-boot receipt/CPU binding
+and all fields were complete. FactoryMAC/UP prerequisites were therefore actually
+NEGATIVE. The proposed synchronous blocking management hook must remain HOLD;
+no manual setter/UP/network_init call is permitted. Vendor startup later restored
+factoryMAC/original DHCP/default/parent and fresh old decoded media.
+
+Owned observation hook and native readers/watchdog retired; original future/auth/
+fresh9 passed. Its newly created empty init parent initially remained; DISTINCT
+v34 then verified exactowned inode/root0755/empty/nonsymlink and retired it with
+rmdir/fsync, preserving all helper/observer bytes and fresh9. Current helper store
+is unchanged v32 CONFIRMED+CLEANED with OLD bootID under the NEW actual kernel.
+Do not call helper cleanup/management boot or rewrite that metadata to repair it.
+Private observational data stays inert, with no installed hook. See native report
+for exact facts and timing. Next step is SOURCE-ONLY ordering design, no launch.
+
 ## Separate bounded boot gate — currently HOLD
 
 A confirmed additive record is NOT the input to boot recreation: ManagementBoot
@@ -176,7 +200,8 @@ worker, then ensures the additive path. Same-boot reapply does not renew it;
 second pending boot or terminal confirmed/expired state cleans, no recreation.
 This is a separate120-second BOOT window, not a changed110-second runtime limit.
 
-However, EARLY factory MAC and physical-link prerequisites are NOT yet proved.
+EARLY factory MAC and physical-link prerequisites now have actual NEGATIVE v33
+evidence. The earlier pinned source explains the observed ordering:
 Pinned system0.2.8 `dc2b6d967fc16aa59b412ae306eb34f4c1ec3d0b`:
 
 - `project/app/jetkvm/RkLunch.sh:rcS` runs userdata hooks synchronously BEFORE
@@ -196,7 +221,8 @@ stock vendor eth0 down/MAC reapply/up sequence and normal owner initialization;
 runtime DHCP renew alone does not accept that sequence.
 
 Thus the current blocking hook could loop on factory-MAC/parent prerequisites
-before vendor setup assigns them, denying unchanged DHCP/app startup. Do not
+before vendor setup assigns them (v33 actually observed differentMAC/DOWN),
+denying unchanged DHCP/app startup. Do not
 install/reboot that hook until a reviewed source-grounded early observation or
 boot-safe ordering solution proves these prerequisites. No arbitrary parent MAC
 setter, parent-UP manipulation, full network_init/RkLunch invocation or global
