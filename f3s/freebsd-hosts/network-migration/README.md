@@ -1,7 +1,9 @@
 # FreeBSD address migration preparation (m14)
 
-Prepared only. Nothing here establishes that native FreeBSD rollback, new
-management connectivity or cable movement has passed acceptance. Keep all
+The bounded f3 native canary passed expiry, actual boot recovery, fresh
+old/new management, confirmation and scoped reapply on 2026-11-05; see the
+[v14 execution record](V14-CANARY.md#native-results--2026-11-05). Other hosts
+and standalone guests still need their own guarded acceptance. Keep all
 production cabling unchanged through shared-port0 acceptance. Never create
 an activation marker merely because these local fixture checks pass.
 

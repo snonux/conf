@@ -1,7 +1,9 @@
 # Rocky physical-address migration (n14)
 
-Preparation only; no native NetworkManager rollback or remote connectivity has
-been proven by this change. Covers r0–r2/enp0s5 only. Other Rocky hosts have
+The bounded r2 native canary passed timed NetworkManager rollback, actual boot
+recovery, fresh old/new management, confirmation and scoped reapply on
+2026-11-05; see the [v14 execution record](../../../../f3s/freebsd-hosts/network-migration/V14-CANARY.md#native-results--2026-11-05).
+Other nodes still require their own guarded acceptance. Covers r0–r2/enp0s5 only. Other Rocky hosts have
 separate interfaces/ULA requirements and are deliberately excluded.
 
 All `rocky_network_migration_*` tasks are Operational. Prepare installs dormant
