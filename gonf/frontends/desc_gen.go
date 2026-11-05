@@ -78,6 +78,10 @@ func (Monitoring) DescRetireNRPE() string {
 	return "Removes NRPE after confirming it is unused and saving its package"
 }
 
+func (Monitoring) DescSyncthingState() string {
+	return "Repairs ownership of existing Syncthing check state files"
+}
+
 func (Web) DescACMEInvoke() string { return "Requests and renews frontend ACME certificates" }
 
 func (Web) DescInetd() string { return "Installs and converges frontend inetd" }

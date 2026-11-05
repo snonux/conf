@@ -1,11 +1,56 @@
 package internal
 
 import (
+	"context"
+	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+// TestRunInitializesEmptyState verifies the first run after a configuration
+// manager creates the state file before assigning its owner and mode.
+func TestRunInitializesEmptyState(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		file string
+	}{
+		{ModeFolders, stateFileName},
+		{ModeFreshness, freshnessStateFile},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+			srv := httptest.NewServer(newFakeFresh(now))
+			defer srv.Close()
+			cfg := freshConfig(t, srv.URL)
+			cfg.Mode = tc.mode
+			path := filepath.Join(cfg.StateDir, tc.file)
+			if err := os.WriteFile(path, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			result := Run(context.Background(), cfg, now)
+			if result.Level != OK {
+				t.Fatalf("first run: %v %q", result.Level, result.Line)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !json.Valid(data) {
+				t.Fatal("first run did not replace empty state with valid JSON")
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != 0o600 {
+				t.Fatalf("state mode = %v, want 0600", info.Mode().Perm())
+			}
+		})
+	}
+}
 
 func TestStateRoundTripAndTrack(t *testing.T) {
 	dir := t.TempDir()

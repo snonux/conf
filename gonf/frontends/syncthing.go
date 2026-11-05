@@ -68,7 +68,17 @@ func installSyncthingPlugin(source string, account Resource) []Dependency {
 	keyFile := File(syncthingKeyFile, WithContent(key+"\n"), Perm(0o640, "root:_gogios"), WithSensitive)
 	ignore := File(syncthingIgnoreFile, WithContent(syncthingIgnore), Perm(0o640, "root:_gogios"))
 	state := Dir(syncthingStateDir, Perm(0o750, "_gogios:_gogios"), DependsOn(account))
-	return []Dependency{plugin, keyFile, ignore, state}
+	return append([]Dependency{plugin, keyFile, ignore, state}, syncthingStateFiles()...)
+}
+
+// syncthingStateFiles converges ownership without changing saved history.
+func syncthingStateFiles(deps ...Dependency) []Dependency {
+	// The plugin atomically replaces these files with mode 0600. Repair
+	// ownership left by a privileged diagnostic run without resetting the
+	// escalation history or granting other users access to the state.
+	folders := EnsureFile(syncthingStateDir+"/check_syncthing.json", Perm(0o600, "_gogios:_gogios"), DependsOn(deps...))
+	freshness := EnsureFile(syncthingStateDir+"/check_syncthing_freshness.json", Perm(0o600, "_gogios:_gogios"), DependsOn(deps...))
+	return []Dependency{folders, freshness}
 }
 
 // addSyncthingChecks adds "Check Syncthing", which pages on stuck folders

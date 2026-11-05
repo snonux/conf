@@ -97,6 +97,27 @@ func (Monitoring) DTailChecks() {
 	})
 }
 
+// OptsSyncthingState keeps existing-state repair out of the aggregate.
+func (Monitoring) OptsSyncthingState() TaskOptions {
+	return TaskOptions{Operational()}
+}
+
+// SyncthingState repairs ownership of existing Syncthing check state files.
+// It requires the managed directory and both regular files to exist and
+// changes no package, configuration, schedule or running service.
+func (Monitoring) SyncthingState() {
+	admission := Command("sh", List("-ceu", `
+dir=/var/db/check_syncthing
+[ -d "$dir" ]
+[ ! -L "$dir" ]
+[ "$(stat -f '%Su:%Sg:%Lp' "$dir")" = '_gogios:_gogios:750' ]
+for name in check_syncthing.json check_syncthing_freshness.json; do
+  [ -f "$dir/$name" ]
+  [ ! -L "$dir/$name" ]
+done`), WithName("syncthing-state-admission"))
+	syncthingStateFiles(admission)
+}
+
 func cleanupLegacyDTail() Resource {
 	return Command("sh", List("-ceu", `
 for binary in dserver dcat dgrep dmap dtail dtailhealth; do

@@ -105,6 +105,17 @@ transfer pages through the escalation. Use a persistent directory owned by
 the check's user (e.g. `/var/db/...`, not `/var/run`, which a reboot
 empties and so restarts the clock).
 
+Run diagnostics as the same user as the scheduled check (`_gogios` on the
+frontends). Both modes atomically replace their state file with mode 0600,
+owned by the invoking user. Running as root against the scheduled check's
+state directory leaves files that `_gogios` cannot read. The frontend
+`frontends_gogios` recipe converges both files to 0600 `_gogios:_gogios`
+while preserving their contents and escalation history.
+For an existing installation,
+`./gonf.sh cluster frontends frontends_syncthing_state`
+repairs only those files' ownership and modes;
+it refuses a missing file or an unexpected state directory.
+
 ## Build and test
 
 ```sh
