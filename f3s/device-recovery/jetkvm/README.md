@@ -1,8 +1,10 @@
 # JetKVM recovery design and unresolved gates
 
-Evidence reviewed 2026-11-05 for task s14. **Preparation only: no recovery
-helper is installed, no network setting is changed, and no JetKVM recovery
-trial has passed. Renumbering remains gated.**
+Evidence reviewed 2026-11-05 for task s14. **The first device has the helper
+installed and two additive detached-expiry trials passed cleanup. Fixed-channel
+HTTP/SSH usability failed; renumbering remains gated.** See the
+[native runtime evidence](NATIVE-RUNTIME-2026-11-05.md). Historical preparation
+and capability observations below do not establish a working recovery path.
 
 The mandatory contract is in IQ's
 [`RECOVERY.md`](../../../../iq/topics/infra/openbsdrouter-plan/RECOVERY.md)

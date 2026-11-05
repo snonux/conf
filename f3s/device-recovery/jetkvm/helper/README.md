@@ -1,10 +1,12 @@
-# JetKVM recovery helper — offline implementation
+# JetKVM recovery helper
 
 This standalone Linux Go module implements the revised protocol in
 [the parent README](../README.md#revised-design-fixed-management-plus-one-target-bearing-boot).
-It has not been installed or executed on a JetKVM. No address/profile is allocated
-by this module. Native acceptance remains task s14; these tests establish local
-software behavior, not firmware/network compatibility or working remote access.
+It is installed on the first device; two unconfirmed additive runtime trials
+proved detached expiry and exact cleanup, but routed fixed-channel access failed.
+See [native evidence](../NATIVE-RUNTIME-2026-11-05.md). No address/profile is
+allocated by this module. Full native acceptance remains task s14; offline tests
+do not establish working remote access, boot recovery or DHCP-owner compatibility.
 
 Build/check from this directory:
 
@@ -26,9 +28,10 @@ They do not execute BusyBox network mutations or establish native behavior.
 
 The CLI refuses mutations unless root, the pinned hardware device ID matches the
 vendor's CPU Serial verbatim (including a 15-digit serial), Linux reports the
-reviewed ARMv7/5.10.160 ABI, and `/userdata` is mounted ext4 read-write. Actual ARM
-execution, clock resolution, watchdog behavior and this Go runtime's compatibility
-still need native verification. `-version` works without these prerequisites.
+reviewed ARMv7/5.10.160 ABI, and `/userdata` is mounted ext4 read-write. ARM
+execution, detached monotonic expiry and exact owned cleanup passed on the
+first device; fixed-channel reception failed. Watchdog/boot restoration and
+DHCP-owner compatibility remain unverified. `-version` skips these prerequisites.
 All network execution uses fixed BusyBox argv, with a three-second per-command
 execution timeout, no shell. No native operation runs as part of the tests.
 
