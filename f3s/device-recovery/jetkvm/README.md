@@ -10,6 +10,10 @@ and [`ADDRESS-RECOVERY.md`](../../../../iq/topics/infra/openbsdrouter-plan/ADDRE
 Those inventories own allocations; this file does not allocate addresses.
 Keep the controller's existing AP connection and every old allocation.
 
+The [first native canary plan](NATIVE-CANARY.md) records source ownership,
+actual media-port requirements, temporary access and serial native proof gates.
+It remains a review candidate; it allocates and activates nothing.
+
 ## Evidence and limits
 
 Authenticated reads establish app 0.5.10 and system 0.2.8 on all four devices.

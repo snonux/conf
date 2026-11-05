@@ -120,14 +120,30 @@ persisted deadline and refuses a different pending generation.
 For a bounded boot recreation trial, root issues a new authorization with
 `boot_allowance=true`, boot ID of the current boot and a fresh nonce, then runs
 bootstrap and reboots the JetKVM within the armed window without confirmation.
-Install the **management-only** synchronous wrapper [management-boot.sh](management-boot.sh)
-with its pinned ID before that boot. `management-boot` requires no pending primary
+Only after successful bootstrap has persisted active authorization, install the
+**management-only** synchronous wrapper [management-boot.sh](management-boot.sh)
+with its pinned ID before that boot. Do not install a hook without active state,
+or reboot if installation consumes the remaining armed budget.
+`management-boot` requires no pending primary
 transaction. It consumes/syncs the single allowance, records the new boot ID and
 new 120-second deadline, verifies a new detached cleanup worker, then recreates
 the additive path before returning. A same-boot reapply keeps that deadline.
 Another unconfirmed boot cleans up instead of recreating. Lost worker startup
 synchronously cleans the additive path before returning an error. The wrapper
 blocks startup on any error because RkLunch ignores hook exit status.
+
+Confirmed or expired additive state takes a terminal cleanup branch: remove
+only exactly owned additive resources and return success so unchanged vendor
+DHCP/Dropbear/app startup can continue. A previous-boot ownership journal never
+authorizes deletion of a foreign surviving resource. Cleanup failures still block
+startup. This avoids stranding a device if the management-only hook remains at
+an unexpected reboot after keep; it does not promise a persistent fixed endpoint
+for terminal additive trials. The pending-primary refusal precedes this branch.
+The full pre-app hook's receipt/readiness and worker-failure behavior is unchanged.
+Remove only the owned management-only hook after its completed bounded boot
+trial, until the separately reviewed full-hook transition. Source-only terminal
+cleanup tests do not establish native startup acceptance; see
+[the first-canary plan](../NATIVE-CANARY.md).
 
 After real fresh fixed-path, boot, stock network_init, udhcpc **and** jetdhcpc
 renew/rebind and owner-reapply proofs, USB/video/media/authentication checks,

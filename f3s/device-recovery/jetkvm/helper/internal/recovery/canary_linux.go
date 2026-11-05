@@ -74,8 +74,11 @@ func ManagementBoot(adapter Adapter, boot string, now int64, start func(State) e
 		if auth.Hash != adapter.Profile.Hash() {
 			return errors.New("canary profile mismatch")
 		}
-		if auth.Confirmed {
-			return errors.New("new bounded boot authorization required")
+		if auth.Confirmed || auth.Expired {
+			// This hook guards only an additive trial. Once terminal, release
+			// owned resources and let the unchanged vendor network start; a
+			// lingering hook must not strand the device before Dropbear/app.
+			return adapter.Cleanup()
 		}
 		if auth.Boot != boot {
 			if !auth.BootAllowance || auth.Expired {
