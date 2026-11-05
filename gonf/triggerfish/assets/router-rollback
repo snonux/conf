@@ -10,8 +10,8 @@ BASE=/etc/gonf
 STATE=$BASE/router-state
 SELF=$BASE/router-rollback
 LOCK=$BASE/router-lock
-FILES='/etc/hostname.igc0 /etc/hostname.igc1 /etc/hostname.igc2 /etc/hostname.igc3 /etc/mygate /etc/pf.conf /etc/dhcpd.conf /etc/ntpd.conf /var/unbound/etc/unbound.conf /etc/sysctl.conf /etc/rc.conf.local'
-SERVICES='dhcpd unbound ntpd rad'
+FILES='/etc/hostname.igc0 /etc/hostname.igc1 /etc/hostname.igc2 /etc/hostname.igc3 /etc/mygate /etc/pf.conf /etc/dhcpd.conf /etc/ntpd.conf /var/unbound/etc/unbound.conf /etc/sysctl.conf /etc/rc.conf.local /etc/resolv.conf'
+SERVICES='dhcpd unbound ntpd rad resolvd'
 
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
@@ -107,6 +107,15 @@ install_boot() {
  # changes so an upgrade cannot silently move recovery after network loading.
  typeset target=/etc/rc next=/etc/rc.gonf-next
  if grep -q '^# BEGIN gonf router recovery$' "$target"; then
+  # Upgrade only the previously reviewed exact hook, never a changed anchor.
+  if grep -qx ' unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf' "$target"; then
+   check_hook legacy
+   sed 's/^ unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf$/ unset dhcpd_flags unbound_flags ntpd_flags rad_flags resolvd_flags pf/' "$target" > "$next"
+   /bin/ksh -n "$next"
+   chmod "$(stat -f %Lp "$target")" "$next"
+   chown root:wheel "$next"
+   mv -f "$next" "$target"
+  fi
   check_hook
   return
  fi
@@ -116,7 +125,7 @@ install_boot() {
    print "# BEGIN gonf router recovery"
    print "if /etc/gonf/router-rollback boot-needed; then"
    print " /etc/gonf/router-rollback boot-restore || exit 1"
-   print " unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf"
+   print " unset dhcpd_flags unbound_flags ntpd_flags rad_flags resolvd_flags pf"
    print " _rc_parse_conf"
    print "fi"
    print "# END gonf router recovery"
@@ -129,14 +138,22 @@ install_boot() {
  check_hook
 }
 check_hook() {
+ typeset cached=' unset dhcpd_flags unbound_flags ntpd_flags rad_flags resolvd_flags pf'
+ [[ ${1:-} != legacy ]] || cached=' unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf'
  awk '
   /^mount -uw \/$/ {mounted=NR}
   /^# BEGIN gonf router recovery$/ {hook=NR; count++}
   /^sysctl_conf$/ {sys=NR}
   /^sh \/etc\/netstart$/ {net=NR}
   END {exit !(count==1 && mounted<hook && hook<sys && hook<net)}' /etc/rc || fail 'early boot hook missing or moved'
- grep -qx ' unset dhcpd_flags unbound_flags ntpd_flags rad_flags pf' /etc/rc || fail 'cached rc state would survive rollback'
- grep -qx ' /etc/gonf/router-rollback boot-restore || exit 1' /etc/rc || fail 'boot restore invocation missing'
+ grep -qxF "$cached" /etc/rc || fail 'cached rc state would survive rollback'
+ [[ $(sed -n '/^# BEGIN gonf router recovery$/,/^# END gonf router recovery$/p' /etc/rc) == "# BEGIN gonf router recovery
+if $SELF boot-needed; then
+ $SELF boot-restore || exit 1
+$cached
+ _rc_parse_conf
+fi
+# END gonf router recovery" ]] || fail 'boot recovery block changed'
 }
 
 ready() {
@@ -211,7 +228,7 @@ snapshot() {
  fi
  for f in $FILES; do
   mkdir -p "$s/files${f%/*}"
-  if [[ -e $f ]]; then
+  if [[ -e $f || -L $f ]]; then
    [[ -f $f && ! -L $f ]] || fail 'unsupported persistent symlink'
    cp -p "$f" "$s/files$f"
   else
@@ -309,6 +326,7 @@ persist_candidate() {
  chmod 600 /etc/sysctl.conf.gonf-next
  mv -f /etc/sysctl.conf.gonf-next /etc/sysctl.conf
  rcctl disable rad
+ rcctl disable resolvd
  rcctl enable unbound ntpd
  rcctl set unbound flags "-c /var/unbound/etc/unbound.conf"
  rcctl set ntpd flags ""
@@ -386,7 +404,12 @@ activate() {
  pfctl -F states >/dev/null
  if ! pfctl -s info | grep -q '^Status: Enabled'; then pfctl -e; fi
  sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0 >/dev/null
- rcctl start unbound ntpd
+ rcctl start unbound
+ # resolvd is stopped and disabled under the armed journal. Switch only after
+ # local DNS starts; ntpd must resolve through it rather than removed IPv6.
+ atomic /etc/resolv.conf 'nameserver 127.0.0.1'
+ chmod 644 /etc/resolv.conf
+ rcctl start ntpd
  [[ $(cat "$STATE/profile") == shared-igc0 ]] || rcctl start dhcpd
  atomic "$STATE/status" active-unconfirmed
  sync
@@ -487,6 +510,14 @@ restore_runtime() {
   mv -f /etc/rc.conf.local.gonf-restore /etc/rc.conf.local
  else
   rm -f /etc/rc.conf.local
+ fi
+ # A restarted resolvd may rewrite this file. Restore its exact captured bytes
+ # after service restoration, retaining its original runtime/persistent flags.
+ if [[ -f $STATE/saved/files/etc/resolv.conf ]]; then
+  cp -p "$STATE/saved/files/etc/resolv.conf" /etc/resolv.conf.gonf-restore
+  mv -f /etc/resolv.conf.gonf-restore /etc/resolv.conf
+ else
+  rm -f /etc/resolv.conf
  fi
 }
 restore() {

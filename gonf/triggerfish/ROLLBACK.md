@@ -1,7 +1,16 @@
 # Router rollback controller
 
-Preparation only. The controller is not installed and no live trial has run.
-Task l14 implements recovery; t14/u14 own installation and bounded live proof.
+The recovery controller and wg2 bootstrap were deployed on 2026-11-05.
+Two unconfirmed 180-second trials expired through native root cron; fresh old-LAN
+SSH verified restored/no-pending state and absence of wg2's file/interface.
+The first acceptance attempt hit a startup handshake delay and was left
+unconfirmed. After recreating only the controller's temporary wg2, a new
+post-activation handshake and held fresh old/VPN SSH receipts passed; token
+`t14-vpn-accept2-20261105` was confirmed. Final fresh old/VPN reconnects passed.
+Controller routing/AllowedIPs remain restricted to `10.99.0.1/32`; DNS, default
+route and wg1 were preserved. Phone, real reboot and igc1 recovery are untested.
+The resolver changes below are prepared, not installed; no physical profile
+has been activated. Task l14 implements recovery; t14/u14 own bounded live proof.
 The inactive profile renderer supplies configuration input. Physical cable and
 recovery-path acceptance gates remain in the IQ router plan.
 
@@ -35,7 +44,7 @@ unperformed acceptance explicitly recorded.
 
 ## Bounded bootstrap execution plan
 
-This is the review boundary before live Setup. Use two distinct tokens and
+This was the review boundary before live Setup. Use distinct tokens and
 `window_seconds:180` for both trials. Do not write physical-profile readiness
 or activate a physical profile during this bootstrap. Reuse the protected
 prepared keys; never render the hostname candidate or client private key to a
@@ -59,7 +68,7 @@ terminal/log. Keep the phone peer dormant.
    before `triggerfish_rollback_activate`. The stage prerequisites restage
    inactive physical candidates only; they do not activate those profiles.
 4. Bring up the prepared controller wg2 with only the temporary
-   `10.99.0.0/24` route needed for this bootstrap. Preserve controller DNS,
+   `10.99.0.1/32` route needed for this bootstrap. Preserve controller DNS,
    default route and wg1. Within the deadline, measure a recent authenticated
    handshake, route selection/source `10.99.0.2`, and fresh SSH connections
    to both `192.168.1.2` and `10.99.0.1`. Keep those sessions held while their
@@ -83,6 +92,70 @@ introduced controller wg2 when abandoning the bootstrap. Actual reboot
 recovery and igc1 physical recovery remain unproved by this experiment.
 The full shared profile still requires the separately reviewed armed
 resolver/resolvd transition recorded in IQ HANDOFF before activation.
+
+## Shared-profile resolver transaction and acceptance plan
+
+Physical profiles snapshot `/etc/resolv.conf` (including absence and mode),
+resolvd runtime flags/running state, and persistent rc.conf.local before arming.
+Symlinks, including dangling symlinks, refuse before any pending marker.
+Activation stops resolvd with the other owned services, disables it persistently,
+starts the configured Unbound, atomically switches the router resolver to only
+`nameserver 127.0.0.1`, and then starts ntpd. Bootstrap never enters this branch.
+Restore uses saved runtime flags when restarting resolvd, restores persistent
+flag drift afterward, then restores exact resolver-file bytes/mode after any
+service-generated rewrite. The early boot hook clears cached `resolvd_flags`
+before reparsing restored rc configuration. Setup upgrades the exact previous
+bootstrap hook only with no pending trial; altered hook blocks refuse.
+
+The next reviewed live step is limited to the router's `shared-igc0` profile:
+
+1. Recheck fresh old/VPN SSH, confirmed/no-pending bootstrap, handshake,
+   controller route and unchanged physical cabling. Capture router running and
+   persistent address/route, PF, forwarding, DNS and service state. Recheck
+   controller DNS/default/wg1 and host/service health (including documented
+   pre-existing exceptions). Inspect ARP/host/controller inventory for `.11.2`
+   clients and new-prefix collisions; retain `.11.2`. Review r14 dependencies
+   specifically for router-only staging: all production hosts/services still
+   use their old addresses/routes, no endpoint or service bind is promoted,
+   and TemporaryFlows remains empty. Any discovered dependency blocks readiness
+   until resolved; preparation tasks alone are not runtime acceptance.
+2. Through gonf, install the reviewed updated helper/hook with Setup; verify
+   native syntax, exact early hook and root cron. Stage `shared-igc0` with a
+   new token and a 300-second window. Obtain its frozen digest. Only after the
+   preceding measured inventory/dependency review, use gonf Readiness with
+   that exact digest and explicit reviewed assertion. Arm; inspect persisted
+   deadline/pending state before activation. No DHCP offers on shared igc0.
+3. Keep the existing controller VPN `/32`; temporarily add only
+   `10.20.0.1/32` to this peer's AllowedIPs and controller route for new-gateway
+   SSH via source `10.99.0.2`. Preserve controller old IP, DNS/default/wg1.
+   Activate through gonf. Check expected old/provisioning/zone aliases on igc0,
+   local ULA only, no native IPv6 default/autoconfiguration, recovery prefix
+   on igc1 without overlap, IPv4 forwarding on/IPv6 forwarding off, loaded PF
+   policy, running Unbound/ntpd and stopped/disabled resolvd/dhcpd/rad.
+4. Before confirmation, prove fresh held old `.1.2` and new `10.20.0.1` SSH
+   (new via the authenticated VPN), plus fresh `10.99.0.1` SSH. Verify selected
+   routes/sources and post-activation handshake. Use native system resolution
+   for public A records including `pool.ntp.org`, direct local-Unbound queries,
+   ntpd peer resolution and the router's public IPv4 egress. Assert resolver
+   file is localhost-only and controller DNS/default/wg1 remain unchanged.
+   Compare existing host/k3s/storage/monitoring reachability to the baseline.
+5. First leave confirmation unset and observe native cron expiry. Fresh old
+   and VPN reconnects must show restored/no-pending state, original physical
+   address/route/PF/forwarding/service state and exact saved resolver file/
+   persistent flags with original resolvd runtime state. wg2 must survive this
+   physical-profile restore. Remove only the temporary new-gateway `/32`
+   controller route/AllowedIP after the experiment.
+6. If expiry passes, repeat with a distinct token/frozen digest/readiness.
+   Repeat the preceding checks; record held old/new socket receipts through
+   gonf Proof, then set service acceptance and Confirm before expiry. Recheck
+   fresh old/new/VPN access and no-pending state afterward. Leave host aliases,
+   canonical DNS, service binds and mesh endpoints for their own guarded steps.
+
+This router-only acceptance does not establish same-interface forwarding/NAT
+from a migrated lab client, application ACLs for new sources, actual boot
+recovery, physical isolation, phone transport or igc1 cable recovery. Those
+require their own bounded canary/native or physical gates before relying on
+them. No cable action belongs in this transaction.
 
 Register `Rollback{}` with prefix `triggerfish_rollback_` on the triggerfish
 cluster, and attach `RouterTrial{}` to its inventory. All methods are operational;
@@ -150,7 +223,7 @@ AllowedIPs, handshake and recovery routing before supplying readiness.
 `Activate` requires an unexpired armed trial and rechecks the timer/readiness.
 It marks the journal before its first write. Prefixes are removed before they
 move between physical ports; 192.168.1.2 remains on igc0 and existing 10.98.0.1
-stays on igc1. It stops/changes only dhcpd, unbound, ntpd and rad, preserves
+stays on igc1. It stops/changes only dhcpd, unbound, ntpd, rad and resolvd, preserves
 unrelated sysctl keys, and binds Unbound at native
 `/var/unbound/etc/unbound.conf`. It flushes PF states when switching policy so
 old states cannot bypass new rules. Fresh connections are required afterwards.

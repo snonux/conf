@@ -70,8 +70,11 @@ rcctl() {
  print -- "rcctl $*" >> "$BASE/operations"
  case $* in
  'check cron'|'check ntpd') return 0;;
+ 'check resolvd') [[ ! -f $BASE/resolvd-stopped ]];;
  'check '*) return 1;;
- 'start unbound ntpd') [[ ! -f $BASE/fail-activate ]];;
+ 'start unbound') [[ ! -f $BASE/fail-activate ]];;
+ 'start ntpd') grep -qx 'nameserver 127.0.0.1' "${BASE%/gonf}/resolv.conf";;
+ '-f start resolvd') print 'nameserver 192.0.2.99' > "${BASE%/gonf}/resolv.conf";;
  *) return 0;;
  esac
 }
@@ -102,8 +105,12 @@ for i in igc1 igc2 igc3; do print up > "$fixture/etc/hostname.$i"; done
 print 192.168.1.1 > "$fixture/etc/mygate"
 print 'set state-policy floating\npass all' > "$fixture/etc/pf.conf"
 print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0\nkern.maxfiles=12345' > "$fixture/etc/sysctl.conf"
-print 'pkg_scripts=uptimed' > "$fixture/etc/rc.conf.local"
+print 'pkg_scripts=uptimed\nresolvd_flags=""' > "$fixture/etc/rc.conf.local"
+print 'nameserver fe80::1%igc0\nnameserver fd22:c702:acb7::1' > "$fixture/etc/resolv.conf"
+chmod 644 "$fixture/etc/resolv.conf"
+cp -p "$fixture/etc/resolv.conf" "$fixture/resolv.expected"
 print 'daemon_flags=' > "$fixture/var/run/rc.d/ntpd"
+print 'daemon_flags=-a fixture-runtime-drift' > "$fixture/var/run/rc.d/resolvd"
 print 'wg2: flags=<UP>\n inet 10.99.0.1 netmask 0xffffff00' > "$base/interfaces/wg2"
 # Not keys: this synthetic fixture tests only the fail-closed presence gate.
 {
@@ -123,6 +130,11 @@ RC
 # install_boot is deliberately exercised only against the rewritten fixture rc.
 "$fixture/run" install_boot
 /bin/ksh -n "$fixture/etc/rc"
+# Existing bootstrap hooks are upgraded only when their legacy form matches.
+sed 's/ rad_flags resolvd_flags pf$/ rad_flags pf/' "$fixture/etc/rc" > "$fixture/etc/rc.next"
+mv "$fixture/etc/rc.next" "$fixture/etc/rc"
+"$fixture/run" install_boot
+grep -qx ' unset dhcpd_flags unbound_flags ntpd_flags rad_flags resolvd_flags pf' "$fixture/etc/rc"
 "$fixture/run" stage trial0001 shared-igc0 180
 # Produce exact reviewed candidate binding as a controller would, then verify
 # both missing readiness and missing keys block arm before any network writes.
@@ -131,6 +143,12 @@ expect_fail() {
   print -u2 -- "unexpected success: $*"; exit 1
  fi
 }
+# A corrupt cached-state reparse must not be silently accepted or upgraded.
+cp -p "$fixture/etc/rc" "$fixture/rc.expected"
+sed '/^ _rc_parse_conf$/d' "$fixture/etc/rc" > "$fixture/etc/rc.next"
+mv "$fixture/etc/rc.next" "$fixture/etc/rc"
+expect_fail install_boot
+cp -p "$fixture/rc.expected" "$fixture/etc/rc"
 expect_fail arm trial0001 shared-igc0 180
 # The fixture root is mode 700 and the review is owned by the invoking root.
 {
@@ -158,12 +176,45 @@ print 0 > "$base/router-state/deadline"
 if grep -q '192.168.11.2' "$base/interfaces/igc0"; then exit 1; fi
 grep -q '192.168.11.2' "$fixture/etc/hostname.igc0"
 grep -qx 'kern.maxfiles=12345' "$fixture/etc/sysctl.conf"
+cmp -s "$fixture/resolv.expected" "$fixture/etc/resolv.conf"
+[[ $(stat -f %Lp "$fixture/etc/resolv.conf") == 644 ]]
+grep -qx 'resolvd_flags=""' "$fixture/etc/rc.conf.local"
+grep -qx 'rcctl set resolvd flags -a fixture-runtime-drift' "$base/operations"
+grep -qx 'rcctl -f start resolvd' "$base/operations"
 "$fixture/run" restore
+cmp -s "$fixture/resolv.expected" "$fixture/etc/resolv.conf"
 [[ -f $base/router-owner && ! -f $base/router-state/pending ]]
 rm "$base/fail-activate"
+# Unsupported resolver symlinks refuse before pending authorizes activation.
+"$fixture/run" stage trialdns1 shared-igc0 180
+mv "$fixture/etc/resolv.conf" "$fixture/resolv.saved"
+ln -s "$fixture/resolv.saved" "$fixture/etc/resolv.conf"
+expect_fail arm trialdns1 shared-igc0 180
+[[ ! -f $base/router-state/pending ]]
+rm "$fixture/etc/resolv.conf"
+ln -s "$fixture/absent-resolver-target" "$fixture/etc/resolv.conf"
+expect_fail arm trialdns1 shared-igc0 180
+[[ ! -f $base/router-state/pending ]]
+rm "$fixture/etc/resolv.conf"
+mv "$fixture/resolv.saved" "$fixture/etc/resolv.conf"
+# An absent file and a stopped resolver must round-trip without starting it.
+touch "$base/resolvd-stopped"
+rm "$fixture/etc/resolv.conf"
+"$fixture/run" stage trialdns2 shared-igc0 180
+"$fixture/run" arm trialdns2 shared-igc0 180
+"$fixture/run" activate trialdns2
+: > "$base/operations"
+"$fixture/run" restore
+[[ ! -e $fixture/etc/resolv.conf ]]
+if grep -qx 'rcctl -f start resolvd' "$base/operations"; then exit 1; fi
+rm "$base/resolvd-stopped"
+cp -p "$fixture/resolv.expected" "$fixture/etc/resolv.conf"
 "$fixture/run" stage trial0002 shared-igc0 180
 "$fixture/run" arm trial0002 shared-igc0 180
 "$fixture/run" activate trial0002
+grep -qx 'nameserver 127.0.0.1' "$fixture/etc/resolv.conf"
+grep -qx 'rcctl stop resolvd' "$base/operations"
+grep -qx 'rcctl disable resolvd' "$base/operations"
 expect_fail confirm trial0002 services-checked
 # Existing SSH tuple must be rejected, even when its socket is still present.
 print '192.168.1.236 23456 192.168.1.2 22' > "$base/router-state/preexisting-connections"
@@ -191,10 +242,11 @@ cat > "$fixture/boot-cache" <<EOF2
 . "$fixture/functions"
 . "$fixture/mocks"
 _rc_parse_conf() {
- dhcpd_flags=NO; unbound_flags=NO; ntpd_flags=NO; rad_flags=NO; pf=YES
+ dhcpd_flags=NO; unbound_flags=NO; ntpd_flags=NO; rad_flags=NO; resolvd_flags=; pf=YES
  [[ ! -f "$fixture/etc/rc.conf.local" ]] || . "$fixture/etc/rc.conf.local"
 }
 unbound_flags=active-cached-value
+resolvd_flags=NO
 EOF2
 # Re-arm the pending marker and invoke the genuine inserted block in isolation.
 touch "$base/router-state/pending"
@@ -209,7 +261,7 @@ chmod 700 "$base/router-rollback"
 sed -n '/^# BEGIN gonf router recovery$/,/^# END gonf router recovery$/p' "$fixture/etc/rc" >> "$fixture/boot-cache"
 # The child shell, rather than this harness, expands these variables.
 # shellcheck disable=SC2016
-print '[[ $unbound_flags == NO && $pf == YES ]]' >> "$fixture/boot-cache"
+print '[[ $unbound_flags == NO && $resolvd_flags == "" && $pf == YES ]]' >> "$fixture/boot-cache"
 /bin/ksh "$fixture/boot-cache"
 # Missing interface placements, template activation, changed frozen bytes and
 # unlisted dependency readiness must refuse without applying anything.
