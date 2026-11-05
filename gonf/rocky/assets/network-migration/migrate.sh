@@ -10,8 +10,16 @@ readonly endpoint=/usr/local/sbin/gonf-endpoint-rollback
 # Root-owned recipe output; no operator-supplied shell expressions.
 # shellcheck disable=SC1091
 source /etc/gonf-network-migration.conf
-: "${iface:?}" "${old:?}" "${lab:?}" "${recovery:?}" "${ula:?}"
+: "${iface:?}" "${old:?}" "${lab:?}" "${recovery:?}"
 : "${shared_gateway:?}"
+# Existing r-node configurations predate these explicit role/policy fields.
+role=${role:-k3s}
+ipv6_policy=${ipv6_policy:-ula}
+case "$role:$ipv6_policy" in
+    k3s:ula) : "${ula:?}";;
+    standalone:disabled) [[ -z ${ula:-} ]] || exit 1;;
+    *) printf 'Unreviewed role or physical IPv6 policy\n' >&2; exit 1;;
+esac
 mkdir -p "$state"
 exec 9>"$state/lock"
 flock -x 9
@@ -39,10 +47,12 @@ _restore_persistent() {
         _fail 'Unsupported saved profile path'
     cp -a "$pending/profile" "$profile"
     restorecon "$profile"
-    if [[ -f $pending/flannel-existed ]]; then
-        cp -a "$pending/flannel" /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
-    else
-        rm -f /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
+    if [[ ! -f $pending/standalone ]]; then
+        if [[ -f $pending/flannel-existed ]]; then
+            cp -a "$pending/flannel" /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
+        else
+            rm -f /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
+        fi
     fi
 }
 _restore_runtime() {
@@ -95,7 +105,9 @@ _snapshot() {
     ip -4 route save table main dev "$iface" > "$state/snapshot/route4"
     ip -6 route save table main dev "$iface" > "$state/snapshot/route6"
     sysctl -n "net.ipv6.conf.$iface.accept_ra" > "$state/snapshot/accept-ra"
-    if [[ -f /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml ]]; then
+    if [[ $role == standalone ]]; then
+        touch "$state/snapshot/standalone"
+    elif [[ -f /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml ]]; then
         cp -a /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml "$state/snapshot/flannel"
         touch "$state/snapshot/flannel-existed"
     fi
@@ -136,7 +148,7 @@ _activate() {
     systemctl is-enabled --quiet gonf-network-rollback-runtime.service
     systemctl is-active --quiet gonf-network-rollback.timer
     [[ $action == stage || $action == promote ]] || _fail 'Invalid action'
-    if [[ $action == promote ]]; then
+    if [[ $action == promote && $role == k3s ]]; then
         # Serial authorization must name precisely this node, never a cluster.
         _gate serial-k3s-approved
         [[ $(<"$state/serial-k3s-approved") == "$(hostname -s)" ]] ||
@@ -144,6 +156,10 @@ _activate() {
         ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
             _fail 'Stage and independently accept the lab address first'
         systemctl is-active --quiet k3s
+    fi
+    if [[ $action == promote ]]; then
+        ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
+            _fail 'Stage and independently accept the lab address first'
     fi
     _snapshot
     uuid=$(<"$pending/uuid")
@@ -163,13 +179,17 @@ _activate() {
     return_routes=$(_return_routes "$uuid" "$return_gateway")
     # No network mutation occurs until the complete private journal exists and
     # PID1 watchdog/boot recovery are armed. Keep existing DNS and other routes.
+    local -a ipv6_options=(ipv6.method disabled)
+    if [[ $ipv6_policy == ula ]]; then
+        ipv6_options=(ipv6.method manual ipv6.addresses "$ula/64"
+            ipv6.gateway '' ipv6.routes '' ipv6.never-default yes
+            ipv6.ignore-auto-routes yes ipv6.ignore-auto-dns yes ipv6.dns '')
+    fi
     nmcli connection modify uuid "$uuid" ipv4.method manual \
         ipv4.addresses "$addresses" ipv4.gateway "$gateway" \
         ipv4.dns "$dns" ipv4.ignore-auto-dns yes \
         ipv4.routes "$return_routes" \
-        ipv6.method manual ipv6.addresses "$ula/64" ipv6.gateway '' \
-        ipv6.routes '' ipv6.never-default yes ipv6.ignore-auto-routes yes \
-        ipv6.ignore-auto-dns yes ipv6.dns ''
+        "${ipv6_options[@]}"
     nmcli --wait 60 connection up uuid "$uuid" ifname "$iface"
     sysctl -q -w "net.ipv6.conf.$iface.accept_ra=0"
     # Also remove stale externally-added physical addresses/RA routes; NM
@@ -177,8 +197,10 @@ _activate() {
     ip -6 address flush dev "$iface" scope global
     ip -6 route flush default dev "$iface"
     ip -6 route flush dev "$iface" proto ra
-    ip -6 address add "$ula/64" dev "$iface"
-    if [[ $action == promote ]]; then
+    if [[ $ipv6_policy == ula ]]; then
+        ip -6 address add "$ula/64" dev "$iface"
+    fi
+    if [[ $action == promote && $role == k3s ]]; then
         mkdir -p /etc/rancher/k3s/config.yaml.d
         printf 'flannel-iface: %s\n' "$iface" > /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
         # Mark BEFORE restart so any partial restart gets reconciled on undo.

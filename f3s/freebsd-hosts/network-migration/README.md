@@ -115,3 +115,23 @@ absent keys and the actual enumerated alias variables. It covers clearing
 Stage alias201 and clearing Promote alias200 while retaining accepted Stage
 alias201. It executes no host network commands and is not a native FreeBSD
 acceptance test.
+
+Standalone guest preparation (q24, 2026-11-05): the separate
+`freebsd-guest-migration` cluster exposes only `freebsd_guest_network_*`
+actions. It does not join hypervisor aggregates or change vm-bhyve autostart.
+Root coordinated a temporary guest start for read-only inspection; its default
+policy remains stopped. Inspection established hostname freebsd.lan.buetow.org,
+vtnet0 / MAC 58:9c:fc:00:56:44, static .139/24 and `inet6 accept_rtadv` in
+root:wheel 0644 `/etc/rc.conf`; no rc.conf.local, empty rc.conf.d. Access is
+paul with noninteractive doas; the inventory uses the existing trusted
+`freebsd.lan` SSH alias. Root SSH is not assumed.
+
+Its explicit `ipv6_policy=disabled` and empty ULA remove upstream physical
+native IPv6 and suppress RA, leaving link-local and wg0 untouched. No guest
+ULA is allocated. The existing rc.conf key journal and boot hook restore the
+previous address/RA/default state, and timer, endpoint and current-cabling
+return-route contracts remain identical. No netif restart or VM operation is
+performed by guest migration actions. The fixture now exercises vtnet0 stage,
+promote, runtime/boot restoration, missing isolated gate and unknown IPv6
+policy. Native FreeBSD `/bin/sh -n` accepted both helper and boot hook; no
+native expiry/reboot, connectivity or migration acceptance is claimed.

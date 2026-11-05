@@ -209,6 +209,42 @@ def main():
         run('stage', 'isolated', ok=False)  # Human/cabling gate stays closed.
         calls = json.loads(db.read_text())['calls']
         assert not any('netif' in ' '.join(call) or 'bridge' in ' '.join(call) for call in calls)
+        # Actual guest interface, explicit no-ULA native policy and retained
+        # wg0 ownership: the fixture refuses commands for any other interface.
+        for command in ('id', 'lockf', 'date', 'pgrep', 'sync', 'netstat',
+                        'sysrc', 'ifconfig', 'route'):
+            (bindir / command).write_text(MOCK.replace('re0', 'vtnet0'))
+        guest = json.loads(json.dumps(initial).replace('re0', 'vtnet0')
+                           .replace('.130', '.139').replace('::130', '::139'))
+        guest['calls'] = []
+        conf.write_text('iface=vtnet0\nold=192.168.1.139\nlab=10.20.0.139\n'
+                        'recovery=10.98.0.139\nula=\n'
+                        'shared_gateway=192.168.1.2\nipv6_policy=unallocated\n')
+        db.write_text(json.dumps(guest))
+        rcconf.write_text(''.join(f'{key}={shlex.quote(value)}\n'
+                                 for key, value in guest['keys'].items()))
+        run('stage', ok=False)
+        assert not (state / 'pending').exists()
+        conf.write_text(conf.read_text().replace('unallocated', 'disabled'))
+        run('stage', 'isolated', ok=False)
+        staged = run('stage')
+        assert staged['v4'] == ['192.168.1.139', '10.20.0.139']
+        assert staged['v6'] == [] and staged['ra'] is False
+        assert staged['keys']['ifconfig_vtnet0_ipv6'] == 'inet6 -accept_rtadv'
+        assert staged['return'] == '192.168.1.2'
+        run('rollback')
+        restored = json.loads(db.read_text())
+        for field in ('keys', 'v4', 'v6', 'ra', 'default4', 'default6', 'return'):
+            assert restored[field] == guest[field], field
+        run('stage')
+        run('confirm')
+        run('promote')
+        promoted = json.loads(db.read_text())
+        assert promoted['v4'] == ['10.20.0.139', '192.168.1.139']
+        run('boot')
+        restored = json.loads(db.read_text())
+        assert restored['keys']['ifconfig_vtnet0'] == guest['keys']['ifconfig_vtnet0']
+        assert not any('wg0' in ' '.join(call) for call in restored['calls'])
         print('PASS: activation gates, dual-address stage, explicit confirm, primary promotion,')
         print('timer rollback, repeated rollback, cached parent rc reload/alias enumeration,')
         print('endpoint fail-closed, CARP/bhyve preservation')

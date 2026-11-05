@@ -28,16 +28,18 @@ import (
 //	NameRockyPis     → rocky_kernel_audit / rocky_kernel_audit_* (also in rocky)
 //	NameFreeBSD      → freebsd / freebsd_*
 const (
-	NameFrontends   = "frontends"
-	NameNetBSDPis   = "netbsd-pis"
-	NameRockyPis    = "rocky-pis"
-	NamePis         = "pis"
-	NameRockyK3s    = "rocky-k3s"
-	NameRockyAll    = "rocky-all"
-	NameRockyDtail  = "rocky-dtail"
-	NameFreeBSD     = "freebsd-hosts"
-	NameGarage      = "garage"
-	NameTriggerfish = "triggerfish"
+	NameFrontends             = "frontends"
+	NameNetBSDPis             = "netbsd-pis"
+	NameRockyPis              = "rocky-pis"
+	NamePis                   = "pis"
+	NameRockyK3s              = "rocky-k3s"
+	NameRockyAll              = "rocky-all"
+	NameRockyDtail            = "rocky-dtail"
+	NameRockyGuestMigration   = "rocky-guest-migration"
+	NameFreeBSDGuestMigration = "freebsd-guest-migration"
+	NameFreeBSD               = "freebsd-hosts"
+	NameGarage                = "garage"
+	NameTriggerfish           = "triggerfish"
 )
 
 // Per-host recipe data is attached with WithData, one small struct type per
@@ -80,6 +82,12 @@ func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	pi2, pi3 := registerPis()
 	registerRockyK3s(pi2, pi3)
 	registerFreeBSD()
+	// Guest stays out of hypervisor aggregates and vm_list (normally stopped).
+	// Use its trusted SSH alias; plain-IP inventory must not bypass host keys.
+	guest := Host("freebsd", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("freebsd/amd64"),
+		WithSSHHost("freebsd.lan"),
+		WithData(freebsd.MigrationHost{Interface: "vtnet0", OldIPv4: "192.168.1.139", LabIPv4: "10.20.0.139", RecoveryIPv4: "10.98.0.139", SharedGateway: "192.168.1.2", Standalone: true, IPv6Policy: "disabled"}))
+	Cluster(NameFreeBSDGuestMigration, guest)
 }
 
 // lan bundles the SSH settings every LAN host (piN, rN, fN) shares. The port
@@ -214,8 +222,10 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 	// Root access is documented for the standalone VM; validate sudo and
 	// bootstrap gonf when it becomes reachable before approving a deploy.
 	standalone := Host("rocky", rnode,
+		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.123", LabIPv4: "10.20.0.123", RecoveryIPv4: "10.98.0.123", SharedGateway: "192.168.1.2", Standalone: true, IPv6Policy: "disabled"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:55:00"}),
 	)
+	Cluster(NameRockyGuestMigration, standalone)
 	Cluster(NameRockyK3s, r0, r1, r2).Parallel(3)
 	Cluster(NameRockyDtail, pi2, pi3, r0, r1, r2)
 	Cluster(NameRockyAll, pi2, pi3, r0, r1, r2, standalone)

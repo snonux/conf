@@ -85,7 +85,7 @@ func (NetworkMigration) DescRollback() string {
 }
 
 func (NetworkMigration) DescStage() string {
-	return "Adds the lab address and local ULA on the unchanged shared wire"
+	return "Adds the lab address and applies the reviewed native IPv6 policy"
 }
 
 func (NetworkMigration) DescStatus() string {

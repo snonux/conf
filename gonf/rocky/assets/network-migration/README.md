@@ -109,3 +109,25 @@ References: [NetworkManager properties](https://networkmanager.dev/docs/api/1.42
 (primary address order, manual IPv6 and route policy),
 [systemd timers](https://www.freedesktop.org/software/systemd/man/252/systemd.timer.html),
 [boot network ordering](https://github.com/systemd/systemd/blob/main/docs/NETWORK_ONLINE.md).
+
+Standalone guest preparation (q24, 2026-11-05): the explicit
+`rocky-guest-migration` cluster exposes only `rocky_guest_network_*` actions
+for rocky/.123. Read-only inspection verified active enp0s5, persistent NM
+keyfile `/etc/NetworkManager/system-connections/enp0s5.nmconnection`, manual
+IPv4 and automatic IPv6. This is a standalone build VM, with no k3s role.
+Its `role=standalone`, `ipv6_policy=disabled`, empty ULA configuration removes
+upstream native IPv6 on that interface without allocating a guest ULA or
+changing wg0. Unknown policies fail closed. No flannel file is read, saved,
+written or removed and no k3s gate/restart is used; a standalone boot runtime
+unit has no k3s dependency. Snapshots record standalone ownership, so rollback
+continues to leave unrelated k3s files alone. The normal r-node ULA and serial
+restart contract remains unchanged.
+
+The same old-IP retention, shared .2 return route, separately gated isolated
+recovery, independent watchdog/boot rollback, endpoint hook and fresh service
+acceptance requirements apply. Guest-native timer expiry, reboot recovery,
+connectivity and endpoint acceptance remain unperformed. Native Bash syntax
+and `nmcli --offline connection add` accepted the prepared address order,
+return route and disabled-IPv6 policy without changing any live connection.
+The disposable fixture exercises guest stage/promote/boot restore and rejects
+an unallocated policy, checking no k3s or wg0 commands and no drop-in changes.

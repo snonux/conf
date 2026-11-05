@@ -63,11 +63,13 @@ func Register() {
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Base{}, rnodes.K3s{}, rnodes.WireGuard{})
 	RegisterOnCluster(cluster.NameRockyK3s, rocky.NetworkMigration{})
+	RegisterMethods(rocky.NetworkMigration{}, WithPrefix("rocky_guest_network_"), OnCluster(cluster.NameRockyGuestMigration))
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.NodePortGuard{})
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Firewall{})
 
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
+	RegisterMethods(freebsd.NetworkMigration{}, WithPrefix("freebsd_guest_network_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.ZfsKeys{}, WithPrefix("freebsd_zfskeys_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.ShellyFans{}, WithPrefix("freebsd_shellyfans_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))

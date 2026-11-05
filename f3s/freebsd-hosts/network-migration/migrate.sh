@@ -13,7 +13,13 @@ fi
 shift
 # shellcheck source=/dev/null
 . /usr/local/etc/gonf-network-migration.conf
-: "${iface:?}" "${old:?}" "${lab:?}" "${recovery:?}" "${ula:?}" "${shared_gateway:?}"
+: "${iface:?}" "${old:?}" "${lab:?}" "${recovery:?}" "${shared_gateway:?}"
+ipv6_policy=${ipv6_policy:-ula}
+case "$ipv6_policy" in
+    ula) : "${ula:?}";;
+    disabled) [ -z "${ula:-}" ] || exit 1;;
+    *) echo "unreviewed native IPv6 policy" >&2; exit 1;;
+esac
 pending=$state/pending
 keys="ifconfig_${iface} ifconfig_${iface}_alias200 ifconfig_${iface}_alias201 ifconfig_${iface}_alias202 ifconfig_${iface}_ipv6 defaultrouter ipv6_defaultrouter static_routes route_gonfmigration"
 
@@ -177,14 +183,18 @@ stage() {
         fi
     fi
     set_return_route
-    sysrc -f /etc/rc.conf "ifconfig_${iface}_ipv6=inet6 $ula prefixlen 64 -accept_rtadv" >/dev/null
+    ipv6_config='inet6 -accept_rtadv'
+    if [ "$ipv6_policy" = ula ]; then
+        ipv6_config="inet6 $ula prefixlen 64 -accept_rtadv"
+    fi
+    sysrc -f /etc/rc.conf "ifconfig_${iface}_ipv6=$ipv6_config" >/dev/null
     ifconfig "$iface" inet6 -accept_rtadv
     # Read before deleting; pipelines must not hide ifconfig failures.
     v6_rows > "$pending/v6.remove"
     while read -r address prefix; do
-        [ "$address" = "$ula" ] || ifconfig "$iface" inet6 "$address" delete
+        [ "$address" = "${ula:-}" ] || ifconfig "$iface" inet6 "$address" delete
     done < "$pending/v6.remove"
-    if ! v6_rows | awk '{print $1}' | grep -qxF "$ula"; then
+    if [ "$ipv6_policy" = ula ] && ! v6_rows | awk '{print $1}' | grep -qxF "$ula"; then
         ifconfig "$iface" inet6 "$ula" prefixlen 64 alias
     fi
     if [ -s "$pending/default6" ]; then

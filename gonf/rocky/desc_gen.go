@@ -35,7 +35,7 @@ func (NetworkMigration) DescPrepare() string {
 }
 
 func (NetworkMigration) DescPromote() string {
-	return "Requests new physical primary selection and a serial k3s refresh"
+	return "Selects the lab primary, refreshing k3s only for k3s hosts"
 }
 
 func (NetworkMigration) DescRollback() string {

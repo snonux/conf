@@ -244,5 +244,30 @@ elif args[:2] == ['connection', 'modify']:
     run('stage', 'isolated')
     assert_isolated_routes()
     run('rollback')
+    # Standalone policy explicitly has no ULA, no k3s/drop-in writes and
+    # preserves the same timer/boot/endpoint transaction contracts.
+    conf.write_text(conf.read_text().replace('ula=fd00::120', 'ula=') +
+                    'role=standalone\nipv6_policy=unallocated\n')
+    log.write_text('')
+    run('stage', 'shared', success=False)
+    assert not log.read_text(), 'Unknown IPv6 policy ran OS commands'
+    conf.write_text(conf.read_text().replace('unallocated', 'disabled'))
+    dropin = root / 'dropins' / '60-network-migration.yaml'
+    dropin.write_text('unrelated preexisting content')
+    (state / 'stage-approved').touch()
+    request('stage', 'shared')
+    assert (pending / 'standalone').exists()
+    assert not (pending / 'flannel').exists()
+    assert 'ipv6.method disabled' in log.read_text()
+    assert 'ip -6 address add' not in log.read_text()
+    (state / 'confirm-approved').touch()
+    run('confirm')
+    (state / 'promote-approved').touch()
+    request('promote', 'shared')  # No serial-k3s-approved gate exists.
+    run('restore-boot')
+    run('restore-after-boot')
+    assert dropin.read_text() == 'unrelated preexisting content'
+    assert 'k3s' not in log.read_text()
+    assert 'wg0' not in log.read_text()
     print('PASS: request flock dispatch (negative old deadlock), owned /32 replacement '
           '(negative old append), stage/promote, expiry/boot/endpoint/confirm recovery')

@@ -10,7 +10,7 @@ import (
 
 const migrationHelper = "/usr/local/sbin/gonf-network-migration"
 
-// NetworkMigration prepares explicit, reversible f-host address changes.
+// NetworkMigration prepares explicit, reversible host address changes.
 // Every method is operational: ordinary freebsd applies never stage addresses.
 type NetworkMigration struct{ RequiresRoot }
 
@@ -18,6 +18,9 @@ type NetworkMigration struct{ RequiresRoot }
 // SharedGateway must be reachable on the unchanged production cable.
 type MigrationHost struct {
 	Interface, OldIPv4, LabIPv4, RecoveryIPv4, ULA, SharedGateway string
+	// Standalone is a reviewed vtnet0 guest with no allocated native ULA.
+	Standalone bool
+	IPv6Policy string
 }
 
 func (NetworkMigration) OptsPrepare() TaskOptions  { return TaskOptions{Operational()} }
@@ -31,12 +34,18 @@ func (NetworkMigration) OptsStatus() TaskOptions   { return TaskOptions{Operatio
 func (NetworkMigration) Prepare() {
 	EachHost(func(h MigrationHost) {
 		// Reserve alias200..202; Carp owns alias0, Bhyve owns vm_*.
-		for _, value := range []string{h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.SharedGateway} {
+		for _, value := range List(h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.SharedGateway) {
 			if !netip.MustParseAddr(value).Is4() {
 				panic("migration requires IPv4")
 			}
 		}
-		if addr := netip.MustParseAddr(h.ULA); !addr.Is6() || !addr.IsPrivate() || h.Interface != "re0" {
+		ipv6Policy := "ula"
+		if h.Standalone {
+			ipv6Policy = h.IPv6Policy
+			if h.Interface != "vtnet0" || ipv6Policy != "disabled" || h.ULA != "" {
+				panic("guest migration requires reviewed vtnet0 and disabled native IPv6 without ULA")
+			}
+		} else if addr := netip.MustParseAddr(h.ULA); !addr.Is6() || !addr.IsPrivate() || h.Interface != "re0" {
 			panic("migration requires re0 and IPv6 ULA")
 		}
 		check := Command("test", List("!", "-d", "/var/db/gonf-network-migration/pending"))
@@ -44,8 +53,8 @@ func (NetworkMigration) Prepare() {
 		EnsureDir("/usr/local/etc", RootOwned)
 		EnsureDir("/var/db/gonf-network-migration", RootPrivate)
 		conf := File("/usr/local/etc/gonf-network-migration.conf", WithContent(fmt.Sprintf(
-			"iface='%s'\nold='%s'\nlab='%s'\nrecovery='%s'\nula='%s'\nshared_gateway='%s'\n",
-			h.Interface, h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.ULA, h.SharedGateway)), RootPrivate, DependsOn(check))
+			"iface='%s'\nold='%s'\nlab='%s'\nrecovery='%s'\nula='%s'\nshared_gateway='%s'\nipv6_policy='%s'\n",
+			h.Interface, h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.ULA, h.SharedGateway, ipv6Policy)), RootPrivate, DependsOn(check))
 		helper := InstallFile(migrationHelper, paths.FHostAsset("network-migration/migrate.sh"), RootExec, DependsOn(conf))
 		// System rc.d is deliberate: local_startup scripts may be discovered
 		// only after netif. Restore before netif consumes an unconfirmed rc.conf.
@@ -54,7 +63,7 @@ func (NetworkMigration) Prepare() {
 	})
 }
 
-// Stage adds the lab address and local ULA on the unchanged shared wire.
+// Stage adds the lab address and applies the reviewed native IPv6 policy.
 func (NetworkMigration) Stage() { Sh(migrationHelper + " stage shared 900") }
 
 // Promote selects the lab primary and gateway while retaining old management.
