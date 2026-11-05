@@ -76,7 +76,13 @@ func Register() {
 func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	registerFrontends()
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
-		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true, BootCanary: trial.BootCanary}),
+		WithData(triggerfish.RouterProfiles{
+			RetainProvisioningAlias: true, BootCanary: trial.BootCanary,
+			// Shared-wire canary only; the other reserved devices need their own native range proof.
+			JetKVMManagement: []triggerfish.JetKVMManagementEndpoint{
+				{Address: "192.168.11.140", UDPMin: 32768, UDPMax: 60999},
+			},
+		}),
 		WithData(trial))
 	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()

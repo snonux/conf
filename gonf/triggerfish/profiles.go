@@ -22,6 +22,17 @@ type RouterProfiles struct {
 	RetainProvisioningAlias bool
 	// TemporaryFlows are reviewed routed dependencies during mixed-address stages.
 	TemporaryFlows []MigrationFlow
+	// JetKVMManagement admits only independently reserved shared-wire endpoints.
+	// Populate after IQ allocation and native UDP-range inspection, not discovery.
+	JetKVMManagement []JetKVMManagementEndpoint
+}
+
+// JetKVMManagementEndpoint permits laptop management and native ephemeral UDP.
+// Each address needs its own verified device UDP range; no inventory is activated
+// by the zero-value RouterProfiles, and these permits never follow a cable move.
+type JetKVMManagementEndpoint struct {
+	Address        string
+	UDPMin, UDPMax uint16
 }
 
 // MigrationFlow permits one source, destination and transport port while staging.
@@ -62,6 +73,9 @@ func (Profiles) Candidates() {
 // It performs no I/O and never reads keys or modifies router state.
 func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	if err := validateMigrationFlows(data.TemporaryFlows); err != nil {
+		return nil, err
+	}
+	if err := validateJetKVMManagement(data); err != nil {
 		return nil, err
 	}
 	profiles := make(map[string]map[string]string)
@@ -131,6 +145,23 @@ func validateMigrationFlows(flows []MigrationFlow) error {
 	return nil
 }
 
+func validateJetKVMManagement(data RouterProfiles) error {
+	if len(data.JetKVMManagement) > 0 && !data.RetainProvisioningAlias {
+		return fmt.Errorf("JetKVM management requires retained shared provisioning alias")
+	}
+	seen := make(map[string]bool)
+	for _, endpoint := range data.JetKVMManagement {
+		if !slices.Contains([]string{"192.168.11.140", "192.168.11.141", "192.168.11.142", "192.168.11.143"}, endpoint.Address) {
+			return fmt.Errorf("unreviewed JetKVM management address %q", endpoint.Address)
+		}
+		if seen[endpoint.Address] || endpoint.UDPMin == 0 || endpoint.UDPMax < endpoint.UDPMin {
+			return fmt.Errorf("duplicate JetKVM address or invalid native UDP range")
+		}
+		seen[endpoint.Address] = true
+	}
+	return nil
+}
+
 func profilePF(s routerStage, data RouterProfiles) string {
 	rules := fmt.Sprintf(`# Inactive candidate: %s. No blanket pass; wg0/wg1 are not configured here.
 lab_if = "%s"
@@ -195,6 +226,14 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 
 	if s.recovery {
 		rules += "pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port { 22, 443 } tag gonf_transit keep state\n"
 		rules += "pass in on wg2 inet proto icmp from 10.99.0.2 to 10.98.0.0/24 tag gonf_transit keep state\n"
+	}
+	if s.name == "shared-igc0" {
+		for _, endpoint := range data.JetKVMManagement {
+			// Exact reserved destinations only. Media uses device-native ephemeral
+			// UDP; the existing gonf_transit tag admits its routed egress/replies.
+			rules += fmt.Sprintf("pass in on wg2 inet proto tcp from 10.99.0.2 to %s port { 22, 80 } tag gonf_transit keep state\n", endpoint.Address)
+			rules += fmt.Sprintf("pass in on wg2 inet proto udp from 10.99.0.2 to %s port %d:%d tag gonf_transit keep state\n", endpoint.Address, endpoint.UDPMin, endpoint.UDPMax)
+		}
 	}
 	if s.lab == "igc1" {
 		rules += "pass in on igc1 inet proto udp from any port 68 to { 255.255.255.255, 10.20.0.1 } port 67 keep state\npass out on igc1 inet proto udp from 10.20.0.1 port 67 to any port 68 keep state\n"

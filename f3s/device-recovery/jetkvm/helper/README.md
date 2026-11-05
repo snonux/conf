@@ -65,8 +65,13 @@ The profile schema is `device`, `cabling`, `parent`, `link`, `mac`, `address`,
 `gateway`, `controller`, `table`, `priority`. This version deliberately implements
 only `cabling=shared-igc0`, `parent=eth0`, `link=jkrecover`, an allocated address in
 `192.168.11.0/24`, gateway `192.168.11.2` and controller `10.99.0.2/32`.
-The MAC must be locally administered unicast; table/priority must be 1000–32000
-and unoccupied. The future igc1/10.98 profile is rejected. It requires its own
+The MAC must be locally administered unicast. Table must be **1000–1023**;
+priority independently remains **1000–32000**, and both must be unoccupied.
+The shipped BusyBox 1.36.1 table-name parser caps IDs at 1023, while priority
+uses a separate uint32 parser. Root-reviewed read-only v11 on the first device
+verified empty tables 1000/1023 and exact rejection of 1024; no routing mutation
+was submitted. The proposed first profile uses table 1000 / priority 1140.
+The future igc1/10.98 profile is rejected. It requires its own
 reviewed profile transition and physical-path acceptance. A matching gateway IP
 is never treated as proof of current cabling.
 

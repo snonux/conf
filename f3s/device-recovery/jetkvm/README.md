@@ -356,9 +356,9 @@ source-policy table/rule after confirming the numbers are unused. For the
 first proposed device, the intended route semantics are:
 
 ```text
-table 1140: 192.168.11.0/24 dev jkrecover src 192.168.11.140
-table 1140: 10.99.0.2/32 via 192.168.11.2 dev jkrecover src 192.168.11.140
-priority 1140: from 192.168.11.140/32 to 10.99.0.2/32 lookup 1140
+table 1000: 192.168.11.0/24 dev jkrecover src 192.168.11.140
+table 1000: 10.99.0.2/32 via 192.168.11.2 dev jkrecover src 192.168.11.140
+priority 1140: from 192.168.11.140/32 to 10.99.0.2/32 lookup 1000
 ```
 
 This changes no default route. The child has its own connected prefix, so it

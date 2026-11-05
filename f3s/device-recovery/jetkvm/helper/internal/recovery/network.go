@@ -117,7 +117,12 @@ func (p Profile) Validate() error {
 	if err != nil || len(mac) != 6 || mac[0]&3 != 2 {
 		return errors.New("management MAC must be locally administered unicast")
 	}
-	if p.Parent != "eth0" || p.Link != "jkrecover" || p.Table < 1000 || p.Table > 32000 || p.Priority < 1000 || p.Priority > 32000 || p.Device == "" {
+	// Shipped BusyBox resolves table IDs through a fixed 0..1023 name table.
+	// Rule priority has a separate uint32 parser; retain its reviewed range.
+	if p.Table < 1000 || p.Table > 1023 {
+		return errors.New("management table must be in reviewed BusyBox range 1000..1023")
+	}
+	if p.Parent != "eth0" || p.Link != "jkrecover" || p.Priority < 1000 || p.Priority > 32000 || p.Device == "" {
 		return errors.New("invalid owned management identifiers")
 	}
 	// This version deliberately supports only the reviewed current shared-wire profile.

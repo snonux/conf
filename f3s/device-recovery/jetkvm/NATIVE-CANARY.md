@@ -8,6 +8,39 @@ trial. IQ owns allocations and acceptance; this repository owns deployment
 source. Begin with **e10a0883debf7d4a**, authenticated at **192.168.1.241**.
 Do not generalize its results to the other three devices.
 
+## Native read-only v10/v11 checkpoints
+
+One root-reviewed inspection on 2026-11-05 verified the exact CPU Serial
+`e10a0883debf7d4a`, Linux `5.10.160 armv7l`, writable ext4 userdata, and kernel
+UDP ephemeral range **32768–60999**. The installed socket tables showed TCP80
+and temporary developer TCP22, with no TCP443 listener. The helper directory,
+child and hook were absent. Parent/all/default `rp_filter`, `arp_filter`,
+`arp_announce` and `arp_ignore` were all zero; no policy was changed.
+
+The read command then failed closed with
+`ip: invalid argument '1140' to 'table'`. It did not reach priority absence or
+the parent semantic snapshots. These checks remain unproved. All exact
+developer-access cleanup and separate fresh HTTP/new-WebRTC ID/version/USB/video
+checks passed. Private evidence is under
+`~/.local/state/conf/s14-jetkvm-inspection-v10-20261105/`.
+
+The pinned system BusyBox 1.36.1 tarball's `networking/libiproute/rt_names.c`
+limits table IDs to 1023. Its `iprule.c` parses priority separately as uint32.
+The follow-up root-reviewed v11 succeeded: tables 140/1000/1023 were empty,
+1024 produced the exact expected status-1 parser rejection, priority 1140 was
+absent, and both parent snapshots matched each other and the settled v9
+baseline after ignoring numeric address lifetimes only. Neither snapshot had
+tentative/DAD-failed IPv6 or the probe child/module. Exact cleanup and fresh
+HTTP/WebRTC postchecks passed. Evidence is in the matching private v11 directory.
+
+The source helper now caps tables at **1000–1023**, retaining the independent
+priority range **1000–32000**. First-profile proposal is table 1000 / priority
+1140. Focused tests model the actual BusyBox rejection and exercise the highest
+accepted table with a larger priority. Native command acceptance/read-only
+absence does not prove addressed routing or ownership cleanup. No native
+helper/interface/module change occurred; bootstrap still needs root's review
+of the exact installation/profile/authorization and allocated path readiness.
+
 ## Source ownership and minimum preparation
 
 Use [the parent design](README.md) and [helper protocol](helper/README.md).
@@ -21,7 +54,7 @@ without sending keyboard, mouse or power commands.
 |---|---|
 | Root / IQ ADDRESS-RECOVERY | Reconcile and reserve proposed `.11.140`–`.11.143` and management MACs from the parent table; retain every old allocation. Record current cabling as shared igc0. |
 | conf `gonf/triggerfish/profiles.go` | Add a narrowly enabled shared-profile management exception, retaining `192.168.11.2/24` on igc0. Render and review inactive candidates, then use the existing guarded journal. |
-| Laptop wg2 owner | Add only the four exact reserved `/32` routes/AllowedIPs to the existing wg2 peer in its persistent source and runtime; source remains `10.99.0.2`. Preserve other routes, peer material, DNS/default and wg1. |
+| Laptop wg2 owner | Add only admitted exact reserved `/32` routes/AllowedIPs to the existing wg2 peer in its persistent source and runtime; source remains `10.99.0.2`. Preserve other routes, peer material, DNS/default and wg1. |
 | This helper | Pin ARMv7 artifact hash, actual CPU Serial, profile and private metadata; initially install no boot hook and no acceptance receipt. |
 
 The known ledger has no `.11.140`–`.11.143` allocations and records no DHCP
@@ -34,18 +67,32 @@ absent. Do not start a DHCP server or alter vendor reservations to reserve a
 macvlan address. Reject a conflicting IP/MAC or unexplained provisioning client.
 The router's `.11.2` is **shared igc0**, not igc1 recovery.
 
+The laptop route owner is the existing root-private `/etc/wireguard/wg2.conf`
+and its current wg2 peer. Root should stage a private candidate from that exact
+source, adding only `192.168.11.140/32` after its allocation for the first canary;
+save a private exact baseline and compare every other field semantically without
+printing keys. Other `/32`s enter only with their separate admission. Apply the
+reviewed persistent delta and corresponding existing-peer/runtime route together,
+with a bounded controller rollback restoring only that addition. Do not bring
+wg1 down, replace peer keys, broaden a peer AllowedIPs prefix or use a runtime
+`ip route` command as the sole source. Prove the retained router wg2 session and
+`ip route get` source `10.99.0.2`, plus unchanged old IPv4/DNS/default routes.
+Root coordinates this transaction after router candidate acceptance and before
+device bootstrap; no laptop source/runtime change is made by this plan.
+
 Proposed first profile, only after reservation and a fresh CPU Serial check:
 
 ```json
-{"device":"e10a0883debf7d4a","cabling":"shared-igc0","parent":"eth0","link":"jkrecover","mac":"02:52:53:08:97:97","address":"192.168.11.140/24","gateway":"192.168.11.2","controller":"10.99.0.2/32","table":1140,"priority":1140}
+{"device":"e10a0883debf7d4a","cabling":"shared-igc0","parent":"eth0","link":"jkrecover","mac":"02:52:53:08:97:97","address":"192.168.11.140/24","gateway":"192.168.11.2","controller":"10.99.0.2/32","table":1000,"priority":1140}
 ```
 
-Check table/priority 1140 and child name are unused; refuse foreign state. The
+Recheck table 1000, priority 1140 and child name are unused; refuse foreign state. The
 CLI pins `/proc/cpuinfo` Serial verbatim, not a padded conversion of the API ID.
 Read the actual 15- or 16-digit serial and reconcile any API/CPU disagreement
 before finalizing `device`, wrappers or CLI arguments. Verify `uname` reports
-`armv7l` / `5.10.160` and `/userdata` is writable ext4. No fresh native CPU
-Serial read or on-device execution of this artifact has happened in this plan.
+`armv7l` / `5.10.160` and `/userdata` is writable ext4. The v10/v11 reads
+verified these facts for this canary. The helper artifact has not executed
+on the device.
 
 ## Media ports and narrow router candidate
 
@@ -88,10 +135,13 @@ and router state/counters. If it fails, inspect the exact tuple/cause before
 proposing another permission. Device-side unsolicited ICE attempts may be
 blocked without making the controller-initiated pair unusable.
 
-Use a typed, opt-in `RouterProfiles` field for the verified UDP bounds, and
-render these rules only in `shared-igc0` with `RetainProvisioningAlias=true`.
-Reject zero/reversed bounds. This is a preparation proposal for root, not a Go
-change here. Existing `MigrationFlow` supports single ports and physical ingress;
+The source-only `RouterProfiles.JetKVMManagement` field now takes exact admitted
+addresses and per-device `UDPMin`/`UDPMax` bounds. It renders only `shared-igc0`
+and requires `RetainProvisioningAlias=true`; validation rejects other addresses,
+duplicates and zero/reversed bounds. Inventory remains empty: the source change
+activates no permission. First-device bounds are now verified; the other three
+must be inspected independently before admission. Existing `MigrationFlow`
+supports single ports and physical ingress;
 it cannot represent this wg2 UDP range. Do not weaken that type's validation or
 create thousands of per-port flows. The four-address rule is a ceiling; no
 unreserved row may enter an active candidate. Different verified device ranges
@@ -259,9 +309,18 @@ Repeat required network/media proofs on all four actual devices, including
 `46793b0d4c8d45d` using jetdhcpc, before recording their acceptance.
 
 The full pre-app hook and external receipt transition remains a separate
-reviewed step after those proofs. Install the full wrapper before issuing its
-`full_transaction_hook_installed` receipt flag; avoid rebooting in an incomplete
-receipt/hook transition. Primary arm requires every native receipt field and
+reviewed safety checkpoint after those proofs. Installing a full wrapper before
+a valid receipt can block unchanged vendor startup on an unexpected reboot;
+an instruction to avoid reboot does not close that crash window. Before any
+main trial, root must review a boot-safe transition with explicit authority for
+the no-primary-pending installation state (for example, a narrowly validated
+transition marker allowing owned additive cleanup and unchanged vendor startup
+until full acceptance is activated). It must not mint an acceptance receipt or
+bypass a pending primary transaction. Prove interruption at each receipt/hook
+installation boundary and preserve full-hook fail-closed behavior for actual
+primary transactions. This checkpoint is not implemented by the additive
+terminal-state fix and does not block the first runtime bootstrap. Primary arm
+requires every native receipt field and
 confirmed additive state. Only then follow the helper's unchanged-primary
 expiry/reboot/restore and failure-injection trials, and later the real primary
 target trial. No target address, vendor network RPC, primary promotion or igc1

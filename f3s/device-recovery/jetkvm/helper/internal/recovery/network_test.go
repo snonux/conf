@@ -22,6 +22,16 @@ type kernel struct {
 
 func (k *kernel) Run(args ...string) error {
 	k.calls = append(k.calls, append([]string(nil), args...))
+	if hasPrefix(args, "ip", "route", "add") || hasPrefix(args, "ip", "route", "del") {
+		if err := busyBoxTable(args[4]); err != nil {
+			return err
+		}
+	}
+	if hasPrefix(args, "ip", "rule", "add") || hasPrefix(args, "ip", "rule", "del") {
+		if err := busyBoxTable(args[10]); err != nil {
+			return err
+		}
+	}
 	key := strings.Join(args, " ")
 	failed := k.fail != "" && strings.HasPrefix(key, k.fail)
 	if failed && !k.after {
@@ -58,6 +68,9 @@ func (k *kernel) Run(args ...string) error {
 }
 func (k *kernel) Output(args ...string) (string, error) {
 	if hasPrefix(args, "ip", "route", "show") {
+		if err := busyBoxTable(args[4]); err != nil {
+			return "", err
+		}
 		return strings.Join(k.routes, "\n"), nil
 	}
 	if hasPrefix(args, "ip", "rule", "show") {
@@ -74,6 +87,67 @@ func (k *kernel) DisableIPv6(link string) error {
 	k.link.IPv6Disabled = true
 	return nil
 }
+
+// Model the installed parser limit found by native read-only inspection, not
+// the full Linux routing-table ABI. Priority is deliberately not parsed here.
+func busyBoxTable(value string) error {
+	table, err := strconv.Atoi(value)
+	if err != nil || table < 0 || table > 1023 {
+		return errors.New("BusyBox table parser rejected identifier")
+	}
+	return nil
+}
+
+func TestProfileSeparatesBusyBoxTableAndRulePriority(t *testing.T) {
+	for _, tc := range []struct {
+		table, priority int
+		valid           bool
+	}{
+		{999, 1140, false}, {1000, 1140, true}, {1023, 1140, true},
+		{1024, 1140, false}, {32000, 1140, false},
+		{1000, 999, false}, {1000, 1000, true}, {1023, 32000, true},
+		{1000, 32001, false},
+	} {
+		t.Run(strconv.Itoa(tc.table)+"/"+strconv.Itoa(tc.priority), func(t *testing.T) {
+			a, k := setupAdapter(t)
+			a.Profile.Table, a.Profile.Priority = tc.table, tc.priority
+			if tc.valid {
+				if err := a.Ensure(); err != nil {
+					t.Fatal(err)
+				}
+				if err := a.Probe(); err != nil {
+					t.Fatal(err)
+				}
+				if err := a.Cleanup(); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := a.Ensure(); err == nil {
+					t.Fatal("unsupported profile accepted")
+				}
+				if len(k.calls) != 0 || k.link.Exists || k.module {
+					t.Fatal("invalid profile reached kernel mutations")
+				}
+			}
+		})
+	}
+}
+
+func TestFakeKernelRejectsNativeUnsupportedTable(t *testing.T) {
+	k := new(kernel)
+	for _, args := range [][]string{
+		{"ip", "route", "show", "table", "1024"},
+		{"ip", "route", "show", "table", "1140"},
+	} {
+		if _, err := k.Output(args...); err == nil {
+			t.Fatal("fixture lost native read-only table parser rejection")
+		}
+	}
+	if _, err := k.Output("ip", "route", "show", "table", "1023"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func hasPrefix(args []string, prefix ...string) bool {
 	if len(args) < len(prefix) {
 		return false
@@ -101,7 +175,7 @@ func setupAdapter(t *testing.T) (Adapter, *kernel) {
 		t.Fatal(err)
 	}
 	k := new(kernel)
-	p := Profile{Device: "exampledevice0001", Cabling: "shared-igc0", Parent: "eth0", Link: "jkrecover", MAC: "02:00:5e:00:53:01", Address: "192.168.11.201/24", Gateway: "192.168.11.2", Controller: "10.99.0.2/32", Table: 1201, Priority: 1201}
+	p := Profile{Device: "exampledevice0001", Cabling: "shared-igc0", Parent: "eth0", Link: "jkrecover", MAC: "02:00:5e:00:53:01", Address: "192.168.11.201/24", Gateway: "192.168.11.2", Controller: "10.99.0.2/32", Table: 1000, Priority: 1201}
 	return Adapter{Store: Store{Dir: dir}, Boot: "boot-original-001", Profile: p, Runner: k}, k
 }
 func privateJSON(t *testing.T, path string, v any) {
@@ -196,7 +270,7 @@ func TestForeignOwnershipRefusedWithoutDeletion(t *testing.T) {
 			case "route":
 				k.routes = append(k.routes, "203.0.113.0/24 dev foreign")
 			case "rule":
-				k.rules = []string{"1201: from all lookup 1201"}
+				k.rules = []string{"1201: from all lookup 1000"}
 			case "duplicate-rule":
 				k.rules = append(k.rules, k.rules[0])
 			case "boot":
