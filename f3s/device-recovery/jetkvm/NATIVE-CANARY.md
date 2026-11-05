@@ -3,10 +3,62 @@
 Prepared 2026-11-05 for s14, after offline helper commit `8379ae8`.
 **Review candidate only. Nothing in this file allocates addresses, installs a
 helper/hook, enables developer access, or authorizes concurrent live work.**
-Root coordinates native work after the host/endpoint worker reports no pending
-trial. IQ owns allocations and acceptance; this repository owns deployment
+Root coordinates network/bootstrap/reboot work after the host/endpoint worker
+reports no pending trial. Separately reviewed file-only staging is independent. IQ owns allocations and acceptance; this repository owns deployment
 source. Begin with **e10a0883debf7d4a**, authenticated at **192.168.1.241**.
 Do not generalize its results to the other three devices.
+
+## Shared-wire readiness accepted by root
+
+IQ commit `71b7503` reserves management `.11.140`–`.11.143` and their unique
+MAC rows. Root reconciled fresh OpenWrt selected inventory and observed all four
+duplicate-address probes on router igc0 without replies. The guarded router
+transaction `s14-jetmgmt-20261105` is confirmed with no pending restore: it adds
+only first-device TCP22/80 and UDP32768–60999 from laptop `10.99.0.2` to
+`192.168.11.140`. Old/new/VPN router SSH and protected-state checks passed.
+
+The laptop's private source, root-owned persistent wg2 config and runtime now
+retain the four exact reserved `/32` routes/AllowedIPs; existing keys, peers,
+routes, DNS/default and wg1 are unchanged. These are path-readiness results;
+the separately reviewed file-only staging result below establishes only the
+installed artifact, not a working child or accepted recovery path.
+
+The single authorized v12 file-staging attempt exited 1 with no remote output,
+before its first absent-path marker and therefore before mkdir or file writes.
+Exact developer cleanup and fresh independent HTTP/WebRTC postchecks passed.
+Pinned system source has `CONFIG_STAT` disabled, explaining the stat-applet
+preflight failure by source inference; v12 did not emit an individual native
+applet result. The Go helper's internal `Lstat` does not depend on a stat applet.
+A private v13 installer candidate replaces shell stat with selected BusyBox
+`ls -ldni` metadata, validated before writes, and emits named preflight booleans.
+It remains unexecuted pending root review. No helper install is accepted.
+
+## First file-only staging accepted: v13
+
+Root reviewed and ran the private v13 installer on the authenticated e10 device.
+Every named ABI/CPU/ext4/tool/metadata/path-absence/profile preflight passed.
+Only `/userdata/jkrecover` (root:root0700), its `jkrecover` binary (0700) and
+`profile.json` (0600) were created. No hook, authorization, active canary,
+network interface, module, route/rule or vendor-network write was made.
+
+The 4,394,216-byte artifact's device SHA256 matched
+`6628486bfb04c4f361a2744f55264a4089774826dff15e63341d02d72f9809bf`;
+the226-byte profile matched
+`39836aee2b29e77ae6ec9a7c2d50f904c189c099825334023d30b00d961702ef`.
+The only helper action was `-version`, which returned0.1.0 on the actual ARM
+CPU. SSH staging took2.07124s; the native copy took1.345231s. These results
+prove transport, metadata and basic native execution, not bootstrap recovery.
+
+The preceding v12 attempt exited before its first write marker; no installation
+was accepted. The pinned image configuration disables BusyBox stat, explaining
+that guard failure, although v12 did not print the exact failed guard. v13 used
+validated numeric `ls -ldni` metadata within the same userdata filesystem and
+retained exclusive file creation/inode-owned partial cleanup. Exact developer
+mode false/TCP22 closed/empty authorized-key restoration and original enable
+request termination passed after both attempts. Separate fresh HTTP/new-WebRTC
+identity, version, USB and video-ready checks passed. Private evidence is under
+`~/.local/state/conf/s14-jetkvm-first-install-v13-20261105/` (and the failed
+v12 sibling). No credential or full vendor configuration is published.
 
 ## Native read-only v10/v11 checkpoints
 
@@ -19,7 +71,8 @@ child and hook were absent. Parent/all/default `rp_filter`, `arp_filter`,
 
 The read command then failed closed with
 `ip: invalid argument '1140' to 'table'`. It did not reach priority absence or
-the parent semantic snapshots. These checks remain unproved. All exact
+the parent semantic snapshots. Those checks were incomplete at v10; v11 below
+records their subsequent successful verification. All exact
 developer-access cleanup and separate fresh HTTP/new-WebRTC ID/version/USB/video
 checks passed. Private evidence is under
 `~/.local/state/conf/s14-jetkvm-inspection-v10-20261105/`.
@@ -52,33 +105,29 @@ without sending keyboard, mouse or power commands.
 
 | Owner | Concrete preparation before the first addressed trial |
 |---|---|
-| Root / IQ ADDRESS-RECOVERY | Reconcile and reserve proposed `.11.140`–`.11.143` and management MACs from the parent table; retain every old allocation. Record current cabling as shared igc0. |
-| conf `gonf/triggerfish/profiles.go` | Add a narrowly enabled shared-profile management exception, retaining `192.168.11.2/24` on igc0. Render and review inactive candidates, then use the existing guarded journal. |
-| Laptop wg2 owner | Add only admitted exact reserved `/32` routes/AllowedIPs to the existing wg2 peer in its persistent source and runtime; source remains `10.99.0.2`. Preserve other routes, peer material, DNS/default and wg1. |
+| Root / IQ ADDRESS-RECOVERY | All four management rows reserved; keep original allocations and shared-igc0 identity. |
+| conf `gonf/triggerfish/profiles.go` | First tuple only admitted and guarded PF transaction confirmed; retain `192.168.11.2/24` on igc0. |
+| Laptop wg2 owner | Four exact reserved `/32`s accepted in private source, persistent config and runtime; source remains `10.99.0.2`. |
 | This helper | Pin ARMv7 artifact hash, actual CPU Serial, profile and private metadata; initially install no boot hook and no acceptance receipt. |
 
-The known ledger has no `.11.140`–`.11.143` allocations and records no DHCP
-server for the provisioning subnet. That is not a fresh conflict check.
-Root must reconcile the currently active DHCP servers' configuration/lease
-inventories, provisioning clients, router neighbors, controller routes and MAC
-inventories. Probe duplicate addresses from the existing on-link router path
-before assignment; missing ARP replies alone do not prove a sleeping client is
-absent. Do not start a DHCP server or alter vendor reservations to reserve a
+The allocated management subnet has no DHCP server. Root's fresh selected
+inventory reconciliation and on-link probes are recorded above; missing ARP
+replies alone would not prove a sleeping client absent. Preserve that inventory
+ownership and refuse new conflicts. Do not start a DHCP server or alter vendor
+reservations to reserve a
 macvlan address. Reject a conflicting IP/MAC or unexplained provisioning client.
 The router's `.11.2` is **shared igc0**, not igc1 recovery.
 
 The laptop route owner is the existing root-private `/etc/wireguard/wg2.conf`
-and its current wg2 peer. Root should stage a private candidate from that exact
-source, adding only `192.168.11.140/32` after its allocation for the first canary;
-save a private exact baseline and compare every other field semantically without
-printing keys. Other `/32`s enter only with their separate admission. Apply the
-reviewed persistent delta and corresponding existing-peer/runtime route together,
-with a bounded controller rollback restoring only that addition. Do not bring
+and its current wg2 peer. Root accepted the four exact reserved `/32` additions
+from a private candidate with protected fields compared without printing keys.
+Future changes must keep persistent source and existing-peer/runtime state
+together, with bounded rollback restoring only the owned delta. Do not bring
 wg1 down, replace peer keys, broaden a peer AllowedIPs prefix or use a runtime
 `ip route` command as the sole source. Prove the retained router wg2 session and
 `ip route get` source `10.99.0.2`, plus unchanged old IPv4/DNS/default routes.
-Root coordinates this transaction after router candidate acceptance and before
-device bootstrap; no laptop source/runtime change is made by this plan.
+Root coordinated that transaction after router candidate acceptance. No further
+laptop source/runtime change is part of helper file staging.
 
 Proposed first profile, only after reservation and a fresh CPU Serial check:
 
@@ -138,8 +187,8 @@ blocked without making the controller-initiated pair unusable.
 The source-only `RouterProfiles.JetKVMManagement` field now takes exact admitted
 addresses and per-device `UDPMin`/`UDPMax` bounds. It renders only `shared-igc0`
 and requires `RetainProvisioningAlias=true`; validation rejects other addresses,
-duplicates and zero/reversed bounds. Inventory remains empty: the source change
-activates no permission. First-device bounds are now verified; the other three
+duplicates and zero/reversed bounds. Cluster inventory now admits only the first
+device tuple; its exact two-line PF addition is confirmed. The other three
 must be inspected independently before admission. Existing `MigrationFlow`
 supports single ports and physical ingress;
 it cannot represent this wg2 UDP range. Do not weaken that type's validation or
