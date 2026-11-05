@@ -198,6 +198,31 @@ func KeepCanary(adapter Adapter, boot string, proof bool) error {
 	})
 }
 
+// CleanupCanary removes only terminal additive resources on this same boot.
+// It does not stop the vendor app, cancel a pending watchdog or change its state.
+func CleanupCanary(adapter Adapter, boot string) error {
+	return adapter.Store.Locked(func() error {
+		state, err := adapter.Store.Load()
+		if err == nil && state.Phase != "confirmed" && state.Phase != "restored" {
+			return errors.New("primary transaction pending; additive cleanup forbidden")
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		var auth CanaryAuthorization
+		if err := readPrivate(filepath.Join(adapter.Store.Dir, "canary-active.json"), &auth); err != nil {
+			return err
+		}
+		if auth.Hash != adapter.Profile.Hash() || auth.Boot != boot || adapter.Boot != boot {
+			return errors.New("terminal canary profile or boot mismatch")
+		}
+		if !auth.Confirmed && !auth.Expired {
+			return errors.New("canary still pending; retain independent expiry worker")
+		}
+		return adapter.Cleanup()
+	})
+}
+
 func guardedCanary(adapter Adapter, auth CanaryAuthorization, now int64, start func(State) error) error {
 	state := State{Generation: auth.Generation, Boot: auth.Boot, Deadline: auth.Deadline}
 	if err := start(state); err != nil {

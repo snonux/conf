@@ -8,6 +8,11 @@ reports no pending trial. Separately reviewed file-only staging is independent. 
 source. Begin with **e10a0883debf7d4a**, authenticated at **192.168.1.241**.
 Do not generalize its results to the other three devices.
 
+Current checkpoint: v26 first-device IPvlan fixed HTTP/SSH/media and independent
+expiry passed. See [native evidence](NATIVE-RUNTIME-2026-11-05.md) and
+[next confirmed/owner/boot gates](CONFIRMED-NEXT.md). Older sections below retain
+the initial macvlan plan/history; they do not describe current acceptance.
+
 ## Shared-wire readiness accepted by root
 
 IQ commit `71b7503` reserves management `.11.140`–`.11.143` and their unique

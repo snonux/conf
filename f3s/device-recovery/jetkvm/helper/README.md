@@ -2,8 +2,8 @@
 
 This standalone Linux Go module implements the revised protocol in
 [the parent README](../README.md#revised-design-fixed-management-plus-one-target-bearing-boot).
-It is installed on the first device; two unconfirmed additive runtime trials
-proved detached expiry and exact cleanup, but routed fixed-channel access failed.
+It is installed on the first device. Historical macvlan trials failed fixed
+access; v26 IPvlan proved fixed HTTP/SSH/decoded media and detached expiry/cleanup.
 See [native evidence](../NATIVE-RUNTIME-2026-11-05.md). No address/profile is
 allocated by this module. Full native acceptance remains task s14; offline tests
 do not establish working remote access, boot recovery or DHCP-owner compatibility.
@@ -30,7 +30,7 @@ The CLI refuses mutations unless root, the pinned hardware device ID matches the
 vendor's CPU Serial verbatim (including a 15-digit serial), Linux reports the
 reviewed ARMv7/5.10.160 ABI, and `/userdata` is mounted ext4 read-write. ARM
 execution, detached monotonic expiry and exact owned cleanup passed on the
-first device; fixed-channel reception failed. Watchdog/boot restoration and
+first device, with successful IPvlan fixed-channel reception. Watchdog/boot restoration and
 DHCP-owner compatibility remain unverified. `-version` skips these prerequisites.
 Network execution uses fixed BusyBox argv with a three-second per-command
 execution timeout, no shell. The explicit IPvlan L2 candidate uses one narrowly
@@ -265,5 +265,23 @@ expiry, worker, authorization and boot protocols remain unchanged.
 
 Native v20 proved actual driver and module-file presence, not IPvlan loadability
 or reception. See the [candidate and installation checkpoint](../IPVLAN-L2-CANDIDATE.md).
-The IPvlan helper/profile was installed by reviewed v25 file-only staging; only
-`-version` ran. No IPvlan module/link or network operation has run or is accepted.
+The IPvlan helper/profile was installed by reviewed v25 file-only staging. v26
+then passed first-device runtime fixed HTTP/SSH/media plus independent expiry
+and cleanup. Boot/DHCP-owner/fleet acceptance remain open.
+
+## Terminal runtime cleanup candidate (source only)
+
+`jkrecover -device ID canary-cleanup` is a new source entrypoint, not yet in the
+installed v26 binary. It takes the existing Store lock, refuses a pending or
+invalid primary state, requires matching profile/current boot and a confirmed OR
+expired additive record, then invokes existing typed `Adapter.Cleanup`. It never
+confirms/expires a pending canary, extends a deadline, stops the vendor app or
+writes vendor JSON. Repeated terminal cleanup is idempotent; foreign resources
+or cleanup errors remain failures with ownership retained for retry. The existing
+`management-boot` still requires `NoVendorApp` and is unchanged.
+
+Keep only after root's fresh authenticated fixed proof: the CLI boolean is an
+external operator attestation, not a built-in verifier of media/evidence files.
+Keep cancels expiry; the worker exits without deleting resources. Therefore a
+confirmed runtime test needs the separately staged cleanup command and an old
+path for cleanup, not a reboot or app stop. See [next gates](../CONFIRMED-NEXT.md).

@@ -33,7 +33,7 @@ func run() error {
 		return nil
 	}
 	if flag.NArg() < 1 {
-		return fmt.Errorf("action required: bootstrap, canary-keep, management-boot, pre-app, arm, confirm, status, worker, canary-worker")
+		return fmt.Errorf("action required: bootstrap, canary-keep, canary-cleanup, management-boot, pre-app, arm, confirm, status, worker, canary-worker")
 	}
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("root required")
@@ -82,6 +82,8 @@ func run() error {
 		return recovery.StartCanary(executable, *config, *profilePath, boot, adapter, recovery.BootTime)
 	case "canary-keep":
 		return recovery.KeepCanary(adapter, boot, *recoveryProof)
+	case "canary-cleanup":
+		return recovery.CleanupCanary(adapter, boot)
 	case "management-boot":
 		if err := recovery.NoVendorApp(); err != nil {
 			return err

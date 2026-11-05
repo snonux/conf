@@ -1,7 +1,8 @@
-# IPvlan L2 candidate — files installed, kernel trial untried
+# IPvlan L2 — first runtime proved, remaining native gates open
 
 The two macvlan runtime trials failed fixed-channel usability and passed
-independent expiry/cleanup. No native acceptance or primary transition follows.
+independent expiry/cleanup. v26 subsequently passed IPvlan fixed HTTP/SSH/media and independent expiry.
+This is first-device runtime acceptance only; no primary transition follows.
 The [runtime evidence](NATIVE-RUNTIME-2026-11-05.md) remains authoritative.
 
 Root-approved read-only v20 on the same first device observed kernel 5.10.160
@@ -48,7 +49,8 @@ to L3, promisc, ARP policy change or vendor configuration write is included.
 
 Root reviewed and v25 completed this file-only transition. See the
 [native receipt](NATIVE-RUNTIME-2026-11-05.md#ipvlan-prerequisite-and-file-only-installation).
-No module or link operation has run; the next kernel trial still requires review.
+The separate v26 runtime/expiry trial then passed; confirmation/owner/boot trials
+still require source review and root coordination.
 The preserved installation protocol was:
 
 1. Freeze all Jet writers. Use the proven temporary access lifecycle, original
