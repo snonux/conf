@@ -64,10 +64,14 @@ No kernel/helper action beyond -version. New rollout needs its own reviewed
 short exec/stdin and exact access cleanup; no implicit reuse of v25 permission.
 
 v28 privately archived the expired v26 terminal beforeimage, then replaced ONLY
-authorization input. Current v28 active state is CONFIRMED and cleaned, not
-expired. Do not reuse the expired-generation transition or blindly reset its
-journals for another trial. Any future generation needs a separately reviewed
-terminal-store transition preserving complete evidence; no receipt is implied.
+authorization input. Current v28 active state was CONFIRMED and cleaned, not
+expired. Reviewed actual v31 archived that WHOLE seven-file store under its
+stable lock to `/userdata/jkrecover-confirmed-cleaned-s14-v31-20261105`, retaining
+all identities/bytes plus an independent controller archive. Current default
+has only the SAME binary/profile bytes, no journals or authorization; ONLY-version
+ran. Exact auth cleanup and fresh9 passed. This was an explicit file-only
+transition, not an expired-generation shortcut or runtime grant. Proposed v32
+requires fresh two-file admission and separate full-protocol review/GO.
 
 ## Reviewed v28 runtime protocol and remaining acceptance
 

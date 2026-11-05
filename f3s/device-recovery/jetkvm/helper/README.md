@@ -276,6 +276,12 @@ staged by v27 binary-only rollout (SHA `a0857114…389c14b`). v28 subsequently
 invoked cleanup twice on its actual confirmed generation; both returned and all21
 native terminal checks passed. The whole v28 trial still FAILED its former-
 deadline decoded-video proof (zero RTP), so this is cleanup evidence only.
+v29 reproduced absent cold-session video on the old path; v30 then passed a
+separately reviewed producer-startup/decode timing diagnostic there. Neither
+retroactively accepts the failed v28 fixed-path former-deadline frame.
+v31 subsequently preserved the complete confirmed-cleaned seven-file store in
+an inert native sibling plus independent controller archive, then staged only
+the SAME binary/profile in a fresh default directory; no new canary ran.
 It takes the existing Store lock, refuses a pending or
 invalid primary state, requires matching profile/current boot and a confirmed OR
 expired additive record, then invokes existing typed `Adapter.Cleanup`. It never

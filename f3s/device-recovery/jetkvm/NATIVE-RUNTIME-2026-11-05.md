@@ -222,8 +222,9 @@ were terminal. Runner exit1 truthfully recorded `passed=false`,
 `former_deadline_survival=false`, `outcome=CONFIRMED_CLEANED`,
 `cleanup_proven=true`, fixed-probe bracket=true and all-processes-terminal=true.
 
-Current native additive state is the confirmed, cleaned v28 terminal record,
-with no native helper network resources. The complete failed and positive proofs
+At v28 terminal the additive state was confirmed and cleaned, with no native
+helper network resources. The later v31 file-only transition below preserves
+that whole store without reclassifying its flags. The complete failed and positive proofs
 remain privately preserved. No management/main acceptance receipt was created.
 
 ## v29 old-path cold-session diagnostic: zero RTP reproduced
@@ -276,6 +277,36 @@ for this observation. It does not prove the exact cause of v29, establish sleep
 as that cause, or retrospectively accept v28's failed fixed-path former-deadline
 video. A new fixed-path/confirmed protocol needs its own reviewed transition,
 generation and exclusive window before any native action.
+
+## v31 current store: complete terminal archive, fresh two-file default
+
+Root reviewed and ran one file-only transition after all prior actors closed.
+The complete actual v28 CONFIRMED+CLEANED seven-file beforeimage was exclusively
+archived/synced on the controller. Native preflight and stage held/rechecked the
+SAME stable old lock and every inode/hash/mode, worker birth gone, unchanged
+native boot/original parent, absent child/modules/table/rule/upper links,
+factory MAC/OEM module pin and no hook. The known v28 terminal21/cleanup twice
+and all three original-auth/fresh9 receipts bound admission; expired flags were
+never substituted for the actual confirmed record.
+
+The entire native old directory was atomically renamed to
+`/userdata/jkrecover-confirmed-cleaned-s14-v31-20261105`; all seven archived
+identities/bytes remained exact. The fresh default `/userdata/jkrecover` now
+contains ONLY root-private binary0700 (4,399,605 bytes, SHA `a0857114…389c14b`)
+and profile0600 (242 bytes, SHA `2815fbf4…a3d91`), with the SAME pinned bytes.
+Only `-version` ran, returning0.1.0. Preflight took1.259s and stage3.016s. The
+complete controller archive hashes and native archive/fresh-layout receipts
+passed. Original developer enable future reached terminal, false mode/closed22/
+exact empty key were restored, and all nine fresh old-access checks passed.
+PC/SSH/processes closed; no new generation/authorization/helper network action,
+module, DHCP signal, hook, receipt or boot occurred. No migration acceptance is
+implied by this evidence-preserving file transition.
+
+A separate SOURCE-ONLY v32 proposal will require this fresh two-file layout and
+apply explicit9s producer readiness plus5s decode inside14s in all three fresh
+fixed-media phases. Same-generation keep/repeat/validated owner renewals and
+mandatory actual confirmed cleanup twice/native21/fresh9 remain required. It
+has no runtime execution grant from v31 file-only success.
 
 ## Remaining gates
 
