@@ -1,4 +1,4 @@
-# IPvlan L2 candidate — source only
+# IPvlan L2 candidate — files installed, kernel trial untried
 
 The two macvlan runtime trials failed fixed-channel usability and passed
 independent expiry/cleanup. No native acceptance or primary transition follows.
@@ -38,13 +38,18 @@ CREATE|EXCL|ACK, exact parent index and child name. It does not set MAC or paren
 flags. Typed readback must observe actual L2, matching parent/name/index/MAC and
 positive child index before proceeding. All IPs, policy table/priority, workers,
 authorization/deadline, expiry and boot protocols remain unchanged. Any pre-existing eth0 upper-link relationship is refused before creation because
-IPvlan mode belongs to the shared physical port. Root must establish no foreign
-network-namespace owners and freeze competing writers for the trial. No fallback
+IPvlan mode belongs to the shared physical port. Root must require globally absent IPvlan/macvlan modules, absent parent upper
+links and serialized writers before the first kernel trial. Global module
+absence excludes an existing IPvlan port in any namespace; namespace APIs were
+unavailable and are not claimed verified. No namespace probing is planned. No fallback
 to L3, promisc, ARP policy change or vendor configuration write is included.
 
-## Reviewed installation checkpoint still required
+## Completed file-only installation
 
-This is a concrete proposed file-only transition, not authority to execute it:
+Root reviewed and v25 completed this file-only transition. See the
+[native receipt](NATIVE-RUNTIME-2026-11-05.md#ipvlan-prerequisite-and-file-only-installation).
+No module or link operation has run; the next kernel trial still requires review.
+The preserved installation protocol was:
 
 1. Freeze all Jet writers. Use the proven temporary access lifecycle, original
    enable-future terminal cleanup and fresh old-path postchecks. Before any file

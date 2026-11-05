@@ -251,7 +251,7 @@ Do not retain an existing WebRTC session as proof. Do not operate host power.
 Keep all old allocations and the current-cabling recovery path until its separate
 retirement gate. The future igc1 transition is outside this profile's support.
 
-## Explicit IPvlan L2 candidate (source only)
+## Explicit IPvlan L2 candidate (files installed; kernel untried)
 
 The optional `kind=ipvlan` selects only `/oem/usr/ko/ipvlan.ko` and its matching
 module query/unload; macvlan ownership remains separate. It inherits the actual
@@ -265,4 +265,5 @@ expiry, worker, authorization and boot protocols remain unchanged.
 
 Native v20 proved actual driver and module-file presence, not IPvlan loadability
 or reception. See the [candidate and installation checkpoint](../IPVLAN-L2-CANDIDATE.md).
-No IPvlan helper/profile has been installed or network operation authorized.
+The IPvlan helper/profile was installed by reviewed v25 file-only staging; only
+`-version` ran. No IPvlan module/link or network operation has run or is accepted.

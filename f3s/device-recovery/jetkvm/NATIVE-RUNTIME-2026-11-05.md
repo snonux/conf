@@ -62,18 +62,63 @@ buffer was too small for the observed fragmented IDR; a client-only 512-packet
 buffer decoded successfully. Server video configuration and timing budgets
 were unchanged. No fixed-path media session ran because HTTP/SSH proof failed.
 
+## IPvlan prerequisite and file-only installation
+
+Read-only v20 identified the actual `rk_gmac-dwmac` driver and regular shipped
+IPvlan module (24,960 bytes, SHA256
+`8e076dc464de7291124530fafca4d83d079471cf34164752927a5938dda4bc39`).
+Both modules were unloaded. This is presence evidence, not a loadability result.
+
+Root-reviewed v25 then completed a **file-only** transition on the same first
+device. A complete exclusive controller archive was synced; the original seven
+files, including terminal journals and stable lock, were renamed together to
+`/userdata/jkrecover-macvlan-expired-s14-v25-20261105`. Their exact inode/hash/mode
+identities remained unchanged. The new default directory contains only:
+
+- `jkrecover`: root-owned0700, 4,399,140 bytes, SHA256
+  `1e69b15b9d452a0e1653cb4a7db8dee06d29e391213e09c729d2fe97cb976c95`.
+- `profile.json`: root-owned0600, 242 bytes, SHA256
+  `2815fbf4031cda9346619e76b9037a29c0ce2f544fdb12a20f8bcb05913a3d91`.
+
+The profile explicitly selects IPvlan and expected factory parent MAC
+`30:52:53:08:97:97`; other address/table/rule fields remain the same. The old
+locally administered MAC reservation remains unused. Only `-version` ran,
+returning0.1.0. Preflight took1.330s and staging2.624s; copy transferred the exact
+binary in0.762s. Original-parent comparison passed. Developer access cleanup and
+all nine fresh HTTP/WebRTC/identity/version/USB/video/mode/key/closed22 checks
+passed. No module, link, netlink, IP/rule, sysctl, ARP, hook, boot allowance,
+receipt or primary operation occurred. IPvlan network usability is **untried**.
+
+Earlier file-only attempts stopped safely: v21 failed a namespace guard before
+archive/staging; v23 completed the controller archive but its9,855-byte SSH exec
+exceeded the pinned Dropbear2025.88 limit9000. Read-only v24 proved OLD_INTACT,
+all seven original identities/hashes, absent archive sibling and unchanged
+parent/kernel resources. A local postcheck insertion error was caught; saved
+bytes classified offline, then a separately reviewed exact original fresh
+postcheck passed all nine checks. v25 used a reviewed lossless gzip/base64 short
+exec, validating exact decoded bytes while preserving profile/binary stdin.
+It changed no server limit or payload protocol. Private failed-attempt evidence
+was retained.
+
+The namespace API was unavailable to v22. It is not claimed verified. File-only
+staging did not require namespace admission because it could not change a port.
+A first kernel trial still requires global IPvlan and macvlan module absence,
+no parent upper links, verified factory MAC and serialized writers; a globally
+absent IPvlan module excludes existing IPvlan ports in any namespace. No namespace
+probing or mutation is included in the proposed trial.
+
 ## Remaining gate
 
-Identify the actual Ethernet driver and its receive-filter behavior before
-another network trial. Pinned kernel/rootfs capability, including a possible
-IPVLAN alternative sharing the physical MAC, is source evidence only until
-installed support and a reviewed bounded native test establish it. Do not
-change macvlan mode or enable parent/global promiscuity or ARP changes blindly.
-Boot recreation, DHCP-owner reapply, all other devices and primary-network
-transactions remain unproved.
+The [IPvlan L2 candidate](IPVLAN-L2-CANDIDATE.md) is installed as files only.
+Root must review a concrete short unconfirmed native trial before loading the
+module or creating its link. Typed helper creation explicitly requests L2 and
+must observe actual mode/kind/parent/MAC/index before UP; source tests do not
+establish native reception. Reuse fresh forced fixed-path authentication/media,
+independent expiry and a separate postexpiry audit. Do not change parent/global
+promiscuity or ARP policy to make a trial pass. Boot recreation, DHCP-owner
+reapply, all other devices and primary-network transactions remain unproved.
 
-Private evidence is under `~/.local/state/conf/s14-jetkvm-runtime-canary-v16-20261105/`
-and `s14-jetkvm-runtime-canary-v19-20261105/`, with separate postexpiry audits,
-terminal metadata archive and bounded capture timings. Credentials, key/shadow
+Private evidence remains under `~/.local/state/conf/` in the v16/v19 runtime,
+v20/v22/v24 read-only and v25 file-staging directories. Credentials, key/shadow
 values, raw application configuration, video frames and private outputs are
 not reproduced here.
