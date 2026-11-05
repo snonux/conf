@@ -481,9 +481,11 @@ restore_runtime() {
   return
  fi
  for service in $SERVICES; do rcctl stop "$service"; done
+ print 'restoring: services stopped'
  typeset keep=no
  if grep -q '^inet 10.98.0.1 ' "$STATE/saved/addresses/igc1"; then keep=yes; fi
  clear_physical "$keep"
+ print 'restoring: physical addresses cleared'
  for i in igc0 igc1 igc2 igc3; do
   while read -r family address mask; do
    if [[ $family == inet ]]; then
@@ -513,17 +515,13 @@ restore_runtime() {
   else ifconfig "$i" -inet6; fi
   if grep -q '<UP,' "$STATE/saved/flags/$i"; then ifconfig "$i" up; else ifconfig "$i" down; fi
  done
+ print 'restoring: physical interfaces restored'
  for family in inet inet6; do
   while read -r destination gateway flags priority; do
-   # Learned route status and priority are part of the captured route record;
-   # connected/local routes are recreated by ifconfig, never globally flushed.
-   if [[ $flags == *H* ]]; then
-    route -n add -"$family" -host "$destination" "$gateway" -priority "$priority" >/dev/null
-   else
-    route -n add -"$family" "$destination" "$gateway" -priority "$priority" >/dev/null
-   fi
+   restore_gateway_route "$family" "$destination" "$gateway" "$flags" "$priority"
   done < "$STATE/saved/routes.$family"
  done
+ print 'restoring: physical routes restored'
  pfctl -f "$STATE/saved/pf.runtime"
  restore_table_presence
  pfctl -F states >/dev/null
@@ -570,6 +568,19 @@ restore_runtime() {
   mv -f /etc/resolv.conf.gonf-restore /etc/resolv.conf
  else
   rm -f /etc/resolv.conf
+ fi
+}
+route_present() {
+ route -n show -"$1" | awk -v d="$2" -v g="$3" -v f="$4" -v p="$5" \
+  '$1==d && $2==g && $3==f && $(NF-1)==p {found=1} END {exit !found}'
+}
+restore_gateway_route() {
+ typeset family=$1 destination=$2 gateway=$3 flags=$4 priority=$5
+ route_present "$family" "$destination" "$gateway" "$flags" "$priority" && return 0
+ if [[ $flags == *H* ]]; then set -- -host "$destination"; else set -- "$destination"; fi
+ if ! route -n add -"$family" "$@" "$gateway" -priority "$priority" > "$STATE/route-restore.log" 2>&1; then
+  # SLAAC can recreate the exact saved gateway between the query and add.
+  route_present "$family" "$destination" "$gateway" "$flags" "$priority" || fail 'saved physical gateway route could not be restored'
  fi
 }
 restore_table_presence() {

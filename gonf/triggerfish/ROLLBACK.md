@@ -245,7 +245,9 @@ inactive stage, and queues that original restore; it refuses a pending or
 confirmed previous transaction. It never constructs a replacement baseline
 from the partially restored live state.
 It recreates only the physical interfaces/routes it owns; no global route flush
-or tunnel reconfiguration occurs. Runtime/persistent address drift is preserved
+or tunnel reconfiguration occurs. Gateway restoration accepts an already exact
+route, including one recreated by SLAAC between checking and adding it; a failed
+add without that exact route still refuses. Runtime/persistent address drift is preserved
 separately instead of assuming saved hostname files reproduce runtime state.
 Post-rack restore retains the saved igc1 recovery address and its PF permissions.
 The ownership marker remains so normal reapply cannot undo recovery.

@@ -88,8 +88,15 @@ ifconfig() {
  esac
 }
 route() {
- if [[ $* == '-n show -inet' ]]; then print 'default 192.168.1.1 UGS 0 0 - 8 igc0'; return; fi
+ if [[ $* == '-n show -inet' ]]; then
+  if [[ ! -f $BASE/route-failure && ( ! -f $BASE/route-race || -f $BASE/route-added ) ]]; then
+   print 'default 192.168.1.1 UGS 0 0 - 8 igc0'
+  fi
+  return 0
+ fi
  if [[ $* == '-n show -inet6' ]]; then return; fi
+ if [[ $* == '-n add '* && -f $BASE/route-race ]]; then touch "$BASE/route-added"; return 1; fi
+ if [[ $* == '-n add '* && -f $BASE/route-failure ]]; then return 1; fi
  print -- "route $*" >> "$BASE/operations"
 }
 sysctl() {
@@ -187,6 +194,15 @@ expect_fail() {
   print -u2 -- "unexpected success: $*"; exit 1
  fi
 }
+# A correct gateway may appear between query and add; an actual failed add
+# without that exact route must still fail instead of reporting recovery.
+touch "$base/route-race"
+"$fixture/run" restore_gateway_route inet default 192.168.1.1 UGS 8
+[[ -f $base/route-added ]]
+rm "$base/route-race" "$base/route-added"
+touch "$base/route-failure"
+expect_fail restore_gateway_route inet default 192.168.1.1 UGS 8
+rm "$base/route-failure"
 # A corrupt cached-state reparse must not be silently accepted or upgraded.
 cp -p "$fixture/etc/rc" "$fixture/rc.expected"
 sed '/^ _rc_parse_conf$/d' "$fixture/etc/rc" > "$fixture/etc/rc.next"

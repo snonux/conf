@@ -120,8 +120,8 @@ func (Rollback) Restore() {
 	// Restoring PF flushes the SSH session that delivered this task. Keep the
 	// attempt independent of that session; the existing journal/cron still owns
 	// retries, and Status must prove completion rather than this launch returning.
-	Command("sh", List("-c", "umask 077; /usr/bin/nohup "+rollbackCommand+
-		" restore </dev/null >/etc/gonf/router-restore.log 2>&1 &"))
+	driver := "\"$1\" restore; restore_status=$?; printf 'restore exit=%s\\n' \"$restore_status\"; exit \"$restore_status\""
+	Command("sh", List("-c", "umask 077; /usr/bin/nohup /bin/sh -c \"$1\" router-restore \"$2\" </dev/null >/etc/gonf/router-restore.log 2>&1 &", "router-restore", driver, rollbackCommand))
 }
 
 // OptsRestorePrevious excludes journal recovery from routine deployment.
