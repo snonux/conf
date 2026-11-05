@@ -105,3 +105,35 @@ gate remains separate; no dependency on all-destination network promotion is
 introduced. Private evidence: `~/.local/state/conf/y14-preparation/evidence/`
 with primary-boot progress, original causal receipts, postboot original-baseline
 comparisons, native snapshot/proof tar backups and terminal cleanup receipts.
+
+## First confirmed-state guard trial stopped before confirmation
+
+Conf c09e806's isolated confirmed-boot guard passed its source fixture and both
+review corrections. The dormant helper SHA2fb69f5f… was installed at19:10:50
+using the freshly rebuilt Go client containing both Prepare admission checks;
+all other resources and protected live state matched. Installation did not arm
+the guard. See [the guard contract](Y14-CONFIRMED-BOOT-NEXT.md).
+
+After actual f0/r0 20:05 jobs and fresh health/six-peer checks, the first trial
+promoted at20:06:14 with ordinary deadline20:08:14. NEW primary/default, retained
+OLD alias/ULA/controller return, four held SSH paths, unchanged protected fields
+and all six OLD-source peer transports passed. The complete original pending
+snapshot was copied before confirmation and validated on the controller against
+the original OLD beforeimage, with its canonical hash pinned locally.
+
+The router NAT observer's local18-second wait timed out. The native command used
+timeout15 without a hard-kill grace; why TERM did not finish remains unproved.
+The original failed driver/result are retained. Strict failure recovery restored
+OLD at20:06:54, before ordinary expiry. No ordinary confirmation, confirmed-state
+guard activation, independent guard expiry or reboot occurred. No guard acceptance
+is claimed from this attempt.
+
+Postfailure verification matched protected files/rc semantics, IPv4/IPv6/WG,
+bridge, VM state, OLD default and laptop return; pending scopes were absent and
+the source guard remained zero. Full cluster/storage/DNS/API/verified TLS and
+all six bidirectional overlay IPv4/IPv6 checks passed. Rollback twice was a no-op;
+only the trial's empty private activation gate was removed. The whole matching
+`rolled-back-1793909214.FyxjmZ` journal was archived privately. No router capture
+or timeout process remained, and both exact health-probe UIDs were deleted.
+The revised observer must preserve partial evidence and enforce finite native
+and controller cleanup before a separately reviewed retry.
