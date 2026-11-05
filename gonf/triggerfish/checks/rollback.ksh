@@ -25,7 +25,18 @@ pfctl() {
   return 0;;
  '-s info') print 'Status: Enabled';;
  '-s Interfaces -v') print 'lo (skip)'; print 'lo0 (skip)';;
- '-sr') print 'pass all';;
+ '-sr')
+  print 'pass all'
+  if [[ -f $BASE/pf-tables/__automatic_aabb_0 && ! -f $BASE/unreferenced-auto ]]; then
+   print 'pass in inet from <__automatic_aabb_0> to any'
+  fi;;
+ '-vvs Tables')
+  for table in "$BASE/pf-tables/"*; do
+   [[ -f $table ]] || continue
+   if [[ ${table##*/} == __automatic_* && ! -f $BASE/mutable-auto ]]; then
+    print -- "c-a-r-- ${table##*/}"
+   else print -- "-pa-r-- ${table##*/}"; fi
+  done;;
  '-f '*)
   print -- "pfctl $*" >> "$BASE/operations"
   if [[ $2 == "$STATE/candidate/pf.conf" ]]; then
@@ -275,6 +286,26 @@ expect_fail recover_previous wrongtoken
 rm "$base/pf-tables/existing"
 sed '/^table <existing> persist$/d' "$fixture/etc/pf.conf" > "$fixture/etc/pf.next"
 mv "$fixture/etc/pf.next" "$fixture/etc/pf.conf"
+# Optimizer-created const tables are part of the running policy. Unknown,
+# mutable or unreferenced runtime-only tables still refuse before arming.
+print '192.0.2.0/24' > "$base/pf-tables/__automatic_aabb_0"
+"$fixture/run" stage trialauto1 shared-igc0 180
+touch "$base/mutable-auto"
+expect_fail arm trialauto1 shared-igc0 180
+grep -q 'mutable optimizer PF table' "$fixture/failure.log"
+[[ ! -f $base/router-state/pending ]]
+rm "$base/mutable-auto"
+touch "$base/unreferenced-auto"
+expect_fail arm trialauto1 shared-igc0 180
+grep -q 'unreferenced optimizer PF table' "$fixture/failure.log"
+rm "$base/unreferenced-auto"
+"$fixture/run" arm trialauto1 shared-igc0 180
+grep -q '^table <__automatic_aabb_0> const' "$base/router-state/saved/pf.runtime"
+/sbin/pfctl -nf "$base/router-state/saved/pf.runtime"
+"$fixture/run" activate trialauto1
+"$fixture/run" restore
+grep -qx '192.0.2.0/24' "$base/pf-tables/__automatic_aabb_0"
+rm "$base/pf-tables/__automatic_aabb_0"
 # Unsupported resolver symlinks refuse before pending authorizes activation.
 "$fixture/run" stage trialdns1 shared-igc0 180
 mv "$fixture/etc/resolv.conf" "$fixture/resolv.saved"

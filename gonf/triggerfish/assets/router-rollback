@@ -289,10 +289,25 @@ snapshot() {
  awk '$2=="(skip)" {print "set skip on " $1}' "$s/pf.interfaces" >> "$s/pf.runtime"
  awk '/^table / {print}' "$s/pf.parsed" >> "$s/pf.runtime"
  pfctl -sr >> "$s/pf.runtime"
+ pfctl -vvs Tables > "$s/pf.table-flags"
  pfctl -s Tables | while read -r f; do
   [[ $f == +([a-zA-Z0-9_]) ]] || fail 'unsupported PF table name'
-  grep -Eq "^table <$f>( |$)" "$s/pf.parsed" || fail 'runtime-only PF table needs explicit recovery support'
   pfctl -t "$f" -T show > "$s/tables/$f"
+  if ! grep -Eq "^table <$f>( |$)" "$s/pf.parsed"; then
+   # The optimizer replaces address lists with read-only internal tables.
+   # Capture only its known name shape, const flag and a running-rule reference.
+   print -r -- "$f" | grep -Eq '^__automatic_[a-f0-9]+_[0-9]+$' || fail 'runtime-only PF table needs explicit recovery support'
+   awk -v name="$f" '$1 ~ /^c/ && $2==name {found=1} END {exit !found}' "$s/pf.table-flags" || fail 'mutable optimizer PF table is unsupported'
+   grep -qF "<$f>" "$s/pf.runtime" || fail 'unreferenced optimizer PF table is unsupported'
+   {
+    print -- "table <$f> const {"
+    cat "$s/tables/$f"
+    print '}'
+   } > "$s/table.declaration"
+   cat "$s/table.declaration" >> "$s/pf.parsed"
+   cat "$s/table.declaration" >> "$s/pf.runtime"
+   rm "$s/table.declaration"
+  fi
  done
  pfctl -nf "$s/pf.runtime"
  atomic "$STATE/snapshot-digest" "$(checksum "$s")"

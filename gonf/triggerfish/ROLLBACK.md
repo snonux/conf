@@ -322,8 +322,15 @@ existing controller's service checks pass, set `ServicesVerified=true` and invok
 `Confirm` with the same token. No extra human approval is introduced. Confirmation
 cancels the pending restore; it does not retire old/recovery addresses.
 
-PF anchors and runtime-only tables are refused before arming: their independent
-loaders are outside this recovery controller. Profiles use floating state policy
+PF anchors and unrecognized runtime-only tables are refused before arming:
+their independent loaders are outside this recovery controller. The narrow
+exception is an optimizer-shaped `__automatic_HEX_NUMBER` table that is const
+and referenced by a running rule. Its captured contents become an explicit
+const declaration in the saved runtime rules, which are parsed natively before
+arming. Mutable or unreferenced lookalikes refuse. Across a cold boot, acceptance
+compares these internal tables by contents and rule references; their opaque
+names can change. Named table identity and contents remain exact.
+Profiles use floating state policy
 and only loopback skip; unexpected persistent if-bound policy or skipped physical
 interfaces also refuse. Table declarations come from the saved parsed file,
 while dynamic contents and live rules are captured separately. Restore also
