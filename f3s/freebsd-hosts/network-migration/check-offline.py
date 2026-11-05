@@ -44,6 +44,7 @@ elif cmd == 'sysrc':
         for item in a:
             k,v=item.split('=',1); s['keys'][k]=v; write_key(k,v)
 elif cmd == 'ifconfig':
+    if a[:1] == ['-L']: a=a[1:]
     assert a[0] == 're0', a
     if len(a)==1 or len(a)==2:
         print('re0: flags=UP')
@@ -52,7 +53,13 @@ elif cmd == 'ifconfig':
             print(' inet 192.168.1.138 netmask 0xffffffff vhid 1')
         if len(a)==1 or a[1]=='inet6':
             print(' inet6 fe80::1%re0 prefixlen 64 scopeid 0x1')
-            for ip in s['v6']: print(' inet6',ip,'prefixlen 64')
+            for ip in s['v6']:
+                props=s.get('v6_properties',{}).get(ip,{})
+                print(' inet6',ip,'prefixlen 64',
+                      'autoconf' if props.get('autoconf') else '',
+                      ('pltime '+str(props['pltime'])+' vltime '+str(props['vltime']))
+                      if 'pltime' in props else '',
+                      'temporary' if props.get('temporary') else '')
             print(' nd6 options=23<PERFORMNUD'+(',ACCEPT_RTADV' if s['ra'] else '')+'>')
     elif a[1]=='inet6' and a[2] in ['accept_rtadv','-accept_rtadv']:
         s['ra']=a[2]=='accept_rtadv'
@@ -60,8 +67,14 @@ elif cmd == 'ifconfig':
         family=a[1]; ip=a[2].split('/')[0]; field='v4' if family=='inet' else 'v6'
         if a[-1]=='delete':
             assert ip in s[field], (ip,s[field]); s[field].remove(ip)
+            if family=='inet6': s.setdefault('v6_properties',{}).pop(ip,None)
         elif a[-1]=='alias':
             assert ip not in s[field], (ip,s[field]); s[field].append(ip)
+            if family=='inet6':
+                props={'autoconf': 'autoconf' in a}
+                for flag in ('pltime','vltime'):
+                    if flag in a: props[flag]=int(a[a.index(flag)+1])
+                s.setdefault('v6_properties',{})[ip]=props
         else:
             assert family=='inet', a
             s[field][0]=ip
@@ -70,6 +83,7 @@ elif cmd == 'route':
         if '-inet6' in a:
             if s['default6']:
                 print('destination: default\n gateway:',s['default6'],'\n interface: re0')
+                print(' flags: <UP,GATEWAY,DONE'+(',STATIC' if s.get('default6_static') else '')+'>')
             else: rc=1
         elif a[-1]=='10.99.0.2' and s['return']:
             print('destination: 10.99.0.2\n gateway:',s['return'],'\n interface: re0')
@@ -79,6 +93,7 @@ elif cmd == 'route':
         else: s['return']=a[-1]
     elif '-inet6' in a:
         s['default6']=None if a[0]=='delete' else a[-1]
+        if a[0]!='delete': s['default6_static']='-nostatic' not in a
     else: s['default4']=a[-1]
 else: raise AssertionError((cmd,a))
 p.write_text(json.dumps(s))
@@ -174,6 +189,7 @@ def main():
         run('stage', ok=False)  # Never replace an armed snapshot.
         run('rollback')
         assert_restored()
+        assert json.loads(db.read_text())['default6_static'] is False
         run('rollback')  # Restore retries are harmless after completion.
         run('stage')
         boot_with_cached_rc(initial)  # Absent alias201 must disappear in parent.
@@ -209,6 +225,29 @@ def main():
         run('stage', 'isolated', ok=False)  # Human/cabling gate stays closed.
         calls = json.loads(db.read_text())['calls']
         assert not any('netif' in ' '.join(call) or 'bridge' in ' '.join(call) for call in calls)
+        # Native SLAAC ownership and lifetimes must survive detached rollback,
+        # with time spent in the trial deducted rather than renewed forever.
+        db.write_text(json.dumps(initial))
+        rcconf.write_text(''.join(f'{key}={shlex.quote(value)}\n'
+                                 for key, value in initial['keys'].items()))
+        native=json.loads(db.read_text())
+        native['v6_properties']={
+            native['v6'][0]: {'autoconf':True, 'pltime':1200, 'vltime':1800},
+            native['v6'][1]: {'autoconf':True, 'pltime':20, 'vltime':30}}
+        db.write_text(json.dumps(native))
+        run('stage')
+        trial=json.loads(db.read_text()); trial['now']+=600
+        db.write_text(json.dumps(trial))
+        restored=run('rollback')
+        assert restored['v6']==[native['v6'][0]]
+        assert restored['v6_properties'][native['v6'][0]]=={
+            'autoconf':True, 'pltime':600, 'vltime':1200}
+        # No supported setter for temporary ownership: refuse before mutation.
+        native['v6_properties'][native['v6'][0]]['temporary']=True
+        db.write_text(json.dumps(native))
+        run('stage', ok=False)
+        assert not (state / 'pending').exists()
+        assert json.loads(db.read_text())['v6']==native['v6']
         # Actual guest interface, explicit no-ULA native policy and retained
         # wg0 ownership: the fixture refuses commands for any other interface.
         for command in ('id', 'lockf', 'date', 'pgrep', 'sync', 'netstat',

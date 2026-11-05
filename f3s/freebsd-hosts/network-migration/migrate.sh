@@ -42,6 +42,49 @@ v6_rows() {
         }'
 }
 
+# Keep native ownership and finite lifetimes: recreating an autoconfigured
+# address as a plain alias would silently turn it into an immortal static IP.
+save_v6_metadata() {
+    rows=$(ifconfig -L "$iface" inet6) || return
+    printf '%s\n' "$rows" | awk '
+        $1 == "inet6" && $2 !~ /^fe80:/ {
+            prefix=""; owner="-autoconf"; preferred="infty"; valid="infty"
+            for (i=3; i<=NF; i++) {
+                if ($i == "prefixlen") prefix=$(i+1)
+                if ($i == "autoconf") owner="autoconf"
+                if ($i == "temporary") exit 1
+                if ($i == "pltime") preferred=$(i+1)
+                if ($i == "vltime") valid=$(i+1)
+            }
+            if (prefix !~ /^[0-9]+$/) exit 1
+            if (owner == "autoconf" && (preferred == "infty" || valid == "infty")) exit 1
+            if (preferred != "infty" && preferred !~ /^[0-9]+$/) exit 1
+            if (valid != "infty" && valid !~ /^[0-9]+$/) exit 1
+            print $2, prefix, owner, preferred, valid
+        }'
+}
+
+restore_v6_metadata() {
+    elapsed=$(($(date +%s) - $(cat "$pending/v6-captured-at")))
+    [ "$elapsed" -ge 0 ] || elapsed=0
+    while read -r address prefix owner preferred valid; do
+        if [ "$valid" != infty ]; then
+            valid=$((valid - elapsed))
+            [ "$valid" -gt 0 ] || continue
+        fi
+        if [ "$preferred" != infty ]; then
+            preferred=$((preferred - elapsed))
+            [ "$preferred" -ge 0 ] || preferred=0
+        fi
+        if ! v6_rows | awk '{print $1}' | grep -qxF "$address"; then
+            set -- "$iface" inet6 "$address" prefixlen "$prefix" "$owner"
+            if [ "$preferred" != infty ]; then set -- "$@" pltime "$preferred"; fi
+            if [ "$valid" != infty ]; then set -- "$@" vltime "$valid"; fi
+            ifconfig "$@" alias
+        fi
+    done < "$pending/v6-metadata"
+}
+
 save_key() {
     if sysrc -f /etc/rc.conf -n "$1" > "$state/preparing/$1" 2>/dev/null; then
         touch "$state/preparing/$1.exists"
@@ -120,6 +163,8 @@ arm() {
     netstat -rn > "$state/preparing/routes.evidence"
     v4_rows > "$state/preparing/v4"
     v6_rows > "$state/preparing/v6"
+    date +%s > "$state/preparing/v6-captured-at"
+    save_v6_metadata > "$state/preparing/v6-metadata" || fail 'unsupported native IPv6 metadata; no address changed'
     awk '{print $1}' "$state/preparing/v4" | grep -qxF "$old" || fail 'retained old host IPv4 is missing'
     rows=$(ifconfig "$iface" inet) || return
     printf '%s\n' "$rows" | awk '$1=="inet" {print $2; exit}' > "$state/preparing/primary"
@@ -266,15 +311,17 @@ restore_runtime() {
             ifconfig "$iface" inet6 "$address" delete
         fi
     done < "$pending/v6.remove"
-    while read -r address prefix; do
-        if ! v6_rows | awk '{print $1}' | grep -qxF "$address"; then
-            ifconfig "$iface" inet6 "$address" prefixlen "$prefix" alias
-        fi
-    done < "$pending/v6"
+    restore_v6_metadata
     if [ -s "$pending/ra" ]; then ifconfig "$iface" inet6 accept_rtadv; fi
     if [ -s "$pending/default6" ]; then
         if ! route -n get -inet6 default >/dev/null 2>&1; then
-            route add -inet6 default "$(cat "$pending/default6")"
+            # route(8) defaults to STATIC, whereas a router-advertisement
+            # default belongs to the kernel's expiring router list.
+            if grep -Eq 'flags: .*STATIC' "$pending/default6.evidence"; then
+                route add -inet6 default "$(cat "$pending/default6")"
+            else
+                route add -inet6 -nostatic default "$(cat "$pending/default6")"
+            fi
         fi
     fi
 }

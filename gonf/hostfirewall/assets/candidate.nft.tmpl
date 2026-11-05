@@ -12,6 +12,9 @@ table inet f3s_guard {
         # Trust source ranges, never the public IPv6 prefix assigned by ISP.
         ip saddr 192.168.1.0/24 return
         ip6 saddr fd22:c702:acb7::/64 return
+        # Authenticated laptop wg2 management through triggerfish. Address
+        # staging owns the explicit return /32; no NodePort trust is added.
+        ip saddr 10.99.0.2 tcp dport 22 return
         # Keep replies to host-initiated traffic and current sessions.
         ct state established,related return
         meta l4proto { icmp, ipv6-icmp } return

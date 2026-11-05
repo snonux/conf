@@ -44,8 +44,12 @@ Stage adds the new IPv4 while retaining the old primary, configures static
 local ULA on re0, suppresses RA there, removes prior non-link-local physical
 IPv6, and removes only a physical re0 IPv6 default. wg0 IPv6, CARP alias0,
 vm-bhyve bridge/taps, PF, service binds and hosts names are untouched. Native
-SLAAC addresses are restored with their saved prefix lengths on timed
-rollback; RA resumes where previously enabled. Boot rollback uses the saved
+SLAAC addresses are restored with their saved prefix lengths, autoconf flag
+and finite preferred/valid lifetimes on timed rollback. Time spent in the
+trial is deducted; expired addresses are not resurrected. Metadata is captured
+with native `ifconfig -L` before mutation. Temporary addresses and unsupported
+autoconf lifetime metadata fail closed before activation, rather than becoming
+immortal static aliases. RA resumes where previously enabled. Boot rollback uses the saved
 persistent settings. DHCP and an active DHCPv6 client require separate review.
 
 Alias200/201/202 are reserved to this helper; collisions fail before mutation.
