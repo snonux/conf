@@ -349,15 +349,38 @@ persist_candidate() {
 clear_physical() {
  typeset keep=${1:-no} i family address mask rest
  for i in igc0 igc1 igc2 igc3; do
-  ifconfig "$i" inet6 -autoconf
+  # Do not enable an originally disabled family merely to clear policy bits.
+  if ifconfig "$i" | grep -q 'inet6 '; then
+   ifconfig "$i" inet6 -autoconf -temporary
+  fi
   route -n flush -inet -iface "$i" >/dev/null
   route -n flush -inet6 -iface "$i" >/dev/null
+  drain_addresses "$i" "$keep"
+ done
+}
+drain_addresses() {
+ typeset i=$1 keep=$2 attempt family address
+ # slaacd can have an address proposal in flight when its policy is disabled.
+ for attempt in 1 2 3 4 5; do
   ifconfig "$i" | awk -v keep="$keep" '
    $1=="inet" && $2!="192.168.1.2" && !(keep=="yes" && $2=="10.98.0.1") {print "inet", $2}
    $1=="inet6" && $2 !~ /^fe80:/ {print "inet6", $2}' > "$STATE/remove-addresses"
+  [[ -s $STATE/remove-addresses ]] || return 0
+  [[ $attempt != 5 ]] || fail 'physical address proposals did not quiesce'
   while read -r family address; do
    ifconfig "$i" "$family" "$address" delete
   done < "$STATE/remove-addresses"
+  sleep 1
+ done
+}
+check_candidate_ipv6() {
+ typeset i
+ for i in igc0 igc1 igc2 igc3; do
+  ifconfig "$i" > "$STATE/ipv6-check"
+  ! grep -q AUTOCONF6 "$STATE/ipv6-check" || fail 'physical IPv6 autoconfiguration remains enabled'
+  awk 'NR==FNR {if ($1=="inet6") allowed[$3]=1; next}
+   $1=="inet6" && $2!~/^fe80:/ && !allowed[$2] {exit 1}' \
+   "$STATE/candidate/hostname.$i" "$STATE/ipv6-check" || fail 'unexpected physical IPv6 address'
  done
 }
 apply_addresses() {
@@ -418,6 +441,7 @@ activate() {
  chmod 644 /etc/resolv.conf
  rcctl start ntpd
  [[ $(cat "$STATE/profile") == shared-igc0 ]] || rcctl start dhcpd
+ check_candidate_ipv6
  atomic "$STATE/status" active-unconfirmed
  sync
  print 'active and UNCONFIRMED; recovery remains armed'
@@ -471,10 +495,22 @@ restore_runtime() {
      fi
     fi
    else
-    ifconfig "$i" inet6 alias "$address" prefixlen "$mask"
+    # slaacd owns these addresses and their lifetimes. Readding them manually
+    # would turn privacy addresses into immortal static aliases.
+    if ! awk -v a="$address" '$1=="inet6" && $2==a && /autoconf/ {found=1}
+      END {exit !found}' "$STATE/saved/flags/$i"; then
+     ifconfig "$i" inet6 alias "$address" prefixlen "$mask"
+    fi
    fi
   done < "$STATE/saved/addresses/$i"
-  if grep -q 'AUTOCONF6[>,]' "$STATE/saved/flags/$i"; then ifconfig "$i" inet6 autoconf; fi
+  if grep -q 'inet6 ' "$STATE/saved/flags/$i"; then
+   if grep -q AUTOCONF6TEMP "$STATE/saved/flags/$i"; then
+    ifconfig "$i" inet6 temporary
+   else ifconfig "$i" inet6 -temporary; fi
+   if grep -q 'AUTOCONF6[>,]' "$STATE/saved/flags/$i"; then
+    ifconfig "$i" inet6 autoconf
+   else ifconfig "$i" inet6 -autoconf; fi
+  else ifconfig "$i" -inet6; fi
   if grep -q '<UP,' "$STATE/saved/flags/$i"; then ifconfig "$i" up; else ifconfig "$i" down; fi
  done
  for family in inet inet6; do
@@ -505,6 +541,14 @@ restore_runtime() {
  fi
  sysctl "net.inet.ip.forwarding=$(cat "$STATE/saved/forward4")" \
   "net.inet6.ip6.forwarding=$(cat "$STATE/saved/forward6")" >/dev/null
+ # The candidate blocks router advertisements. Relearn only after restoring
+ # the saved PF policy and forwarding state, before DNS-dependent services.
+ for i in igc0 igc1 igc2 igc3; do
+  if grep -q 'AUTOCONF6[>,]' "$STATE/saved/flags/$i"; then
+   slaacctl send solicitation "$i"
+   wait_slaac "$i"
+  fi
+ done
  for service in $SERVICES; do
   if [[ $(cat "$STATE/saved/services/$service") == running ]]; then
    rcctl set "$service" flags "$(cat "$STATE/saved/services/$service.flags")"
@@ -527,11 +571,47 @@ restore_runtime() {
   rm -f /etc/resolv.conf
  fi
 }
+wait_slaac() {
+ typeset i=$1 attempt
+ for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  ifconfig "$i" > "$STATE/slaac-check"
+  # Compare managed /64 prefixes, not rotating privacy suffixes. Require live
+  # autoconf ownership and positive finite lifetimes on relearned addresses.
+  if awk '
+   function prefix(a, halves,h,t,hn,tn,gap,j,x,out) {
+    split(a,halves,"::"); hn=split(halves[1],h,":"); tn=split(halves[2],t,":")
+    if (halves[1]=="") hn=0; if (halves[2]=="") tn=0
+    gap=8-hn-tn
+    for(j=1;j<=4;j++) {
+     x=(j<=hn ? h[j] : j<=hn+gap ? "0" : t[j-hn-gap])
+     sub(/^0+/,"",x); if(x=="") x="0"; out=out ":" x
+    }
+    return out
+   }
+   NR==FNR {if ($1=="inet6" && /autoconf/) expected[prefix($2)]=1; next}
+   $1=="inet6" && /autoconf/ {
+    p=0; v=0; for(j=1;j<NF;j++) {
+     if($j=="pltime") p=$(j+1); if($j=="vltime") v=$(j+1)
+    }
+    if(p+0>0 && v+0>0) actual[prefix($2)]=1
+   }
+   END {for(p in expected) if(!actual[p]) exit 1}
+  ' "$STATE/saved/flags/$i" "$STATE/slaac-check"; then return 0; fi
+  sleep 1
+ done
+ fail 'native SLAAC prefix recovery did not complete'
+}
 restore() {
  [[ -f $STATE/snapshot-digest ]] || fail 'no saved trial exists'
  # Explicit restore after confirmation is intentionally refused: it could undo
  # a later accepted stage. Repeating an already completed restore is allowed.
  [[ $(cat "$STATE/status") != confirmed ]] || fail 'confirmed trial cannot be restored'
+ [[ -f $STATE/deadline && $(cat "$STATE/deadline") == +([0-9]) ]] || fail 'no durable recovery deadline exists'
+ [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'snapshot integrity failed'
+ # A replay is another disruptive transaction. Re-arm the existing deadline
+ # before writing, so a disconnected/failed replay is retried by native cron.
+ touch "$STATE/pending"
+ sync
  atomic "$STATE/status" restoring
  restore_files
  restore_runtime

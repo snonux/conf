@@ -140,8 +140,9 @@ The next reviewed live step is limited to the router's `shared-igc0` profile:
    file is localhost-only and controller DNS/default/wg1 remain unchanged.
    Compare existing host/k3s/storage/monitoring reachability to the baseline.
 5. First leave confirmation unset and observe native cron expiry. Fresh old
-   and VPN reconnects must show restored/no-pending state, original physical
-   address/route/PF/forwarding/service state and exact saved resolver file/
+   and VPN reconnects must show restored/no-pending state, original static
+   addresses/routes/PF/forwarding/services, native SLAAC ownership and managed
+   prefixes with live lifetimes (privacy suffixes may rotate), and exact saved resolver file/
    persistent flags with original resolvd runtime state. wg2 must survive this
    physical-profile restore. Remove only the temporary new-gateway `/32`
    controller route/AllowedIP after the experiment.
@@ -253,10 +254,16 @@ PF anchors and runtime-only tables are refused before arming: their independent
 loaders are outside this recovery controller. Profiles use floating state policy
 and only loopback skip; unexpected persistent if-bound policy or skipped physical
 interfaces also refuse. Table declarations come from the saved parsed file,
-while dynamic contents and live rules are captured separately. IPv6 address
-recovery restores captured addresses/prefix lengths and re-enables the original
-physical autoconfiguration policy; SLAAC lifetimes are then maintained by the
-OS. The timed/boot canaries still need to establish actual remote recovery and
+while dynamic contents and live rules are captured separately. IPv6 recovery
+restores captured static addresses/prefix lengths and both autoconfiguration/
+temporary-address policy flags. Originally disabled physical IPv6 families are
+disabled again, removing trial-introduced link-local addresses. Captured SLAAC
+addresses are never recreated as static aliases: after restoring PF, native
+solicitation must recover their managed /64 prefixes with positive lifetimes
+within ten seconds. Privacy suffixes may rotate. Activation disables both
+autoconfiguration policies, drains in-flight proposals within a bounded loop
+and refuses unexpected remaining IPv6 addresses before acceptance.
+The timed/boot canaries still need to establish actual remote recovery and
 service behavior; offline fixtures cannot establish that outcome.
 
 `checks/rollback.ksh CONTROLLER PROFILE_DIRECTORY` runs on OpenBSD under root

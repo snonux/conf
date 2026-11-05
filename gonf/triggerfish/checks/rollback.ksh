@@ -21,6 +21,10 @@ pfctl() {
  '-s info') print 'Status: Enabled';;
  '-s Interfaces -v') print 'lo (skip)'; print 'lo0 (skip)';;
  '-sr') print 'pass all';;
+ '-f '*)
+  print -- "pfctl $*" >> "$BASE/operations"
+  if [[ $2 == "$STATE/candidate/pf.conf" ]]; then touch "$BASE/pf-blocks-ra"
+  else rm -f "$BASE/pf-blocks-ra"; fi;;
  *) print -- "pfctl $*" >> "$BASE/operations";;
  esac
 }
@@ -38,8 +42,22 @@ ifconfig() {
   return 0;;
  destroy) rm -f "$file"; return 0;;
  up|down) return 0;;
+ -inet6)
+  awk '$1!="inet6"' "$file" > "$file.next"; mv "$file.next" "$file"
+  return 0;;
  inet|inet6)
-  [[ $* == -autoconf || $* == autoconf ]] && return 0
+  if [[ $1 == -autoconf || $1 == autoconf || $1 == -temporary || $1 == temporary ]]; then
+   typeset opt flag
+   for opt in "$@"; do
+    case $opt in *temporary) flag=AUTOCONF6TEMP;; *) flag=AUTOCONF6;; esac
+    sed "s/$flag, UP/UP/; s/$flag,//g; s/,$flag>/>/g" "$file" > "$file.next"
+    mv "$file.next" "$file"
+    if [[ $opt != -* ]]; then
+     sed "s/flags=</flags=<$flag,/" "$file" > "$file.next"; mv "$file.next" "$file"
+    fi
+   done
+   return 0
+  fi
   typeset address=$1
   [[ $1 != alias ]] || { shift; address=$1; }
   if [[ $* == *" delete" ]]; then
@@ -89,6 +107,13 @@ sh() {
  print ' inet 10.99.0.1 netmask 0xffffff00' >> "$BASE/interfaces/wg2"
 }
 sync() { :; }
+slaacctl() {
+ [[ $1 == send && $2 == solicitation ]] || return 1
+ # Real candidate PF denies RA/RS. An early solicitation cannot recover SLAAC.
+ [[ ! -f $BASE/pf-blocks-ra ]] || return 1
+ [[ ! -f $BASE/slaac-fail ]] || return 0
+ [[ ! -f $BASE/slaac-addresses ]] || cat "$BASE/slaac-addresses" >> "$BASE/interfaces/$3"
+}
 MOCKS
 # Each invocation is a separate native shell with errexit enabled, so a parent
 # conditional cannot accidentally disable failure propagation in the worker.
@@ -312,6 +337,44 @@ chmod 600 "$base/router-readiness/post-rack"
 "$fixture/run" restore
 if grep -E 'ifconfig igc1 inet 10[.]98[.]0[.]1 delete|ifconfig igc[023].*10[.]98[.]0[.]1' "$base/operations"; then exit 1; fi
 grep -q 'inet 10.98.0.1 ' "$base/interfaces/igc1"
+# Native IPv6 ownership: restore static aliases, relearn managed prefixes and
+# remove a link-local address from a family absent in the captured baseline.
+print 'igc0: flags=<AUTOCONF6,AUTOCONF6TEMP,UP,BROADCAST>' > "$base/interfaces/igc0"
+{
+ print ' inet 192.168.1.2 netmask 0xffffff00'
+ print ' inet6 fe80::1 prefixlen 64'
+ print ' inet6 2001:db8:1:0::1234 prefixlen 64 autoconf temporary pltime 100 vltime 200'
+ print ' inet6 fd02:ca0b:f1cb:20::99 prefixlen 64'
+} >> "$base/interfaces/igc0"
+print ' inet6 2001:db8:1::5678 prefixlen 64 autoconf temporary pltime 100 vltime 200' > "$base/slaac-addresses"
+"$fixture/run" stage ipv6trial shared-igc0 180
+"$fixture/run" arm ipv6trial shared-igc0 180
+"$fixture/run" activate ipv6trial
+# An address proposal surviving a late event refuses acceptance.
+print ' inet6 2001:db8:2::bad prefixlen 64' >> "$base/interfaces/igc0"
+expect_fail check_candidate_ipv6
+print ' inet6 fe80::2 prefixlen 64' >> "$base/interfaces/igc2"
+touch "$base/slaac-fail"
+expect_fail restore
+[[ -f $base/router-state/pending ]]
+rm "$base/slaac-fail"
+: > "$base/operations"
+"$fixture/run" restore
+grep -q 'inet6 fd02:ca0b:f1cb:20::99 prefixlen 64' "$base/interfaces/igc0"
+grep -q 'inet6 2001:db8:1::5678.*autoconf temporary' "$base/interfaces/igc0"
+if grep -q '2001:db8:1:0::1234' "$base/interfaces/igc0"; then exit 1; fi
+if grep -q 'inet6 ' "$base/interfaces/igc2"; then exit 1; fi
+grep -q AUTOCONF6TEMP "$base/interfaces/igc0"
+grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
+# Even replay of a restored journal must recover independently on failure.
+[[ ! -f $base/router-state/pending ]]
+touch "$base/slaac-fail"
+expect_fail restore
+[[ -f $base/router-state/pending ]]
+rm "$base/slaac-fail"
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
 # wg2 bootstrap shares only the durable journal and hook with physical trials.
 # It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
