@@ -19,8 +19,9 @@ The laptop's root-private `/etc/wireguard/wg2.conf` is enabled through
 addresses. Its DNS, default routes, old management IPv4 and wg1 are unchanged.
 The automatic upstream DHCPv6 host lease rotated during this session; it was
 recorded separately from migration changes. The phone remains dormant.
-Host renumbering, forwarded new-host NAT, actual reboot and physical igc1
-recovery are still unproved. No AP or cable changes occurred. Task l14 supplies
+The u14 timed and actual reboot canaries also passed, followed by a confirmed
+default reapply (`u14-final-20261105`). Host renumbering, forwarded new-host NAT
+and physical igc1 recovery remain later gates. No AP or cable changes occurred. Task l14 supplies
 the recovery controller; t14/u14 own its bounded native deployment and proof.
 
 `VPN.Candidate`, registered separately as an operational task, reads the private
@@ -102,7 +103,16 @@ recovery and igc1 physical recovery remain unproved by this experiment.
 The full shared profile still requires the separately reviewed armed
 resolver/resolvd transition recorded in IQ HANDOFF before activation.
 
-## Router reboot canary (u14; not executed yet)
+## Router reboot canary (u14; verified 2026-11-05)
+
+The sequence below completed natively. `u14-expiry-20261105` removed its alias
+and comment through root cron. `u14-reboot-20261105` rebooted with an 1800-second
+deadline; a changed boot time and `restored-at-boot` were observed before that
+deadline, with no pending rollback. Protected file hashes/modes, static routes,
+IPv6 policy, PF policy/named tables/contents and service state matched the
+accepted baseline. Fresh old/new/VPN SSH, DNS and public IPv4 passed. The final
+default reapply was confirmed and contains no canary artifacts. Kubernetes,
+NFS and Gogios remained healthy. This does not establish any physical igc1 path.
 
 The fixed temporary address `10.20.0.254/24` is reserved for this router-only
 test, outside all planned host/JetKVM addresses and DHCP bindings. Explicit
@@ -152,7 +162,8 @@ The reviewed live plan must complete these steps before claiming boot recovery:
 
 The disposable native fixture mocks shutdown and mutation commands and tests
 reboot refusal/guard logic plus file restoration. It cannot prove a real reboot.
-All actual reboot evidence remains pending until the sequence above completes.
+Native evidence is retained privately under the t14/u14 preparation state;
+the fixture remains only a guard/logic test and never requests a real reboot.
 
 ## Shared-profile resolver transaction and acceptance plan
 
@@ -345,8 +356,8 @@ solicitation must recover their managed /64 prefixes with positive lifetimes
 within ten seconds. Privacy suffixes may rotate. Activation disables both
 autoconfiguration policies, drains in-flight proposals within a bounded loop
 and refuses unexpected remaining IPv6 addresses before acceptance.
-The timed shared-profile canary passed as recorded above. Actual reboot and
-physical recovery remain later gates; offline fixtures cannot establish them.
+The timed and actual reboot canaries passed as recorded above. Physical
+recovery remains a later gate; offline fixtures cannot establish it.
 
 `checks/rollback.ksh CONTROLLER PROFILE_DIRECTORY` runs on OpenBSD under root
 using a disposable rewritten filesystem and mocked mutation commands. It uses
