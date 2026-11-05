@@ -9,12 +9,15 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 MOCK = r'''#!/usr/bin/env python3
-import json, os, re, shlex, sys
+import hashlib, json, os, re, shlex, subprocess, sys
 from pathlib import Path
 p=Path(os.environ['FIXTURE_DB'])
 s=json.loads(p.read_text())
 a=sys.argv[1:]; cmd=Path(sys.argv[0]).name
-s['calls'].append([cmd]+a)
+# Pure observations neither mutate fixture state nor contribute to the
+# network/unsafe-command trace. Keep all route queries (including clock faults).
+pure = cmd in ('id','pgrep','date','sysctl','stat','sha256','sync')
+if not pure: s['calls'].append([cmd]+a)
 rc=0
 if cmd == 'id': print('0')
 elif cmd == 'lockf':
@@ -22,6 +25,16 @@ elif cmd == 'lockf':
 elif cmd == 'date': print(s['now'])
 elif cmd == 'pgrep': rc=1
 elif cmd == 'sync': pass
+elif cmd == 'sha256':
+    print(hashlib.sha256(Path(a[-1]).read_bytes()).hexdigest())
+elif cmd == 'stat':
+    target=Path(a[-1]); uid=1001 if s.get('untrusted_path')==str(target) else 0
+    print(str(uid)+':0:'+oct(target.stat().st_mode & 0o777)[2:])
+elif cmd == 'sysctl': print('{ sec = '+str(s.get('boot_epoch',100))+', usec = 0 }')
+elif cmd == 'cp':
+    if 'confirmed-boot-preparing.' in a[-1] and s.pop('fail_guard_copy_once',False):
+        Path(a[-1]).mkdir(mode=0o700); rc=1
+    else: rc=subprocess.run(['/bin/cp',*a]).returncode
 elif cmd == 'netstat': print('fixture evidence')
 elif cmd == 'sysrc':
     rcfile=Path(os.environ['FIXTURE_RC'])
@@ -87,6 +100,10 @@ elif cmd == 'ifconfig':
             detach_gateway_routes(s[field][0])
             s[field][0]=ip
 elif cmd == 'route':
+    if 'get' in a and a[-1]=='default' and s.get('advance_default_query_to'):
+        s['now']=s.pop('advance_default_query_to')
+    if a[0] in ('add','change') and 'default' in a and '-inet6' not in a and s.pop('fail_default_once',False):
+        p.write_text(json.dumps(s)); sys.exit(1)
     if 'get' in a:
         if '-inet6' in a:
             if s['default6']:
@@ -95,7 +112,7 @@ elif cmd == 'route':
             else: rc=1
         elif a[-1]=='10.99.0.2' and s['return']:
             print('destination: 10.99.0.2\n gateway:',s['return'],'\n interface: re0')
-        elif s['default4']: print('destination: default\n gateway:',s['default4'],'\n interface: re0')
+        elif s['default4']: print('destination: default\n gateway: '+s['default4']+'\n interface: re0')
         else: rc=1
     elif '-host' in a:
         if a[0]=='delete': s['return']=None
@@ -107,7 +124,7 @@ elif cmd == 'route':
         if (a[0]=='change' and not s['default4']) or (a[0]=='add' and s['default4']): rc=1
         else: s['default4']=a[-1]
 else: raise AssertionError((cmd,a))
-p.write_text(json.dumps(s))
+if not pure: p.write_text(json.dumps(s))
 sys.exit(rc)
 '''
 
@@ -116,18 +133,19 @@ def main():
     with tempfile.TemporaryDirectory(prefix="freebsd-migration-") as raw:
         tmp = Path(raw)
         state = tmp / "state"
-        state.mkdir()
+        state.mkdir(mode=0o700)
         bindir = tmp / "bin"
         bindir.mkdir()
         db = tmp / "db.json"
         rcconf = tmp / "rc.conf"
         rcconf.write_text('# fixture only\n')
+        rcconf.chmod(0o644)  # Native live rc.conf mode, independent of caller umask.
         conf = tmp / "migration.conf"
         conf.write_text("iface=re0\nold=192.168.1.130\nlab=10.20.0.130\n"
                         "recovery=10.98.0.130\nula=fd02:ca0b:f1cb:20::130\n"
                         "shared_gateway=192.168.1.2\n")
         for command in ('id', 'lockf', 'date', 'pgrep', 'sync', 'netstat',
-                        'sysrc', 'ifconfig', 'route'):
+                        'sysrc', 'ifconfig', 'route', 'sha256', 'stat', 'sysctl', 'cp'):
             file = bindir / command
             file.write_text(MOCK)
             file.chmod(0o755)
@@ -239,6 +257,181 @@ def main():
         run('stage', 'isolated', ok=False)  # Human/cabling gate stays closed.
         calls = json.loads(db.read_text())['calls']
         assert not any('netif' in ' '.join(call) or 'bridge' in ' '.join(call) for call in calls)
+        # Confirmed-NEW boot protection is an isolated lease over an immutable
+        # accepted OLD snapshot. Ordinary pending is never edited or bypassed.
+        guard = state / 'confirmed-boot-guard'
+
+        def guard_trial(now):
+            seed = json.loads(json.dumps(initial))
+            seed.update(now=now, boot_epoch=100, calls=[])
+            db.write_text(json.dumps(seed))
+            rcconf.write_text(''.join(f'{k}={shlex.quote(v)}\n' for k,v in seed['keys'].items()))
+            run('stage'); accepted_stage = run('confirm')
+            existing = set(state.glob('accepted-*'))
+            run('promote', 'shared', '300'); confirmed = run('confirm')
+            archive, = set(state.glob('accepted-*')) - existing
+            snapshot = archive / 'snapshot'
+            assert (snapshot / 'rc.conf.evidence').stat().st_mode & 0o777 == 0o600
+            assert rcconf.stat().st_mode & 0o777 == 0o644
+            result = subprocess.run([str(helper), 'confirmed-boot-hash', archive.name],
+                                    env=env, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            digest = result.stdout.strip()
+            assert len(digest) == 64
+            return archive.name, snapshot, digest, accepted_stage, confirmed
+
+        def set_fixture(**values):
+            current = json.loads(db.read_text()); current.update(values)
+            db.write_text(json.dumps(current))
+
+        def same_network(expected, fields=('keys','v4','v6','default4','return')):
+            current = json.loads(db.read_text())
+            assert all(current[k] == expected[k] for k in fields), fields
+            assert not (state / 'pending').exists()
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(4000)
+        immutable = {f.name:f.read_bytes() for f in snapshot.iterdir()}
+        run('arm-confirmed-boot', name, '0'*64, '120', ok=False)
+        assert not guard.exists(); same_network(new_primary)
+        for field, replacement in [('v4', b'changed\n'), ('primary', b'10.20.0.130\n')]:
+            original = (snapshot / field).read_bytes()
+            (snapshot / field).write_bytes(replacement)
+            run('arm-confirmed-boot', name, digest, '120', ok=False)
+            assert not guard.exists(); same_network(new_primary)
+            (snapshot / field).write_bytes(original)
+        field = snapshot / 'v4'; original = field.read_bytes()
+        field.unlink(); field.symlink_to(snapshot / 'primary')
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        field.unlink(); field.write_bytes(original); field.chmod(0o600)
+        field.chmod(0o644)
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        field.chmod(0o600)
+        set_fixture(untrusted_path=str(snapshot))
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        set_fixture(untrusted_path='')
+        # An owned-address filter must not hide a foreign actual primary.
+        set_fixture(v4=['192.168.1.138',*new_primary['v4']])
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        assert not guard.exists()
+        set_fixture(v4=new_primary['v4'])
+        subprocess.run([str(bindir/'sysrc'),'-f',str(rcconf),'-x','ifconfig_re0_alias200'],env=env,check=True,capture_output=True)
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        assert not guard.exists() and '192.168.1.130' in json.loads(db.read_text())['v4']
+        subprocess.run([str(bindir/'sysrc'),'-f',str(rcconf),'ifconfig_re0_alias200=inet 192.168.1.130/24'],env=env,check=True,capture_output=True)
+
+        # Interrupted copy creates only a private preparing directory; active
+        # lease publication remains atomic and ordinary configuration untouched.
+        set_fixture(fail_guard_copy_once=True)
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        assert not guard.exists(); same_network(new_primary)
+        run('arm-confirmed-boot', name, digest, '120')
+        original_deadline = (guard / 'deadline').read_bytes()
+        for command in ('stage','promote','confirm','rollback'):
+            run(command, ok=False); same_network(new_primary)
+        run('arm-confirmed-boot', name, digest, '900', ok=False)
+        assert (guard / 'deadline').read_bytes() == original_deadline
+        run('release-confirmed-boot', ok=False)
+        run('boot', ok=False)  # Same kernel cannot fabricate a boot claim.
+        set_fixture(now=4121)
+        run('watchdog')  # A confirmed NEW primary expires independently.
+        same_network(old_stage); assert not guard.exists()
+        run('restore-confirmed-boot'); run('restore-confirmed-boot')
+        assert immutable == {f.name:f.read_bytes() for f in snapshot.iterdir()}
+        run('promote', 'shared', '300')
+        run('arm-confirmed-boot', name, digest, '120', ok=False)
+        run('rollback'); same_network(old_stage)
+
+        print('PASS: guard admission, atomic publication, exclusivity and independent expiry', flush=True)
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(5000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_epoch=101, now=5010)
+        run('boot'); same_network(new_primary)
+        run('boot'); same_network(new_primary)  # Same-kernel replay is harmless.
+        # After a genuine new-kernel claim, release must check both surfaces:
+        # the actual first physical IPv4, and the OLD alias persisted for reboot.
+        set_fixture(v4=['192.168.1.138',*new_primary['v4']])
+        run('release-confirmed-boot', ok=False)
+        assert guard.exists()
+        set_fixture(v4=new_primary['v4'])
+        subprocess.run([str(bindir/'sysrc'),'-f',str(rcconf),'-x','ifconfig_re0_alias200'],env=env,check=True,capture_output=True)
+        run('release-confirmed-boot', ok=False)
+        assert guard.exists() and '192.168.1.130' in json.loads(db.read_text())['v4']
+        subprocess.run([str(bindir/'sysrc'),'-f',str(rcconf),'ifconfig_re0_alias200=inet 192.168.1.130/24'],env=env,check=True,capture_output=True)
+        (guard / 'claim-started').rename(guard / 'claim-saved')
+        run('release-confirmed-boot', ok=False)  # Epoch alone is not a complete claim.
+        (guard / 'claim-saved').rename(guard / 'claim-started')
+        run('release-confirmed-boot')
+        set_fixture(now=5700)
+        run('watchdog'); same_network(new_primary)
+        assert not guard.exists()
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(6000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_epoch=101, now=6010); run('boot')
+        set_fixture(boot_epoch=102)
+        run('release-confirmed-boot', ok=False)
+        boot_with_cached_rc(old_stage)  # A second NEW boot consumes no new lease.
+        assert not guard.exists()
+        assert json.loads(db.read_text())['keys'] == old_stage['keys']
+
+        for index, claim in enumerate(('missing','malformed','nonprivate')):
+            name, snapshot, digest, old_stage, new_primary = guard_trial(7000+index*100)
+            run('arm-confirmed-boot', name, digest, '600')
+            set_fixture(boot_epoch=101)
+            (guard / 'claim-started').touch(mode=0o600)
+            if claim != 'missing':
+                (guard / 'boot-epoch').write_text('bad\n' if claim=='malformed' else '101\n')
+                (guard / 'boot-epoch').chmod(0o644 if claim=='nonprivate' else 0o600)
+            boot_with_cached_rc(old_stage)
+            assert not guard.exists()  # Interrupted claim forces OLD before netif.
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(8000)
+        run('arm-confirmed-boot', name, digest, '120')
+        set_fixture(boot_epoch=101, now=8121)
+        run('release-confirmed-boot', ok=False)
+        boot_with_cached_rc(old_stage); assert not guard.exists()
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(9000)
+        run('arm-confirmed-boot', name, digest, '600')
+        (guard / 'claim-started').touch(mode=0o600)
+        set_fixture(boot_epoch=101)
+        run('watchdog'); same_network(old_stage)  # Retry an interrupted boot claim.
+
+        print('PASS: one-boot allowance, release, expired boot and interrupted claims', flush=True)
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(10000)
+        immutable = {f.name:f.read_bytes() for f in snapshot.iterdir()}
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(fail_default_once=True)
+        run('restore-confirmed-boot', ok=False)
+        assert guard.exists() and (guard / 'restoring').exists()
+        assert not (state / 'pending').exists()
+        run('watchdog'); same_network(old_stage)  # Before deadline, restoring retries.
+        run('restore-confirmed-boot')
+        assert immutable == {f.name:f.read_bytes() for f in snapshot.iterdir()}
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(11000)
+        run('arm-confirmed-boot', name, digest, '600')
+        original = (snapshot / 'v4').read_bytes(); (snapshot / 'v4').write_text('changed\n')
+        run('restore-confirmed-boot', ok=False); same_network(new_primary)
+        (snapshot / 'v4').write_bytes(original)
+        original_conf = conf.read_bytes(); conf.write_bytes(original_conf+b'# changed\n')
+        run('restore-confirmed-boot', ok=False); same_network(new_primary)
+        conf.write_bytes(original_conf)
+        run('restore-confirmed-boot'); same_network(old_stage)
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(12000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_epoch=101, now=12010); run('boot')
+        deadline = int((guard / 'deadline').read_text())
+        set_fixture(advance_default_query_to=deadline)
+        run('release-confirmed-boot', ok=False)  # Last runtime query crosses deadline.
+        assert guard.exists(); same_network(new_primary)
+        run('watchdog'); same_network(old_stage)
+
+        print('PASS: partial restore retry, immutable input and deadline-crossing release', flush=True)
+
         # Native SLAAC ownership and lifetimes must survive detached rollback,
         # with time spent in the trial deducted rather than renewed forever.
         db.write_text(json.dumps(initial))
@@ -265,7 +458,7 @@ def main():
         # Actual guest interface, explicit no-ULA native policy and retained
         # wg0 ownership: the fixture refuses commands for any other interface.
         for command in ('id', 'lockf', 'date', 'pgrep', 'sync', 'netstat',
-                        'sysrc', 'ifconfig', 'route'):
+                        'sysrc', 'ifconfig', 'route', 'sha256', 'stat', 'sysctl', 'cp'):
             (bindir / command).write_text(MOCK.replace('re0', 'vtnet0'))
         guest = json.loads(json.dumps(initial).replace('re0', 'vtnet0')
                            .replace('.130', '.139').replace('::130', '::139'))
@@ -300,7 +493,7 @@ def main():
         assert not any('wg0' in ' '.join(call) for call in restored['calls'])
         print('PASS: activation gates, dual-address stage, explicit confirm, primary promotion,')
         print('timer rollback, repeated rollback, cached parent rc reload/alias enumeration,')
-        print('endpoint fail-closed, CARP/bhyve preservation')
+        print('endpoint fail-closed, CARP/bhyve preservation, confirmed-boot guard')
 
 
 if __name__ == '__main__':

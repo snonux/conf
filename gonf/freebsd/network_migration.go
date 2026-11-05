@@ -49,12 +49,13 @@ func (NetworkMigration) Prepare() {
 			panic("migration requires re0 and IPv6 ULA")
 		}
 		check := Command("test", List("!", "-d", "/var/db/gonf-network-migration/pending"))
+		guard := Command("test", List("!", "-e", "/var/db/gonf-network-migration/confirmed-boot-guard"))
 		EnsureDir("/usr/local/sbin", RootOwned)
 		EnsureDir("/usr/local/etc", RootOwned)
 		EnsureDir("/var/db/gonf-network-migration", RootPrivate)
 		conf := File("/usr/local/etc/gonf-network-migration.conf", WithContent(fmt.Sprintf(
 			"iface='%s'\nold='%s'\nlab='%s'\nrecovery='%s'\nula='%s'\nshared_gateway='%s'\nipv6_policy='%s'\n",
-			h.Interface, h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.ULA, h.SharedGateway, ipv6Policy)), RootPrivate, DependsOn(check))
+			h.Interface, h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.ULA, h.SharedGateway, ipv6Policy)), RootPrivate, DependsOn(check, guard))
 		helper := InstallFile(migrationHelper, paths.FHostAsset("network-migration/migrate.sh"), RootExec, DependsOn(conf))
 		// System rc.d is deliberate: local_startup scripts may be discovered
 		// only after netif. Restore before netif consumes an unconfirmed rc.conf.

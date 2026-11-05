@@ -1,5 +1,7 @@
 #!/bin/sh
 # FreeBSD base sh: do not depend on a package before netif at boot.
+# Guard restoration binds pending only inside its subshell; callers retain it.
+# shellcheck disable=SC2030,SC2031
 set -eu
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
 export PATH
@@ -21,6 +23,7 @@ case "$ipv6_policy" in
     *) echo "unreviewed native IPv6 policy" >&2; exit 1;;
 esac
 pending=$state/pending
+guard=$state/confirmed-boot-guard
 keys="ifconfig_${iface} ifconfig_${iface}_alias200 ifconfig_${iface}_alias201 ifconfig_${iface}_alias202 ifconfig_${iface}_ipv6 defaultrouter ipv6_defaultrouter static_routes route_gonfmigration"
 
 fail() { echo "gonf-network-migration: $*" >&2; exit 1; }
@@ -159,6 +162,7 @@ arm() {
     mkdir "$state/preparing"
     for key in $keys; do save_key "$key"; done
     cp -p /etc/rc.conf "$state/preparing/rc.conf.evidence"
+    chmod 600 "$state/preparing/rc.conf.evidence"
     ifconfig "$iface" > "$state/preparing/ifconfig.evidence"
     netstat -rn > "$state/preparing/routes.evidence"
     v4_rows > "$state/preparing/v4"
@@ -347,6 +351,185 @@ rollback() {
     sync
 }
 
+# The confirmed-boot guard owns a separate OLD snapshot. Ordinary pending
+# transactions keep their unconditional early-boot rollback semantics.
+guard_private() {
+    [ ! -L "$1" ] && [ -e "$1" ] || fail 'guard path missing or symlinked'
+    guard_meta=$(stat -f '%u:%g:%Lp' "$1")
+    case $guard_meta in 0:0:*) :;; *) fail 'guard path is not root-owned';; esac
+    case $guard_meta in
+        0:0:700) [ -d "$1" ] || fail 'guard directory type changed';;
+        0:0:600) [ -f "$1" ] || fail 'guard file type changed';;
+        *) fail 'guard requires directories 0700 and files 0600';;
+    esac
+}
+
+guard_hash() (
+    guard_private "$1"
+    [ -d "$1" ] || fail 'guard snapshot is not a directory'
+    hash_file=$(mktemp "$state/guard-hash.XXXXXX")
+    trap 'rm -f "$hash_file"' 0
+    LC_ALL=C; export LC_ALL
+    for item in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        guard_private "$item"
+        [ -f "$item" ] || fail 'guard snapshot must contain regular files only'
+        name=${item##*/}
+        case $name in v6.remove) continue;; *[!a-zA-Z0-9._-]*) fail 'invalid snapshot filename';; esac
+        digest=$(sha256 -q "$item") || exit 1
+        printf '%s %s\n' "$name" "$digest" >> "$hash_file"
+    done
+    sha256 -q "$hash_file"
+)
+
+guard_source() (
+    case $1 in accepted-*) :;; *) fail 'guard requires an accepted OLD snapshot';; esac
+    case $1 in *[!a-zA-Z0-9._-]*) fail 'invalid accepted snapshot name';; esac
+    guard_private "$state"; guard_private "$state/$1"
+    source_dir=$state/$1/snapshot
+    guard_private "$source_dir"
+    for field in primary default4 profile v4; do guard_private "$source_dir/$field"; done
+    [ "$(cat "$source_dir/primary")" = "$old" ] || fail 'snapshot primary is not OLD'
+    [ "$(cat "$source_dir/default4")" = 192.168.1.1 ] || fail 'snapshot default is not OLD'
+    [ "$(cat "$source_dir/profile")" = shared ] || fail 'guard requires shared profile'
+    awk '{print $1}' "$source_dir/v4" | grep -qxF "$lab" || fail 'snapshot lacks accepted Stage alias'
+    [ ! -e "$source_dir/endpoints-required" ] || fail 'guard is address-only'
+    printf '%s\n' "$source_dir"
+)
+
+guard_epoch() {
+    guard_clock=$(sysctl -n kern.boottime)
+    guard_clock=$(printf '%s\n' "$guard_clock" | awk -F '[=,]' '{gsub(/ /,"",$2); print $2}')
+    case $guard_clock in ''|*[!0-9]*) fail 'invalid kernel epoch';; esac
+    printf '%s\n' "$guard_clock"
+}
+
+guard_new_primary() {
+    physical_rows=$(ifconfig "$iface" inet)
+    [ "$(printf '%s\n' "$physical_rows" | awk '$1=="inet" {print $2; exit}')" = "$lab" ] || fail 'NEW primary required'
+    v4_rows | awk '{print $1}' | grep -qxF "$old" || fail 'retained OLD alias missing'
+    [ "$(sysrc -n "ifconfig_$iface")" = "inet $lab/24" ] || fail 'NEW persistent primary required'
+    [ "$(sysrc -n "ifconfig_${iface}_alias200")" = "inet $old/24" ] || fail 'persistent OLD alias required'
+    [ "$(sysrc -n defaultrouter)" = 10.20.0.1 ] || fail 'NEW persistent default required'
+    route -n get -inet default | grep -q 'gateway: 10.20.0.1$' || fail 'NEW runtime default required'
+}
+
+guard_check() (
+    checked=${1:-$guard}
+    guard_private "$checked"
+    [ -f "$checked/ready" ] || fail 'guard arming did not finish'
+    for field in ready source hash deadline preboot config-hash helper-hash; do
+        guard_private "$checked/$field"
+    done
+    [ ! -d "$state/pending" ] || fail 'ordinary pending overlaps confirmed guard'
+    source_dir=$(guard_source "$(cat "$checked/source")")
+    [ "$(guard_hash "$source_dir")" = "$(cat "$checked/hash")" ] || fail 'accepted OLD snapshot changed'
+    [ "$(guard_hash "$checked/old")" = "$(cat "$checked/hash")" ] || fail 'guard working snapshot changed'
+    [ "$(sha256 -q /usr/local/etc/gonf-network-migration.conf)" = "$(cat "$checked/config-hash")" ] || fail 'guard config changed'
+    [ "$(sha256 -q "$helper")" = "$(cat "$checked/helper-hash")" ] || fail 'guard helper changed'
+    for field in deadline preboot; do
+        value=$(cat "$checked/$field")
+        case $value in ''|*[!0-9]*) fail 'invalid guard epoch';; esac
+    done
+)
+
+guard_arm() (
+    [ -f "$state/activation-approved" ] || fail 'activation gate missing'
+    [ ! -e "$guard" ] && [ ! -L "$guard" ] || fail 'confirmed guard already exists'
+    [ ! -d "$pending" ] || fail 'ordinary transaction is pending'
+    [ ! -d /var/db/gonf-endpoint/pending ] || fail 'endpoint transaction is pending'
+    case $3 in ''|*[!0-9]*) fail 'invalid guard lifetime';; esac
+    [ "$3" -ge 120 ] && [ "$3" -le 900 ] || fail 'guard lifetime must be 120..900 seconds'
+    [ "${#2}" -eq 64 ] || fail 'invalid snapshot hash'
+    case $2 in *[!0-9a-f]*) fail 'invalid snapshot hash';; esac
+    source_dir=$(guard_source "$1")
+    [ "$(guard_hash "$source_dir")" = "$2" ] || fail 'OLD snapshot does not match approved hash'
+    guard_new_primary
+    epoch=$(guard_epoch)
+    stage=$(mktemp -d "$state/confirmed-boot-preparing.XXXXXX")
+    cp -Rp "$source_dir" "$stage/old"
+    printf '%s\n' "$1" > "$stage/source"
+    printf '%s\n' "$2" > "$stage/hash"
+    printf '%s\n' "$epoch" > "$stage/preboot"
+    printf '%s\n' "$(($(date +%s) + $3))" > "$stage/deadline"
+    sha256 -q /usr/local/etc/gonf-network-migration.conf > "$stage/config-hash"
+    sha256 -q "$helper" > "$stage/helper-hash"
+    touch "$stage/ready"
+    guard_check "$stage"
+    [ ! -e "$guard" ] && [ ! -L "$guard" ] || fail 'guard appeared while arming'
+    arm_deadline=$(cat "$stage/deadline")
+    [ "$(date +%s)" -lt "$arm_deadline" ] || fail 'guard expired while arming'
+    mv "$stage" "$guard"
+    sync
+    printf 'Confirmed-boot guard armed; deadline=%s\n' "$(cat "$guard/deadline")"
+)
+
+guard_restore() (
+    [ -e "$guard" ] || [ -L "$guard" ] || return 0
+    guard_check
+    touch "$guard/restoring"; sync
+    pending=$guard/old
+    restore_keys
+    if [ "$1" != boot ]; then restore_runtime; fi
+    archive=$(mktemp -d "$state/confirmed-boot-restored-$(date +%s).XXXXXX")
+    mv "$guard" "$archive/guard"
+    sync
+)
+
+guard_claim_present() {
+    [ -e "$guard/claim-started" ] || [ -L "$guard/claim-started" ] ||
+        [ -e "$guard/boot-epoch" ] || [ -L "$guard/boot-epoch" ]
+}
+
+guard_claim_valid() (
+    guard_private "$guard/claim-started"
+    guard_private "$guard/boot-epoch"
+    claim=$(cat "$guard/boot-epoch")
+    case $claim in ''|*[!0-9]*) exit 1;; esac
+    [ "$claim" != "$(cat "$guard/preboot")" ]
+)
+
+guard_boot() (
+    [ -e "$guard" ] || [ -L "$guard" ] || return 0
+    guard_check
+    epoch=$(guard_epoch)
+    if [ "$(date +%s)" -ge "$(cat "$guard/deadline")" ] || [ -e "$guard/restoring" ]; then
+        guard_restore boot; return
+    fi
+    if guard_claim_present; then
+        if ! guard_claim_valid || [ "$(cat "$guard/boot-epoch")" != "$epoch" ]; then
+            guard_restore boot
+        fi
+        return
+    fi
+    [ "$epoch" != "$(cat "$guard/preboot")" ] || fail 'guard requires a new kernel'
+    touch "$guard/claim-started"; sync
+    printf '%s\n' "$epoch" > "$guard/boot-epoch.tmp"
+    mv "$guard/boot-epoch.tmp" "$guard/boot-epoch"
+    sync
+)
+
+guard_release() (
+    guard_check
+    release_deadline=$(cat "$guard/deadline")
+    [ "$(date +%s)" -lt "$release_deadline" ] || fail 'guard expired; restore required'
+    [ ! -e "$guard/restoring" ] || fail 'guard restoration has started'
+    guard_claim_valid || fail 'guard boot claim is incomplete'
+    [ "$(guard_epoch)" = "$(cat "$guard/boot-epoch")" ] || fail 'guard boot identity changed'
+    archive=$(mktemp -d "$state/confirmed-boot-released-$(date +%s).XXXXXX")
+    guard_new_primary
+    # The final runtime query can outlast the lease while this lock is held.
+    [ "$(date +%s)" -lt "$release_deadline" ] || fail 'guard expired during release checks'
+    mv "$guard" "$archive/guard"
+    sync
+)
+
+case "${1:-}" in
+    stage|promote|confirm|rollback)
+        [ ! -e "$guard" ] && [ ! -L "$guard" ] || fail 'confirmed-boot guard is active'
+        ;;
+esac
+
 case "${1:-}" in
     stage|promote)
         action=$1; profile=${2:-shared}; seconds=${3:-900}
@@ -363,16 +546,34 @@ case "${1:-}" in
         sync
         ;;
     rollback) rollback runtime;;
-    boot) rollback boot;;
+    boot) rollback boot; guard_boot;;
     watchdog)
         if [ -d "$pending" ] && [ "$(date +%s)" -ge "$(cat "$pending/deadline")" ]; then
             rollback runtime
         fi
+        if [ -d "$guard" ]; then
+            guard_check
+            if [ "$(date +%s)" -ge "$(cat "$guard/deadline")" ] || [ -e "$guard/restoring" ] ||
+                { guard_claim_present && { ! guard_claim_valid || [ "$(cat "$guard/boot-epoch")" != "$(guard_epoch)" ]; }; }; then
+                guard_restore runtime
+            fi
+        fi
         ;;
+    confirmed-boot-hash) guard_hash "$(guard_source "${2:-}")";;
+    arm-confirmed-boot) guard_arm "${2:-}" "${3:-}" "${4:-600}";;
+    restore-confirmed-boot) guard_restore runtime;;
+    release-confirmed-boot) guard_release;;
     status)
+        if [ -d "$guard" ]; then
+            guard_check
+            echo "confirmed-boot guard deadline=$(cat "$guard/deadline")"
+            exit 0
+        fi
         if [ -d "$pending" ]; then
             echo "pending profile=$(cat "$pending/profile") deadline=$(cat "$pending/deadline")"
         else echo 'no pending transaction'; fi
         ;;
-    *) fail 'usage: stage|promote [shared|isolated] [seconds], confirm, rollback, watchdog, boot, status';;
+    *) fail 'usage: stage|promote [shared|isolated] [seconds], confirm, rollback, watchdog, boot, status;
+confirmed-boot-hash ARCHIVE; arm-confirmed-boot ARCHIVE SHA256 [seconds];
+restore-confirmed-boot; release-confirmed-boot';;
 esac
