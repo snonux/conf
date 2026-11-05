@@ -66,10 +66,16 @@ const (
 // Register itself only sequences the host/cluster groups below, in a fixed
 // order, so the host and cluster registration order stays stable.
 func Register() {
+	RegisterWithRouterTrial(triggerfish.RouterTrial{})
+}
+
+// RegisterWithRouterTrial registers the inventory with explicit nonsecret router
+// trial input. Ordinary registration keeps the fail-closed zero default.
+func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	registerFrontends()
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
 		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true}),
-		WithData(triggerfish.RouterTrial{})) // Trials refuse mutation until explicitly configured.
+		WithData(trial))
 	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()
 	registerRockyK3s(pi2, pi3)

@@ -33,6 +33,57 @@ wg2 readiness dependency for `shared-igc0`. A disposable fixture exercises the
 boot-file restore; it does not establish actual reboot recovery. Keep such
 unperformed acceptance explicitly recorded.
 
+## Bounded bootstrap execution plan
+
+This is the review boundary before live Setup. Use two distinct tokens and
+`window_seconds:180` for both trials. Do not write physical-profile readiness
+or activate a physical profile during this bootstrap. Reuse the protected
+prepared keys; never render the hostname candidate or client private key to a
+terminal/log. Keep the phone peer dormant.
+
+1. Establish a fresh authenticated SSH connection to literal `192.168.1.2`
+   with port 22 and multiplexing disabled. Recheck old `.1.2` and `.11.2`, wg2
+   file/interface absence, no pending journal, active cron, the native rc hook
+   anchor and no controller overlap with `10.99.0.0/24`. Capture controller
+   addresses/routes, existing wg1, DNS and default route as the comparison
+   baseline. Verify the trusted router host key against the existing old-LAN
+   identity; use that same identity via `HostKeyAlias=192.168.1.2` for VPN SSH.
+2. Through gonf push with `-privilege=doas`, explicit `-p 22` and disabled
+   multiplexing, run `triggerfish_rollback_setup` then
+   `triggerfish_vpn_candidate`. Setup changes only recovery machinery (helper,
+   early rc hook and cron); candidate staging creates no interface. Verify
+   the installed helper syntax, hook position and root cron before arming.
+3. Supply nonsecret `GONF_ROUTER_TRIAL` JSON for the expiry token/profile/window;
+   run `triggerfish_rollback_stage`, inspect its inactive digest/status, then
+   `triggerfish_rollback_arm`. Verify the pending marker and persisted deadline
+   before `triggerfish_rollback_activate`. The stage prerequisites restage
+   inactive physical candidates only; they do not activate those profiles.
+4. Bring up the prepared controller wg2 with only the temporary
+   `10.99.0.0/24` route needed for this bootstrap. Preserve controller DNS,
+   default route and wg1. Within the deadline, measure a recent authenticated
+   handshake, route selection/source `10.99.0.2`, and fresh SSH connections
+   to both `192.168.1.2` and `10.99.0.1`. Keep those sessions held while their
+   measured tuples are recorded by the gonf proof task if time permits.
+5. Deliberately omit confirmation. Allow cron to expire the router trial
+   (180 seconds plus at most 60 seconds tick granularity). Establish fresh
+   old-LAN SSH; require restored/no-pending status and absence of both
+   `/etc/hostname.wg2` and runtime wg2. Compare old aliases and physical/PF/
+   service state to the baseline. Stop if any required check fails.
+6. Restage with the distinct acceptance token, arm, verify deadline and
+   activate. Recheck handshake/route and hold two fresh old/VPN SSH sessions.
+   Feed each session's measured `SSH_CONNECTION` tuple and `proof_role` to
+   `triggerfish_rollback_proof` through gonf while that socket remains open.
+   Only after transport and baseline comparisons pass, set
+   `services_verified:true` and run `triggerfish_rollback_confirm` before
+   expiry. Require confirmed/no-pending status and fresh old/VPN reconnects.
+
+On an interruption or failed transport check, leave confirmation unset and
+observe automatic expiry through a new old-LAN session. Revert only the
+introduced controller wg2 when abandoning the bootstrap. Actual reboot
+recovery and igc1 physical recovery remain unproved by this experiment.
+The full shared profile still requires the separately reviewed armed
+resolver/resolvd transition recorded in IQ HANDOFF before activation.
+
 Register `Rollback{}` with prefix `triggerfish_rollback_` on the triggerfish
 cluster, and attach `RouterTrial{}` to its inventory. All methods are operational;
 no normal aggregate selects them. Empty trial data refuses stage/arm/activation.
@@ -43,13 +94,13 @@ network startup. It restores files and explicitly clears/reparses cached rc
 service variables. `rc.local` and `rc.firsttime` are too late for this contract.
 The native anchor is checked each time; an upstream rc change must be reviewed.
 
-The intended controller entrypoint parses `GONF_ROUTER_TRIAL` with `TrialFromEnvironment` before
+The controller entrypoint parses `GONF_ROUTER_TRIAL` with `TrialFromEnvironment` before
 registering inventory. Input is nonsecret JSON; missing input keeps the zero
 default, while unknown fields, trailing data and invalid profile/token/window or
 proof tuples return a payload-free error. The composition root supplies that
 value through `RegisterWithRouterTrial`; ordinary `Register` stays unchanged.
-That composition-root integration and VPN task registration remain pending in
-the 2026-11-04 preparation checkpoint; this does not yet expose a live workflow.
+`triggerfish_vpn_candidate` stages the private bootstrap input separately;
+neither ordinary registration nor a routine aggregate activates a trial.
 For example, a trial starts with `{"profile":"vpn-bootstrap","token":"t14-vpn-expiry-20261104","window_seconds":180}`.
 Proof calls add `proof_role` and the measured `ssh_connection` from a fresh held
 session. Confirmation sets `services_verified` only after controller checks.

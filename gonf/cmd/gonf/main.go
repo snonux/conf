@@ -9,6 +9,7 @@ import (
 	"github.com/snonux/conf/gonf/garage"
 	"github.com/snonux/conf/gonf/paths"
 	"github.com/snonux/conf/gonf/tasks"
+	"github.com/snonux/conf/gonf/triggerfish"
 	"github.com/snonux/gonf/api"
 	"github.com/snonux/gonf/cli"
 	"github.com/snonux/gonf/secret"
@@ -16,11 +17,16 @@ import (
 )
 
 func main() {
+	trial, err := triggerfish.TrialFromEnvironment()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "gonf: router trial:", err)
+		os.Exit(1)
+	}
 	if err := setSecretProvider(); err != nil {
 		fmt.Fprintln(os.Stderr, "gonf: secret provider:", err)
 		os.Exit(1)
 	}
-	cluster.Register()
+	cluster.RegisterWithRouterTrial(trial)
 	tasks.Register()
 	cli.Main()
 }

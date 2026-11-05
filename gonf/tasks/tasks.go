@@ -34,6 +34,7 @@ func Register() {
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
 	RegisterMethods(triggerfish.Profiles{}, WithPrefix("triggerfish_profiles_"), OnCluster(cluster.NameTriggerfish))
 	RegisterMethods(triggerfish.Rollback{}, WithPrefix("triggerfish_rollback_"), OnCluster(cluster.NameTriggerfish))
+	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.VPN{})
 	AggregatePrefix("triggerfish", "Configure the LAN OpenBSD host")
 	RegisterGroup([]any{
 		openbsd.Unattended{}, frontends.Maintenance{}, frontends.Monitoring{},

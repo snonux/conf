@@ -40,6 +40,10 @@ func (Rollback) DescProof() string {
 	return "Records a fresh authenticated management connection's measured socket"
 }
 
+func (Rollback) DescReadiness() string {
+	return "Binds the measured VPN and inventory review to the frozen candidate"
+}
+
 func (Rollback) DescRestore() string {
 	return "Reapplies the saved persistent and running state idempotently"
 }
@@ -61,3 +65,7 @@ func (Unattended) DescCron() string {
 func (Unattended) DescNewsyslog() string { return "Rotates the private unattended-upgrade log" }
 
 func (Unattended) DescScript() string { return "Installs the router's base, package and audit wrapper" }
+
+func (VPN) DescCandidate() string {
+	return "Stages the private wg2 input without creating an interface"
+}
