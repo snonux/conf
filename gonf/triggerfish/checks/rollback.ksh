@@ -79,6 +79,10 @@ rcctl() {
  esac
 }
 crontab() { print -- "* * * * * $SELF tick"; }
+pgrep() {
+ [[ $* == '-xf /sbin/resolvd' && -f $BASE/native-resolvd ]] || return 1
+ print 12345
+}
 netstat() { cat "$BASE/sockets"; }
 sh() {
  [[ $1 == "${BASE%/gonf}/netstart" && $2 == wg2 ]] || return 1
@@ -197,6 +201,17 @@ expect_fail arm trialdns1 shared-igc0 180
 [[ ! -f $base/router-state/pending ]]
 rm "$fixture/etc/resolv.conf"
 mv "$fixture/resolv.saved" "$fixture/etc/resolv.conf"
+# Native boot can start resolvd without an rc.d runtime cache. Unknown process
+# arguments refuse, while the exact no-argument daemon captures empty flags.
+mv "$fixture/var/run/rc.d/resolvd" "$fixture/resolvd.runtime.saved"
+expect_fail arm trialdns1 shared-igc0 180
+[[ ! -f $base/router-state/pending ]]
+touch "$base/native-resolvd"
+"$fixture/run" arm trialdns1 shared-igc0 180
+[[ ! -s $base/router-state/saved/services/resolvd.flags || $(cat "$base/router-state/saved/services/resolvd.flags") == '' ]]
+"$fixture/run" restore
+rm "$base/native-resolvd"
+mv "$fixture/resolvd.runtime.saved" "$fixture/var/run/rc.d/resolvd"
 # An absent file and a stopped resolver must round-trip without starting it.
 touch "$base/resolvd-stopped"
 rm "$fixture/etc/resolv.conf"
