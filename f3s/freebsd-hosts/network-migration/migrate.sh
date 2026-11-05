@@ -397,12 +397,23 @@ guard_source() (
     printf '%s\n' "$source_dir"
 )
 
-guard_epoch() {
-    guard_clock=$(sysctl -n kern.boottime)
-    guard_clock=$(printf '%s\n' "$guard_clock" | awk -F '[=,]' '{gsub(/ /,"",$2); print $2}')
-    case $guard_clock in ''|*[!0-9]*) fail 'invalid kernel epoch';; esac
-    printf '%s\n' "$guard_clock"
+guard_id_valid() {
+    case $1 in ''|*[!0-9a-f]*) return 1;; esac
+    [ "${#1}" -eq 64 ]
 }
+
+guard_boot_id() (
+    guard_private "$state"
+    id_file=$(mktemp "$state/boot-id.XXXXXX") || exit 1
+    trap 'rm -f "$id_file"' 0
+    trap 'exit 1' 1 2 3 15
+    # kern.boot_id is opaque, not text. Check the producer status before
+    # hashing; a failed sysctl can still have written partial or full output.
+    sysctl -b kern.boot_id > "$id_file" || exit 1
+    id_size=$(wc -c < "$id_file") || exit 1
+    [ "$id_size" -eq 16 ] || fail 'invalid opaque boot identity size'
+    sha256 -q "$id_file"
+)
 
 guard_new_primary() {
     physical_rows=$(ifconfig "$iface" inet)
@@ -418,7 +429,7 @@ guard_check() (
     checked=${1:-$guard}
     guard_private "$checked"
     [ -f "$checked/ready" ] || fail 'guard arming did not finish'
-    for field in ready source hash deadline preboot config-hash helper-hash; do
+    for field in ready source hash deadline preboot-id config-hash helper-hash; do
         guard_private "$checked/$field"
     done
     [ ! -d "$state/pending" ] || fail 'ordinary pending overlaps confirmed guard'
@@ -427,10 +438,9 @@ guard_check() (
     [ "$(guard_hash "$checked/old")" = "$(cat "$checked/hash")" ] || fail 'guard working snapshot changed'
     [ "$(sha256 -q /usr/local/etc/gonf-network-migration.conf)" = "$(cat "$checked/config-hash")" ] || fail 'guard config changed'
     [ "$(sha256 -q "$helper")" = "$(cat "$checked/helper-hash")" ] || fail 'guard helper changed'
-    for field in deadline preboot; do
-        value=$(cat "$checked/$field")
-        case $value in ''|*[!0-9]*) fail 'invalid guard epoch';; esac
-    done
+    value=$(cat "$checked/deadline")
+    case $value in ''|*[!0-9]*) fail 'invalid guard deadline';; esac
+    guard_id_valid "$(cat "$checked/preboot-id")" || fail 'invalid guard boot identity'
 )
 
 guard_arm() (
@@ -445,12 +455,12 @@ guard_arm() (
     source_dir=$(guard_source "$1")
     [ "$(guard_hash "$source_dir")" = "$2" ] || fail 'OLD snapshot does not match approved hash'
     guard_new_primary
-    epoch=$(guard_epoch)
+    boot_id=$(guard_boot_id) || fail 'kernel boot identity unavailable'
     stage=$(mktemp -d "$state/confirmed-boot-preparing.XXXXXX")
     cp -Rp "$source_dir" "$stage/old"
     printf '%s\n' "$1" > "$stage/source"
     printf '%s\n' "$2" > "$stage/hash"
-    printf '%s\n' "$epoch" > "$stage/preboot"
+    printf '%s\n' "$boot_id" > "$stage/preboot-id"
     printf '%s\n' "$(($(date +%s) + $3))" > "$stage/deadline"
     sha256 -q /usr/local/etc/gonf-network-migration.conf > "$stage/config-hash"
     sha256 -q "$helper" > "$stage/helper-hash"
@@ -478,34 +488,36 @@ guard_restore() (
 
 guard_claim_present() {
     [ -e "$guard/claim-started" ] || [ -L "$guard/claim-started" ] ||
-        [ -e "$guard/boot-epoch" ] || [ -L "$guard/boot-epoch" ]
+        [ -e "$guard/boot-id" ] || [ -L "$guard/boot-id" ]
 }
 
 guard_claim_valid() (
     guard_private "$guard/claim-started"
-    guard_private "$guard/boot-epoch"
-    claim=$(cat "$guard/boot-epoch")
-    case $claim in ''|*[!0-9]*) exit 1;; esac
-    [ "$claim" != "$(cat "$guard/preboot")" ]
+    guard_private "$guard/boot-id"
+    claim=$(cat "$guard/boot-id")
+    guard_id_valid "$claim" || exit 1
+    [ "$claim" != "$(cat "$guard/preboot-id")" ]
 )
 
 guard_boot() (
     [ -e "$guard" ] || [ -L "$guard" ] || return 0
     guard_check
-    epoch=$(guard_epoch)
     if [ "$(date +%s)" -ge "$(cat "$guard/deadline")" ] || [ -e "$guard/restoring" ]; then
         guard_restore boot; return
     fi
+    if ! boot_id=$(guard_boot_id); then
+        guard_restore boot; return
+    fi
     if guard_claim_present; then
-        if ! guard_claim_valid || [ "$(cat "$guard/boot-epoch")" != "$epoch" ]; then
+        if ! guard_claim_valid || [ "$(cat "$guard/boot-id")" != "$boot_id" ]; then
             guard_restore boot
         fi
         return
     fi
-    [ "$epoch" != "$(cat "$guard/preboot")" ] || fail 'guard requires a new kernel'
+    [ "$boot_id" != "$(cat "$guard/preboot-id")" ] || fail 'guard requires a new kernel'
     touch "$guard/claim-started"; sync
-    printf '%s\n' "$epoch" > "$guard/boot-epoch.tmp"
-    mv "$guard/boot-epoch.tmp" "$guard/boot-epoch"
+    printf '%s\n' "$boot_id" > "$guard/boot-id.tmp"
+    mv "$guard/boot-id.tmp" "$guard/boot-id"
     sync
 )
 
@@ -515,7 +527,8 @@ guard_release() (
     [ "$(date +%s)" -lt "$release_deadline" ] || fail 'guard expired; restore required'
     [ ! -e "$guard/restoring" ] || fail 'guard restoration has started'
     guard_claim_valid || fail 'guard boot claim is incomplete'
-    [ "$(guard_epoch)" = "$(cat "$guard/boot-epoch")" ] || fail 'guard boot identity changed'
+    boot_id=$(guard_boot_id) || fail 'kernel boot identity unavailable; restore required'
+    [ "$boot_id" = "$(cat "$guard/boot-id")" ] || fail 'guard boot identity changed'
     archive=$(mktemp -d "$state/confirmed-boot-released-$(date +%s).XXXXXX")
     guard_new_primary
     # The final runtime query can outlast the lease while this lock is held.
@@ -554,7 +567,8 @@ case "${1:-}" in
         if [ -d "$guard" ]; then
             guard_check
             if [ "$(date +%s)" -ge "$(cat "$guard/deadline")" ] || [ -e "$guard/restoring" ] ||
-                { guard_claim_present && { ! guard_claim_valid || [ "$(cat "$guard/boot-epoch")" != "$(guard_epoch)" ]; }; }; then
+                ! boot_id=$(guard_boot_id) ||
+                { guard_claim_present && { ! guard_claim_valid || [ "$(cat "$guard/boot-id")" != "$boot_id" ]; }; }; then
                 guard_restore runtime
             fi
         fi

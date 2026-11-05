@@ -8,6 +8,18 @@ the separate v2 retry proved native guard expiry. See
 No primary confirmation, guard activation or confirmed-NEW reboot is authorized
 by this file. Root reviews the exact native slice separately.
 
+Native retry and deployment are currently **on HOLD**. The deployed2fb helper
+uses estimated `kern.boottime` as identity; its one-second change in the same
+running boot refused the next installation before any object was created.
+The unchanged-helper fixture also reproduces false OLD recovery after a clock
+correction and false NEW release on a different boot with the same timestamp.
+FreeBSD's [timecounter source](https://raw.githubusercontent.com/freebsd/freebsd-src/releng/15.0/sys/kern/kern_tc.c)
+explains why boot time changes with wall-clock adjustments. The source fix under
+review instead uses the [cached16-byte kernel boot ID](https://raw.githubusercontent.com/freebsd/freebsd-src/releng/15.0/sys/kern/kern_mib.c),
+read through `sysctl -b`, with producer status and exact length checked before
+hashing. Historical receipts retain their actual timestamps; they did not
+capture this new identity field and are not rewritten to claim otherwise.
+
 ## Minimal source contract
 
 The separate `/var/db/gonf-network-migration/confirmed-boot-guard` holds a
@@ -27,12 +39,21 @@ archives are not silently chmodded or adopted to pass this admission.
 
 A complete private preparing directory is validated before atomic publication
 and sync. Failed copying/validation cannot publish a partly armed guard. The
-fixed120..900-second lifetime is not renewed by retries. One fresh kernel epoch
-may be claimed, with durable intent/epoch records. Same-kernel reentry is
+fixed120..900-second lifetime is not renewed by retries. The revised source
+claims one fresh kernel boot identity, with durable intent/ID records; wall-clock
+epochs remain date evidence and deadlines, never identity. Same-kernel reentry is
 idempotent; expiry, a second kernel, or interrupted/malformed/nonprivate claims
 restore OLD through the validated backup. A restoring marker keeps partial
 runtime recovery retryable even before the deadline. The original archive is
 never the mutable restore workspace.
+
+An unavailable or malformed opaque ID must restore trusted OLD during early
+boot and active-guard watchdog execution. Release refuses unavailable identity
+and keeps recovery armed; arm publishes nothing on extraction failure. The
+minimal `random` rc dependency stays before NETIF and does not replace this
+fail-closed requirement: entropy seeding may still be unavailable. New native
+acceptance requires a separately reviewed stable-ID consumer/context bundle and
+fresh actual schedules/stamps after the local-day boundary.
 
 Release requires a complete new-kernel claim, the same current kernel, NEW
 persistent/runtime primary/default and retained OLD alias. It checks the clock

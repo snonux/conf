@@ -1,6 +1,6 @@
 #!/bin/sh
 # PROVIDE: gonf_network_rollback
-# REQUIRE: FILESYSTEMS
+# REQUIRE: FILESYSTEMS random
 # BEFORE: netif routing
 # KEYWORD: nojail
 # shellcheck source=/dev/null

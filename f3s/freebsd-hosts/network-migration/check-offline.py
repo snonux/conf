@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise the shell transaction with disposable command fixtures, never SSH."""
+import hashlib
 import json
 import os
 import shlex
@@ -30,7 +31,13 @@ elif cmd == 'sha256':
 elif cmd == 'stat':
     target=Path(a[-1]); uid=1001 if s.get('untrusted_path')==str(target) else 0
     print(str(uid)+':0:'+oct(target.stat().st_mode & 0o777)[2:])
-elif cmd == 'sysctl': print('{ sec = '+str(s.get('boot_epoch',100))+', usec = 0 }')
+elif cmd == 'sysctl':
+    if a == ['-b','kern.boot_id']:
+        data=bytes.fromhex(s.get('boot_id','01'*16)); size=s.get('boot_id_size',16)
+        os.write(1,(data+b'\x00'*max(0,size-len(data)))[:size])
+        rc=s.get('boot_id_status',0)
+    elif a == ['-n','kern.boottime']: print('{ sec = '+str(s.get('boot_epoch',100))+', usec = 0 }')
+    else: raise AssertionError(a)
 elif cmd == 'cp':
     if 'confirmed-boot-preparing.' in a[-1] and s.pop('fail_guard_copy_once',False):
         Path(a[-1]).mkdir(mode=0o700); rc=1
@@ -263,7 +270,7 @@ def main():
 
         def guard_trial(now):
             seed = json.loads(json.dumps(initial))
-            seed.update(now=now, boot_epoch=100, calls=[])
+            seed.update(now=now, boot_epoch=100, boot_id='01'*16, calls=[])
             db.write_text(json.dumps(seed))
             rcconf.write_text(''.join(f'{k}={shlex.quote(v)}\n' for k,v in seed['keys'].items()))
             run('stage'); accepted_stage = run('confirm')
@@ -345,7 +352,7 @@ def main():
 
         name, snapshot, digest, old_stage, new_primary = guard_trial(5000)
         run('arm-confirmed-boot', name, digest, '600')
-        set_fixture(boot_epoch=101, now=5010)
+        set_fixture(boot_epoch=101, boot_id='02'*16, now=5010)
         run('boot'); same_network(new_primary)
         run('boot'); same_network(new_primary)  # Same-kernel replay is harmless.
         # After a genuine new-kernel claim, release must check both surfaces:
@@ -368,8 +375,8 @@ def main():
 
         name, snapshot, digest, old_stage, new_primary = guard_trial(6000)
         run('arm-confirmed-boot', name, digest, '600')
-        set_fixture(boot_epoch=101, now=6010); run('boot')
-        set_fixture(boot_epoch=102)
+        set_fixture(boot_epoch=101, boot_id='02'*16, now=6010); run('boot')
+        set_fixture(boot_epoch=101, boot_id='03'*16)  # Different boot, identical wall-clock estimate.
         run('release-confirmed-boot', ok=False)
         boot_with_cached_rc(old_stage)  # A second NEW boot consumes no new lease.
         assert not guard.exists()
@@ -378,24 +385,24 @@ def main():
         for index, claim in enumerate(('missing','malformed','nonprivate')):
             name, snapshot, digest, old_stage, new_primary = guard_trial(7000+index*100)
             run('arm-confirmed-boot', name, digest, '600')
-            set_fixture(boot_epoch=101)
+            set_fixture(boot_epoch=101, boot_id='02'*16)
             (guard / 'claim-started').touch(mode=0o600)
             if claim != 'missing':
-                (guard / 'boot-epoch').write_text('bad\n' if claim=='malformed' else '101\n')
-                (guard / 'boot-epoch').chmod(0o644 if claim=='nonprivate' else 0o600)
+                (guard / 'boot-id').write_text('bad\n' if claim=='malformed' else hashlib.sha256(bytes.fromhex('02'*16)).hexdigest()+'\n')
+                (guard / 'boot-id').chmod(0o644 if claim=='nonprivate' else 0o600)
             boot_with_cached_rc(old_stage)
             assert not guard.exists()  # Interrupted claim forces OLD before netif.
 
         name, snapshot, digest, old_stage, new_primary = guard_trial(8000)
         run('arm-confirmed-boot', name, digest, '120')
-        set_fixture(boot_epoch=101, now=8121)
+        set_fixture(boot_epoch=101, boot_id='02'*16, now=8121)
         run('release-confirmed-boot', ok=False)
         boot_with_cached_rc(old_stage); assert not guard.exists()
 
         name, snapshot, digest, old_stage, new_primary = guard_trial(9000)
         run('arm-confirmed-boot', name, digest, '600')
         (guard / 'claim-started').touch(mode=0o600)
-        set_fixture(boot_epoch=101)
+        set_fixture(boot_epoch=101, boot_id='02'*16)
         run('watchdog'); same_network(old_stage)  # Retry an interrupted boot claim.
 
         print('PASS: one-boot allowance, release, expired boot and interrupted claims', flush=True)
@@ -423,7 +430,7 @@ def main():
 
         name, snapshot, digest, old_stage, new_primary = guard_trial(12000)
         run('arm-confirmed-boot', name, digest, '600')
-        set_fixture(boot_epoch=101, now=12010); run('boot')
+        set_fixture(boot_epoch=101, boot_id='02'*16, now=12010); run('boot')
         deadline = int((guard / 'deadline').read_text())
         set_fixture(advance_default_query_to=deadline)
         run('release-confirmed-boot', ok=False)  # Last runtime query crosses deadline.
@@ -431,6 +438,64 @@ def main():
         run('watchdog'); same_network(old_stage)
 
         print('PASS: partial restore retry, immutable input and deadline-crossing release', flush=True)
+
+        # Kernel identity is independent of the wall-clock boot-time estimate.
+        name, snapshot, digest, old_stage, new_primary = guard_trial(13000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_epoch=101, now=13010)  # Clock correction, no actual new boot ID.
+        run('boot', ok=False)
+        assert guard.exists() and not (guard / 'claim-started').exists()
+        assert not (guard / 'boot-id').exists()
+        same_network(new_primary)
+        run('restore-confirmed-boot'); same_network(old_stage)
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(14000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_id='02'*16, now=14010)  # New boot ID, unchanged boot_epoch=100.
+        run('boot'); same_network(new_primary)
+        assert (guard / 'boot-id').read_text().strip() == hashlib.sha256(bytes.fromhex('02'*16)).hexdigest()
+        set_fixture(boot_epoch=101)
+        run('watchdog'); same_network(new_primary)
+        set_fixture(boot_epoch=99)
+        run('boot'); same_network(new_primary)
+        run('release-confirmed-boot')
+        assert not guard.exists()
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(15000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_id='02'*16, now=15010); run('boot')
+        set_fixture(boot_id='03'*16)  # A second boot still reports boot_epoch=100.
+        run('release-confirmed-boot', ok=False)
+        assert guard.exists()
+        run('watchdog'); same_network(old_stage)
+
+        # Preserve producer failure even if sysctl writes a complete 16-byte ID.
+        invalid_ids = ({'boot_id_size':0}, {'boot_id_size':15}, {'boot_id_size':17},
+                       {'boot_id_size':0, 'boot_id_status':1},
+                       {'boot_id_size':16, 'boot_id_status':1})
+        for index, invalid in enumerate(invalid_ids):
+            name, snapshot, digest, old_stage, new_primary = guard_trial(16000+index*100)
+            set_fixture(**invalid)
+            run('arm-confirmed-boot', name, digest, '600', ok=False)
+            assert not guard.exists() and not list(state.glob('boot-id.*'))
+            same_network(new_primary)
+            set_fixture(boot_id_size=16, boot_id_status=0)
+            run('arm-confirmed-boot', name, digest, '600')
+            set_fixture(boot_id='02'*16, **invalid)
+            boot_with_cached_rc(old_stage)  # Includes unavailable/unseeded entropy.
+            assert not guard.exists() and not list(state.glob('boot-id.*'))
+
+        name, snapshot, digest, old_stage, new_primary = guard_trial(17000)
+        run('arm-confirmed-boot', name, digest, '600')
+        set_fixture(boot_id='02'*16); run('boot')
+        set_fixture(boot_id_status=1, boot_id_size=16)
+        run('release-confirmed-boot', ok=False)
+        assert guard.exists()
+        run('watchdog'); same_network(old_stage)
+        assert not list(state.glob('boot-id.*'))
+
+        print('PASS: stable opaque boot identity, clock correction, identical-epoch boots,', flush=True)
+        print('strict producer/size admission, early entropy failure and watchdog recovery', flush=True)
 
         # Native SLAAC ownership and lifetimes must survive detached rollback,
         # with time spent in the trial deducted rather than renewed forever.
