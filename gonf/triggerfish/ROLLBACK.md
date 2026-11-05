@@ -7,12 +7,21 @@ The first acceptance attempt hit a startup handshake delay and was left
 unconfirmed. After recreating only the controller's temporary wg2, a new
 post-activation handshake and held fresh old/VPN SSH receipts passed; token
 `t14-vpn-accept2-20261105` was confirmed. Final fresh old/VPN reconnects passed.
-Controller routing/AllowedIPs remain restricted to `10.99.0.1/32`; DNS, default
-route and wg1 were preserved. Phone, real reboot and igc1 recovery are untested.
-The resolver changes below are prepared, not installed; no physical profile
-has been activated. Task l14 implements recovery; t14/u14 own bounded live proof.
-The inactive profile renderer supplies configuration input. Physical cable and
-recovery-path acceptance gates remain in the IQ router plan.
+The router-only `shared-igc0` profile subsequently passed a 300-second native
+cron-expiry trial (`t14-shared-expiry3-20261105`), including original static
+addresses/routes, managed SLAAC ownership, PF rules/table presence, service and
+resolver restoration. Distinct token `t14-shared-accept3-20261105` passed fresh
+old/new/VPN socket proofs, DNS/ntpd resolution, public IPv4 egress and host-health
+checks, then confirmation. No rollback is pending.
+
+The laptop's root-private `/etc/wireguard/wg2.conf` is enabled through
+`wg-quick@wg2`, with routes to the router VPN, lab, recovery and two Shelly
+addresses. Its DNS, default routes, old management IPv4 and wg1 are unchanged.
+The automatic upstream DHCPv6 host lease rotated during this session; it was
+recorded separately from migration changes. The phone remains dormant.
+Host renumbering, forwarded new-host NAT, actual reboot and physical igc1
+recovery are still unproved. No AP or cable changes occurred. Task l14 supplies
+the recovery controller; t14/u14 own its bounded native deployment and proof.
 
 `VPN.Candidate`, registered separately as an operational task, reads the private
 logical secret `paths.TriggerfishSecret("hostname.wg2")` and stages only
@@ -107,7 +116,7 @@ service-generated rewrite. The early boot hook clears cached `resolvd_flags`
 before reparsing restored rc configuration. Setup upgrades the exact previous
 bootstrap hook only with no pending trial; altered hook blocks refuse.
 
-The next reviewed live step is limited to the router's `shared-igc0` profile:
+The reviewed router-only `shared-igc0` activation sequence is:
 
 1. Recheck fresh old/VPN SSH, confirmed/no-pending bootstrap, handshake,
    controller route and unchanged physical cabling. Capture router running and
@@ -277,8 +286,8 @@ solicitation must recover their managed /64 prefixes with positive lifetimes
 within ten seconds. Privacy suffixes may rotate. Activation disables both
 autoconfiguration policies, drains in-flight proposals within a bounded loop
 and refuses unexpected remaining IPv6 addresses before acceptance.
-The timed/boot canaries still need to establish actual remote recovery and
-service behavior; offline fixtures cannot establish that outcome.
+The timed shared-profile canary passed as recorded above. Actual reboot and
+physical recovery remain later gates; offline fixtures cannot establish them.
 
 `checks/rollback.ksh CONTROLLER PROFILE_DIRECTORY` runs on OpenBSD under root
 using a disposable rewritten filesystem and mocked mutation commands. It uses
