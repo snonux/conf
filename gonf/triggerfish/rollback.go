@@ -115,8 +115,14 @@ func (Rollback) Confirm() { trialCommand("confirm", false) }
 // OptsRestore excludes explicit restoration from routine deployment.
 func (Rollback) OptsRestore() TaskOptions { return TaskOptions{Operational()} }
 
-// Restore reapplies the saved persistent and running state idempotently.
-func (Rollback) Restore() { Sh(rollbackCommand + " restore") }
+// Restore queues an independent restore attempt with a private diagnostic log.
+func (Rollback) Restore() {
+	// Restoring PF flushes the SSH session that delivered this task. Keep the
+	// attempt independent of that session; the existing journal/cron still owns
+	// retries, and Status must prove completion rather than this launch returning.
+	Command("sh", List("-c", "umask 077; /usr/bin/nohup "+rollbackCommand+
+		" restore </dev/null >/etc/gonf/router-restore.log 2>&1 &"))
+}
 
 func trialCommand(action string, profile bool) {
 	EachHost(func(t RouterTrial) {

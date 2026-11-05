@@ -234,7 +234,11 @@ The root cron `tick` restores expired trials independently of SSH, within one
 minute of the persisted deadline. It can terminate an overrun activation before
 restoring. A reboot with any pending marker immediately restores persisted
 files before networking starts, regardless of the deadline. Explicit `Restore`
-restores files plus captured runtime state and can be repeated after failure.
+launches a detached attempt, writing a root-private
+`/etc/gonf/router-restore.log`, so PF reload cannot terminate its delivering
+SSH session and the recovery attempt together. Require restored/no-pending
+`Status`; launch success alone does not prove completion. Failed attempts keep
+the journal armed for cron, and can be repeated.
 It recreates only the physical interfaces/routes it owns; no global route flush
 or tunnel reconfiguration occurs. Runtime/persistent address drift is preserved
 separately instead of assuming saved hostname files reproduce runtime state.

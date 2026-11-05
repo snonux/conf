@@ -45,7 +45,7 @@ func (Rollback) DescReadiness() string {
 }
 
 func (Rollback) DescRestore() string {
-	return "Reapplies the saved persistent and running state idempotently"
+	return "Queues an independent restore attempt with a private diagnostic log"
 }
 
 func (Rollback) DescSetup() string { return "Installs the durable timer and early boot recovery hook" }
