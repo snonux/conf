@@ -1,15 +1,16 @@
 # Device recovery preparation (s14)
 
-Initial read-only discovery on **2026-11-05**, followed by the reviewed
-temporary JetKVM SSH inspection trials recorded below. Each restored
-the original key and developer-mode state. No networking, script, schedule,
-output, power, USB or firmware state was changed and no device was rebooted.
-This is preparation, **not accepted rollback proof**.
-Keep s14 open and block device renumbering until the tests below pass.
+Initial read-only discovery on **2026-11-05** preceded the reviewed temporary
+JetKVM developer-access inspections, which restored the original key and mode.
+The user subsequently approved the Shelly Matter transition and fully-down
+MCU/control maintenance window. Its actual native checkpoints are recorded in
+[Shelly acceptance](SHELLY-NATIVE-2026-11-05.md). Keep s14 open until every
+device's required native rollback and service checks have passed.
 
 ## Installed evidence
 
-Both authenticated Shelly Plug M Gen3 devices report model S3PL-30110EU,
+**Discovery baseline before the approved transition:** both authenticated
+Shelly Plug M Gen3 devices reported model S3PL-30110EU,
 firmware 2.1.0, digest authentication enabled, output on, `initial_state=off`,
 Matter enabled, zero scripts and one existing schedule. Both have current
 system time and `restart_required=false`. Station 0 is static at the retained
@@ -162,7 +163,7 @@ mutation or reboot implementation. Root coordinates timing with host trials.
    mode would prevent an armed rollback, defer cleanup until it is confirmed
    and disarmed. Keep old allocations until explicit retirement.
 
-**Current blockers:** no proven Matter-preserving Shelly boot restore;
+**Initial discovery blockers:** no proven Matter-preserving Shelly boot restore;
 Schedule offline-boot behavior untested; JetKVM's installed userdata boot hook
 is verified on one canary, but no recovery helper is installed or exercised.
 Safe owner restart/watchdog behavior and deterministic old DHCP recovery remain
@@ -343,11 +344,12 @@ request terminal, developer mode false, TCP22 closed, original empty key
 restored, and identity/USB/video checks passed. No hook or rollback was
 installed. v4's exit1 only reflects the absent optional hook-directory listing.
 
-## Conditional Matter-off Shelly script proposal (not authorized)
+## Matter-off Shelly transition design (approved 2026-11-05)
 
-This is a concrete alternative if Matter-on Schedule cannot meet boot
-recovery. It is **not** a request to disable Matter or perform a reboot now.
-The IQ approval gate still applies. Current metadata is zero enrolled fabrics
+The user approved this transition and its fully shut-down MCU/control window
+on 2026-11-05. Actual execution is tracked in the linked native record above;
+the design below preserves the original rationale and guarded protocol.
+The required IQ approval was obtained. Pre-transition metadata was zero enrolled fabrics
 on both devices, but disabling the feature changes integration capability.
 Neither fabric reset nor pairing-code access is needed.
 

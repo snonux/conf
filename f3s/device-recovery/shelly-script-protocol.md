@@ -1,7 +1,9 @@
-# Prepared Shelly IPv4 rollback script
+# Shelly IPv4 rollback script protocol
 
-`shelly-network-recovery.js` is reviewable offline code, not an installed script.
-It deliberately refuses to arm until EXPECTED_ID is replaced with the exact
+`shelly-network-recovery.js` is the reviewed template source. The approved
+native deployment and acceptance checkpoints are in
+[the dated record](SHELLY-NATIVE-2026-11-05.md). It deliberately refuses to arm
+until EXPECTED_ID is replaced with the exact
 independently authenticated device ID. It supports the current static IPv4
 station configuration; DHCP restoration is refused because its old address
 would not be deterministic. It never handles Wi-Fi credentials or output state.
@@ -33,7 +35,7 @@ documented interpreter; Node fixtures do not prove firmware compatibility.
 Script.storage is documented before installed2.1.0, but Matter-off script
 availability and exact runtime behavior still require installed verification.
 
-## Guarded controller sequence (not executed)
+## Guarded controller sequence
 
 1. Root finishes serial host rollback trials and schedules safe shutdown of
    workloads, VMs and f0–f3. Prove that router/AP/Pis/controller access is
@@ -171,5 +173,6 @@ exists. No device is contacted by these tests.
 
 Fixtures do not prove installed interpreter compatibility, flash durability,
 boot execution, runtime route application, uninterrupted relay behavior or
-remote connectivity. Those remain guarded live tests, with Matter still on
-and no recovery script currently installed on either actual device.
+remote connectivity. The separate dated native record establishes which
+installed-device checks actually passed in the approved window; thirteen
+offline scenarios alone are not native acceptance.
