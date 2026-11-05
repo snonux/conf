@@ -1,16 +1,18 @@
 # JetKVM additive runtime evidence — 2026-11-05
 
 Task s14 remains open. **First-device IPvlan fixed HTTP/SSH/media and independent
-expiry/cleanup passed in v26. Boot, DHCP-owner and fleet acceptance remain open;
-no primary renumbering is accepted.**
+expiry/cleanup passed in v26. v28 proved same-generation keep/repeat keep,
+DHCP renew before/after keep and typed cleanup twice, but its former-deadline
+video proof failed with zero RTP. Boot and fleet acceptance remain open; no
+primary renumbering is accepted.**
 
 Only `e10a0883debf7d4a`, originally `192.168.1.241`, was tested. Its verified
 ARMv7/5.10.160 device received the root-private helper binary/profile; `-version`
 returned 0.1.0. IQ owns the reserved management rows. The initial macvlan shared-igc0
 profile used `192.168.11.140/24`, MAC `02:52:53:08:97:97`, gateway `.11.2`,
 table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
-MAC and original addresses/default remained unchanged. No hook, boot allowance,
-primary transaction, management receipt or confirmation was installed/issued.
+MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
+transaction, management receipt or confirmation.
 
 ## Historical macvlan runtime outcome
 
@@ -166,6 +168,64 @@ This accepts the first device's runtime IPvlan fixed path and detached expiry,
 not persistent native recovery. Vendor DHCP/default/original addresses remained
 unchanged. No primary or full-acceptance receipt exists.
 
+## v28 confirmed runtime: partial proof, overall acceptance FAILED
+
+One root-reviewed complete serial protocol ran after actual scheduled host-job
+completion and exclusive-window clearance. It used installed binary
+`a0857114…389c14b`, unchanged profile `2815fbf4…a3d91`, a fresh generation and
+original110-second deadline, no boot allowance/hook/receipt/primary operation.
+Before mutation it archived the complete prior terminal store and checked both
+global modules absent, no parent upper links, factory MAC/OEM hash and ORIGINAL
+parent semantics. Namespace API remained unavailable and was not claimed verified.
+
+The following actual native proofs passed:
+
+- Pending bootstrap, validated DHCP-owner SIGUSR1 and new bound/renew lease output;
+  fixed HTTP/SSH, exact authorization restoration before RTC takeover, forced
+  `10.99.0.2 → 192.168.11.140` UDP/data/decoded H264 frame and origin birth gone.
+- Same-generation keep before deadline, actual confirmed=true with original
+  deadline and allowance=false, repeat keep with unchanged active/deadline/
+  owned/worker identity, then worker birth gone. No bootstrap-after-keep call ran;
+  its refusal remains source-test coverage only.
+- A second validated owner SIGUSR1 and actual changed lease output after keep,
+  preserving PID/birth, old lease network semantics and network settings, followed
+  by fresh fixed-address decoded media. The signal command rechecked exact
+  owner PID/birth/argv and pinned selected DHCP handler; the app's cached-PID RPC
+  was not used. This is renew proof, not rebind or carrier/boot acceptance.
+
+The separate former-deadline observer FAILED its decoded-video requirement.
+Fresh HTTP login/device identity succeeded. Its fresh RTC had ICE completed,
+DTLS connected, the exact nominated fixed UDP pair, data-channel identity,
+version, USB and video-ready=true, but received ZERO decrypted RTP packets/bytes,
+zero assembled frames and zero decoded frames before frame TimeoutError. It is
+not a demonstrated decoder-buffer failure. Immediate post-keep video had passed.
+The cached video-ready flag is insufficient evidence of active streaming.
+No jitter/budget increase, video control RPC, setting change, network repair or
+retry followed this failed proof.
+
+Mandatory actual-state terminal triage still ran: confirmed=true/expired=false,
+fresh postformer fixed HTTP/SSH passed, `canary-cleanup` returned twice, and all21
+confirmed-native checks passed. Both modules, child, table1000 and priority1140
+were absent; ownership cleared; worker birth gone; same generation/profile/boot/
+original deadline remained; both parent snapshots matched ORIGINAL semantics.
+Each of the three temporary-auth scopes genuinely drained its ORIGINAL enable
+future, restored exact empty key/false mode/closed22, and passed all nine fresh
+old HTTP/newRTC/identity/version/USB/video/access checks.
+
+Exact controller BOOTTIME witnesses (seconds): Ready116680.034; fixed transport
+116681.118; auth clean116681.324; first media proof116682.893; origin exit0
+116688.945; confirm phase exit0 116712.698; conservative former-deadline boundary
+116797.042; postconfirm observer terminal116803.396; final native terminal
+116824.036. Both40-second nonpromiscuous router header captures listened before
+origin and bracketed the actual fixed probes. All owned process groups/streams
+were terminal. Runner exit1 truthfully recorded `passed=false`,
+`former_deadline_survival=false`, `outcome=CONFIRMED_CLEANED`,
+`cleanup_proven=true`, fixed-probe bracket=true and all-processes-terminal=true.
+
+Current native additive state is the confirmed, cleaned v28 terminal record,
+with no native helper network resources. The complete failed and positive proofs
+remain privately preserved. No management/main acceptance receipt was created.
+
 ## Remaining gates
 
 [Confirmed runtime and owner/boot plan](CONFIRMED-NEXT.md) describes the next
@@ -177,13 +237,16 @@ and profile) retained exact inode/content identities; the complete old seven-fil
 v26 store was independently archived on the controller first. Preflight took
 1.450s, staging 3.820s and copy 1.154s. Only `-version` ran, returning 0.1.0.
 Original-parent checks, exact access cleanup and all nine fresh checks passed.
-No cleanup/bootstrap/renew/keep or kernel operation occurred. A confirmed trial
-still needs its separately reviewed driver and root-released window. DHCP renew/rebind/owner reapply, bounded boot with
-actual early MAC ordering, all other devices and the boot-safe full-hook/receipt
-transition remain unproved. Do not broaden ARP/promiscuity/global policy.
+No cleanup/bootstrap/renew/keep or kernel operation occurred during v27 itself.
+v28 subsequently exercised the confirmed runtime above. Its zero-RTP former-
+deadline video failure needs source-grounded session diagnosis and a separately
+reviewed proof before whole confirmed-runtime acceptance. Rebind/carrier owner
+reapply, bounded boot with actual early MAC ordering, all other devices and the
+boot-safe full-hook/receipt transition remain unproved. Do not broaden
+ARP/promiscuity/global policy.
 
 Private evidence remains under `~/.local/state/conf/` in v16/v19 historical
 runtime, v20/v22/v24 read-only, v25 file staging and
 `s14-jetkvm-ipvlan-runtime-v26-20261105/` (including orchestration and separate
-postexpiry). Credentials, key/shadow values, raw application configuration,
+postexpiry), and `s14-jetkvm-confirmed-runtime-v28-20261105/`. Credentials, key/shadow values, raw application configuration,
 video frames and private outputs are not reproduced here.

@@ -1,10 +1,14 @@
 # Next JetKVM confirmed runtime and owner/boot gates
 
 Source-only proposal under s14. Root reviews exact code/drivers and serializes
-all native windows; F3 currently owns the live window. No device access, file
-replacement, lease signal, helper invocation, hook or boot is authorized here.
+all native windows. v28 ran and is terminal; further device access, file
+replacement, lease signal, helper invocation, hook or boot needs its own reviewed
+slice and exclusive-window clearance.
 Only first device e10a0883debf7d4a/.1.241/.11.140 is in scope. v26 accepted
-runtime fixed HTTP/SSH/media and independent expiry, not these later gates.
+runtime fixed HTTP/SSH/media and independent expiry. v28 proved keep/repeat keep,
+owner renew before/after keep and typed cleanup twice, but FAILED the former-
+deadline decoded-video proof; its terminal state is confirmed and cleaned. See
+[NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
 ## Source contract and the narrow cleanup addition
 
@@ -34,7 +38,7 @@ runtime fixed HTTP/SSH/media and independent expiry, not these later gates.
 
 Root reviewed/committed the cleanup source as `0da9417`; v27 installed binary
 SHA `a0857114…389c14b` without changing profile or terminal journals. The cleanup
-action remains untried; its confirmed runtime driver still needs review. Tests cover both
+action returned twice during actual v28 confirmed cleanup. Tests cover both
 terminal states, repeated cleanup, pending refusal, pending-primary/hash/boot/
 foreign failures, retry and selected/pre-existing/foreign module preservation.
 
@@ -59,12 +63,13 @@ only the installer-owned temporary inode on failure; unknown drift stops.
 No kernel/helper action beyond -version. New rollout needs its own reviewed
 short exec/stdin and exact access cleanup; no implicit reuse of v25 permission.
 
-For the subsequent fresh runtime generation, privately archive the known v26
-terminal metadata, then atomically replace ONLY authorization input as in v19.
-Keep old active/owned/lock records; StartCanary accepts a DIFFERENT generation
-because old active is expired. No journal deletion, manual reset or receipt.
+v28 privately archived the expired v26 terminal beforeimage, then replaced ONLY
+authorization input. Current v28 active state is CONFIRMED and cleaned, not
+expired. Do not reuse the expired-generation transition or blindly reset its
+journals for another trial. Any future generation needs a separately reviewed
+terminal-store transition preserving complete evidence; no receipt is implied.
 
-## Proposed confirmed runtime and owner-renew slices
+## Reviewed v28 runtime protocol and remaining acceptance
 
 Use exact actual CPU/ABI/profile/module pins and original parent baseline.
 Require global IPvlan/macvlan absence, absent parent upper links and serialized
@@ -105,6 +110,14 @@ settings. No boot allowance/hook during this runtime protocol.
    unchanged DHCP/network settings/default, USB/version/video and all nine fresh
    old-access checks. Do NOT reuse v26's expired=true validator for confirmed
    cleanup. Archive the complete terminal evidence; no full receipt follows.
+
+The actual v28 renew command bound the selected owner PID/birth/exact argv and
+pinned selected handler immediately before direct SIGUSR1. This avoided the
+app object's cached PID-only RPC target; readonly network settings and changed
+lease output verified completion before and after keep. The original protocol
+above is retained as the reviewed sequence, not a whole acceptance claim. The
+former-deadline decoded frame remains failed (zero RTP), although fixed HTTP/SSH,
+exact UDP/data and deliberate typed cleanup passed.
 
 The concrete renew source is pinned app0.5.10
 `f152581df82c519ecc4349f471dfc8612fbf0c48`:

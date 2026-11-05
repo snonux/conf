@@ -251,7 +251,7 @@ Do not retain an existing WebRTC session as proof. Do not operate host power.
 Keep all old allocations and the current-cabling recovery path until its separate
 retirement gate. The future igc1 transition is outside this profile's support.
 
-## Explicit IPvlan L2 candidate (files installed; kernel untried)
+## Explicit IPvlan L2 (first runtime/expiry passed)
 
 The optional `kind=ipvlan` selects only `/oem/usr/ko/ipvlan.ko` and its matching
 module query/unload; macvlan ownership remains separate. It inherits the actual
@@ -269,11 +269,14 @@ The IPvlan helper/profile was installed by reviewed v25 file-only staging. v26
 then passed first-device runtime fixed HTTP/SSH/media plus independent expiry
 and cleanup. Boot/DHCP-owner/fleet acceptance remain open.
 
-## Terminal runtime cleanup (installed, native action untried)
+## Terminal runtime cleanup (native confirmed cleanup tried twice)
 
 `jkrecover -device ID canary-cleanup` was added in root source `0da9417` and
-staged by v27 binary-only rollout (SHA `a0857114…389c14b`). Only `-version` ran;
-the cleanup action itself remains untried. It takes the existing Store lock, refuses a pending or
+staged by v27 binary-only rollout (SHA `a0857114…389c14b`). v28 subsequently
+invoked cleanup twice on its actual confirmed generation; both returned and all21
+native terminal checks passed. The whole v28 trial still FAILED its former-
+deadline decoded-video proof (zero RTP), so this is cleanup evidence only.
+It takes the existing Store lock, refuses a pending or
 invalid primary state, requires matching profile/current boot and a confirmed OR
 expired additive record, then invokes existing typed `Adapter.Cleanup`. It never
 confirms/expires a pending canary, extends a deadline, stops the vendor app or
