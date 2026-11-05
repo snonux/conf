@@ -282,6 +282,11 @@ retroactively accepts the failed v28 fixed-path former-deadline frame.
 v31 subsequently preserved the complete confirmed-cleaned seven-file store in
 an inert native sibling plus independent controller archive, then staged only
 the SAME binary/profile in a fresh default directory; no new canary ran.
+A separate v32 generation then PASSED the complete first-device confirmed
+runtime with explicit producer-startup9s plus decode5s inside14s, all three fixed
+media phases, owner renew before/after keep, keep/repeat and actual typed cleanup
+twice/native21. Current default is v32 confirmed-and-cleaned; boot/fleet remain
+open and v28/v29 failures remain preserved.
 It takes the existing Store lock, refuses a pending or
 invalid primary state, requires matching profile/current boot and a confirmed OR
 expired additive record, then invokes existing typed `Adapter.Cleanup`. It never

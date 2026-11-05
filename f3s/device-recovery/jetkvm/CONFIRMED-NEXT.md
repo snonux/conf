@@ -1,13 +1,15 @@
 # Next JetKVM confirmed runtime and owner/boot gates
 
 Source-only proposal under s14. Root reviews exact code/drivers and serializes
-all native windows. v28 ran and is terminal; further device access, file
+all native windows. v32 ran and is terminal; further device access, file
 replacement, lease signal, helper invocation, hook or boot needs its own reviewed
 slice and exclusive-window clearance.
 Only first device e10a0883debf7d4a/.1.241/.11.140 is in scope. v26 accepted
 runtime fixed HTTP/SSH/media and independent expiry. v28 proved keep/repeat keep,
 owner renew before/after keep and typed cleanup twice, but FAILED the former-
-deadline decoded-video proof; its terminal state is confirmed and cleaned. See
+deadline decoded-video proof. A separate v32 generation later PASSED all three
+fixed media phases with explicit startup/decode timing, renew/keep/repeat and
+typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
 ## Source contract and the narrow cleanup addition
@@ -67,11 +69,14 @@ v28 privately archived the expired v26 terminal beforeimage, then replaced ONLY
 authorization input. Current v28 active state was CONFIRMED and cleaned, not
 expired. Reviewed actual v31 archived that WHOLE seven-file store under its
 stable lock to `/userdata/jkrecover-confirmed-cleaned-s14-v31-20261105`, retaining
-all identities/bytes plus an independent controller archive. Current default
-has only the SAME binary/profile bytes, no journals or authorization; ONLY-version
+all identities/bytes plus an independent controller archive. At v31 terminal the default
+had only the SAME binary/profile bytes, no journals or authorization; ONLY-version
 ran. Exact auth cleanup and fresh9 passed. This was an explicit file-only
-transition, not an expired-generation shortcut or runtime grant. Proposed v32
-requires fresh two-file admission and separate full-protocol review/GO.
+transition, not an expired-generation shortcut or runtime grant. Subsequent v32
+required fresh two-file admission and separate full-protocol review/GO, and has
+now passed. Current default again holds a confirmed-and-cleaned SEVEN-file v32
+terminal store; preserve it and its original deadline/boot/evidence. Do not
+reuse fresh-two-file or expired-state admission without a reviewed transition.
 
 ## Reviewed v28 runtime protocol and remaining acceptance
 
@@ -119,7 +124,7 @@ The actual v28 renew command bound the selected owner PID/birth/exact argv and
 pinned selected handler immediately before direct SIGUSR1. This avoided the
 app object's cached PID-only RPC target; readonly network settings and changed
 lease output verified completion before and after keep. The original protocol
-above is retained as the reviewed sequence, not a whole acceptance claim. The
+above is retained as the reviewed sequence, not a whole acceptance claim. The v28
 former-deadline decoded frame remains failed (zero RTP), although fixed HTTP/SSH,
 exact UDP/data and deliberate typed cleanup passed.
 
@@ -139,7 +144,7 @@ eth0 addresses. A first-device udhcpc renew is not jetdhcpc, rebind/expiry or
 carrier-down/up acceptance. Do not call setNetworkSettings/toggleDHCPClient,
 release leases, killall, full RkLunch or its stop script as a narrow owner test.
 
-## Current video follow-up — old-path timing passed, fixed proof open
+## Video timing follow-up — separate v32 fixed runtime passed
 
 v29 reproduced zero-RTP/frame failure on a single cold fresh OLD-path view,
 without a preceding capture PC. HTTP/exact UDP/data proofs passed; streaming was
@@ -152,9 +157,10 @@ session start+9s, then measured the unchanged5s decode limit inside14s media
 frame5.805s,186 RTP packets/208,250 bytes,12 assemblies and zero decoder warnings.
 The concurrent sleep getter still timed out independently; actual sleep state
 remains unknown. PC/wrappers/process closed. This is a new measured startup
-protocol, not a relabeling of v28/v29 failures. It does not accept the failed
-fixed former-deadline frame; that needs its own reviewed native slice and safe
-terminal-store transition. No setter/IDR/control RPC or decoder/network repair
+protocol, not a relabeling of v28/v29 failures. It did not accept the failed v28 fixed former-deadline frame. Separate reviewed
+v32 then passed all three fresh fixed media phases using explicit9+5 inside14,
+including first postformer RTP5.721s/frame5.908s. Original/auth cleanup and native
+cleanup twice/21 passed. V28/v29 failures remain preserved; no boot proof follows. No setter/IDR/control RPC or decoder/network repair
 is authorized by these diagnostics.
 
 ## Separate bounded boot gate — currently HOLD

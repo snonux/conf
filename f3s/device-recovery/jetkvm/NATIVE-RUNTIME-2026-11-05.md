@@ -3,7 +3,9 @@
 Task s14 remains open. **First-device IPvlan fixed HTTP/SSH/media and independent
 expiry/cleanup passed in v26. v28 proved same-generation keep/repeat keep,
 DHCP renew before/after keep and typed cleanup twice, but its former-deadline
-video proof failed with zero RTP. Boot and fleet acceptance remain open; no
+video proof failed with zero RTP. A separate v32 trial subsequently PASSED the
+whole first-device confirmed runtime under explicit startup/decode timing.
+Boot and fleet acceptance remain open; no
 primary renumbering is accepted.**
 
 Only `e10a0883debf7d4a`, originally `192.168.1.241`, was tested. Its verified
@@ -302,11 +304,66 @@ PC/SSH/processes closed; no new generation/authorization/helper network action,
 module, DHCP signal, hook, receipt or boot occurred. No migration acceptance is
 implied by this evidence-preserving file transition.
 
-A separate SOURCE-ONLY v32 proposal will require this fresh two-file layout and
-apply explicit9s producer readiness plus5s decode inside14s in all three fresh
-fixed-media phases. Same-generation keep/repeat/validated owner renewals and
-mandatory actual confirmed cleanup twice/native21/fresh9 remain required. It
-has no runtime execution grant from v31 file-only success.
+## v32 complete first-device confirmed runtime: PASS
+
+One separately root-reviewed generation used the actual fresh v31 two-file
+store, SAME a085 binary/profile2815, no boot allowance/hook/receipt/primary change,
+and original device BOOTTIME deadline33,276,000,000,000ns (110s from preflight).
+All three fresh media phases used explicit actual decrypted H264 RTP readiness
+by session start+9s, then the unchanged5s decode limit inside14s total. This is
+a new protocol; prior v28/v29 failed receipts remain failed.
+
+Pending validated owner SIGUSR1/new lease completion, fresh fixed HTTP/SSH,
+original-auth restoration before RTC takeover, exact forced controller
+`10.99.0.2 → 192.168.11.140` UDP/data/video decoded proof and origin birth gone
+before expiry all passed. Same-generation keep and repeat keep passed before
+the original deadline with unchanged active/deadline/owned/worker identity,
+confirmed=true/allowance=false and worker birth gone. A second validated owner
+SIGUSR1 after keep produced actual new bound/renew lease output with stable
+PID/birth/argv and unchanged old lease network semantics/settings. No app cached-
+PID renew RPC, bootstrap-after-keep, release, carrier toggle or setter ran.
+
+Immediate post-keep and separate post-former-deadline fresh fixed HTTP/media
+proofs passed. Fresh postformer HTTP/SSH also passed in actual-state terminal
+triage. All three media sessions proved the exact allowed fixed UDP pair,
+identity/version/USB/video and one decoded H264 frame within existing limits:
+
+| Fresh media phase | First RTP seconds | Frame by seconds | RTP packets/bytes | Initial decoder warnings |
+| --- | ---: | ---: | --- | ---: |
+| Pending | 0.983 | 1.412 | 262 / 283,893 | 15 |
+| Immediate post-keep | 0.720 | 1.263 | 168 / 163,742 | 26 |
+| Beyond former deadline | 5.721 | 5.908 | 187 / 207,568 | 0 |
+
+Warnings were preserved rather than hidden. Initial/post-keep readonly sleep
+getters actually returned supported=true, enabled=false and configured duration0
+AFTER connection (pinned source maps0 to default60s). This does not establish
+preconnection sleep. The postformer concurrent getter timed out independently;
+its actual sleep state remained unknown. No getter barrier, persistent setting,
+IDR request, jitter/budget increase or video/server change occurred.
+
+Actual terminal flags were confirmed/not-expired. Typed `canary-cleanup` returned
+TWICE and all21 confirmed-native checks passed: same generation/profile/boot/
+original deadline/no allowance; worker birth gone; child/both modules/table1000/
+priority1140 absent; owned intents clear; two settled parent snapshots matching
+ORIGINAL semantics; USB/version unchanged. Every one of the three temporary-auth
+scopes genuinely drained its ORIGINAL enable future, restored exact empty key/
+false mode/closed22 and passed all nine fresh old-access checks.
+
+Exact controller BOOTTIME witnesses: captures listening119113.357/119113.367;
+Ready119128.441; fixed transport119129.496; auth clean119129.741; first frame
+proof119131.241; origin exit0 119137.165; confirm exit0 119160.402; conservative
+former boundary119246.069; postconfirm observer exit0 119252.741; full native
+terminal119272.687. Both40s nonpromiscuous router header captures bracketed the
+actual fixed probes and all owned process groups/streams/PCs were terminal.
+Runner exit0 truthfully recorded passed/cleanup/former survival/postformer fixed
+HTTPSSH/capture bracket/all-processes-terminal=true, outcomeCONFIRMED_CLEANED.
+
+Current default is the complete confirmed-and-cleaned v32 terminal store, with no
+helper network resources and no management/main receipt. The earlier v28 store
+remains inert in its v31 sibling plus controller archive. This accepts only the
+FIRST device's confirmed runtime, narrow DHCP renew/reapply and explicit typed
+terminal cleanup. It does not accept rebind/carrier, native boot ordering,
+primary renumbering or the other devices.
 
 ## Remaining gates
 
@@ -322,8 +379,8 @@ Original-parent checks, exact access cleanup and all nine fresh checks passed.
 No cleanup/bootstrap/renew/keep or kernel operation occurred during v27 itself.
 v28 subsequently exercised the confirmed runtime above. v29 reproduced absent
 video on the old path; v30 accepted an explicit startup/decode timing protocol
-there. v28's fixed-path former-deadline video still needs a separately reviewed
-proof before whole confirmed-runtime acceptance. Rebind/carrier owner
+there. A new v32 generation then passed the whole first-device confirmed runtime
+under that protocol; v28's failed proof itself was not relabeled. Rebind/carrier owner
 reapply, bounded boot with actual early MAC ordering, all other devices and the
 boot-safe full-hook/receipt transition remain unproved. Do not broaden
 ARP/promiscuity/global policy.
