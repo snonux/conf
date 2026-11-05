@@ -12,6 +12,27 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
+## Vendor readiness evidence after the early boot failure
+
+The v33 early receipt proved that vendor startup had not yet established the
+factory MAC or brought eth0 UP. Its observer hook was removed, and v34 removed
+the exact empty init parent. A blocking management hook remains unsuitable.
+Read-only v35 then completed with original authorization restored and all nine
+fresh access checks passing. Two steady-state snapshots showed current-boot
+`/run` tmpfs, stable DHCP daemon PID/birth/argv/session and complete lease,
+SID equal to PID with PPID1, no child callback or unknown process reads, and
+matching actual IPv4/default route/DNS plus factory MAC and administrative UP.
+The optional proc children file is unavailable; direct PPID enumeration supplies
+the child check. The lease is written before daemon backgrounding, so requiring
+its timestamp after daemon birth would reject normal startup.
+
+These facts support a bounded read-only readiness collector and validator.
+They do not accept deferred boot timing or authorize a blocking pre-vendor
+hook. Existing ManagementBoot/NoVendorApp and full-primary guards stay intact.
+The v32 seven-file confirmed/cleaned store retains its old boot/deadline bytes.
+Private v35 evidence is under
+`~/.local/state/conf/s14-jetkvm-parent-readiness-v35-20261105/`.
+
 ## Source contract and the narrow cleanup addition
 
 - `helper/cmd/jkrecover/main.go`: `canary-keep` passes the explicit

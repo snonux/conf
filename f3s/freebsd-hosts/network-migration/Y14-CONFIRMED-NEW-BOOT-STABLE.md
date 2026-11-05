@@ -1,12 +1,16 @@
-# f3 stable-ID confirmed-NEW boot — dormant files accepted; live HOLD
+# f3 stable-ID confirmed-NEW boot — failed trial; OLD restored
 
-The reviewed stable-ID diagnostic installation passed at22:50:11UTC on
-2026-11-05 (local date2026-11-06). f3 remains OLD-primary dual Stage, with
-normal Rocky AUTO/RUNNING and FreeBSD/labs stopped. All four ordinary/endpoint/
-confirmed-guard/activation markers are absent. No VM stop, address change,
-guard activation, service restart or reboot occurred in this file-only slice.
-Confirmed-NEW startup remains unaccepted; live execution requires separate root
-approval and fresh full1005-second writer/health admission.
+The amended actual boot trial failed after release because one required
+watcher SSH query timed out. Typed owned recovery restored OLD; full terminal
+verification passed at23:43:09UTC on2026-11-05 (local date2026-11-06).
+f3 remains OLD-primary dual Stage, normal Rocky AUTO/RUNNING, and FreeBSD/labs
+stopped. All four active ordinary/endpoint/guard/activation markers are absent.
+Only the two owned diagnostic rc hooks were removed after durable whole-evidence
+archival; the private original context/program/causal receipts remain native.
+No retry or guest primary action is authorized. Confirmed-NEW startup has valid
+causal receipts but remains unaccepted as a complete trial because NEW was not
+observed through the former guard deadline. Frozen source and failures are
+preserved; future source changes and live execution need separate review.
 
 The managed helperce4728 and random-dependent rollback rcefdeb1 were already
 accepted in the earlier file-only slice. This distinct bundle reads opaque
@@ -14,6 +18,64 @@ accepted in the earlier file-only slice. This distinct bundle reads opaque
 and hashes those bytes. All guard/controller/proof/release/cleanup identity
 comparisons use this ID. Boot epochs remain diagnostic date evidence only.
 Historical contexts, failed trials and receipts remain unchanged.
+
+## Actual amended boot and failed post-release observation
+
+Actual23:25 f1/r1 completion and one fresh fixed readiness run passed full
+health, all six strict peer measurements, four literal f3 paths, OLD protected
+state/PF0/normal VM, installed pins/graph and marker absence. The actual minimum
+next writer was f2/r2 at23:45, so the full1005-second budget plus observed stop/
+prearm headroom fit. Normal Rocky stopped gracefully at23:26:51.336.
+
+The ordinary300 promotion armed at23:27:01.984, deadline23:32:01. The trusted
+controller OLD snapshot, transport and preboot NAT/service checks passed before
+ordinary confirmation and guard600 arming at23:27:46.997, deadline23:37:46.
+One normal f3 reboot was requested at23:27:50.116. Fresh old-path SSH returned
+at23:29:57.374 with a different opaque boot ID. Original early and runtime
+receipts proved saved NEW before NETIF/WG and runtime NEW before LOGIN, with
+matching claimed ID and timestamps before the deadline.
+
+After one bounded diagnostic warmup, fresh unchanged strict2/2 IPv4 and IPv6
+measurements passed for all six actual peers. A separate post-startup capture
+proved all six actual OLD physical UDP sources. Fresh NEW-source paired-SYN/
+exact-PF NAT and verified TLS, full service health, strict original guest WG,
+configured gateway traffic/handshakes and literal paths passed. The actual guest
+next timer23:39:59 was beyond guard+110; all bounded typed property reads also
+completed. No peer/key/AllowedIPs/source-YAML change occurred.
+
+Same-ID release completed at23:33:07.793 after former ordinary+65. At23:33:17,
+one subsequent watcher SSH query reported a connection timeout. The frozen
+driver failed its post-release no-violation assertion (line341) and completed
+typed trusted OLD recovery; operator exit1 was recorded at23:33:21. No guard
+packet violation was recorded. Actual subsequent PF counters were0 and full
+OLD state matched the accepted original. The connection-timeout cause is not
+established; it must not be relabeled as a packet drop, proven SSH limit, or
+accepted former-deadline survival.
+
+Full postfailure protected state, strict original WG, normal VM policy,
+all-six checks, four literal paths, strict guest/typed no-op admission and
+service health passed. Both owned probe UIDs and all local/f3/router capture
+processes drained. A separate failure cleanup revalidated actual OLD/current ID/
+trusted controller hash, absent active journals, matching context/receipts,
+pinned hooks and empty root600 gate. An exclusive0600 whole accepted/released/
+restored/proof/hook/gate archive was fsynced with its parent before revalidation
+and removal of only the two hooks and empty gate. Root review caught a string/int deadline mismatch in the first unexecuted
+cleanup source; its distinct corrected source and actual-shaped regression are
+preserved.
+
+Unchanged scoped Prepare and PF owner reapply passed; the PF loaded checksum
+matched before and after, with no reload, state flush or counter reset. Final
+OLD/default/alias/ULA/99return/protected/WG/PF0/normal VM and marker absence
+passed at23:43:09.391. Private terminal evidence is
+`evidence/confirmed-new-boot-stable-AMENDED-failure-TERMINAL-private.json`;
+whole archive is
+`evidence/confirmed-new-boot-stable-AMENDED-failure-whole-native-evidence.tgz`.
+The base16, amended4 and original raw failure/causal receipts are unchanged.
+
+The next work is source-only watcher timeout diagnosis and a separately reviewed
+host retry. Standalone Rocky then FreeBSD primary/gateway expiry, boot and final
+confirmation remain required after host acceptance; no guest activation or
+full-referrer/source promotion follows from this failed trial.
 
 ## 23:08 budget HOLD and controller-only amendment
 
@@ -103,7 +165,7 @@ by fresh strict measurements, success-cleanup ordering and cleanup quarantine.
 The managed shell helper's full offline suite had already passed once for
 7a37ac4; it was not repeated for these consumers.
 
-## Dormant native acceptance
+## Historical dormant native acceptance
 
 The private0700 directory is
 `/var/db/gonf-network-migration/y14-confirmed-new-boot-stable-proof`.
