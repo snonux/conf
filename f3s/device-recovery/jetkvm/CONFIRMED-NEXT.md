@@ -135,6 +135,24 @@ eth0 addresses. A first-device udhcpc renew is not jetdhcpc, rebind/expiry or
 carrier-down/up acceptance. Do not call setNetworkSettings/toggleDHCPClient,
 release leases, killall, full RkLunch or its stop script as a narrow owner test.
 
+## Current video follow-up — old-path timing passed, fixed proof open
+
+v29 reproduced zero-RTP/frame failure on a single cold fresh OLD-path view,
+without a preceding capture PC. HTTP/exact UDP/data proofs passed; streaming was
+inactive and the concurrent3s sleep getter timed out, so actual sleep remains
+unknown. Pinned source automatically starts video on first session and can wait5s
+for wake/relock under videoLock; no explicit view activation RPC is required.
+The separately reviewed v30 protocol admitted actual decrypted H264 RTP by
+session start+9s, then measured the unchanged5s decode limit inside14s media
+(total35s outer/RPC3/jitter512). One OLD-path view passed: first RTP5.723s,
+frame5.805s,186 RTP packets/208,250 bytes,12 assemblies and zero decoder warnings.
+The concurrent sleep getter still timed out independently; actual sleep state
+remains unknown. PC/wrappers/process closed. This is a new measured startup
+protocol, not a relabeling of v28/v29 failures. It does not accept the failed
+fixed former-deadline frame; that needs its own reviewed native slice and safe
+terminal-store transition. No setter/IDR/control RPC or decoder/network repair
+is authorized by these diagnostics.
+
 ## Separate bounded boot gate — currently HOLD
 
 A confirmed additive record is NOT the input to boot recreation: ManagementBoot

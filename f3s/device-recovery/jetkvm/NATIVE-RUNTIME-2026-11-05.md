@@ -226,6 +226,57 @@ Current native additive state is the confirmed, cleaned v28 terminal record,
 with no native helper network resources. The complete failed and positive proofs
 remain privately preserved. No management/main acceptance receipt was created.
 
+## v29 old-path cold-session diagnostic: zero RTP reproduced
+
+One separately reviewed normal-view-only diagnostic used OLD `.1.241` from local
+`.1.236`, with no preceding capture PC and no developer/SSH/helper/owner/module/
+setting action. Fresh HTTP login/device both returned200 with matching identity.
+A single fresh RTC completed ICE/DTLS, exact old UDP pair and data-channel
+identity/version/USB/video-ready checks, but cached streaming was0 (inactive).
+It received ZERO RTP packets/bytes and frames before the unchanged5s frame timeout.
+The concurrent readonly sleep getter independently timed out at3s; actual sleep
+support/configuration/state was not observed and remains UNKNOWN. No getter
+barrier, delayed frame-start or budget extension was used. Relative session
+milestones were RPC open0.568s, readonly queries/frame start0.596s, sleep getter
+terminal3.597s and frame timeout5.597s. PC/wrappers closed and process exited1;
+no retry occurred. This reproduces absent cold-session video on the old path,
+so the v28 failure alone does not establish a management-network regression.
+
+Pinned app source automatically starts capture on first ICE-connected session
+(`webrtc.go:onFirstSessionConnected`); no browser-only video-start RPC is required.
+Last disconnect stops video and starts an idle-sleep timer. The source default
+is60s, but actual device duration was not recorded. `internal/native/video.go:
+VideoStart` holds videoLock, disables sleep, then waits5s for relock if sleeping.
+The readonly sleep getter takes the same lock. This supports a startup/wake
+hypothesis, not a proven runtime sleep cause; cached ready=true is not streaming
+proof. Both v28 and v29 failed decoded-frame receipts remain failed and preserved.
+
+## v30 old-path producer-readiness diagnostic: PASS
+
+A separately reviewed NEW normal-view timing protocol retained35s outer,
+14s media total,5s decoded-frame and3s readonly RPC limits with client jitter512.
+It required actual decrypted H264 RTP by session start+9s, then began the
+unchanged5s frame measurement. No preceding capture PC, hidden retry, getter
+barrier, control RPC, setting change, helper or network action occurred.
+The prior v28/v29 failures remain failed and preserved.
+
+One OLD `.1.236 → .1.241` view passed: HTTP login/device200/200, exact identity,
+ICE completed/DTLS connected, explicit allowed candidate and actual nominated
+old UDP pair, data-channel version/USB/video checks and one decoded H264 frame.
+Actual first video RTP arrived5.723s after session start; startup-ready and frame
+measurement began then. A decoded frame arrived by5.805s. It received186 RTP
+packets/208,250 bytes, assembled12 frames and logged zero decoder warnings.
+The cached initial streaming flag remained0; the concurrent readonly sleep
+getter timed out independently at3s, so actual sleep state/support/configuration
+still was NOT observed. PC/wrappers closed, process exited0 and no retry ran.
+
+This demonstrates a real old-path producer start later than the previous
+v29 frame cutoff5.597s, and accepts the new old-path startup/decode measurement
+for this observation. It does not prove the exact cause of v29, establish sleep
+as that cause, or retrospectively accept v28's failed fixed-path former-deadline
+video. A new fixed-path/confirmed protocol needs its own reviewed transition,
+generation and exclusive window before any native action.
+
 ## Remaining gates
 
 [Confirmed runtime and owner/boot plan](CONFIRMED-NEXT.md) describes the next
@@ -238,9 +289,10 @@ v26 store was independently archived on the controller first. Preflight took
 1.450s, staging 3.820s and copy 1.154s. Only `-version` ran, returning 0.1.0.
 Original-parent checks, exact access cleanup and all nine fresh checks passed.
 No cleanup/bootstrap/renew/keep or kernel operation occurred during v27 itself.
-v28 subsequently exercised the confirmed runtime above. Its zero-RTP former-
-deadline video failure needs source-grounded session diagnosis and a separately
-reviewed proof before whole confirmed-runtime acceptance. Rebind/carrier owner
+v28 subsequently exercised the confirmed runtime above. v29 reproduced absent
+video on the old path; v30 accepted an explicit startup/decode timing protocol
+there. v28's fixed-path former-deadline video still needs a separately reviewed
+proof before whole confirmed-runtime acceptance. Rebind/carrier owner
 reapply, bounded boot with actual early MAC ordering, all other devices and the
 boot-safe full-hook/receipt transition remain unproved. Do not broaden
 ARP/promiscuity/global policy.
@@ -248,5 +300,5 @@ ARP/promiscuity/global policy.
 Private evidence remains under `~/.local/state/conf/` in v16/v19 historical
 runtime, v20/v22/v24 read-only, v25 file staging and
 `s14-jetkvm-ipvlan-runtime-v26-20261105/` (including orchestration and separate
-postexpiry), and `s14-jetkvm-confirmed-runtime-v28-20261105/`. Credentials, key/shadow values, raw application configuration,
+postexpiry), `s14-jetkvm-confirmed-runtime-v28-20261105/`, old-view v29 and startup-view v30. Credentials, key/shadow values, raw application configuration,
 video frames and private outputs are not reproduced here.
