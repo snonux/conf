@@ -32,13 +32,16 @@ runtime fixed HTTP/SSH/media and independent expiry, not these later gates.
   Foreign ownership/metadata refuses; a busy module retains intent for retry.
   Confirmed state remains confirmed after cleanup; no receipt is created.
 
-The cleanup source is NOT yet in the installed v26 binary. Tests cover both
+Root reviewed/committed the cleanup source as `0da9417`; v27 installed binary
+SHA `a0857114…389c14b` without changing profile or terminal journals. The cleanup
+action remains untried; its confirmed runtime driver still needs review. Tests cover both
 terminal states, repeated cleanup, pending refusal, pending-primary/hash/boot/
 foreign failures, retry and selected/pre-existing/foreign module preservation.
 
-## File-only binary rollout before a confirmed trial
+## Completed file-only binary rollout; preserved protocol
 
-Review/commit/build first, then pin the new artifact size/hash. Profile stays
+Root completed review/commit/build and v27 file-only rollout, pinning the new
+4,399,605-byte binary SHA `a0857114…389c14b`. This section records its protocol. Profile stays
 EXACT2815fbf4031cda9346619e76b9037a29c0ce2f544fdb12a20f8bcb05913a3d91.
 Do not reset the complete v26 terminal store or replace its stable lock.
 

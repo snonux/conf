@@ -169,10 +169,16 @@ unchanged. No primary or full-acceptance receipt exists.
 ## Remaining gates
 
 [Confirmed runtime and owner/boot plan](CONFIRMED-NEXT.md) describes the next
-separately reviewed slices. The proposed `canary-cleanup` source adds a narrow
-terminal runtime entrypoint, but it is not in the installed v26 artifact yet.
-Root must review/build/stage it while preserving the complete terminal store
-before any confirmed trial. DHCP renew/rebind/owner reapply, bounded boot with
+separately reviewed slices. Root source `0da9417` added the narrow `canary-cleanup` entrypoint. Reviewed v27
+then atomically replaced ONLY the binary with the 4,399,605-byte static artifact
+SHA256 `a0857114635d6404e3ad797b96bb2877726ed420c6e38bb257df96911389c14b`.
+Profile and all six nonbinary files (authorization, active, owned, worker, lock
+and profile) retained exact inode/content identities; the complete old seven-file
+v26 store was independently archived on the controller first. Preflight took
+1.450s, staging 3.820s and copy 1.154s. Only `-version` ran, returning 0.1.0.
+Original-parent checks, exact access cleanup and all nine fresh checks passed.
+No cleanup/bootstrap/renew/keep or kernel operation occurred. A confirmed trial
+still needs its separately reviewed driver and root-released window. DHCP renew/rebind/owner reapply, bounded boot with
 actual early MAC ordering, all other devices and the boot-safe full-hook/receipt
 transition remain unproved. Do not broaden ARP/promiscuity/global policy.
 

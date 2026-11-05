@@ -269,10 +269,11 @@ The IPvlan helper/profile was installed by reviewed v25 file-only staging. v26
 then passed first-device runtime fixed HTTP/SSH/media plus independent expiry
 and cleanup. Boot/DHCP-owner/fleet acceptance remain open.
 
-## Terminal runtime cleanup candidate (source only)
+## Terminal runtime cleanup (installed, native action untried)
 
-`jkrecover -device ID canary-cleanup` is a new source entrypoint, not yet in the
-installed v26 binary. It takes the existing Store lock, refuses a pending or
+`jkrecover -device ID canary-cleanup` was added in root source `0da9417` and
+staged by v27 binary-only rollout (SHA `a0857114…389c14b`). Only `-version` ran;
+the cleanup action itself remains untried. It takes the existing Store lock, refuses a pending or
 invalid primary state, requires matching profile/current boot and a confirmed OR
 expired additive record, then invokes existing typed `Adapter.Cleanup`. It never
 confirms/expires a pending canary, extends a deadline, stops the vendor app or
@@ -283,5 +284,5 @@ or cleanup errors remain failures with ownership retained for retry. The existin
 Keep only after root's fresh authenticated fixed proof: the CLI boolean is an
 external operator attestation, not a built-in verifier of media/evidence files.
 Keep cancels expiry; the worker exits without deleting resources. Therefore a
-confirmed runtime test needs the separately staged cleanup command and an old
+confirmed runtime test needs the separately reviewed installed cleanup command and an old
 path for cleanup, not a reboot or app stop. See [next gates](../CONFIRMED-NEXT.md).
