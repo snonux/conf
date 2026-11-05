@@ -9,7 +9,7 @@ trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/etc/gonf" "$fixture/var/unbound/etc" "$fixture/var/run/rc.d"
 # No production test-mode switch: source only the function section and rewrite
 # absolute state paths. This harness never executes the production dispatch.
-sed '/^# Dispatch:/,$d' "$1" | sed "s@/var/unbound/etc/@__UNBOUND__@g; s@/etc/@$fixture/etc/@g; s@/var/@$fixture/var/@g; s@__UNBOUND__@$fixture/var/unbound/etc/@g" > "$fixture/functions"
+sed '/^# Dispatch:/,$d' "$1" | sed "s@/var/unbound/etc/@__UNBOUND__@g; s@/etc/@$fixture/etc/@g; s@/var/@$fixture/var/@g; s@__UNBOUND__@$fixture/var/unbound/etc/@g; s@/bsd.upgrade@$fixture/bsd.upgrade@g" > "$fixture/functions"
 cp -Rp "$2" "$fixture/etc/gonf/router-profiles"
 cat > "$fixture/mocks" <<'MOCKS'
 # Real parser validation remains safe; mutation calls below only update records.
@@ -120,8 +120,13 @@ rcctl() {
 }
 crontab() { print -- "* * * * * $SELF tick"; }
 pgrep() {
+ if [[ $* == '-x (sysupgrade|syspatch|pkg_add)' && -f $BASE/upgrade-running ]]; then print 12346; return 0; fi
  [[ $* == '-xf /sbin/resolvd' && -f $BASE/native-resolvd ]] || return 1
  print 12345
+}
+shutdown() {
+ [[ $* == '-r now' ]] || return 1
+ print 'shutdown requested' > "$BASE/reboot-requested"
 }
 netstat() { cat "$BASE/sockets"; }
 sh() {
@@ -431,7 +436,60 @@ rm "$base/slaac-fail"
 print 0 > "$base/router-state/deadline"
 "$fixture/run" tick
 [[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
-# wg2 bootstrap shares only the durable journal and hook with physical trials.
+# Router reboot canaries share the durable journal and early hook.
+# The reboot action requires a genuinely changed fixed canary, a long live
+# deadline, no upgrade and three currently established management sockets.
+print 'inet alias 10.20.0.254 255.255.255.0' >> "$base/router-profiles/shared-igc0/hostname.igc0"
+print '# gonf boot canary: 10.20.0.254' >> "$base/router-profiles/shared-igc0/ntpd.conf"
+"$fixture/run" stage boottrial1 shared-igc0 1800
+sed "1s/.*/candidate-sha256=$(cat "$base/router-state/digest")/" "$base/router-readiness/shared-igc0" > "$base/review.next"
+mv "$base/review.next" "$base/router-readiness/shared-igc0"
+chmod 600 "$base/router-readiness/shared-igc0"
+"$fixture/run" arm boottrial1 shared-igc0 1800
+"$fixture/run" activate boottrial1
+expect_fail reboot_canary wrongtoken
+touch "$fixture/bsd.upgrade"
+expect_fail reboot_canary boottrial1
+grep -q 'upgrade kernel is queued' "$fixture/failure.log"
+rm "$fixture/bsd.upgrade"
+touch "$base/upgrade-running"
+expect_fail reboot_canary boottrial1
+grep -q 'unattended upgrade is running' "$fixture/failure.log"
+rm "$base/upgrade-running"
+print "$(($(date +%s) + 10))" > "$base/router-state/deadline"
+expect_fail reboot_canary boottrial1
+grep -q 'insufficient reboot recovery window' "$fixture/failure.log"
+print "$(($(date +%s) + 1800))" > "$base/router-state/deadline"
+expect_fail reboot_canary boottrial1
+grep -q 'management proofs missing' "$fixture/failure.log"
+[[ ! -f $base/reboot-requested ]]
+print '' > "$base/router-state/preexisting-connections"
+cat > "$base/sockets" <<'SOCKETS'
+tcp 0 0 192.168.1.2.22 192.168.1.236.45681 ESTABLISHED
+tcp 0 0 10.20.0.1.22 10.99.0.2.45682 ESTABLISHED
+tcp 0 0 10.99.0.1.22 10.99.0.2.45683 ESTABLISHED
+SOCKETS
+"$fixture/run" proof old boottrial1 '192.168.1.236 45681 192.168.1.2 22'
+"$fixture/run" proof new boottrial1 '10.99.0.2 45682 10.20.0.1 22'
+"$fixture/run" proof vpn boottrial1 '10.99.0.2 45683 10.99.0.1 22'
+cp -p "$fixture/etc/ntpd.conf" "$fixture/canary-ntpd.expected"
+print '# external edit' >> "$fixture/etc/ntpd.conf"
+expect_fail reboot_canary boottrial1
+grep -q 'live boot canary ntpd file changed' "$fixture/failure.log"
+cp -p "$fixture/canary-ntpd.expected" "$fixture/etc/ntpd.conf"
+cp -p "$base/sockets" "$fixture/boot-sockets.expected"
+sed '/10\.99\.0\.1\.22/d' "$base/sockets" > "$base/sockets.next"
+mv "$base/sockets.next" "$base/sockets"
+expect_fail reboot_canary boottrial1
+grep -q 'fresh connection socket not found' "$fixture/failure.log"
+[[ ! -f $base/reboot-requested ]]
+cp -p "$fixture/boot-sockets.expected" "$base/sockets"
+"$fixture/run" reboot_canary boottrial1
+[[ -f $base/reboot-requested && -f $base/router-state/pending ]]
+"$fixture/run" boot_restore
+if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; then exit 1; fi
+[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+# Bootstrap must not alter physical interfaces, PF, routes or service state.
 # It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
 mkdir "$base/router-profiles/vpn-bootstrap"

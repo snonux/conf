@@ -14,6 +14,8 @@ type Profiles struct{ RequiresRoot }
 
 // RouterProfiles carries verified migration dependencies from inventory.
 type RouterProfiles struct {
+	// BootCanary adds a fixed, reserved alias only to the shared profile.
+	BootCanary bool
 	// RetainProvisioningAlias keeps the existing 192.168.11.2 alias in every
 	// candidate until verified retirement. This retains its address only: any
 	// active provisioning clients need explicit reviewed PF permissions.
@@ -103,6 +105,11 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 		files["hostname."+zone.iface] += "inet alias " + zone.address + " 255.255.255.0\n"
 	}
 	files["hostname."+s.lab] += "inet6 alias fd02:ca0b:f1cb:20::1 64\n"
+	files["hostname."+s.lab] += "inet6 -autoconf -temporary\n"
+	if data.BootCanary && s.name == "shared-igc0" {
+		files["hostname.igc0"] += "inet alias 10.20.0.254 255.255.255.0\n"
+		files["ntpd.conf"] += "# gonf boot canary: 10.20.0.254\n"
+	}
 	if s.recovery {
 		files["hostname.igc1"] += "inet alias 10.98.0.1 255.255.255.0\n"
 	}

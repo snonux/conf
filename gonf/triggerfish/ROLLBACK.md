@@ -102,6 +102,58 @@ recovery and igc1 physical recovery remain unproved by this experiment.
 The full shared profile still requires the separately reviewed armed
 resolver/resolvd transition recorded in IQ HANDOFF before activation.
 
+## Router reboot canary (u14; not executed yet)
+
+The fixed temporary address `10.20.0.254/24` is reserved for this router-only
+test, outside all planned host/JetKVM addresses and DHCP bindings. Explicit
+`boot_canary:true` in a `shared-igc0` trial adds that alias and an ntpd comment
+to the inactive candidate. Other profiles and default input never add them.
+Every rendered lab hostname file also explicitly disables IPv6 autoconfiguration
+and temporary addressing, preserving the accepted runtime policy across boot.
+
+`RebootCanary` is Operational and refuses default/other-profile input. The
+single recovery helper additionally requires an active unconfirmed canary,
+unchanged live/candidate files, intact snapshot, more than five minutes left,
+active cron, empty captured dynamic PF tables, and currently established
+old/new/VPN proof sockets. It refuses queued/running upgrades. Only then does
+it request a normal reboot, leaving the pending marker intact.
+
+The reviewed live plan must complete these steps before claiming boot recovery:
+
+1. Verify old/new/VPN access, confirmed shared state, unused reserved alias,
+   current host/service health, empty dynamic PF tables, no queued/running
+   upgrade, and the native mount/rc anchors. `/etc/gonf` is on root and local
+   `/usr` mounts before the hook on this host; the hook tools are available.
+2. Stage/arm the ordinary updated shared profile through gonf under a fresh
+   300-second token. Verify its explicit persistent IPv6 policy, fresh held
+   old/new/VPN sockets, DNS/egress and existing health, then confirm. No host
+   addresses or production cabling change.
+3. Capture that accepted baseline. Stage a distinct 180-second shared trial
+   with `boot_canary:true`, bind readiness to its frozen digest, arm and
+   activate. Prove the extra address and comment really exist in live and
+   persistent state, along with fresh old/new/VPN access and service health.
+   Deliberately omit confirmation. Native cron must remove the canary and
+   restore the accepted baseline; require fresh reconnects and no pending state.
+4. Repeat the canary with a distinct token and 1800-second window. Hold three
+   fresh authenticated sessions while recording their socket proofs. Recheck
+   live canary files, baseline boot time and recovery deadline, then invoke
+   `triggerfish_rollback_reboot_canary` through gonf. A disconnected command
+   alone is not reboot or recovery evidence.
+5. Reconnect through old LAN, then wg2 with a new handshake. Require a changed
+   native boot time, `restored-at-boot` with no pending rollback **before** the
+   original deadline, absent canary alias/comment, exact accepted persistent
+   file hashes/static addresses/routes/PF tables, intended IPv6 policy and
+   service state. Check router IPv4 egress and existing cluster/storage/monitoring.
+   wg2 keys/peers remain unchanged. The router-local recovery gateway does not
+   prove a physical igc1 path.
+6. Reapply the default profile under another guarded trial and confirm only
+   after fresh old/new/VPN and service checks. End confirmed/no-pending with
+   no canary artifacts; the normal aggregate still excludes Operational tasks.
+
+The disposable native fixture mocks shutdown and mutation commands and tests
+reboot refusal/guard logic plus file restoration. It cannot prove a real reboot.
+All actual reboot evidence remains pending until the sequence above completes.
+
 ## Shared-profile resolver transaction and acceptance plan
 
 Physical profiles snapshot `/etc/resolv.conf` (including absence and mode),

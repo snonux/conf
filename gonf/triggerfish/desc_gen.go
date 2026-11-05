@@ -44,6 +44,10 @@ func (Rollback) DescReadiness() string {
 	return "Binds the measured VPN and inventory review to the frozen candidate"
 }
 
+func (Rollback) DescRebootCanary() string {
+	return "Reboots only a proved, unconfirmed shared-profile boot canary"
+}
+
 func (Rollback) DescRestore() string {
 	return "Queues an independent restore attempt with a private diagnostic log"
 }

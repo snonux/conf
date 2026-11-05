@@ -20,6 +20,8 @@ type RouterTrial struct {
 	Profile       string `json:"profile"`
 	Token         string `json:"token"`
 	WindowSeconds uint   `json:"window_seconds"`
+	// BootCanary stages the fixed removable router-only reboot canary.
+	BootCanary bool `json:"boot_canary"`
 	// ServicesVerified is supplied by the guarded controller after service checks.
 	ServicesVerified bool `json:"services_verified"`
 	// ProofRole and SSHConnection are measured by the controller on a fresh
@@ -94,6 +96,14 @@ func (Rollback) OptsActivate() TaskOptions { return TaskOptions{Operational()} }
 // Activate applies only the frozen, armed and explicitly reviewed trial.
 func (Rollback) Activate() { trialCommand("activate", false) }
 
+// OptsRebootCanary excludes the bounded reboot test from routine deployment.
+func (Rollback) OptsRebootCanary() TaskOptions { return TaskOptions{Operational()} }
+
+// RebootCanary reboots only a proved, unconfirmed shared-profile boot canary.
+func (Rollback) RebootCanary() {
+	trialCommand("reboot", false)
+}
+
 // OptsStatus excludes status from routine deployment.
 func (Rollback) OptsStatus() TaskOptions { return TaskOptions{Operational()} }
 
@@ -141,6 +151,10 @@ func (Rollback) RestorePrevious() {
 
 func trialCommand(action string, profile bool) {
 	EachHost(func(t RouterTrial) {
+		if action == "reboot" && (!t.BootCanary || t.Profile != "shared-igc0") {
+			Refuse("Command", "reboot", fmt.Errorf("explicit shared-profile boot canary required"))
+			return
+		}
 		if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$`).MatchString(t.Token) {
 			Refuse("Command", action, fmt.Errorf("a reviewed trial token is required"))
 			return

@@ -76,7 +76,7 @@ func Register() {
 func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	registerFrontends()
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
-		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true}),
+		WithData(triggerfish.RouterProfiles{RetainProvisioningAlias: true, BootCanary: trial.BootCanary}),
 		WithData(trial))
 	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()

@@ -85,8 +85,15 @@ net.inet6.ip6.forwarding=0' ]] || fail 'unexpected sysctl fragment'
   /^up$/ {next}
   /^inet( alias)? [0-9.]+ 255\.255\.255\.0$/ {next}
   /^inet6 alias fd02:ca0b:f1cb:20::1 64$/ {next}
+  /^inet6 -autoconf -temporary$/ {next}
   {exit 1}' "$d"/hostname.igc[0-3] || fail 'unsupported hostname directive'
- [[ $(awk '$1=="inet6" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
+ [[ $(awk '$1=="inet6" && $2=="alias" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
+ [[ $(awk '$0=="inet6 -autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'persistent IPv6 policy missing or duplicated'
+ for f in "$d"/hostname.igc[0-3]; do
+  if grep -q '^inet6 alias ' "$f"; then
+   grep -qx 'inet6 -autoconf -temporary' "$f" || fail 'IPv6 policy must accompany the lab address'
+  fi
+ done
  for f in 10.20.0.1 10.30.0.1 10.40.0.1; do
   [[ $(awk -v a="$f" '$1=="inet" && $3==a {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing zone prefix'
  done
@@ -378,7 +385,7 @@ check_candidate_ipv6() {
  for i in igc0 igc1 igc2 igc3; do
   ifconfig "$i" > "$STATE/ipv6-check"
   ! grep -q AUTOCONF6 "$STATE/ipv6-check" || fail 'physical IPv6 autoconfiguration remains enabled'
-  awk 'NR==FNR {if ($1=="inet6") allowed[$3]=1; next}
+  awk 'NR==FNR {if ($1=="inet6" && $2=="alias") allowed[$3]=1; next}
    $1=="inet6" && $2!~/^fe80:/ && !allowed[$2] {exit 1}' \
    "$STATE/candidate/hostname.$i" "$STATE/ipv6-check" || fail 'unexpected physical IPv6 address'
  done
@@ -397,7 +404,9 @@ apply_addresses() {
     else
      ifconfig "$i" inet "$alias" netmask "$address"
     fi;;
-   inet6) ifconfig "$i" inet6 alias "$address" prefixlen "$mask";;
+   inet6)
+    if [[ $alias == -autoconf ]]; then ifconfig "$i" inet6 -autoconf -temporary
+    else ifconfig "$i" inet6 alias "$address" prefixlen "$mask"; fi;;
    esac
   done < "$STATE/candidate/hostname.$i"
  done
@@ -722,6 +731,34 @@ boot_restore() {
  rm -f "$STATE/pending"
  sync
 }
+reboot_canary() {
+ typeset table role
+ need_token "$1"
+ pending && [[ $(cat "$STATE/status") == active-unconfirmed && $(cat "$STATE/profile") == shared-igc0 ]] || fail 'no active shared boot canary'
+ [[ $(cat "$STATE/deadline") -gt $(($(date +%s) + 300)) ]] || fail 'insufficient reboot recovery window'
+ check_hook
+ rcctl check cron >/dev/null || fail 'rollback cron is not running'
+ [[ ! -e /bsd.upgrade ]] || fail 'an upgrade kernel is queued'
+ ! pgrep -x '(sysupgrade|syspatch|pkg_add)' >/dev/null || fail 'an unattended upgrade is running'
+ [[ $(checksum "$STATE/candidate") == $(cat "$STATE/digest") ]] || fail 'boot canary candidate changed'
+ [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'boot canary snapshot changed'
+ grep -qx 'inet alias 10.20.0.254 255.255.255.0' "$STATE/candidate/hostname.igc0" || fail 'fixed boot canary address missing'
+ grep -qx '# gonf boot canary: 10.20.0.254' "$STATE/candidate/ntpd.conf" || fail 'boot canary file marker missing'
+ cmp -s /etc/hostname.igc0 "$STATE/candidate/hostname.igc0" || fail 'live boot canary hostname file changed'
+ cmp -s /etc/ntpd.conf "$STATE/candidate/ntpd.conf" || fail 'live boot canary ntpd file changed'
+ ! grep -q '10.20.0.254' "$STATE/saved/files/etc/hostname.igc0" || fail 'boot canary already existed in the baseline'
+ ifconfig igc0 | awk '$1=="inet" && $2=="10.20.0.254" {found=1} END {exit !found}' || fail 'boot canary address is not active'
+ for table in recorders camera_updates; do
+  [[ ! -s $STATE/saved/tables/$table ]] || fail 'boot canary requires empty dynamic PF tables'
+ done
+ for role in old new vpn; do
+  [[ -s $STATE/proof.$role ]] || fail 'fresh boot canary management proofs missing'
+  proof "$role" "$1" "$(cat "$STATE/proof.$role")"
+ done
+ sync
+ print 'rebooting unconfirmed canary; early boot must restore the saved profile'
+ shutdown -r now
+}
 tick() {
  pending || return 0
  [[ $(date +%s) -ge $(cat "$STATE/deadline") ]] || return 0
@@ -775,5 +812,6 @@ proof) [[ $# == 4 ]] || fail 'proof ROLE TOKEN SSH_CONNECTION'; lock; proof "$2"
 confirm) [[ $# == 3 ]] || fail 'confirm TOKEN services-checked'; lock; confirm "$2" "$3";;
 restore) lock; restore;;
 recover) [[ $# == 2 ]] || fail 'recover PREVIOUS_TOKEN'; lock; recover_previous "$2";;
+reboot) [[ $# == 2 ]] || fail 'reboot TOKEN'; lock; reboot_canary "$2";;
 *) fail 'use stage, arm, activate, status, proof, confirm or restore';;
 esac
