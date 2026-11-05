@@ -44,6 +44,12 @@ elif cmd == 'sysrc':
         for item in a:
             k,v=item.split('=',1); s['keys'][k]=v; write_key(k,v)
 elif cmd == 'ifconfig':
+    def detach_gateway_routes(ip):
+        # FreeBSD removes routes through the detached connected subnet,
+        # including when ifconfig replaces the primary with another subnet.
+        prefix=ip.rsplit('.',1)[0]+'.'
+        for key in ('default4','return'):
+            if s.get(key) and s[key].startswith(prefix): s[key]=None
     if a[:1] == ['-L']: a=a[1:]
     assert a[0] == 're0', a
     if len(a)==1 or len(a)==2:
@@ -67,6 +73,7 @@ elif cmd == 'ifconfig':
         family=a[1]; ip=a[2].split('/')[0]; field='v4' if family=='inet' else 'v6'
         if a[-1]=='delete':
             assert ip in s[field], (ip,s[field]); s[field].remove(ip)
+            if family=='inet': detach_gateway_routes(ip)
             if family=='inet6': s.setdefault('v6_properties',{}).pop(ip,None)
         elif a[-1]=='alias':
             assert ip not in s[field], (ip,s[field]); s[field].append(ip)
@@ -77,6 +84,7 @@ elif cmd == 'ifconfig':
                 s.setdefault('v6_properties',{})[ip]=props
         else:
             assert family=='inet', a
+            detach_gateway_routes(s[field][0])
             s[field][0]=ip
 elif cmd == 'route':
     if 'get' in a:
@@ -87,14 +95,17 @@ elif cmd == 'route':
             else: rc=1
         elif a[-1]=='10.99.0.2' and s['return']:
             print('destination: 10.99.0.2\n gateway:',s['return'],'\n interface: re0')
-        else: print('destination: default\n gateway:',s['default4'],'\n interface: re0')
+        elif s['default4']: print('destination: default\n gateway:',s['default4'],'\n interface: re0')
+        else: rc=1
     elif '-host' in a:
         if a[0]=='delete': s['return']=None
         else: s['return']=a[-1]
     elif '-inet6' in a:
         s['default6']=None if a[0]=='delete' else a[-1]
         if a[0]!='delete': s['default6_static']='-nostatic' not in a
-    else: s['default4']=a[-1]
+    else:
+        if (a[0]=='change' and not s['default4']) or (a[0]=='add' and s['default4']): rc=1
+        else: s['default4']=a[-1]
 else: raise AssertionError((cmd,a))
 p.write_text(json.dumps(s))
 sys.exit(rc)
@@ -203,11 +214,14 @@ def main():
         promoted = json.loads(db.read_text())
         assert promoted['v4'] == ['10.20.0.130', '192.168.1.130']
         assert promoted['default4'] == '10.20.0.1'
+        assert promoted['return'] == '192.168.1.2'
+        assert ['route','add','default','10.20.0.1'] in promoted['calls']
         promoted['now'] = 2000
         db.write_text(json.dumps(promoted))
         run('confirm', ok=False)
         run('watchdog')
         current = json.loads(db.read_text())
+        assert ['route','add','default','192.168.1.1'] in current['calls']
         for field in ('keys', 'v4', 'v6', 'default4', 'return'):
             assert current[field] == accepted[field], field
         run('promote')

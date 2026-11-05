@@ -251,6 +251,16 @@ stage() {
     fi
 }
 
+# Replacing a physical primary can remove its connected gateway routes.
+# Select add/change from actual native state, including during rollback.
+set_default4() {
+    if route -n get -inet default >/dev/null 2>&1; then
+        route change default "$1"
+    else
+        route add default "$1"
+    fi
+}
+
 promote() {
     # The lab alias must already have passed Stage acceptance. A new arm
     # snapshots that accepted dual-address stage, rather than resetting it.
@@ -258,17 +268,17 @@ promote() {
     if [ "$profile" = isolated ]; then
         v4_rows | awk '{print $1}' | grep -qxF "$recovery" || fail 'stage isolated recovery alias first'
     fi
-    set_return_route
     primary=$(cat "$pending/primary")
     if [ "$primary" != "$lab" ]; then
         ifconfig "$iface" inet "$lab" delete
         ifconfig "$iface" inet "$lab/24"
         ifconfig "$iface" inet "$old/24" alias
     fi
+    set_return_route
     sysrc -f /etc/rc.conf "ifconfig_${iface}=inet $lab/24" "ifconfig_${iface}_alias200=inet $old/24" >/dev/null
     sysrc -f /etc/rc.conf -x "ifconfig_${iface}_alias201" >/dev/null
     sysrc -f /etc/rc.conf defaultrouter=10.20.0.1 >/dev/null
-    route change default 10.20.0.1
+    set_default4 10.20.0.1
 }
 
 restore_runtime() {
@@ -295,7 +305,7 @@ restore_runtime() {
             ifconfig "$iface" inet "$address" netmask "$mask" alias
         fi
     done < "$pending/v4"
-    route change default "$(cat "$pending/default4")"
+    set_default4 "$(cat "$pending/default4")"
     if [ -s "$pending/return" ]; then
         if route -n get -inet 10.99.0.2 | grep -Eq 'destination: 10\.99\.0\.2$'; then
             route change -host 10.99.0.2 "$(cat "$pending/return")"
