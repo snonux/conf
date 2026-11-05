@@ -168,8 +168,11 @@ pass in on igc0 inet proto icmp from 192.168.1.0/24 to 192.168.1.2 keep state
 pass in on { igc0 $wifi_if } inet proto udp to { 192.168.1.2, 10.30.0.1 } port 51822 keep state
 # Router-originated public IPv4 services, including DNS and clock sync.
 pass out on igc0 inet from 192.168.1.2 to ! <nonpublic> keep state
-pass in on $lab_if inet from <lab> to ! <nonpublic> keep state
-pass in on $wifi_if inet from <wifi> to ! <nonpublic> keep state
+# A forwarded packet is filtered again on egress. Only ingress-authorized
+# transit carries this internal tag; an inbound state alone is insufficient.
+pass out inet tagged gonf_transit keep state
+pass in on $lab_if inet from <lab> to ! <nonpublic> tag gonf_transit keep state
+pass in on $wifi_if inet from <wifi> to ! <nonpublic> tag gonf_transit keep state
 # Local DNS, clock sync and management. No private upstream resolver dependency.
 pass in on $lab_if inet proto { tcp udp } from <lab> to 10.20.0.1 port 53 keep state
 pass in on $wifi_if inet proto { tcp udp } from <wifi> to 10.30.0.1 port 53 keep state
@@ -179,19 +182,19 @@ pass in on $lab_if inet proto tcp from <lab> to 10.20.0.1 port 22 keep state
 pass in on $lab_if inet proto icmp from <lab> to 10.20.0.1 keep state
 # Distinct authenticated peers; no NAT between wg2 and the lab.
 # Pi-hole DNS contract: both peers, both DNS transports, only the resolver pair.
-pass in on wg2 inet proto { tcp udp } from { 10.99.0.2, 10.99.0.3 } to { 10.20.0.127, 10.20.0.128 } port 53 keep state
-pass in on wg2 inet proto tcp from 10.99.0.2 to <lab> port { 22, 80, 443 } keep state
-pass in on wg2 inet proto tcp from 10.99.0.3 to <lab> port 443 keep state
+pass in on wg2 inet proto { tcp udp } from { 10.99.0.2, 10.99.0.3 } to { 10.20.0.127, 10.20.0.128 } port 53 tag gonf_transit keep state
+pass in on wg2 inet proto tcp from 10.99.0.2 to <lab> port { 22, 80, 443 } tag gonf_transit keep state
+pass in on wg2 inet proto tcp from 10.99.0.3 to <lab> port 443 tag gonf_transit keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to 10.99.0.1 port 22 keep state
-pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } keep state
+pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag gonf_transit keep state
 # Shelly controllers only; replies use state, no Wi-Fi initiation to lab.
-pass in on $lab_if inet proto tcp from { 10.20.0.130, 10.20.0.131, 10.20.0.132, 10.20.0.133 } to 10.30.0.28 port 80 keep state
-pass in on $lab_if inet proto tcp from { 10.20.0.125, 10.20.0.126 } to { 10.30.0.28, 10.30.0.29 } port 80 keep state
-pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 80 keep state
+pass in on $lab_if inet proto tcp from { 10.20.0.130, 10.20.0.131, 10.20.0.132, 10.20.0.133 } to 10.30.0.28 port 80 tag gonf_transit keep state
+pass in on $lab_if inet proto tcp from { 10.20.0.125, 10.20.0.126 } to { 10.30.0.28, 10.30.0.29 } port 80 tag gonf_transit keep state
+pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 80 tag gonf_transit keep state
 `
 	if s.recovery {
-		rules += "pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port { 22, 443 } keep state\n"
-		rules += "pass in on wg2 inet proto icmp from 10.99.0.2 to 10.98.0.0/24 keep state\n"
+		rules += "pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port { 22, 443 } tag gonf_transit keep state\n"
+		rules += "pass in on wg2 inet proto icmp from 10.99.0.2 to 10.98.0.0/24 tag gonf_transit keep state\n"
 	}
 	if s.lab == "igc1" {
 		rules += "pass in on igc1 inet proto udp from any port 68 to { 255.255.255.255, 10.20.0.1 } port 67 keep state\npass out on igc1 inet proto udp from 10.20.0.1 port 67 to any port 68 keep state\n"
@@ -202,7 +205,7 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 
 	if s.temporary {
 		for _, flow := range data.TemporaryFlows {
 			// Explicit source and target only; no generic private-network pass.
-			rules += fmt.Sprintf("pass in on { igc0 $lab_if } inet proto %s from %s to %s port %d keep state\n", flow.Protocol, flow.Source, flow.Destination, flow.Port)
+			rules += fmt.Sprintf("pass in on { igc0 $lab_if } inet proto %s from %s to %s port %d tag gonf_transit keep state\n", flow.Protocol, flow.Source, flow.Destination, flow.Port)
 		}
 	}
 	return rules

@@ -365,3 +365,18 @@ real configuration parsers and covers missing readiness/keys, changed candidate,
 template rejection, partial failure, timed restore, idempotence, drift, fresh
 socket confirmation, cached boot flags and retained igc1 recovery. Native syntax
 and fixture success are preparation evidence, not a deployed timer/reboot test.
+
+During v14 native host testing on 2026-11-05, the first forwarded wg2 SYN
+was rejected by the router's egress default block despite matching its ingress
+permit. Profiles now tag only explicitly permitted transit with `gonf_transit`
+and allow IPv4 egress carrying that internal tag, following OpenBSD's
+[packet-tagging pattern](https://man.openbsd.org/pf.conf.5#tag).
+Ingress source/interface/port restrictions and the default block remain.
+No NAT is added between wg2 and the lab. All four candidate PF files passed
+native parsing. The corrected shared profile was separately accepted through
+the guarded gonf journal (`v14-transit-20261105`), with fresh old/new/VPN SSH,
+DNS, NTP, public IPv4 and protected file/service/controller checks. Against
+an absent lab canary, TCP22 proceeded to neighbor resolution while TCP23
+received immediate block-return. A subsequent f3 retry established fresh SSH through wg2 from 10.99.0.2
+to 10.20.0.133:22. Full host timed/boot recovery remains v14 acceptance;
+the initial absent-destination probe alone did not establish it.
