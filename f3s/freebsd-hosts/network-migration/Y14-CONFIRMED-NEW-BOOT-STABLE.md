@@ -15,6 +15,57 @@ and hashes those bytes. All guard/controller/proof/release/cleanup identity
 comparisons use this ID. Boot epochs remain diagnostic date evidence only.
 Historical contexts, failed trials and receipts remain unchanged.
 
+## 23:08 budget HOLD and controller-only amendment
+
+The23:05 readiness run passed native health, all six peers, protected state and
+all four authenticated f3 literal paths. Two controller bookkeeping assertions
+failed: its wrapper collided with the protected child's receipt filename, and
+an unqualified hostname assertion rejected the expected `f3.lan.buetow.org`.
+Original receipts and failures were preserved; a separate read-only finisher
+validated them without rerunning accepted checks. Private readiness wrappers
+now use unique labels/distinct child and wrapper filenames and the exact FQDN.
+
+Normal Rocky stopped gracefully at23:08:13.781, leaving insufficient time for
+the frozen prearm checks before the strict23:08:15 latest arm. No operator,
+activation, ordinary pending, guard or reboot started. The reviewed helper
+restored only normal Rocky at23:08:37. Full OLD protected/PF0/normal VM/marker
+clearance, strict original guest WG and both exact probe UID drains passed by
+23:11. Future live GO expired; no budget was shortened.
+
+The guest's native configured-gateway/handshake/Stage/TLS and strict original WG
+checks passed, but its controller no-op admission refused three omitted empty
+array properties. The exact `systemctl show --all` request omitted
+`ExecStartPre`, `ExecStartPost` and `EnvironmentFiles` despite pinned unit36e,
+script540b, correct loaded fragment, no drop-ins/overrides and today's stamp.
+Read-only D-Bus queries independently returned successful explicit empty arrays:
+`a(sasbttttuii) 0` for both commands and `a(sb) 0` for environment files.
+
+A distinct immutable `confirmed-new-boot-stable-array-amendment/` adds three
+bounded5-second typed queries and admits omissions only for those exact fields
+with successful exact empty-type results and no stderr. Other missing fields,
+nonempty values, wrong types, failed/partial/error output still refuse.
+Driver changes only the guest helper path/hash; operator changes only the driver
+hash. The16-artifact base and installed context/proof/hooks remain unchanged.
+Focused typed-producer/admission negatives and actual except/finally/operator
+privacy checks passed; actual full read-only strict guest admission passed at
+23:14:32. No native reinstall or live authority follows from this amendment.
+Its `frozen-pins.json` SHA is
+`2a4453fb6c7132ec7d15654e03d3783b5e73d51d0075e369fb2c29a2eb2d3a63`.
+Root accepted this controller-only source amendment after independent focused
+checks; there is no new native installation. Entry pins are:
+
+| Amendment entry | SHA-256 |
+| --- | --- |
+| `driver.py` | `2a2166267e5462a2dc9462042fb8694301e7edbefbca573dcb05baba19cdadd8` |
+| `operator.py` | `8db238f643fb1e2673ad5c2a9d4019d45241ad33c39baa4c919a25db8f657dd9` |
+| `guest-postboot.py` | `d689ded0dffb1a5cdeda0c2cf1444b7e8f3589364d27dea78630bfd19a593a91` |
+
+The actual read-only admission receipt is `ACTUAL-ADMISSION.json`, SHA
+`fd937ec745c13dec49e35c35fd306c54bcbda35c46324df8ce5e866f3a56e487`.
+Fresh readiness and a separate whole live GO are still required. The16 base
+artifacts below remain immutable; their original driver/operator are retained
+as history while the accepted amended entry points above are the next proposal.
+
 ## Frozen source and checks
 
 The private controller directory is
