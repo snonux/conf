@@ -22,11 +22,21 @@ provides16 cached per-boot random bytes after entropy is ready. Ordinary textual
 `sysctl -b kern.boot_id` returned16 identical bytes across repeated reads.
 No identifier bytes or private key values are reproduced here.
 
-Next work is a source-only generic regression fixture and proposal covering
+The stable-ID source fix and durable generic regressions have since passed the
+single full offline checker and root review, committed as7a37ac4. A separately
+authorized file-only slice deployed helperce4728 and random-dependent rcefdeb1
+at22:20:48UTC. Exact two root:wheel0755 files changed; five other resources and
+all OLD protected/network/WG/PF/VM state stayed unchanged. Native syntax,
+random-before-rollback-before-NETIF order and unchanged reapply passed; markers
+remain absent. No address/guard/VM/reboot action was authorized or performed.
+Private receipts are `evidence/boot-identity-file-only-*.json`.
+
+The frozen13-artifact bundle below remains historical and uninstalled. Next work
+is a distinct source-only stable-ID consumer/context proposal covering
 guard arm/admission, boot claim, watchdog, release and all controller/diagnostic
 identity consumers. Timestamp refresh, tolerance and fallback identity guesses
-are prohibited. No managed helper or immutable context changes are authorized;
-opaque read failure must fail closed. Boot time may remain a diagnostic
+are prohibited. No immutable historical context is changed, and no new consumer
+installation or live trial is authorized; opaque read failure must fail closed. Boot time may remain a diagnostic
 timestamp, but it cannot establish per-boot identity.
 
 The first actual boot attempt remains failed and fully cleaned up; see

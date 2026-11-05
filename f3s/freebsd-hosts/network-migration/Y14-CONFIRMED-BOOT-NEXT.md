@@ -8,17 +8,27 @@ the separate v2 retry proved native guard expiry. See
 No primary confirmation, guard activation or confirmed-NEW reboot is authorized
 by this file. Root reviews the exact native slice separately.
 
-Native retry and deployment are currently **on HOLD**. The deployed2fb helper
-uses estimated `kern.boottime` as identity; its one-second change in the same
+Native retry and consumer installation are currently **on HOLD**. The former2fb helper
+used estimated `kern.boottime` as identity; its one-second change in the same
 running boot refused the next installation before any object was created.
-The unchanged-helper fixture also reproduces false OLD recovery after a clock
+The unchanged2fb fixture also reproduces false OLD recovery after a clock
 correction and false NEW release on a different boot with the same timestamp.
 FreeBSD's [timecounter source](https://raw.githubusercontent.com/freebsd/freebsd-src/releng/15.0/sys/kern/kern_tc.c)
-explains why boot time changes with wall-clock adjustments. The source fix under
-review instead uses the [cached16-byte kernel boot ID](https://raw.githubusercontent.com/freebsd/freebsd-src/releng/15.0/sys/kern/kern_mib.c),
+explains why boot time changes with wall-clock adjustments. The reviewed source fix
+instead uses the [cached16-byte kernel boot ID](https://raw.githubusercontent.com/freebsd/freebsd-src/releng/15.0/sys/kern/kern_mib.c),
 read through `sysctl -b`, with producer status and exact length checked before
 hashing. Historical receipts retain their actual timestamps; they did not
 capture this new identity field and are not rewritten to claim otherwise.
+
+The stable-ID helperce4728 and random-dependent rcefdeb1 were deployed in a
+separate file-only slice at22:20:48UTC, after the single full offline checker,
+root review, exact two-file preview and actual new-day F3 :15 completion. Both
+are root:wheel0755; native syntax and random-before-rollback-before-NETIF order
+passed. The other five resources and OLD protected/WG/PF/VM state stayed
+unchanged, unchanged reapply passed, and all markers remain absent. No guard,
+address, VM or reboot action occurred. A distinct stable-ID controller/context
+bundle and fresh native acceptance are still required; this file-only deployment
+does not accept confirmed-NEW startup or authorize a trial.
 
 ## Minimal source contract
 
