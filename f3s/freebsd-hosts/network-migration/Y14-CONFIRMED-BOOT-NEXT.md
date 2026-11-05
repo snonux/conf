@@ -1,9 +1,11 @@
-# Confirmed-NEW boot guard — source-only review checkpoint
+# Confirmed-NEW boot guard — dormant installation and next native gates
 
-Not deployed or natively accepted. f3 remains OLD-primary Stage after the accepted
-300-second expiry and 600-second OLD boot recovery. No primary confirmation,
-guard activation or confirmed-NEW reboot is authorized by this file. Root must
-review the final source/fixtures/hash and exact native slice first.
+The reviewed dormant helper is installed; guard expiry and confirmed-NEW boot
+remain unaccepted. f3 remains OLD-primary Stage after the accepted 300-second
+expiry and 600-second OLD boot recovery. The first guard trial stopped before
+confirmation and restored OLD; see [native evidence](Y14-PRIMARY-NATIVE.md).
+No primary confirmation, guard activation or confirmed-NEW reboot is authorized
+by this file. Root reviews the exact native slice separately.
 
 ## Minimal source contract
 
