@@ -128,6 +128,15 @@ Stage alias201 and clearing Promote alias200 while retaining accepted Stage
 alias201. It executes no host network commands and is not a native FreeBSD
 acceptance test.
 
+For physical `re0` promotion, `check-wg-refresh.py` exercises the real helper's
+private live-configuration snapshot and in-place WireGuard refresh, including
+snapshot failure and partial-apply/rollback retries. `check-wg-static.py` checks
+the semantic comparison used by live acceptance: peer/AllowedIPs order and
+counters may change, but keys, endpoints, prefixes, ports and keepalives must
+match. Never print the intermediate output of `wg-static.awk`: it includes
+private configuration and must be hashed on the host. Use `check-offline.py
+--guest-only` to run the existing standalone guest assertions separately.
+
 Standalone guest preparation (q24, 2026-11-05): the separate
 `freebsd-guest-migration` cluster exposes only `freebsd_guest_network_*`
 actions. It does not join hypervisor aggregates or change vm-bhyve autostart.

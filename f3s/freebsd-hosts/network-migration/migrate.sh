@@ -81,6 +81,17 @@ restore_v4_aliases() {
     done < "$pending/v4"
 }
 
+# FreeBSD remembers a peer's local source address independently of the route.
+# Reapply the unchanged live configuration in place after a default change:
+# setconf recreates peer transport state without touching wg0 addresses/routes.
+# The original complete input remains in pending if a partial setconf fails.
+refresh_wg_runtime() {
+    [ -f "$pending/wg0.runtime.conf" ] || return 0
+    [ ! -L "$pending/wg0.runtime.conf" ] || fail 'unsafe WireGuard runtime snapshot'
+    ifconfig wg0 >/dev/null 2>&1 || fail 'wg0 missing; runtime restoration remains pending'
+    wg setconf wg0 "$pending/wg0.runtime.conf"
+}
+
 v6_rows() {
     rows=$(ifconfig "$iface" inet6) || return
     printf '%s\n' "$rows" | awk '
@@ -243,6 +254,10 @@ arm() {
         /usr/local/sbin/gonf-endpoint-rollback snapshot "$state/preparing/endpoints"
         touch "$state/preparing/endpoints-required"
     fi
+    if [ "$action" = promote ] && [ "$iface" = re0 ] && ifconfig wg0 >/dev/null 2>&1; then
+        wg showconf wg0 > "$state/preparing/wg0.runtime.conf"
+        chmod 600 "$state/preparing/wg0.runtime.conf"
+    fi
     mv "$state/preparing" "$pending"
     sync
     # A previous rollback's absent keys are now represented by absent
@@ -322,6 +337,7 @@ promote() {
     sysrc -f /etc/rc.conf -x "ifconfig_${iface}_alias201" >/dev/null
     sysrc -f /etc/rc.conf defaultrouter=10.20.0.1 >/dev/null
     set_default4 10.20.0.1
+    refresh_wg_runtime
 }
 
 restore_runtime() {
@@ -366,6 +382,7 @@ restore_runtime() {
             fi
         fi
     fi
+    refresh_wg_runtime
 }
 
 rollback() {
