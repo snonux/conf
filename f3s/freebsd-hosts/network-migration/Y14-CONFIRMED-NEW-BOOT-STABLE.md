@@ -1,6 +1,24 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Rocky boot check corrected; no active transaction — 2026-11-06, 12:14 UTC
 
+The 11:26 ordinary guest reboot restored OLD automatically, but its diagnostic
+failed because the early observer queried D-Bus before the bus was ready.
+This remains a failed boot trial; it is not accepted as a boot proof. Failure
+cleanup completed at 11:52:19. Root independently verified the original OLD
+configuration/WireGuard, the new guest kernel boot identity, complete private
+archives, all markers clear and 121 recorded process origins gone. The parent
+f3 host remains NEW-primary; its kernel did not reboot.
+
+Boot-v7 adds explicit D-Bus ordering and was installed dormant at 12:06 without
+changing the network. Its readiness stopped before health probes or migration
+gates because the approved guest reboot changed the VM's running process ID.
+A separate controller now uses the existing VM policy to normalize only that
+PID; actual configuration checks remain exact. The actual record passes and a
+stopped VM is refused. Original frozen observer/helper/unit sources are intact.
+Root rechecked actual OLD, strict WireGuard, absent markers and 22 closed origins.
+Fresh full-eight-host readiness and one ordinary boot trial are queued for
+12:26 UTC. k3s remains running; its authorized shutdown is reserved for rollout.
 
 ## Rocky automatic recovery and cleanup accepted — 2026-11-06, 10:55 UTC
 
