@@ -1,5 +1,21 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Admission refused before activation — 2026-11-06, 09:33 UTC
+
+The first attempt with the installed cache correction refused its remaining
+writer-time check before taking ownership or creating any gate/request. No
+promotion, cache refresh, rollback timer or migration transaction started.
+Root retired only the exact admission health-probe UIDs and verified the actual
+same-boot amended original OLD state, unchanged WireGuard, all markers absent
+and all recorded process origins gone. This is an admission refusal, not a
+failed migration or automatic-expiry proof. Original evidence remains intact.
+
+The namespace-only v4a successor preserves all migration requirements. Root
+joined readiness verification and launch in one sequential controller to remove
+the previous model-turn delay; admission still requires all eight hosts idle
+and the full fixed900/1035 timing margin. k3s remains running for the pilot;
+the approved complete shutdown is reserved for the later r-node rollout.
+
 ## Cache helper installed without activation — 2026-11-06, 08:56 UTC
 
 Confaacb97e adds the same-value WireGuard source-cache refresh after promotion
