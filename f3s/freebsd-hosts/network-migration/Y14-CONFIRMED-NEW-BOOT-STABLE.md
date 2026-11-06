@@ -1,5 +1,29 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Rocky ordinary boot and cleanup accepted — 2026-11-06, 13:02 UTC
+
+The 12:46 boot-v7 trial passed fresh readiness, strict NEW traffic and one normal
+guest reboot. Native early/runtime observers proved automatic OLD restoration
+before any manual helper call; strict postboot traffic, full health, parent
+kernel/VM protection and process closure also passed. Root independently checked
+the actual causal receipts, original configuration/WireGuard and 99 origins.
+The guest remains OLD-primary 192.168.1.123 with 10.20.0.123 retained.
+
+Cleanup completed at 13:00:48. Root verified both pre-removal archives, original
+OLD on the actual new guest boot, cleared markers, health, exact probe UIDs and
+135 origins. Its first attempt stopped on an existing evidence filename before
+mutations; a controller namespace-only continuation completed the same trial.
+Actual cleanup derivative bytes are in the original controller archive. The
+operator/outer wrapper source supplement is explicitly later; neither original
+pre-removal archive was changed. The failed boot-v6 remains failed and preserved.
+
+The complete final-confirmation guard passed nine offline suites. Root verified
+its 61 source files and 97 external inputs, reviewed recovery/retirement, and
+resolved import-cache isolation before freezing. Actual accepted boot-v7 cleanup
+now satisfies its prerequisites. Fresh guarded final readiness is queued for
+13:06 UTC; no final promotion or confirmation has run yet. k3s remains up.
+Private evidence prefix: `~/.local/state/conf/y14-preparation/evidence/rocky-primary-boot-v7-`.
+
 ## Readiness refused packet loss; OLD state retained — 2026-11-06, 12:29 UTC
 
 Two fresh readiness attempts stopped on a lost IPv4 gateway reply before any
