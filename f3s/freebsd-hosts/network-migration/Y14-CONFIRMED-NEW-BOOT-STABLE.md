@@ -1,5 +1,18 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Rocky diagnostic source ready — 2026-11-06, 07:50 UTC
+
+The three failed guest primary trials remain failed and cleaned. One separate
+instrumented OLD/NEW diagnostic is now frozen and root-reviewed:39 source files,
+manifest `78e816c028c78881bad09ed33269a39b43ae6785067c77a18aefbcf9f5323358`,
+79 external pins, all8 focused checks passed independently. It captures one OLD
+and one NEW strict four-target pass, explicitly rolls back and completes full
+owned evidence/gate/recipe/health cleanup. Slow cleanup must refuse stale
+admission or insufficient writer time before mutations. Fixed900/1035 contracts
+and task914 schedules remain unchanged. It has not run; no expiry, guest boot,
+confirmation or transport-cause claim follows from source checks. Private
+protocol: `~/.local/state/conf/y14-preparation/rocky-blowfish-NEW-diagnostic-reviewed/PROTOCOL.md`.
+
 The f3 host completed confirmed-NEW boot acceptance on2026-11-06; current
 accepted state and remaining guest work are recorded below. Earlier failed
 attempts remain dated evidence and grant no retroactive acceptance.
