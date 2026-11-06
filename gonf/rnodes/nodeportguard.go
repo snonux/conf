@@ -31,7 +31,7 @@ func (NodePortGuard) Stage() {
 	EnsureDir("/etc/f3s-nodeport-guard", RootPrivate)
 	EnsureDir("/usr/local/sbin", RootOwned)
 	rules := InstallFile("/etc/f3s-nodeport-guard/candidate.nft",
-		paths.RNodeAsset(assets+"candidate.nft"), RootPrivate,
+		paths.RNodeAsset(assets+"migration.nft"), RootPrivate,
 		WithValidation("/usr/sbin/nft", List("-c", "-f", CandidatePath)))
 	helper := InstallFile("/usr/local/sbin/f3s-nodeport-guard",
 		paths.RNodeAsset(assets+"f3s-nodeport-guard"), RootExec,

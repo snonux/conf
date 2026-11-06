@@ -14,16 +14,22 @@ type Profile struct {
 	Interface       string
 	EnableWireGuard bool
 	WireGuardPort   uint16
+	// Rules optionally selects a group-owned candidate instead of the template.
+	Rules string
 }
 
 // Stage installs candidates and the guarded activation helper. It neither loads
 // rules nor enables the boot service: approval and one-host verification come
 // first, as described in f3s/docs/linux-source-firewall.md.
 func Stage(profile Profile) {
+	source := profile.Rules
+	if source == "" {
+		source = paths.GonfAsset("hostfirewall", "candidate.nft.tmpl")
+	}
 	EnsureDir("/etc/f3s-firewall", RootPrivate)
 	EnsureDir("/usr/local/sbin", RootOwned)
 	rules := InstallFile("/etc/f3s-firewall/candidate.nft",
-		paths.GonfAsset("hostfirewall", "candidate.nft.tmpl"),
+		source,
 		RootPrivate, WithTemplateData(profile),
 		WithValidation("/usr/sbin/nft", List("-c", "-f", CandidatePath)))
 	helper := InstallFile("/usr/local/sbin/f3s-firewall",

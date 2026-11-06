@@ -1,11 +1,16 @@
 # Physical-source and pod-source migration candidates (o14)
 
-Preparation only. No production rules were loaded and no lab host or service
-was changed. Packet checks load rules only in disposable network namespaces.
+The initial o14 preparation was dormant. During the approved r-node migration
+on 2026-11-06, canonical `rnodes_firewall_stage` and
+`rnodes_node_port_guard_stage` were switched to these migration files.
+Activation still requires each existing loader's guarded apply and fresh SSH
+confirmation; staging alone never loads rules. Native acceptance is recorded
+in the individual 224/324/424 reports. Packet checks load rules only in
+disposable network namespaces.
 `rnodes_firewall_migration_stage` installs `/etc/f3s-firewall/migration.nft`;
 `rnodes_node_port_guard_migration_stage` installs
 `/etc/f3s-nodeport-guard/migration.nft`. Both tasks are Operational and validate
-the dormant files with native `nft -c`. Existing `candidate.nft` files and
+the dormant files with native `nft -c`. These dormant-file tasks leave `candidate.nft` files and
 confirmed boot policies remain unchanged. Neither task installs or activates
 a loader, changes systemd state, or requests a restart.
 
