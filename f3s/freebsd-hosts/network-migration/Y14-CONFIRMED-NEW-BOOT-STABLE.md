@@ -50,7 +50,15 @@ expiry, actual boot, final confirmation and reapply serially. A single read-only
 Rocky capture matches its accepted FINAL dual Stage profile exactly. Its
 wrapper mishandled the normal empty IPv6 JSON array; a hash-linked local finisher
 validated that original capture without another native query or baseline reset.
-No guest primary activation has occurred.
+The first standalone Rocky primary trial at04:06 UTC subsequently FAILED
+and explicitly rolled back to the same accepted OLD Stage. NetworkManager
+activation timestamp and nmcli address serialization exposed checker errors;
+they are being corrected prospectively against saved evidence. No timer-expiry
+or guest-boot acceptance is claimed. Failed-trial cleanup durably archived the
+journal/evidence and removed the original owned gate, but stopped at unchanged
+recipe preview because `-privilege none` rejects privileged chunks. No recipe
+apply ran. Health/reapply/probe cleanup still require a separate continuation;
+no repeat trial or guest reboot has run.
 
 ## Historical failed terminal at01:02 UTC on2026-11-06
 
