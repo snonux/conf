@@ -1,5 +1,14 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Readiness refused packet loss; OLD state retained — 2026-11-06, 12:29 UTC
+
+Two fresh readiness attempts stopped on a lost IPv4 gateway reply before any
+migration gate, promotion, context or reboot. The strict two-of-two criterion
+is unchanged. Root removed the exact owned probe UIDs and verified original
+OLD, strict WireGuard, all markers clear and 43 process origins gone. A bounded
+follow-up diagnostic received 80/80 replies across four targets; this is not
+trial acceptance. Fresh full readiness is queued for 12:46 UTC. k3s remains up.
+
 ## Rocky boot check corrected; no active transaction — 2026-11-06, 12:14 UTC
 
 The 11:26 ordinary guest reboot restored OLD automatically, but its diagnostic
