@@ -1,5 +1,13 @@
 # JetKVM recovery design and unresolved gates
 
+**2026-11-06: JetKVM plan simplified on user instruction.** Keep vendor DHCP,
+use the four prepared MAC reservations, and verify new leases/device identity/
+video/HID after the final human-confirmed rack move. Custom JetKVM helper,
+profiler, IPvlan and boot experiments below are historical and must not resume
+as migration prerequisites. See IQ `topics/infra/openbsdrouter-plan/JETKVM-DHCP.md`.
+The first device is cleaned with an inert helper; incomplete v44 was never run.
+Shelly and host recovery requirements remain unchanged.
+
 Evidence reviewed 2026-11-05 for task s14. **The first device has the helper
 installed and two additive detached-expiry trials passed cleanup. Fixed-channel
 HTTP/SSH usability failed; renumbering remains gated.** See the

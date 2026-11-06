@@ -1,5 +1,13 @@
 # Device recovery preparation (s14)
 
+**2026-11-06: JetKVM plan simplified on user instruction.** Keep vendor DHCP,
+use the four prepared MAC reservations, and verify new leases/device identity/
+video/HID after the final human-confirmed rack move. Custom JetKVM helper,
+profiler, IPvlan and boot experiments below are historical and must not resume
+as migration prerequisites. See IQ `topics/infra/openbsdrouter-plan/JETKVM-DHCP.md`.
+The first device is cleaned with an inert helper; incomplete v44 was never run.
+Shelly and host recovery requirements remain unchanged.
+
 Initial read-only discovery on **2026-11-05** preceded the reviewed temporary
 JetKVM developer-access inspections, which restored the original key and mode.
 The user subsequently approved the Shelly Matter transition and fully-down

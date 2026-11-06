@@ -1,5 +1,13 @@
 # Next JetKVM confirmed runtime and owner/boot gates
 
+**2026-11-06: JetKVM plan simplified on user instruction.** Keep vendor DHCP,
+use the four prepared MAC reservations, and verify new leases/device identity/
+video/HID after the final human-confirmed rack move. Custom JetKVM helper,
+profiler, IPvlan and boot experiments below are historical and must not resume
+as migration prerequisites. See IQ `topics/infra/openbsdrouter-plan/JETKVM-DHCP.md`.
+The first device is cleaned with an inert helper; incomplete v44 was never run.
+Shelly and host recovery requirements remain unchanged.
+
 Source-only proposal under s14. Root reviews exact code/drivers and serializes
 all native windows. v32 ran and is terminal; further device access, file
 replacement, lease signal, helper invocation, hook or boot needs its own reviewed
