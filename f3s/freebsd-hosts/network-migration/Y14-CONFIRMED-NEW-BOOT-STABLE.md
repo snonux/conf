@@ -1,4 +1,4 @@
-# f3 confirmed-NEW boot — persistent monitor prepared
+# f3 confirmed-NEW boot — persistent trial failed; OLD restored
 
 The amended actual boot trial failed after release because one required
 watcher SSH query timed out. Typed owned recovery restored OLD; full terminal
@@ -19,7 +19,43 @@ and hashes those bytes. All guard/controller/proof/release/cleanup identity
 comparisons use this ID. Boot epochs remain diagnostic date evidence only.
 Historical contexts, failed trials and receipts remain unchanged.
 
-## Current preparation at00:26 UTC on2026-11-06
+## Current terminal state at01:02 UTC on2026-11-06
+
+The persistent-monitor host trial FAILED overall, with no release. Fresh actual
+00:45 writer completion, health, strict peers, four paths and typed guest no-op
+admission passed. Only normal Rocky stopped gracefully at00:47:11; ordinary300
+armed at00:47:25, guard600 at00:48:10 (deadline00:58:09), and normal f3 reboot
+was requested at00:48:12. Fresh old SSH, a changed opaque boot ID and original
+NEW causal receipts passed at00:50:19.
+
+At00:50:27, diagnostic warmup line307 failed: f2 lost both IPv4 probes. The
+reused strict checker's `set -e` stopped before IPv6 and PUB identity collection.
+This does not establish a key mismatch, or prove NEW transport healthy. Other
+five peers passed both families and identity. PF0/violations0 and both normal
+counter closes show no recorded persistent-counter transport error. Final
+strict capture/NAT/release were never reached; the trial remains failed.
+
+Typed OLD restoration was independently verified. Full postfailure health,
+unchanged strict six-peer checks (including f2 zero loss in both families), four
+paths, strict original guest/configured gateways/TLS and typed admission passed.
+Both exact pod UIDs, kernel-bound producers, local actors and native captures
+were drained. After exclusive whole-evidence archive/fsync and revalidation,
+only the two persistent proof hooks and owned empty gate were removed. Private
+original context/program/receipts remain; no historical context is reused.
+Unchanged Prepare/PF reapply preserved the loaded checksum without reload,
+flush or reset. All12 terminal predicates passed at01:02:25: OLD-primary Stage,
+normal Rocky AUTO/RUNNING, others stopped and all four active markers absent.
+
+The next source-only change separates authenticated identity/command completion
+from diagnostic ping loss and always records both families. It keeps the final
+original strict2/2 checker and fresh traffic/capture requirements unchanged.
+No further installation or live retry is authorized by this failed trial.
+Evidence: `confirmed-new-boot-persistent-failure-TERMINAL-private.json` and
+`confirmed-new-boot-persistent-failure-whole-native-evidence.tgz` in the private
+preparation evidence directory. Historical16+4+17+4 pins and OLD source YAML
+remain exact. Guest primary trials still follow full host acceptance.
+
+## Historical preparation at00:26 UTC on2026-11-06
 
 A distinct persistent counter monitor replaces repeated per-sample SSH
 connections. Its producer uses the same PF selection loop and cumulative
