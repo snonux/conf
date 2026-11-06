@@ -16,6 +16,35 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v43 known readiness failure and completed cleanup — 2026-11-06
+
+The complete corrected b759/b9 trial used manifest64 `ab4bb59b…`,1234 external
+pins and five independently passed focused suites. Setup, one normal reboot and
+old-address HTTP/H264 recovery passed. Its small pending witness at boot+17.07s
+held the metadata lock only17.11–17.26s, then waited within the original readiness
+bound. Full observation began33.40s, with short locks33.44–33.54 and41.56–41.59s.
+The old long-lock pattern did not span readiness in this trial.
+
+The live management proof FAILED. A known failed result was retained on the
+first write at boot+30.876382221s, with reason `wait-timeout` and last readiness
+code `collector-timeout`; original wait_until was30.871888957s and expiry120.871888957s.
+The last code alone does not establish which earlier observation/validation
+prevented readiness. The collector has a per-call3s context inside the original30s
+window, and earlier reasons may be overwritten. No timeout increase or further
+boot retry is inferred. A separate bounded read-only timing probe is SOURCE ONLY.
+
+Independent original expiry passed with `usability_previously_ensured=false`;
+it verifies the known negative/empty state, not a usable management path. Whole
+boot, primary and fleet acceptance remain false. The trial ended06:41:56/operator1
+with cleanup proven: exact hook/empty parent retired, whole failed10-file journal
+preserved, original7 restored verbatim, no managed resources. Root independently
+checked five auth/fresh9 scopes, PC closure, six final native predicates,
+159/190-file archive hashes, actual final path-mapped journal and actor/group/stream
+closure. Helper remainsb759/b9; current kernel is
+`c910d0bc-16d3-4bba-8d68-ead8fbe0e96c`; historical6 metadata is unchanged.
+Private evidence: `~/.local/state/conf/s14-jetkvm-deferred-boot-v43-20261106/`
+and `s14-jetkvm-v43-root-terminal-verification-private.json` in its parent.
+
 ## v42 terminal-diagnostic helper file-only stage — 2026-11-06
 
 The reviewed source correction is committed as confb9e754e. Its clean detached

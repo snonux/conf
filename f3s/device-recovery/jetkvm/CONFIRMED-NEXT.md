@@ -12,7 +12,22 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
-## Current checkpoint — 2026-11-06, 06:09 UTC
+## Current checkpoint — 2026-11-06, 06:42 UTC
+
+v43 FAILED live management readiness but completed verified cleanup. The new
+helper retained a known negative result: original wait timeout, last collector
+timeout, first-write persistence. Short observer lock times were measured; the
+previous long-lock pattern was not repeated across readiness. The last code
+is not enough to identify the earlier blocking predicate. No new boot is planned
+before a bounded read-only readiness timing probe.
+
+Original expiry of the negative state and all owned cleanup/auth/fresh9/archive/
+process checks passed; management/primary/fleet acceptance remain false. Original7
+is restored, historical6 unchanged, no managed resources/hook exist. Helper
+remainsb759/b9 and current kernel is c910d0bc…. See the
+[v43 record](NATIVE-RUNTIME-2026-11-05.md#v43-known-readiness-failure-and-completed-cleanup--2026-11-06).
+
+## Earlier checkpoint — 2026-11-06, 06:09 UTC
 
 Binary-only v42 PASSED with helperb75947bc…/4730284B/root0700/version0.1.0,
 sourceconfb9e754e/clean embedded revision. It retains fixed-code negative
