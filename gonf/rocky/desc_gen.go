@@ -30,6 +30,10 @@ func (NetworkMigration) DescConfirm() string {
 	return "Accepts independently verified fresh management and service checks"
 }
 
+func (NetworkMigration) DescDiagnostics() string {
+	return "Installs tcpdump for migration packet diagnostics"
+}
+
 func (NetworkMigration) DescPrepare() string {
 	return "Installs dormant NetworkManager transaction and PID1 rollback tools"
 }

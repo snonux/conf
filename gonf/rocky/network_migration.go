@@ -22,12 +22,16 @@ type MigrationHost struct {
 	IPv6Policy string
 }
 
-func (NetworkMigration) OptsPrepare() TaskOptions  { return TaskOptions{Operational()} }
-func (NetworkMigration) OptsStage() TaskOptions    { return TaskOptions{Operational()} }
-func (NetworkMigration) OptsPromote() TaskOptions  { return TaskOptions{Operational()} }
-func (NetworkMigration) OptsConfirm() TaskOptions  { return TaskOptions{Operational()} }
-func (NetworkMigration) OptsRollback() TaskOptions { return TaskOptions{Operational()} }
-func (NetworkMigration) OptsStatus() TaskOptions   { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsPrepare() TaskOptions     { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsStage() TaskOptions       { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsPromote() TaskOptions     { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsConfirm() TaskOptions     { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRollback() TaskOptions    { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsStatus() TaskOptions      { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsDiagnostics() TaskOptions { return TaskOptions{Operational()} }
+
+// Diagnostics installs tcpdump for migration packet diagnostics.
+func (NetworkMigration) Diagnostics() { Packages("tcpdump") }
 
 // Prepare installs dormant NetworkManager transaction and PID1 rollback tools.
 func (NetworkMigration) Prepare() {
