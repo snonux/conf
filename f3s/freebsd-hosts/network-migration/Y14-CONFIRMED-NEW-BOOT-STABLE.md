@@ -1,16 +1,8 @@
-# f3 confirmed-NEW boot — persistent trial failed; OLD restored
+# f3 confirmed-NEW boot — host accepted; guest primaries pending
 
-The amended actual boot trial failed after release because one required
-watcher SSH query timed out. Typed owned recovery restored OLD; full terminal
-verification passed at23:43:09UTC on2026-11-05 (local date2026-11-06).
-f3 remains OLD-primary dual Stage, normal Rocky AUTO/RUNNING, and FreeBSD/labs
-stopped. All four active ordinary/endpoint/guard/activation markers are absent.
-Only the two owned diagnostic rc hooks were removed after durable whole-evidence
-archival; the private original context/program/causal receipts remain native.
-This failed trial grants no guest primary acceptance. Confirmed-NEW startup has valid
-causal receipts but remains unaccepted as a complete trial because NEW was not
-observed through the former guard deadline. Frozen source and failures are
-preserved; future source changes and live execution need separate review.
+The f3 host completed confirmed-NEW boot acceptance on2026-11-06; current
+accepted state and remaining guest work are recorded below. Earlier failed
+attempts remain dated evidence and grant no retroactive acceptance.
 
 The managed helperce4728 and random-dependent rollback rcefdeb1 were already
 accepted in the earlier file-only slice. This distinct bundle reads opaque
@@ -19,7 +11,48 @@ and hashes those bytes. All guard/controller/proof/release/cleanup identity
 comparisons use this ID. Boot epochs remain diagnostic date evidence only.
 Historical contexts, failed trials and receipts remain unchanged.
 
-## Current terminal state at01:02 UTC on2026-11-06
+## Accepted host terminal at01:49 UTC on2026-11-06
+
+The distinct diagnostic-bundle host trial PASSED. f3 now persists primary
+`10.20.0.133/24` and default `10.20.0.1`; old `192.168.1.133/24`, local
+`fd02:ca0b:f1cb:20::133/64` and laptop return via192.168.1.2 remain. Normal Rocky
+is AUTO/RUNNING; FreeBSD/labs remain stopped. All four active markers and both
+trial hooks are absent. No cable, peer/key/AllowedIPs, source YAML or full-mesh
+endpoint rollout changed.
+
+Actual01:25 writer and fresh readiness/guest gates passed. Normal Rocky stopped
+gracefully01:27:16, ordinary300 armed01:27:31, guard600 armed01:28:15, and one
+normal f3 reboot was requested01:28:18. Changed opaque ID and original NEW
+before-NETIF/WG/runtime-before-LOGIN receipts passed01:30:24. The new diagnostic
+checker independently completed identity and both families, then the UNCHANGED
+fresh strict checker passed all six2/2 in both families. Fresh capture proved
+all six actual OLD physical UDP sources; paired-SYN/PF NEW-source NAT/TLS,
+services, strict original guest/gateways/timer and four held paths passed.
+
+Same-ID release passed01:33:36 after former ordinary+65. The SAME persistent
+counter stayed through former outer01:38:15+65;1469 postboot samples were zero.
+Final NEW and disconnect/operator exit0 passed01:39:21. Exact owned cleanup
+archived/fsynced accepted+released+native proof evidence before removing only
+two pinned hooks and the empty gate; no restore ran. Unchanged Prepare/PF
+reapply preserved loaded rules without reload/reset. Final health/strict peers/
+paths/guest, exact two UID drains, producer/capture/actor absence and source
+pins passed; full host terminal01:49:51/process receipt01:50:00.
+
+Two final controller bookkeeping errors (receipt filename collision and YAML
+filename typo) are retained. Separate SHA-linked finishers validate the genuine
+original exit/native evidence without rerun or reinterpretation. Private
+terminal receipts are `confirmed-new-boot-diagnostic-success-TERMINAL-private.json`
+and `confirmed-new-boot-diagnostic-success-process-drain-final-private.json`.
+Earlier failed trials below remain failed.
+
+Task y14 stays OPEN: standalone Rocky then FreeBSD still need primary/gateway
+expiry, actual boot, final confirmation and reapply serially. A single read-only
+Rocky capture matches its accepted FINAL dual Stage profile exactly. Its
+wrapper mishandled the normal empty IPv6 JSON array; a hash-linked local finisher
+validated that original capture without another native query or baseline reset.
+No guest primary activation has occurred.
+
+## Historical failed terminal at01:02 UTC on2026-11-06
 
 The persistent-monitor host trial FAILED overall, with no release. Fresh actual
 00:45 writer completion, health, strict peers, four paths and typed guest no-op
