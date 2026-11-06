@@ -1,4 +1,47 @@
-# f3 and Rocky accepted NEW; FreeBSD final cutover pending
+# f3 and standalone guests: primary migration accepted
+
+## FreeBSD primary migration and cleanup complete — 2026-11-06, 16:28 UTC
+
+FreeBSD is primary 10.20.0.139/default 10.20.0.1, retaining 192.168.1.139
+and the controller return route. Confirmation through a fresh NEW connection,
+one normal NEW boot, source-bound TLS, full service health and parent protection
+passed. Root separately verified the persistent primary/default, retained old
+alias and actual native boot claim. The ordinary and confirmed-boot former
+deadline observations both passed; the final operator exited successfully.
+
+The existing WireGuard configuration and its known pre-existing broken identity
+remain unchanged. The reviewed standalone native-IPv6 exception still applies:
+no guest ULA is allocated; FreeBSD retains link-local with upstream RA disabled.
+The first final attempt passed a snapshot path where the helper required an
+archive name; the existing helper restored OLD, and that failed attempt remains
+failed. Two subsequent attempts refused before mutation during a short NFS
+monitor job. No updater or monitor policy was changed. The successful run used
+the corrected archive argument and bounded fresh read-only recollection.
+
+Cleanup completed at 16:28 UTC. Complete native and controller archives were
+preserved before the exact original activation gate was removed under the helper
+lock. Unchanged source-owned Prepare preview/reapply preserved protected files
+and accepted NEW settings; fresh old/new connections and full health passed.
+The two owned probes were deleted with UID preconditions, all 211 recorded
+origins were absent, and graceful shutdown restored FreeBSD STOPPED with Rocky
+RUNNING/AUTO and other guests stopped. k3s remains up; cables are unchanged.
+
+Root independently verified both archive hashes and gzip contents (330 native,
+655 controller members), executed sources/plan/final-trial health/probe identities,
+subsequent cleanup health, process absence and current native VM policy. The
+first cleanup stopped before gate removal because the existing guest shell
+banner prefixed the binary stream. Framed base64 transfer corrected that transport
+issue; the failed attempt remains preserved. No guest shell or library contract
+was changed.
+
+Cleanup evidence: `freebsd-primary-final-root1609d-cleanup2-terminal-private.json`
+(SHA256 `cc3f47da731a3c0865d7b2c9b4c0ff47f71322cbeab33eeb437439bfc6bbb1ab`).
+Root verification: `freebsd-primary-final-root1609d-ROOT-cleanup-verification-terminal-private.json`
+(SHA256 `78fd73a03e56fe12c505e373dfdcd987619973198c85f5f3c00679955313af59`).
+
+Private final evidence: `freebsd-primary-final-root1609d-terminal-private.json`
+(SHA256 `c2f0cfa84766d77eccb4aafe18864a0f84ee4077916c89b26fe34d0586c5be44`)
+under `~/.local/state/conf/y14-preparation/evidence/`.
 
 ## Rocky complete; FreeBSD recovery trials passed — 2026-11-06, 15:48 UTC
 
