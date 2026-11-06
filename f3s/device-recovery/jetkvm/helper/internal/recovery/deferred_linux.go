@@ -31,8 +31,9 @@ type DeferredClaim struct {
 }
 
 type deferredResult struct {
-	Claim   DeferredClaim `json:"claim"`
-	Outcome string        `json:"outcome"`
+	Claim      DeferredClaim       `json:"claim"`
+	Outcome    string              `json:"outcome"`
+	Diagnostic *deferredDiagnostic `json:"diagnostic,omitempty"`
 }
 
 // deferredOps is only the read-only observation boundary of this boot role.
@@ -178,11 +179,35 @@ func continueDeferredManagement(ctx context.Context, a Adapter, ops deferredOps,
 	if initial.Generation != self.Generation || initial.Boot != self.Boot || initial.Boot != a.Boot || initial.Deadline != self.Deadline || initial.Hash != a.Profile.Hash() || a.Profile.kind() != "ipvlan" || initial.Attempt != "waiter-attempted" || initial.Deadline < WindowNS || initial.WaitUntil != initial.Deadline-WindowNS+deferredWaitNS || self.PID <= 1 || self.Birth == "" {
 		return errors.New("deferred continuation identity mismatch")
 	}
-	tick, err := ops.now()
+	recorder, err := pinDeferredDiagnostic(a.Store)
 	if err != nil {
 		return err
 	}
-	if tick < 0 || tick >= initial.WaitUntil {
+	defer func() { _ = recorder.Close() }()
+	diagnostic := deferredDiagnostic{Reason: "admission", Readiness: "not-observed", Persistence: "first-write"}
+	defer func() {
+		if resultErr == nil {
+			return
+		}
+		if errors.Is(resultErr, context.DeadlineExceeded) {
+			diagnostic.Reason = "wait-timeout"
+		} else if errors.Is(resultErr, context.Canceled) {
+			diagnostic.Reason = "cancelled"
+		}
+		if err := persistDeferredFailure(a, ops, initial, self, diagnostic); err != nil {
+			resultErr = errors.Join(resultErr, err)
+			if err := saveDeferredDiagnostic(recorder, a.Store, ops, initial, self, diagnostic); err != nil {
+				resultErr = errors.Join(resultErr, err)
+			}
+		}
+	}()
+	tick, err := ops.now()
+	if err != nil || tick < 0 {
+		diagnostic.Reason = "clock-unavailable"
+		return errors.New("deferred continuation clock unavailable")
+	}
+	if tick >= initial.WaitUntil {
+		diagnostic.Reason = "wait-timeout"
 		return errors.New("deferred readiness deadline reached")
 	}
 	// Clamp every collector and lock acquisition to the remaining original wait
@@ -190,42 +215,30 @@ func continueDeferredManagement(ctx context.Context, a Adapter, ops deferredOps,
 	remainingCtx, remainingCancel := context.WithTimeout(ctx, time.Duration(initial.WaitUntil-tick))
 	defer remainingCancel()
 	ctx = remainingCtx
-	defer func() {
-		if resultErr != nil {
-			// Do not replace another claim or hide the original failure if evidence
-			// persistence itself fails. The independent watchdog remains authoritative.
-			evidenceCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			err := deferredLocked(evidenceCtx, a.Store, func() error {
-				var current DeferredClaim
-				if err := readPrivate(filepath.Join(a.Store.Dir, deferredClaimFile), &current); err != nil {
-					return err
-				}
-				if current != initial {
-					return errors.New("deferred claim changed before failure record")
-				}
-				return deferredSave(a.Store, deferredResultFile, deferredResult{initial, "failed"})
-			})
-			if err != nil {
-				resultErr = errors.Join(resultErr, errors.New("deferred failure evidence not persisted"))
-			}
-		}
-	}()
 	var previous *ParentReadinessSnapshot
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		tick, err := ops.now()
-		if err != nil {
-			return err
+		if err != nil || tick < 0 {
+			diagnostic.Reason = "clock-unavailable"
+			return errors.New("deferred continuation clock unavailable")
 		}
 		if tick >= initial.WaitUntil || tick >= initial.Deadline {
+			diagnostic.Reason = "wait-timeout"
 			return errors.New("deferred readiness deadline reached")
 		}
 		// No Store lock is held while collecting or waiting for vendor startup.
 		snapshot, collectErr := ops.collect(ctx)
+		if collectErr != nil {
+			diagnostic.Readiness = deferredCollectorCode(collectErr)
+		} else if previous != nil {
+			diagnostic.Readiness = deferredValidatorCode(ValidateParentReadiness(a.Boot, a.Profile.MAC, *previous, snapshot))
+		}
 		if collectErr == nil && previous != nil && ValidateParentReadiness(a.Boot, a.Profile.MAC, *previous, snapshot) == nil {
+			diagnostic.Readiness = "validated"
+			diagnostic.Reason = "admission"
 			return deferredLocked(ctx, a.Store, func() error {
 				claim, err := deferredChecked(a, ops, self.Generation, true)
 				if err != nil {
@@ -251,9 +264,11 @@ func continueDeferredManagement(ctx context.Context, a Adapter, ops deferredOps,
 				// to admission. There is no readiness sleep/poll while holding this lock.
 				current, err := ops.collect(ctx)
 				if err != nil {
+					diagnostic.Readiness = deferredCollectorCode(err)
 					return err
 				}
 				if err := ValidateParentReadiness(a.Boot, a.Profile.MAC, snapshot, current); err != nil {
+					diagnostic.Readiness = deferredValidatorCode(err)
 					return err
 				}
 				if err := deferredEmpty(a, ops); err != nil {
@@ -269,6 +284,11 @@ func continueDeferredManagement(ctx context.Context, a Adapter, ops deferredOps,
 				if err != nil {
 					return err
 				}
+				if tick >= initial.WaitUntil {
+					diagnostic.Reason = "wait-timeout"
+					return errors.New("deferred readiness deadline reached before bootstrap")
+				}
+				diagnostic.Reason = "bootstrap"
 				if err := a.Bootstrap(a.Boot, tick); err != nil {
 					cleanupErr := a.Cleanup()
 					if cleanupErr != nil {
@@ -286,7 +306,8 @@ func continueDeferredManagement(ctx context.Context, a Adapter, ops deferredOps,
 				if tick >= claim.Deadline {
 					return expireCanary(a, deferredAuth(claim))
 				}
-				return deferredSave(a.Store, deferredResultFile, deferredResult{claim, "ensured"})
+				diagnostic.Reason = "ensured-persistence"
+				return deferredSave(a.Store, deferredResultFile, deferredResult{Claim: claim, Outcome: "ensured"})
 			})
 		}
 		if collectErr == nil {
@@ -425,7 +446,7 @@ func (claim DeferredClaim) state() State {
 }
 
 func deferredFreshMetadata(store Store) error {
-	for _, name := range []string{deferredClaimFile, deferredWaiterFile, deferredResultFile} {
+	for _, name := range []string{deferredClaimFile, deferredWaiterFile, deferredResultFile, deferredDiagnosticFile} {
 		if _, err := os.Lstat(filepath.Join(store.Dir, name)); err == nil {
 			return errors.New("prior deferred metadata requires explicit reconciliation")
 		} else if !errors.Is(err, os.ErrNotExist) {
