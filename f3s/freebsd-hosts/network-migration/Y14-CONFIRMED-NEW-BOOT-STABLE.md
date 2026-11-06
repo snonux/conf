@@ -1,6 +1,31 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
 
+
+## Rocky automatic recovery and cleanup accepted — 2026-11-06, 10:55 UTC
+
+The independent timer restored the exact original same-boot OLD Stage and
+WireGuard configuration. FIRST read-only observation at10:42:06 proved the
+unique after-deadline native archive before any manual helper request.
+Cleanup completed10:52:19: two completed PID1 rollback no-ops, pre-removal native/
+controller archives, original approval marker retirement, unchanged Gonf Prepare,
+strict traffic/full health/fresh access, exact probe UIDs removed and all markers
+clear. Root verified13 terminal flags and90 recorded actor ledgers. The guest is
+OLD-primary192.168.1.123/default192.168.1.1, with10.20.0.123 retained.
+
+The initial cleanup AST-selector failure and later busy-job refusal remain
+preserved. A source-bound cleanup derivative completed the same genuine trial;
+its actual source bytes are explicitly archived as a later supplement, while
+both pre-removal archives remain unchanged. This accepts the transport fix and
+automatic recovery; guest boot/final confirmation are still pending.
+
+Dormant boot-v6 diagnostics installed10:56 without network changes or reboot.
+The11:06 readiness attempt stopped before all-host collection/health/gates because
+a timer replay omitted a helper function. A readiness-only derivative now passes
+the actual captured record and rejects a changed600s timer. All installed original
+objects remain dormant, context absent, original boot/OLD/WG/markers verified.
+The next actual boot readiness is queued for11:26UTC; k3s remains running.
+
 ## Live transport proof passed; timer recovery pending — 2026-11-06, 10:28 UTC
 
 Standalone Rocky is temporarily NEW-primary10.20.0.123/default10.20.0.1,
