@@ -1,6 +1,6 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
-## Admission refused before activation — 2026-11-06, 09:33 UTC
+## Admission refused before activation — 2026-11-06, 09:49 UTC
 
 The first attempt with the installed cache correction refused its remaining
 writer-time check before taking ownership or creating any gate/request. No
@@ -15,6 +15,12 @@ joined readiness verification and launch in one sequential controller to remove
 the previous model-turn delay; admission still requires all eight hosts idle
 and the full fixed900/1035 timing margin. k3s remains running for the pilot;
 the approved complete shutdown is reserved for the later r-node rollout.
+The next namespace also stopped before activation: the first local interpreter
+failed before native access, then corrected readiness passed but the additional
+Root forward-time guard refused. Exact probe cleanup and actual same-boot OLD/
+all-markers/process absence were verified at09:49. v4b preserves the same source
+semantics; its next readiness is queued for10:06 with the original interpreter.
+No new primary/transport/expiry proof exists yet.
 
 ## Cache helper installed without activation — 2026-11-06, 08:56 UTC
 
