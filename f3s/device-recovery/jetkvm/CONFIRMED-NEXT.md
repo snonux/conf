@@ -12,7 +12,23 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
-## Current checkpoint — 2026-11-06, 05:12 UTC
+## Current checkpoint — 2026-11-06, 06:09 UTC
+
+Binary-only v42 PASSED with helperb75947bc…/4730284B/root0700/version0.1.0,
+sourceconfb9e754e/clean embedded revision. It retains fixed-code negative
+continuation evidence, including an independent bound diagnostic on result
+persistence failure, and prevents admission with a stale readiness clock.
+All original6 historical metadata bytes/inodes remain unchanged; complete
+original7 archive, actual final native markers, auth/fresh9 and local
+process/stream closure were independently verified. Kernel remains09aac103…;
+no runtime generation/hook/network/reboot was introduced.
+
+The corrected short-lock/pending observer and known11-file journal are source
+work for a separate complete boot proposal. v41 remains FAILED, with no new
+boot/primary/fleet acceptance. See the
+[v42 file-only record](NATIVE-RUNTIME-2026-11-05.md#v42-terminal-diagnostic-helper-file-only-stage--2026-11-06).
+
+## Earlier checkpoint — 2026-11-06, 05:12 UTC
 
 v41 FAILED management boot proof after successful setup, one normal reboot and
 old-address HTTP/H264 recovery. Early boot+20s observation prematurely required

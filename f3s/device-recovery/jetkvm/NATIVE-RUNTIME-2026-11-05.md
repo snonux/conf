@@ -16,6 +16,34 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v42 terminal-diagnostic helper file-only stage — 2026-11-06
+
+The reviewed source correction is committed as confb9e754e. Its clean detached
+ARM7/CGO0 build is static, with embedded matching revision and vcs.modified=false.
+The new helper is SHA256
+`b75947bcd1f2dc05891cfefb747ecdf206159d2fda1f4f49cb052cb665c2be2c`
+(4730284 bytes, root0700/version0.1.0). It adds fixed-code terminal failure
+receipts and an independently persisted, bound diagnostic when normal result
+persistence fails, plus a fresh original-readiness clock check before Bootstrap.
+Storage failure can still prevent any receipt; absence never manufactures an
+outcome. Generic race/foreign/lock-busy/privacy/deadline tests passed.
+
+Binary-only native staging PASSED06:09:07/operator0. Manifest21 `513ed0ba…`,
+1222 external pins, artifact/ELF/VCS and all four focused suites were independently
+verified by root. The complete original seven-file beforeimage was exclusively
+fsynced, the same stable lock/all7 identities and bytes rechecked, and the
+candidate hash/root0700/version verified before replacing only the executable.
+The other six bytes/inodes and historical metadata remain exact. Root checked
+the original7 archive hashes, actual native final markers, original-auth/fresh9,
+normal preflight/stage exits and local group/stream/operator-birth closure.
+
+No generation, hook, runtime network action or reboot was introduced. Current
+kernel remains09aac103… and boot/primary/fleet are still open. A separate complete
+v43 whole-boot source uses the shorter-lock/pending observer and expanded known
+journal schema; it is not granted native GO by this file stage.
+Private evidence is `~/.local/state/conf/s14-jetkvm-terminal-file-stage-v42-20261106/`
+and `s14-jetkvm-v42-root-terminal-verification-private.json` in its parent.
+
 ## v41 failed deferred boot with completed cleanup — 2026-11-06
 
 The c29/d81 helper was unchanged. The whole operator used frozen58-file source
