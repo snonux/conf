@@ -16,7 +16,7 @@ source /etc/gonf-network-migration.conf
 role=${role:-k3s}
 ipv6_policy=${ipv6_policy:-ula}
 case "$role:$ipv6_policy" in
-    k3s:ula) : "${ula:?}";;
+    k3s:ula|resolver:ula) : "${ula:?}";;
     standalone:disabled) [[ -z ${ula:-} ]] || exit 1;;
     *) printf 'Unreviewed role or physical IPv6 policy\n' >&2; exit 1;;
 esac
@@ -127,7 +127,7 @@ _snapshot() {
     ip -4 route save table main dev "$iface" > "$state/snapshot/route4"
     ip -6 route save table main dev "$iface" > "$state/snapshot/route6"
     sysctl -n "net.ipv6.conf.$iface.accept_ra" > "$state/snapshot/accept-ra"
-    if [[ $role == standalone ]]; then
+    if [[ $role != k3s ]]; then
         touch "$state/snapshot/standalone"
     elif [[ -f /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml ]]; then
         cp -a /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml "$state/snapshot/flannel"

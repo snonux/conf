@@ -6,6 +6,14 @@ func (Deployment) DescCompose() string {
 	return "Installs ~paul/pihole/docker-compose.yml and the LAN wildcard, recreates on change"
 }
 
+func (Deployment) DescMigrationDNS() string {
+	return "Stages a future wildcard outside every active container mount"
+}
+
+func (Firewall) DescMigrationStage() string {
+	return "Installs dormant resolver source permissions without loading rules"
+}
+
 func (Firewall) DescStage() string {
 	return "Installs a candidate and guarded firewall activation tools without loading rules"
 }

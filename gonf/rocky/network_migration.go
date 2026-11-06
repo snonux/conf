@@ -17,9 +17,9 @@ type NetworkMigration struct{ RequiresRoot }
 // MigrationHost supplies reserved physical addresses without changing wg0.
 type MigrationHost struct {
 	Interface, OldIPv4, LabIPv4, RecoveryIPv4, ULA, SharedGateway string
-	// Standalone omits every k3s operation; IPv6Policy must explicitly be disabled.
-	Standalone bool
-	IPv6Policy string
+	// Role defaults to k3s. Standalone guests require disabled IPv6; resolvers
+	// use eth0 and native ULA without installing or operating k3s resources.
+	Role, IPv6Policy string
 }
 
 func (NetworkMigration) OptsPrepare() TaskOptions     { return TaskOptions{Operational()} }
@@ -36,17 +36,32 @@ func (NetworkMigration) Diagnostics() { Packages("tcpdump") }
 // Prepare installs dormant NetworkManager transaction and PID1 rollback tools.
 func (NetworkMigration) Prepare() {
 	EachHost(func(h MigrationHost) {
-		role, ipv6Policy := "k3s", "ula"
-		if h.Standalone {
-			role, ipv6Policy = "standalone", h.IPv6Policy
+		role, ipv6Policy := h.Role, "ula"
+		if role == "" {
+			role = "k3s"
+		}
+		switch role {
+		case "standalone":
+			ipv6Policy = h.IPv6Policy
 			if ipv6Policy != "disabled" || h.ULA != "" {
 				panic("standalone migration requires explicit disabled physical IPv6 and no ULA")
 			}
-		} else if addr := netip.MustParseAddr(h.ULA); !addr.Is6() || !addr.IsPrivate() {
-			panic("k3s migration requires native ULA")
+		case "k3s", "resolver":
+			if addr := netip.MustParseAddr(h.ULA); !addr.Is6() || !addr.IsPrivate() {
+				panic("migration requires native ULA")
+			}
+			if h.IPv6Policy != "" && h.IPv6Policy != "ula" {
+				panic("migration requires explicit ULA policy or its default")
+			}
+		default:
+			panic("unreviewed migration role")
 		}
-		if h.Interface != "enp0s5" {
-			panic("migration requires reviewed enp0s5 interface")
+		expectedInterface := "enp0s5"
+		if role == "resolver" {
+			expectedInterface = "eth0"
+		}
+		if h.Interface != expectedInterface {
+			panic("migration requires the reviewed interface for its role")
 		}
 		for _, a := range List(h.OldIPv4, h.LabIPv4, h.RecoveryIPv4, h.SharedGateway) {
 			if !netip.MustParseAddr(a).Is4() {
@@ -62,12 +77,12 @@ func (NetworkMigration) Prepare() {
 		script := InstallFile(migrationHelper, paths.GonfAsset("rocky", "network-migration/migrate.sh"), RootExec, DependsOn(conf))
 		for _, unit := range List("gonf-network-rollback.service", "gonf-network-rollback.timer", "gonf-network-rollback-boot.service", "gonf-network-rollback-runtime.service") {
 			asset := unit
-			if h.Standalone && unit == "gonf-network-rollback-runtime.service" {
+			if role != "k3s" && unit == "gonf-network-rollback-runtime.service" {
 				asset = "standalone-runtime.service"
 			}
 			InstallFile("/etc/systemd/system/"+unit, paths.GonfAsset("rocky", "network-migration/"+asset), RootOwned, DependsOn(script))
 		}
-		if !h.Standalone {
+		if role == "k3s" {
 			const dropInDir = "/etc/systemd/system/k3s.service.d"
 			EnsureDir(dropInDir, RootOwned)
 			InstallFile(dropInDir+"/90-gonf-network-maintenance.conf",

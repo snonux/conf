@@ -1,5 +1,5 @@
 [Unit]
-Description=Complete standalone guest boot network rollback
+Description=Complete non-k3s host boot network rollback
 After=NetworkManager.service gonf-network-rollback-boot.service
 Requires=NetworkManager.service gonf-network-rollback-boot.service
 Before=network-online.target

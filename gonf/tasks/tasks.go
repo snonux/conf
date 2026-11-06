@@ -59,6 +59,7 @@ func Register() {
 	RegisterOnCluster(cluster.NameRockyPis, rocky.KernelAudit{}, rocky.Goprecords{})
 	RegisterMethods(pihole.Deployment{}, WithPrefix("pihole_"), OnCluster(cluster.NameRockyPis))
 	RegisterOnCluster(cluster.NameRockyPis, pihole.Firewall{})
+	RegisterMethods(rocky.NetworkMigration{}, WithPrefix("pihole_network_"), OnCluster(cluster.NameRockyPis))
 
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Base{}, rnodes.K3s{}, rnodes.WireGuard{})

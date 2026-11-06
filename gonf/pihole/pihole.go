@@ -20,6 +20,17 @@ type Deployment struct {
 
 const piholeDir = "/home/paul/pihole"
 
+// OptsMigrationDNS keeps future ingress addresses out of ordinary deployments.
+func (Deployment) OptsMigrationDNS() TaskOptions { return TaskOptions{Operational()} }
+
+// MigrationDNS stages a future wildcard outside every active container mount.
+func (Deployment) MigrationDNS() {
+	const staging = "/var/lib/f3s-pihole-migration"
+	EnsureDir(staging, RootPrivate)
+	InstallFile(staging+"/99-f3s-lan-wildcard.conf",
+		paths.GonfAsset("pihole", "network-migration/99-f3s-lan-wildcard-new-vip.conf"), RootPrivate)
+}
+
 // Compose installs ~paul/pihole/docker-compose.yml and the LAN wildcard,
 // recreates on change.
 //

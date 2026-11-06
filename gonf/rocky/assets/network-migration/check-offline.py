@@ -278,6 +278,43 @@ elif args[:2] == ['connection', 'modify']:
     assert dropin.read_text() == 'unrelated preexisting content'
     assert 'k3s' not in log.read_text()
     assert 'wg0' not in log.read_text()
+
+    # Resolver hosts use their physical eth0 with ULA, while retaining the
+    # existing non-k3s journal/boot path. Exercise the actual dispatch code.
+    standalone_conf = conf.read_text()
+    original_ip_fixture = (fixtures / 'ip').read_text()
+    conf.write_text(standalone_conf.replace('iface=enp0s5', 'iface=eth0')
+                    .replace('ula=\n', 'ula=fd00::120\n')
+                    .replace('role=standalone', 'role=resolver'))
+    log.write_text('')
+    run('stage', 'shared', success=False)  # Disabled IPv6 is not resolver policy.
+    assert not log.read_text()
+    conf.write_text(conf.read_text().replace('ipv6_policy=disabled', 'ipv6_policy=ula'))
+    (fixtures / 'ip').write_text(original_ip_fixture.replace('enp0s5', 'eth0'))
+    assert not (state / 'serial-k3s-approved').exists()
+    (state / 'stage-approved').touch()
+    request('stage', 'shared')
+    assert (pending / 'standalone').exists() and not (pending / 'flannel').exists()
+    assert 'ipv6.method manual ipv6.addresses fd00::120/64' in log.read_text()
+    assert 'ip -6 address add fd00::120/64 dev eth0' in log.read_text()
+    (pending / 'deadline').write_text('1')  # Disposable clock fixture only.
+    run('watchdog')
+    assert not pending.exists() and dropin.read_text() == 'unrelated preexisting content'
+    (state / 'stage-approved').touch()
+    request('stage', 'shared')
+    (state / 'confirm-approved').touch()
+    run('confirm')
+    (state / 'promote-approved').touch()
+    request('promote', 'shared')
+    assert 'ipv4.addresses 198.51.100.120/24,192.0.2.120/24' in log.read_text()
+    run('restore-boot')
+    run('restore-after-boot')
+    assert not pending.exists() and dropin.read_text() == 'unrelated preexisting content'
+    assert 'k3s' not in log.read_text() and 'wg0' not in log.read_text()
+    conf.write_text(standalone_conf)
+    (fixtures / 'ip').write_text(original_ip_fixture)
+    print('PASS: resolver eth0/ULA stage, expiry, promotion and boot restore '
+          'never operate k3s, Flannel or absent WireGuard')
     print('PASS: request flock dispatch (negative old deadlock), owned /32 replacement '
           '(negative old append), stage/promote, expiry/boot/endpoint/confirm recovery')
 

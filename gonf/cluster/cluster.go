@@ -182,12 +182,14 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 		WithPlatform("linux/arm64"),
 	)
 	pi2 = Host("pi2", rockyPi,
+		WithData(rocky.MigrationHost{Interface: "eth0", OldIPv4: "192.168.1.127", LabIPv4: "10.20.0.127", RecoveryIPv4: "10.98.0.127", ULA: "fd02:ca0b:f1cb:20::127", SharedGateway: "192.168.1.2", Role: "resolver"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.127", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
 		WithData(goprecords.ClientHost{Host: "pi2"}),
 	)
 	pi3 = Host("pi3", rockyPi,
+		WithData(rocky.MigrationHost{Interface: "eth0", OldIPv4: "192.168.1.128", LabIPv4: "10.20.0.128", RecoveryIPv4: "10.98.0.128", ULA: "fd02:ca0b:f1cb:20::128", SharedGateway: "192.168.1.2", Role: "resolver"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.128", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
@@ -228,7 +230,7 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 	// Root access is documented for the standalone VM; validate sudo and
 	// bootstrap gonf when it becomes reachable before approving a deploy.
 	standalone := Host("rocky", rnode,
-		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.123", LabIPv4: "10.20.0.123", RecoveryIPv4: "10.98.0.123", SharedGateway: "192.168.1.2", Standalone: true, IPv6Policy: "disabled"}),
+		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.123", LabIPv4: "10.20.0.123", RecoveryIPv4: "10.98.0.123", SharedGateway: "192.168.1.2", Role: "standalone", IPv6Policy: "disabled"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:55:00"}),
 	)
 	Cluster(NameRockyGuestMigration, standalone)

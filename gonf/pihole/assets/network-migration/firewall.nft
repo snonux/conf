@@ -1,0 +1,33 @@
+# Dormant Pi-hole migration policy. Replace only this owner's table atomically.
+add table inet f3s_guard
+delete table inet f3s_guard
+table inet f3s_guard {
+    chain before_dnat {
+        type filter hook prerouting priority -150; policy accept;
+        iifname "eth0" fib daddr type local jump from_lan
+    }
+    chain from_lan {
+        ct state established,related return
+        # Dedicated recovery is SSH-only, before any shared-wire trust.
+        ip daddr { 10.98.0.127, 10.98.0.128 } goto recovery
+        # Keep current Wi-Fi/old-LAN clients working during shared-wire staging.
+        ip saddr 192.168.1.0/24 return
+        ip6 saddr fd22:c702:acb7::/64 return
+        ip saddr 10.20.0.0/24 ip daddr { 10.20.0.0/24, 192.168.1.0/24 } return
+        ip6 saddr fd02:ca0b:f1cb:20::/64 ip6 daddr fd02:ca0b:f1cb:20::/64 return
+        # Match the router's two identities and resolver-only DNS exception.
+        ip saddr { 10.99.0.2, 10.99.0.3 } ip daddr { 10.20.0.127, 10.20.0.128 } udp dport 53 return
+        ip saddr { 10.99.0.2, 10.99.0.3 } ip daddr { 10.20.0.127, 10.20.0.128 } tcp dport 53 return
+        ip saddr 10.99.0.2 ip daddr { 10.20.0.127, 10.20.0.128 } tcp dport { 22, 80, 443 } return
+        ip saddr 10.99.0.3 ip daddr { 10.20.0.127, 10.20.0.128 } tcp dport 443 return
+        # Preserve existing diagnostics and old-mode IPv6 boot recovery.
+        # The migration profile owns RA suppression/manual ULA in new mode.
+        meta l4proto { icmp, ipv6-icmp } return
+        ip6 saddr fe80::/10 udp sport 547 udp dport 546 return
+        counter drop
+    }
+    chain recovery {
+        ip saddr 10.99.0.2 tcp dport 22 return
+        counter drop
+    }
+}
