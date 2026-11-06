@@ -1,4 +1,4 @@
-# f3 stable-ID confirmed-NEW boot — failed trial; OLD restored
+# f3 confirmed-NEW boot — persistent monitor prepared
 
 The amended actual boot trial failed after release because one required
 watcher SSH query timed out. Typed owned recovery restored OLD; full terminal
@@ -7,7 +7,7 @@ f3 remains OLD-primary dual Stage, normal Rocky AUTO/RUNNING, and FreeBSD/labs
 stopped. All four active ordinary/endpoint/guard/activation markers are absent.
 Only the two owned diagnostic rc hooks were removed after durable whole-evidence
 archival; the private original context/program/causal receipts remain native.
-No retry or guest primary action is authorized. Confirmed-NEW startup has valid
+This failed trial grants no guest primary acceptance. Confirmed-NEW startup has valid
 causal receipts but remains unaccepted as a complete trial because NEW was not
 observed through the former guard deadline. Frozen source and failures are
 preserved; future source changes and live execution need separate review.
@@ -18,6 +18,43 @@ accepted in the earlier file-only slice. This distinct bundle reads opaque
 and hashes those bytes. All guard/controller/proof/release/cleanup identity
 comparisons use this ID. Boot epochs remain diagnostic date evidence only.
 Historical contexts, failed trials and receipts remain unchanged.
+
+## Current preparation at00:26 UTC on2026-11-06
+
+A distinct persistent counter monitor replaces repeated per-sample SSH
+connections. Its producer uses the same PF selection loop and cumulative
+counters, with exact sequence/monotonic/arrival checks and no sample retry.
+One preboot connection closes before reboot. A new connection starts only after
+the changed opaque ID and original boot receipts pass, and remains through
+release and former-deadline observation. Fixed600/900-second monotonic lifetimes
+are never renewed. A missing or nonzero sample still triggers typed OLD recovery.
+
+The first read-only probe failed before HELLO because its literal multiline
+Python argument was parsed incorrectly by the remote shell. Local and exact
+native producer absence were verified; no configuration changed. A distinct
+single-line base64 envelope preserves the producer bytes exactly. Its native
+probe passed at00:24:20: three cumulative zero samples, normal close, same boot
+and independently verified exact native producer absence. Both probe histories
+and all frozen bundles remain intact; the earlier live SSH timeout cause is
+still unknown.
+
+The new dormant diagnostic installation passed at00:26:25. Only
+`/var/db/gonf-network-migration/y14-confirmed-new-boot-persistent-proof/`
+(private context/proof) and the two new persistent proof rc hooks were added.
+All pins/owners/modes and actual boot graph passed. Deadlines are zero, receipts
+absent, all four active markers absent, and OLD/protected/WG/PF0/normal VM policy
+and managed footprint are unchanged. Earlier native proof directories remain
+inert and preserved; their old armed contexts are never reused.
+
+Controller evidence is under
+`~/.local/state/conf/y14-preparation/confirmed-new-boot-persistent-reviewed/`
+(base17 manifest `a642c29a…`) and its distinct `persistent-argv-reviewed`
+successor (manifest `8020ea95…`). Root independently checked pins, source
+changes, transport/privacy fixtures and native terminal evidence. The next
+single host trial remains conditional on actual writer completion, fresh full
+readiness and the unchanged full1005-second budget. No VM stop or promotion
+occurred in this preparation; the00:25 slot was held for insufficient remaining
+preparation time. Guest primary trials still follow full host acceptance.
 
 ## Actual amended boot and failed post-release observation
 
