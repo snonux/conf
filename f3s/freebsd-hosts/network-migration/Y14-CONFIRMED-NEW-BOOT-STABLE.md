@@ -57,8 +57,13 @@ they are being corrected prospectively against saved evidence. No timer-expiry
 or guest-boot acceptance is claimed. Failed-trial cleanup durably archived the
 journal/evidence and removed the original owned gate, but stopped at unchanged
 recipe preview because `-privilege none` rejects privileged chunks. No recipe
-apply ran. Health/reapply/probe cleanup still require a separate continuation;
-no repeat trial or guest reboot has run.
+apply ran in that failed cleanup attempt. A distinct supported-sudo continuation
+PASSED at04:31 UTC: unchanged recipe preview/apply, strict original guest WG and
+gateways in both families, full health, fresh paths, accepted parent NEW/PF guard0,
+all markers absent and exact probe/actor/capture cleanup. Root independently
+verified all12 terminal predicates, exit0/process-group absence and both durable
+archive hashes. The original trial remains FAILED; no repeat trial or guest
+reboot has run.
 
 ## Historical failed terminal at01:02 UTC on2026-11-06
 
