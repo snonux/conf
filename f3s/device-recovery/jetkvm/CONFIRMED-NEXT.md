@@ -12,6 +12,17 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
+## v37 preflight result — 2026-11-06
+
+The first deferred-boot attempt stopped during its read-only beforeimage export
+at02:27 UTC, before setup or reboot. The partial binary export and6.1986-second
+elapsed time are consistent with the six-second native bound; actual exit code
+was not saved. Original authentication, all nine fresh access checks and local
+process/stream drains passed. No hook/new seed/reboot was introduced. This is a
+FAILED attempt, with v36 still the accepted state; see the
+[native evidence](NATIVE-RUNTIME-2026-11-05.md#v37-attempt-stopped-during-read-only-preflight--2026-11-06).
+The separate successor remains source work until its whole protocol is reviewed.
+
 ## v36 file-only deferred-helper stage — 2026-11-06
 
 The first device now has helper SHA256

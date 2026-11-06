@@ -16,6 +16,24 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v37 attempt stopped during read-only preflight — 2026-11-06
+
+The whole deferred-boot trial was attempted at02:27 UTC, but stopped before
+any setup mutation. Installed startup, old-store, parent and process guards
+and both vendor-owner observations completed. The binary beforeimage export
+was partial (2461159 of4588105 bytes) after6.1986 seconds with no stderr,
+consistent with the native six-second preflight bound. The command's actual
+exit status was not retained, so a timeout exit code is not asserted.
+
+No stage command, owned setup or reboot intent was created. No hook, new seed,
+module or reboot was introduced. The original temporary-access future finished,
+exact authentication restoration and all nine fresh access checks passed, and
+the supervisor drained its local processes and streams. The trial remains
+FAILED; v36 remains the last accepted native state. Complete private evidence
+is retained under `~/.local/state/conf/s14-jetkvm-deferred-boot-v37-20261106/`.
+A separate source successor adjusts only this read-only export budget within
+the unchanged35-second access window and retains actual command exit statuses.
+
 ## v36 file-only deferred-helper stage — 2026-11-06
 
 The first device now has helper SHA256
