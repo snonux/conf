@@ -16,6 +16,30 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v36 file-only deferred-helper stage — 2026-11-06
+
+The first device now has helper SHA256
+`f9459c84744340e5f8a79d64f25bde7261069908f4dd81bfab7261cd36787cae`
+(4588105 bytes, root0700, version0.1.0), built from conf2e31a63. Native file-only
+replacement completed with preflight1.692s/stage4.331s. A complete exclusive
+seven-file controller beforeimage was fsynced; the same stable native lock and
+all identities/bytes were rechecked before atomic replacement of only the binary.
+The other six files, profile2815, inode IDs and original v32 boot/deadline are
+unchanged. Historical metadata was not relabelled to match the newer kernel.
+
+The original temporary-access future completed, authentication restoration was
+exact, all nine fresh access checks passed, PCs closed and owned processes
+terminated. No hook/init parent, generation, authorization reset, runtime helper
+action beyond `-version`, module, network setting or reboot was introduced.
+Private full terminal evidence is
+`~/.local/state/conf/s14-jetkvm-deferred-v36-20261106/runtime/terminal-sanitized.json`.
+
+The installed [deferred role](helper/DEFERRED-MANAGEMENT.md) is still unaccepted
+natively. Its first boot requires separately reviewed zero-intent input/store
+and bounded-hook setup, followed by actual boot/fixed-path/independent-expiry
+and cleanup proof. It does not replace the legacy/full-primary guard or grant
+main-IP/fleet promotion. Those next protocols are source work only.
+
 ## Historical macvlan runtime outcome
 
 Two separate unconfirmed generations reached local bootstrap readiness, each
