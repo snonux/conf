@@ -1,5 +1,22 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+
+## Live transport proof passed; timer recovery pending — 2026-11-06, 10:28 UTC
+
+Standalone Rocky is temporarily NEW-primary10.20.0.123/default10.20.0.1,
+with old192.168.1.123 retained. Its genuine fixed900 trial passed all four
+strict gateway probes2/2. The complete private capture proves both public peers
+use NEW20.123 and no OLD-source packets occur during the probe window. NAT/TLS,
+full cluster/storage health, fresh/held access and protected f3 NEW checks passed.
+Root independently checked packet/count/closure hashes, actual strict results,
+NAT sequence matches, health, source pins and49 owned actor ledgers; all origins
+are gone. The unchanged-value WireGuard correction now has actual transport proof.
+
+Independent rollback deadline is10:41:31UTC; FIRST read-only witness is queued
+for10:42:06. No guest helper request is permitted before that observation. Expiry,
+boot, final confirmation and full migration are still open. k3s remains running.
+Private evidence prefix: `~/.local/state/conf/y14-preparation/evidence/rocky-primary-expiry-v4c-`.
+
 ## Admission refused before activation — 2026-11-06, 09:49 UTC
 
 The first attempt with the installed cache correction refused its remaining
