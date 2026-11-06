@@ -12,6 +12,22 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
+## Current v39 checkpoint — 2026-11-06, 03:04 UTC
+
+One normal boot recovered original-address HTTP/H264/USB, but deferred claims
+were absent and initial/FIRST observations failed. Boot/fixed-path/expiry
+acceptance remains FAILED. Separate minimal retirement subsequently removed
+only the owned hook and empty created parent, after a619-file durable archive
+and exact locked state checks. Final managed network absence, original parent,
+authentication/fresh9 and local drains passed. Inert six-file unused seed state
+still needs explicit whole-store reconciliation; no replay or reset is granted.
+Configuration-hash drift remains unexplained and was not reclassified as success.
+
+The concrete sysfs-symlink preclaim defect is fixed in confd81ef3d and covered by
+native-composition regression/race/vet/errcheck. Its ARM helper c29b9a51… is built
+only; native f945/2e31a63 is unchanged. See the
+[full native record](NATIVE-RUNTIME-2026-11-05.md#v39-failed-boot-trial-and-owned-hook-retirement--2026-11-06).
+
 ## v37 preflight result — 2026-11-06
 
 The first deferred-boot attempt stopped during its read-only beforeimage export

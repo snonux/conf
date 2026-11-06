@@ -16,6 +16,64 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v39 failed boot trial and owned-hook retirement — 2026-11-06
+
+Setup completed (preflight exit0/6.5945s, stage exit0/7.4511s), preserving the
+whole original seven-file store in its unique native archive. A fresh zero-intent
+store and owned startup hook were installed. One normal reboot was acknowledged;
+an observed outage was followed by fresh original-address HTTP and H264/USB proof.
+
+The initial boot observation FAILED (exit1/3.0129s) on an unknown process read.
+Its partial snapshot showed a new kernel, unchanged preboot authorization/active
+seed with allowance still true, zero ownership, and no deferred claim or child.
+The cause of that missing claim is not established by a native error receipt.
+The FIRST audit after request+330 also failed on a process read. Subsequent
+retirement attempts stopped on configuration-hash drift and transient process
+reads; those failed observations remain immutable. None proves expiry or boot
+acceptance.
+
+At03:04, separately reviewed minimal owned-file retirement PASSED. A619-file
+exclusive controller archive was fsynced before deletion. Native export,
+same-lock revalidation/deletion and final inspection returned0 (1.6326s,
+1.5858s and3.2266s). Only the exact owned S00 hook and its exact created empty
+parent were removed. The same kernel, six untouched seed/zero-intent files,
+original seven-file native archive, installed code/profile, original parent and
+absent managed modules/link/uppers/policy were verified. All original access
+futures, exact authentication restoration, nine fresh HTTP/RTC/USB/video/access
+checks, local groups and streams passed. No helper CLI, state reset, network
+change or extra reboot ran. Whole owner/process-scan acceptance is not claimed.
+
+The current six-file store retains its unused preboot allowance, inert without
+a hook; explicit post-vendor whole-store reconciliation remains required.
+Configuration hashes differed between setup, proof and later audits. Cause is
+unknown; hashes were stable within the final retirement itself. That discrepancy
+remains open and was never converted into configuration or trial acceptance.
+Private terminal evidence is under
+`~/.local/state/conf/s14-jetkvm-v39-owned-retirement3-20261106/`.
+
+Source inspection also found a concrete preclaim defect: the native upper-link
+reader rejected the normal `/sys/class/net/eth0` symlink with `O_NOFOLLOW`.
+Conf d81ef3d fixes the specific sysfs resolution, preserving generic symlink
+refusal and testing actual deferred admission. Full race/vet/errcheck and the
+root-applied focused race checks passed. The ARM build is c29b9a51…/4657137B,
+but is NOT deployed; native helper remains f9459c84… from2e31a63. The defect is
+consistent with missing claims, not a retrospective native causality proof.
+
+## v38 attempt stopped on owner parsing — 2026-11-06
+
+The separate02:30 attempt completed its full read-only beforeimage export
+(actual exit0,6.6192 seconds) and accepted the original seven files/inodes.
+It then refused the vendor-owner observation before setup: `ip link` and
+`ip -4 address` each legitimately emit the same eth0 header, but the new MAC/UP
+parser incorrectly required one header. Both actual headers were identical
+and UP; the single MAC line matched the factory address. No stage command,
+owned setup or reboot intent was created. Original authentication restoration,
+all nine fresh access checks and local process/stream drains passed again.
+
+v38 remains FAILED and its evidence is preserved separately. A source successor
+checks this exact two-header format against the retained actual observation,
+including refusal of inconsistent/DOWN headers and foreign/duplicate MACs.
+
 ## v37 attempt stopped during read-only preflight — 2026-11-06
 
 The whole deferred-boot trial was attempted at02:27 UTC, but stopped before
