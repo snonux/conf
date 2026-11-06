@@ -1,4 +1,30 @@
-# f3 confirmed-NEW boot — host accepted; guest primaries pending
+# f3 and Rocky accepted NEW; FreeBSD final cutover pending
+
+## Rocky complete; FreeBSD recovery trials passed — 2026-11-06, 15:48 UTC
+
+Rocky’s final NEW boot, observation past the former deadline, unchanged reapply
+and owned cleanup are complete and independently verified. Its primary address
+is 10.20.0.123 with default 10.20.0.1; the old address and controller return
+route remain. Native guard state was retired after preserving the archives.
+
+FreeBSD’s first 300-second primary trial passed NEW-source NAT/TLS, fresh old
+and new SSH access, full service health and parent protection. The native cron
+restored OLD automatically, without a manual helper. A second trial and one
+normal guest reboot also restored OLD before its deadline, with a changed boot
+identity and unchanged protected configuration. These are actual completed
+trials, not planned checks.
+
+FreeBSD is currently OLD-primary (192.168.1.139), retaining 10.20.0.139, and is
+temporarily running for the final confirmed NEW boot. Final cutover, observation
+past the former deadlines, reapply, archive and cleanup remain. Its existing
+broken WireGuard identity remains unchanged; identity repair is separate.
+Parent f3 remains accepted NEW, Rocky remains running, k3s remains up, and no
+physical cables have moved. Restore FreeBSD’s normal stopped policy at the end.
+
+Private evidence is under `~/.local/state/conf/y14-preparation/evidence/`:
+`rocky-final-confirm-v5-ROOT-cleanup-verification-terminal-private.json`,
+`freebsd-primary-expiry-root1526a-FIRST-terminal-private.json`, and
+`freebsd-primary-boot-root1546a-terminal-private.json`.
 
 ## Rocky confirmed NEW boot passed; deadline observation pending — 2026-11-06, 14:50 UTC
 
