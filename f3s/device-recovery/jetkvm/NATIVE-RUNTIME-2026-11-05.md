@@ -16,6 +16,26 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v40 corrected helper file-only stage — 2026-11-06
+
+At03:33, the first device received helper c29b9a51…/4657137 bytes,
+root0700/version0.1.0/source confd81ef3d. Read-only preflight and binary-only
+stage returned0 in1.5517s and5.4135s. The complete original seven-file controller
+beforeimage was fsynced, the same stable lock and all identities/bytes rechecked,
+then only the verified temporary binary was version-tested and atomically moved.
+The other six file bytes/inodes and historical boot/deadline are unchanged.
+Original authentication restoration, all fresh9 checks and local process/stream
+drains passed. No hook, new generation, helper runtime beyond `-version`, network,
+configuration, USB/power action or reboot ran. Boot/primary/fleet remain open.
+Private complete evidence: `~/.local/state/conf/s14-jetkvm-sysfs-file-stage-v40-20261106/`.
+
+Before this stage, explicit post-vendor reconciliation PASSED03:23: under the
+same current/archive locks, the whole failed six-file store was renamed to
+`/userdata/jkrecover-failed-v39-reconciled-20261106` and the whole original
+seven-file store restored to its default path. All bytes/inodes and historical
+metadata were retained, with a durable thirteen-file beforeimage and verified
+final state/authentication. No state was relabelled to claim expiry or a new boot.
+
 ## v39 failed boot trial and owned-hook retirement — 2026-11-06
 
 Setup completed (preflight exit0/6.5945s, stage exit0/7.4511s), preserving the
@@ -43,8 +63,9 @@ futures, exact authentication restoration, nine fresh HTTP/RTC/USB/video/access
 checks, local groups and streams passed. No helper CLI, state reset, network
 change or extra reboot ran. Whole owner/process-scan acceptance is not claimed.
 
-The current six-file store retains its unused preboot allowance, inert without
-a hook; explicit post-vendor whole-store reconciliation remains required.
+At this retirement checkpoint the six-file store retained its unused preboot
+allowance, inert without a hook. The later explicit reconciliation above archived
+it verbatim and restored the historical store; no pending reconciliation remains.
 Configuration hashes differed between setup, proof and later audits. Cause is
 unknown; hashes were stable within the final retirement itself. That discrepancy
 remains open and was never converted into configuration or trial acceptance.
@@ -55,9 +76,15 @@ Source inspection also found a concrete preclaim defect: the native upper-link
 reader rejected the normal `/sys/class/net/eth0` symlink with `O_NOFOLLOW`.
 Conf d81ef3d fixes the specific sysfs resolution, preserving generic symlink
 refusal and testing actual deferred admission. Full race/vet/errcheck and the
-root-applied focused race checks passed. The ARM build is c29b9a51…/4657137B,
-but is NOT deployed; native helper remains f9459c84… from2e31a63. The defect is
+root-applied focused race checks passed. The ARM build c29b9a51…/4657137B was
+subsequently installed through the separate v40 file-only stage above. The defect is
 consistent with missing claims, not a retrospective native causality proof.
+
+Pinned app source also shows each successful login replaces `local_auth_token`
+with a fresh UUID and saves the configuration. This explains why whole-file hashes
+can differ across fresh login scopes. The old SHA-only evidence cannot prove the
+token was the only differing field, so earlier trials remain failed. Any future
+observational projection must be prospective and protect every other byte.
 
 ## v38 attempt stopped on owner parsing — 2026-11-06
 

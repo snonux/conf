@@ -12,7 +12,16 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
-## Current v39 checkpoint — 2026-11-06, 03:04 UTC
+## Current checkpoint — 2026-11-06, 03:33 UTC
+
+The v39 failed six-file store is archived verbatim and the original historical
+seven-file store was restored under its exact locks. File-only v40 then installed
+the corrected c29b9a51…/4657137B helper from confd81ef3d, preserving the other six
+files/inodes and all historical metadata. Original access/fresh9/local drains
+passed. No hook/generation/runtime network/reboot action was introduced.
+Boot/primary/fleet remain open. The v39 checkpoint below is retained history.
+
+## v39 checkpoint — 2026-11-06, 03:04 UTC
 
 One normal boot recovered original-address HTTP/H264/USB, but deferred claims
 were absent and initial/FIRST observations failed. Boot/fixed-path/expiry
@@ -24,8 +33,8 @@ still needs explicit whole-store reconciliation; no replay or reset is granted.
 Configuration-hash drift remains unexplained and was not reclassified as success.
 
 The concrete sysfs-symlink preclaim defect is fixed in confd81ef3d and covered by
-native-composition regression/race/vet/errcheck. Its ARM helper c29b9a51… is built
-only; native f945/2e31a63 is unchanged. See the
+native-composition regression/race/vet/errcheck. Its ARM helper c29b9a51… was later
+installed by the separate file-only v40 stage above. See the
 [full native record](NATIVE-RUNTIME-2026-11-05.md#v39-failed-boot-trial-and-owned-hook-retirement--2026-11-06).
 
 ## v37 preflight result — 2026-11-06
