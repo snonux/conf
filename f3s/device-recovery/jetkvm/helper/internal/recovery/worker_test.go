@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -21,6 +22,11 @@ func TestMain(m *testing.M) {
 		_ = flags.String("profile", "", "")
 		if err := flags.Parse(os.Args[1:]); err != nil {
 			os.Exit(2)
+		}
+		if flags.Arg(0) == "management-waiter" {
+			if err := os.WriteFile(filepath.Join(*dir, "waiter-test-pid"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+				os.Exit(6)
+			}
 		}
 		state, err := (Store{Dir: *dir}).Load()
 		if err != nil {

@@ -97,6 +97,12 @@ foreign addresses/identity/policy changes or a busy module. Failed cleanup remai
 an error with its ownership journal retained. Do not run concurrent manual kernel
 network changes against these reserved resources.
 
+The separate [deferred management source candidate](DEFERRED-MANAGEMENT.md)
+adds a fail-open early entry plus claim-bound readiness waiter. It is unbuilt,
+uninstalled and natively unverified. Existing synchronous boot/full-primary
+paths remain unchanged; v33's early MAC/DOWN evidence prevents treating the
+synchronous management wrapper as an accepted native boot installation.
+
 ## Bounded additive bootstrap and boot proof
 
 Prepare narrow router/client routes/PF and reserve the profile before native use.

@@ -108,6 +108,13 @@ func ManagementBoot(adapter Adapter, boot string, now int64, start func(State) e
 
 // WorkCanary cleans only additive resources, with an immutable boot/nonce deadline.
 func WorkCanary(adapter Adapter, boot, generation string, now func() (int64, error), ready *os.File) error {
+	return workCanary(adapter, boot, generation, now, ready, adapter.Cleanup)
+}
+
+// workCanary retains one independent deadline loop. The legacy entry always
+// supplies Adapter.Cleanup; only the explicit deferred role supplies its
+// claim-bound, observed-empty terminal check before the same typed cleanup.
+func workCanary(adapter Adapter, boot, generation string, now func() (int64, error), ready *os.File, cleanup func() error) error {
 	var auth CanaryAuthorization
 	if err := readPrivate(filepath.Join(adapter.Store.Dir, "canary-active.json"), &auth); err != nil {
 		return err
@@ -147,7 +154,7 @@ func WorkCanary(adapter Adapter, boot, generation string, now func() (int64, err
 				if err := saveCanary(adapter.Store, current); err != nil {
 					return err
 				}
-				if err := adapter.Cleanup(); err != nil {
+				if err := cleanup(); err != nil {
 					return err
 				}
 				done = true

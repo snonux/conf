@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -33,7 +34,7 @@ func run() error {
 		return nil
 	}
 	if flag.NArg() < 1 {
-		return fmt.Errorf("action required: bootstrap, canary-keep, canary-cleanup, management-boot, pre-app, arm, confirm, status, worker, canary-worker")
+		return fmt.Errorf("action required: bootstrap, canary-keep, canary-cleanup, management-boot, management-deferred, pre-app, arm, confirm, status, worker, canary-worker")
 	}
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("root required")
@@ -95,6 +96,22 @@ func run() error {
 		return recovery.ManagementBoot(adapter, boot, now, func(state recovery.State) error {
 			return recovery.LaunchCanary(executable, *dir, *config, *device, *profilePath, state)
 		})
+	case "management-deferred":
+		return recovery.BeginDeferredManagement(context.Background(), adapter, func(state recovery.State) error {
+			return recovery.LaunchDeferredCanary(executable, *dir, *config, *device, *profilePath, state)
+		}, func(state recovery.State) error {
+			return recovery.LaunchManagementWaiter(executable, *dir, *config, *device, *profilePath, state)
+		})
+	case "management-waiter":
+		if flag.NArg() != 2 {
+			return fmt.Errorf("management waiter requires generation")
+		}
+		ready := os.NewFile(3, "management waiter readiness")
+		if ready == nil {
+			return fmt.Errorf("management waiter readiness descriptor missing")
+		}
+		defer func() { _ = ready.Close() }()
+		return recovery.WorkManagementWaiter(context.Background(), adapter, flag.Arg(1), ready)
 	case "pre-app":
 		if err := recovery.NoVendorApp(); err != nil {
 			return err
@@ -124,7 +141,7 @@ func run() error {
 			return fmt.Errorf("confirm requires generation")
 		}
 		return engine.Confirm(flag.Arg(1), *targetProof, *recoveryProof)
-	case "worker", "canary-worker":
+	case "worker", "canary-worker", "deferred-canary-worker":
 		if flag.NArg() != 2 {
 			return fmt.Errorf("worker requires generation")
 		}
@@ -133,6 +150,9 @@ func run() error {
 			return fmt.Errorf("readiness descriptor missing")
 		}
 		defer func() { _ = ready.Close() }()
+		if flag.Arg(0) == "deferred-canary-worker" {
+			return recovery.WorkDeferredCanary(adapter, boot, flag.Arg(1), recovery.BootTime, ready)
+		}
 		if flag.Arg(0) == "canary-worker" {
 			return recovery.WorkCanary(adapter, boot, flag.Arg(1), recovery.BootTime, ready)
 		}
