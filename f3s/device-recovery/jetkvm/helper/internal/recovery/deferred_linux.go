@@ -394,6 +394,10 @@ func deferredAuth(claim DeferredClaim) CanaryAuthorization {
 }
 
 func nativeDeferredOps(a Adapter) deferredOps {
+	return nativeDeferredOpsAt(a, "/sys")
+}
+
+func nativeDeferredOpsAt(a Adapter, sysRoot string) deferredOps {
 	return deferredOps{now: a.Now, collect: CollectParentReadiness, alive: func(identity WorkerIdentity) error {
 		birth, err := processBirth(identity.PID)
 		if err != nil || birth != identity.Birth {
@@ -401,16 +405,9 @@ func nativeDeferredOps(a Adapter) deferredOps {
 		}
 		return nil
 	}, upperFree: func() error {
-		names, err := (nativeReadinessReader{}).names(context.Background(), "/sys/class/net/eth0", 128)
-		if err != nil {
-			return err
-		}
-		for _, name := range names {
-			if len(name) >= 6 && name[:6] == "upper_" {
-				return errors.New("deferred parent has upper link")
-			}
-		}
-		return nil
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return nativeParentUpperFree(ctx, sysRoot)
 	}, pause: func(ctx context.Context) error {
 		timer := time.NewTimer(100 * time.Millisecond)
 		defer timer.Stop()
