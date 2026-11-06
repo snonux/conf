@@ -62,8 +62,18 @@ PASSED at04:31 UTC: unchanged recipe preview/apply, strict original guest WG and
 gateways in both families, full health, fresh paths, accepted parent NEW/PF guard0,
 all markers absent and exact probe/actor/capture cleanup. Root independently
 verified all12 terminal predicates, exit0/process-group absence and both durable
-archive hashes. The original trial remains FAILED; no repeat trial or guest
-reboot has run.
+archive hashes. The original trial remains FAILED.
+
+A distinct v2 trial subsequently FAILED at04:47:17 UTC. Fresh readiness and
+all24 local checks passed; fixed900 armed04:47:06/deadline05:02:06. The corrected
+pending profile contract passed, then the unchanged strict gateway two-of-two
+check failed without retaining the target/family. Explicit rollback restored
+and verified exact OLD Stage and original WG on the same boot. All four held
+SSH processes drained rc0, no NAT capture started, and only the original owned
+empty activation gate remains. Separate postrollback probes passed all four
+actual gateway/family pairs2/2; pending failure cause remains unknown. Genuine
+v2 failure cleanup is being prepared; no expiry, guest reboot or confirmation
+acceptance is claimed.
 
 ## Historical failed terminal at01:02 UTC on2026-11-06
 
