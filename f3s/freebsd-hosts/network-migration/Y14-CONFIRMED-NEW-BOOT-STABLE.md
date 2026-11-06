@@ -1,5 +1,29 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Rocky confirmed NEW boot passed; deadline observation pending — 2026-11-06, 14:50 UTC
+
+The final-v5 trial completed successfully. Rocky is primary 10.20.0.123 with
+default 10.20.0.1, retaining 192.168.1.123 and the controller return route.
+Confirmation, one normal NEW boot, strict pre/post gateway traffic, both-peer
+actual NEW UDP source, Internet NAT/TLS, full health and parent protection passed.
+The guard was disarmed after all checks; driver/operator and traffic origins
+closed normally. Root independently decoded both packet captures (10 and 8
+outbound packets), checked current NEW/strict WireGuard, health and 97 origins.
+The separate observation after the original deadline is queued for 15:02:05 UTC;
+owned retirement and unchanged reapply still follow. No final cleanup claim yet.
+
+The 14:26 readiness refusal was a calendar-only assumption about the last updater
+run. A controller-only derivative now verifies the actual completed OnBoot600
+run for standalone Rocky with fresh typed timestamps, exact raw-row matching and
+the existing same-day no-op proof. All other host/job/freshness/time checks and
+frozen physical sources are unchanged. Earlier failed trials remain failed.
+
+FreeBSD's source-owned file-only preparation also passed during the idle gap.
+Its current helper/boot hook match source, protected files and OLD settings did
+not change, and normal stopped policy was restored before the Linux trial.
+The guest's primary migration remains pending after Linux cleanup. k3s is up;
+physical cables remain unchanged.
+
 ## Final trial failed; cleanup complete — 2026-11-06, 13:50 UTC
 
 Final-v2 stopped before requesting a reboot. Confirmation and manual recovery
