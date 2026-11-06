@@ -79,6 +79,27 @@ passed. Root independently checked all13 terminal predicates, process birth/grou
 absence and both archive hashes. All guest markers are absent. Neither trial is
 an expiry proof; guest reboot and confirmation acceptance remain open.
 
+## Third guest primary trial failed — 2026-11-06, 05:27 UTC
+
+v3 fresh readiness and all25 local checks passed; installed fixed900 armed
+05:27:10/deadline05:42:09. The one bounded diagnostic round lost both Blowfish
+(.110) probes in each family; Fishfinger(.111) passed. The separate strict pass
+recorded Blowfish IPv4 0/2 and IPv6 1/2, Fishfinger2/2 in both families. Native
+collection completed0 with fresh handshakes, HTTPS200 and controller return
+verified; strict loss evaluation correctly failed. No outer-transport cause is
+proved and the requirement remains unchanged.
+
+The trial explicitly rolled back at05:27:37; exact original OLD Stage and WG
+were verified on the same boot. All four held SSH sessions drained0/errors[],
+no NAT capture started, and only the original owned empty activation gate
+remained. Genuine failed-v3 cleanup PASSED05:35:33/operator0: archives durable
+before exact gate removal, unchanged sudo recipe reapply, strict OLD/full health,
+fresh paths, parent NEW/PF0, exact UID and actor/capture drains. Root independently
+checked all13 flags, archive hashes, exact OLD/all gates absent and process exit.
+Read-only OLD guest/Blowfish/router route, peer and NAT baselines match expectations;
+outer transport cause remains unknown. No expiry, guest reboot or confirmation
+acceptance is claimed, and no fourth promotion is authorized by these checks.
+
 ## Historical failed terminal at01:02 UTC on2026-11-06
 
 The persistent-monitor host trial FAILED overall, with no release. Fresh actual
