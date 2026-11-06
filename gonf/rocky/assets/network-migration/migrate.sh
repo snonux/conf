@@ -31,6 +31,15 @@ _gate() {
     [[ $(stat -c '%u:%a' "$file") == 0:600 ]] ||
         _fail "Gate must be root-owned mode 0600: $1"
 }
+_k3s_maintenance() {
+    local gate=$state/k3s-maintenance-approved
+    [[ -e $gate || -L $gate ]] || return 1
+    _gate k3s-maintenance-approved
+    [[ $(<"$gate") == "$(hostname -s)" ]] ||
+        _fail 'Maintenance gate names another node'
+    [[ $(systemctl show k3s --property=ActiveState --value) == inactive ]] ||
+        _fail 'Maintenance requires k3s to be stopped'
+}
 _endpoint() {
     [[ -f $pending/endpoints-required ]] || return 0
     [[ -x $endpoint ]] || _fail 'Required endpoint rollback helper missing'
@@ -91,7 +100,7 @@ _rollback() {
     _endpoint restore-boot
     _restore_runtime
     if [[ -f $pending/k3s-restarted ]]; then
-        systemctl restart k3s
+        if ! _k3s_maintenance; then systemctl restart k3s; fi
     fi
     _archive rolled-back
 }
@@ -168,7 +177,7 @@ _activate() {
             _fail 'Serial gate names another node'
         ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
             _fail 'Stage and independently accept the lab address first'
-        systemctl is-active --quiet k3s
+        if ! _k3s_maintenance; then systemctl is-active --quiet k3s; fi
     fi
     if [[ $action == promote ]]; then
         ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
@@ -222,9 +231,11 @@ _activate() {
     if [[ $action == promote && $role == k3s ]]; then
         mkdir -p /etc/rancher/k3s/config.yaml.d
         printf 'flannel-iface: %s\n' "$iface" > /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
-        # Mark BEFORE restart so any partial restart gets reconciled on undo.
-        touch "$pending/k3s-restarted"
-        systemctl restart k3s
+        if ! _k3s_maintenance; then
+            # Mark before restart so partial starts get reconciled on undo.
+            touch "$pending/k3s-restarted"
+            systemctl restart k3s
+        fi
     fi
     # Single-use approval: subsequent nodes/transactions need fresh evidence.
     rm -f "$state/$action-approved" "$state/serial-k3s-approved"

@@ -34,7 +34,10 @@ with tempfile.TemporaryDirectory(prefix='rocky-migration-fixture-') as directory
 set -eu
 printf '%s %s\\n' "${0##*/}" "$*" >> "$FIXTURE_LOG"
 case ${0##*/} in
- stat) printf '0:600\\n';;
+ stat)
+   if [[ $* == *k3s-maintenance-approved ]]; then
+     printf '%s\\n' "${FIXTURE_MAINTENANCE_GATE_STAT:-0:600}"
+   else printf '0:600\\n'; fi;;
  sysctl) [[ $* != '-n '* ]] || printf '1\\n';;
  nmcli)
    case "$*" in
@@ -421,3 +424,88 @@ else:
     print('PASS: same-value fwmark source-cache refresh: absent/off/nonzero, '
           'stage unchanged, promote/expiry/boot restore, idempotent rollback, '
           'invalid/query/set/verify failures retain journal; no other WG mutation/restart')
+
+    # Full k3s maintenance is explicit and names this node. Network rollback
+    # must still finish while the service intentionally remains stopped.
+    conf.write_text("iface=enp0s5\nold=192.0.2.120\nlab=198.51.100.120\n"
+                    "recovery=203.0.113.120\nula=fd00::120\nshared_gateway=192.0.2.2\nrole=k3s\n")
+    service_state = root / 'k3s-state'
+    service_state.write_text('inactive')
+    (fixtures / 'systemctl').write_text('''#!/usr/bin/env python3
+import os, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+args = sys.argv[1:]
+with Path(os.environ['FIXTURE_LOG']).open('a') as log:
+    log.write('systemctl ' + ' '.join(args) + '\\n')
+state = (root / 'k3s-state').read_text()
+if args == ['show', 'k3s', '--property=ActiveState', '--value']:
+    print(state)
+elif args == ['is-active', '--quiet', 'k3s']:
+    sys.exit(0 if state == 'active' else 3)
+elif args == ['restart', 'k3s']:
+    (root / 'k3s-state').write_text('active')
+''')
+    node = subprocess.check_output(['hostname', '-s'], text=True).strip()
+    maintenance = state / 'k3s-maintenance-approved'
+    def arm():
+        profile.write_text('uuid=00000000-0000-0000-0000-000000000000\n')
+        (state / 'promote-approved').touch()
+        (state / 'serial-k3s-approved').write_text(node)
+        log.write_text('')
+
+    arm()
+    run('promote', 'shared', success=False)
+    assert not pending.exists() and 'nmcli connection modify' not in log.read_text()
+    maintenance.write_text('another.example')
+    arm()
+    run('promote', 'shared', success=False)
+    assert not pending.exists() and 'nmcli connection modify' not in log.read_text()
+    maintenance.unlink()
+    maintenance.symlink_to(state / 'activation-approved')
+    arm()
+    run('promote', 'shared', success=False)
+    assert not pending.exists()
+    maintenance.unlink()
+    maintenance.write_text(node)
+    for metadata in ('0:644', '1000:600'):
+        env['FIXTURE_MAINTENANCE_GATE_STAT'] = metadata
+        arm()
+        run('promote', 'shared', success=False)
+        assert not pending.exists()
+    env.pop('FIXTURE_MAINTENANCE_GATE_STAT')
+    service_state.write_text('active')
+    arm()
+    run('promote', 'shared', success=False)
+    assert not pending.exists(), 'Running service accepted as maintenance'
+    service_state.write_text('inactive')
+    original_dropin = dropin.read_text()
+    arm()
+    run('promote', 'shared')
+    assert pending.exists() and not (pending / 'k3s-restarted').exists()
+    assert 'ipv4.gateway 10.20.0.1' in log.read_text()
+    assert dropin.read_text() == 'flannel-iface: enp0s5\n'
+    assert 'systemctl restart k3s' not in log.read_text()
+    run('rollback')
+    assert not pending.exists() and dropin.read_text() == original_dropin
+    assert service_state.read_text() == 'inactive'
+    assert 'systemctl restart k3s' not in log.read_text()
+    # A maintenance gate added after a prior live transaction also suppresses
+    # its recorded restart during both ordinary and boot-runtime recovery.
+    for mode in ('rollback', 'watchdog', 'restore-after-boot'):
+        journal(expired=True)
+        (pending / 'k3s-restarted').touch()
+        log.write_text('')
+        if mode == 'restore-after-boot':run('restore-boot')
+        run(mode)
+        assert not pending.exists() and service_state.read_text() == 'inactive'
+        assert 'systemctl restart k3s' not in log.read_text()
+    maintenance.unlink()
+    service_state.write_text('active')
+    arm()
+    run('promote', 'shared')
+    assert (pending / 'k3s-restarted').exists()
+    run('rollback')
+    assert not pending.exists() and log.read_text().count('systemctl restart k3s') == 2
+    print('PASS: real maintenance dispatch/rollback/expiry/boot preserve stopped k3s; '
+          'missing/foreign/symlink/running gates refuse; normal restart retained')

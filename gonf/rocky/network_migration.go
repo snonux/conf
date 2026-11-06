@@ -67,6 +67,13 @@ func (NetworkMigration) Prepare() {
 			}
 			InstallFile("/etc/systemd/system/"+unit, paths.GonfAsset("rocky", "network-migration/"+asset), RootOwned, DependsOn(script))
 		}
+		if !h.Standalone {
+			const dropInDir = "/etc/systemd/system/k3s.service.d"
+			EnsureDir(dropInDir, RootOwned)
+			InstallFile(dropInDir+"/90-gonf-network-maintenance.conf",
+				paths.GonfAsset("rocky", "network-migration/90-gonf-network-maintenance.conf"),
+				RootOwned, DependsOn(script))
+		}
 		// install only: even daemon-reload/enable occurs later under explicit init.
 	})
 }
