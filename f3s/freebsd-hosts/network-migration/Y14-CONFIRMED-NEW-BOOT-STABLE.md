@@ -1,5 +1,26 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Final trial failed; cleanup complete — 2026-11-06, 13:50 UTC
+
+Final-v2 stopped before requesting a reboot. Confirmation and manual recovery
+actually completed, but their completion checker compared an unsuffixed unit
+name with journal names ending in `.service`. Root verified exact original OLD,
+the unchanged guest boot and the guard's recovered original journal. No final
+NEW boot or final cutover is accepted.
+
+Owned cleanup completed after a separate payload-encoding correction: the shell
+had altered literal backslashes in expected script bytes; installed files matched
+the original hashes. Cleanup now encodes those opaque bytes in base64. Root
+verified the complete native archive manifest, both archives, actual controller
+sources archived before retirement, cleared markers, removed guard graph/files,
+health, exact probe UIDs and 108 process origins. Earlier failures remain intact.
+
+The reviewed successor changes only these two checks and its output namespace.
+Its actual inputs now bind the genuine failed-trial cleanup. It is ready, but
+has not run. Rocky remains OLD-primary; f3 remains accepted NEW; k3s is up and
+the FreeBSD guest remains stopped. The next full cutover window is 14:06 UTC.
+Scope is frozen to finishing cutover with the existing recovery mechanism.
+
 ## Rocky ordinary boot and cleanup accepted — 2026-11-06, 13:02 UTC
 
 The 12:46 boot-v7 trial passed fresh readiness, strict NEW traffic and one normal
