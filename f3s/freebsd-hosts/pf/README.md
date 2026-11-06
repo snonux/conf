@@ -16,9 +16,20 @@ deploy the whole `freebsd` aggregate for this change.
 
 ## Policy and evidence
 
+**Shared-LAN migration, 2026-11-06:** the approved staged migration adds
+`10.20.0.0/24` and `fd02:ca0b:f1cb:20::/64` to the candidate's trusted LAN
+sources. This revision was deployed only to f1, preserving its old management,
+WireGuard, running Rocky VM and bridge settings. Other hosts retain their
+previous deployed trusted table until a separately scoped apply. The existing
+f3 new-source guard remains; a separate f1 guard protects old-only referring
+peers while their new return paths are pending. Neither guard changes keys,
+endpoints or bridge forwarding. New physical addresses are added only by the
+separate guarded network-migration task.
+
 Inbound defaults to block; outbound keeps state. `lo0` stays skipped for S7.
-On `re0`, sources in `192.168.1.0/24`, `fd22:c702:acb7::/64` and `fe80::/10`
-can reach host addresses. LAN trust deliberately includes stunnel TCP 2323
+The current candidate trusts `192.168.1.0/24`, `10.20.0.0/24`,
+`fd22:c702:acb7::/64`, `fd02:ca0b:f1cb:20::/64` and `fe80::/10` on `re0`.
+LAN trust deliberately includes stunnel TCP 2323
 from r0–r2, Garage TCP 3900/3901/3903 from f-hosts/r-nodes and UPS TCP 3551.
 WireGuard `wg0` remains trusted, including frontend Garage access and zrepl
 TCP 8888. Encrypted WireGuard UDP **56709** remains reachable on `re0` over

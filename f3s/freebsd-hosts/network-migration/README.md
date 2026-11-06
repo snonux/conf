@@ -2,8 +2,10 @@
 
 The bounded f3 native canary passed expiry, actual boot recovery, fresh
 old/new management, confirmation and scoped reapply on 2026-11-05; see the
-[v14 execution record](V14-CANARY.md#native-results--2026-11-05). Other hosts
-and standalone guests still need their own guarded acceptance. Keep all
+[v14 execution record](V14-CANARY.md#native-results--2026-11-05). The f3 primary
+and both standalone guests completed their serial acceptance and cleanup on
+2026-11-06; see the [primary acceptance record](Y14-CONFIRMED-NEW-BOOT-STABLE.md).
+The [f1 execution record](Z14-F1.md) tracks the next host. Keep all
 production cabling unchanged through shared-port0 acceptance. Never create
 an activation marker merely because these local fixture checks pass.
 
