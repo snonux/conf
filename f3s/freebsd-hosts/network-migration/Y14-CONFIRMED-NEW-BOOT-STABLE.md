@@ -1,5 +1,21 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Instrumented guest diagnostic closed — 2026-11-06, 08:09 UTC
+
+Fresh admission passed; exactly one captured OLD pass passed2/2/all4 and one
+NEW pass lost2/2/all4. Explicit PID1 rollback and full retirement closed0.
+Root verified12terminal fields,88owned actors plus outer/process births, both
+whole archive hashes, five PCAP hashes, three native lineage absences, exact
+original same-boot OLD/all markers absent and protected accepted f3 NEW state.
+Source39/external79 remain exact. This is not expiry/boot/migration acceptance.
+
+NEW-window guest UDP retains OLD1.123 despite route-get selectingNEW20.123;
+14full-payload matches and Ethernet destination identify traffic reaching
+triggerfish with that OLD source, outside its NEW-source NAT policy. Remote
+absence staysUNKNOWN because Blowfish WAN hit256packets. A minimal same-value
+WireGuard source-cache refresh after promotion and runtime rollback is source
+preparation only. See IQ `topics/infra/openbsdrouter-plan/ROCKY-WG-SOURCE-CACHE.md`.
+
 ## Rocky diagnostic source ready — 2026-11-06, 07:50 UTC
 
 The three failed guest primary trials remain failed and cleaned. One separate
