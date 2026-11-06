@@ -72,8 +72,12 @@ and verified exact OLD Stage and original WG on the same boot. All four held
 SSH processes drained rc0, no NAT capture started, and only the original owned
 empty activation gate remains. Separate postrollback probes passed all four
 actual gateway/family pairs2/2; pending failure cause remains unknown. Genuine
-v2 failure cleanup is being prepared; no expiry, guest reboot or confirmation
-acceptance is claimed.
+v2 failure cleanup subsequently PASSED04:58:03/operator0. Whole evidence was
+archived before exact owned-gate removal; unchanged sudo reapply, strict OLD,
+full health, fresh paths, parent NEW/PF guard0, exact UID and actor/capture drains
+passed. Root independently checked all13 terminal predicates, process birth/group
+absence and both archive hashes. All guest markers are absent. Neither trial is
+an expiry proof; guest reboot and confirmation acceptance remain open.
 
 ## Historical failed terminal at01:02 UTC on2026-11-06
 
