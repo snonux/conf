@@ -67,8 +67,9 @@ with the static local ULA, suppresses physical RA/DHCPv6 and installs no native
 IPv6 default. Promote orders lab IPv4 first (NetworkManager's primary selector),
 keeps old IPv4 and changes the IPv4 gateway to 10.20.0.1. It writes only the
 explicit `flannel-iface` drop-in and restarts this one k3s server. No node/etcd
-identity, pod/Service CIDR, wg0/wg1 or tunnel IPv6 is changed. Before confirming,
-verify the selected physical primary and actual Flannel binding, not just Ready.
+identity, pod/Service CIDR, WireGuard configuration or tunnel IPv6 is changed.
+Before confirming, verify the selected physical primary and actual Flannel
+binding, not just Ready.
 
 Both shared actions persist a laptop `10.99.0.2/32` return route through reachable
 `192.168.1.2`. They never select uncabled `10.98.0.1`. A later explicit helper
@@ -87,11 +88,23 @@ through a separately reviewed conversion; do not improvise a live conversion.
 Snapshots are private and contain the scoped profile (possibly credentials),
 physical global addresses/main-table routes, RA setting and owned Flannel
 drop-in. Restore reloads/reactivates the original UUID then reconciles only
-physical addresses/routes; wg0 and pod interfaces are untouched. Reapplying the
-old physical configuration can briefly disrupt it, and restoring k3s after a
+physical addresses/routes; WireGuard addresses/routes and pod interfaces remain
+intact. Reapplying the old physical configuration can briefly disrupt it, and
+restoring k3s after a
 promotion requires a serial restart. No other NM, k3s drop-in or physical
 address/route writers may run while a transaction is unconfirmed. NM DHCP
 renewal and device ifindex behavior across reboot must pass native acceptance.
+
+After promotion and runtime restoration, the helper refreshes WireGuard's
+cached source selection by reapplying wg0's existing firewall mark unchanged.
+Otherwise a retained old local address can remain WireGuard's UDP source after
+the gateway changes and miss the new router's NAT policy. The helper validates
+the mark and verifies it remains unchanged; it never reloads the tunnel or
+changes keys, peers, endpoints, AllowedIPs or the listen port. It skips this
+step when wg0 is absent during early boot. A refresh failure retains the
+pending journal. The Linux 5.14
+[netlink setter](https://github.com/torvalds/linux/blob/v5.14/drivers/net/wireguard/netlink.c)
+clears peer source caches on a mark update, including the current value.
 
 If endpoint changes are included, create `endpoints-required` before starting.
 The p24 root-owned `/usr/local/sbin/gonf-endpoint-rollback` must implement
@@ -132,4 +145,5 @@ connectivity and endpoint acceptance remain unperformed. Native Bash syntax
 and `nmcli --offline connection add` accepted the prepared address order,
 return route and disabled-IPv6 policy without changing any live connection.
 The disposable fixture exercises guest stage/promote/boot restore and rejects
-an unallocated policy, checking no k3s or wg0 commands and no drop-in changes.
+an unallocated policy, checking no k3s restart or drop-in changes. Separate
+synthetic WireGuard fixtures check unchanged-mark refresh and failure recovery.

@@ -27,7 +27,8 @@ with tempfile.TemporaryDirectory(prefix='rocky-migration-fixture-') as directory
                       .replace('/etc/NetworkManager/system-connections', str(root) + '/profiles')
                       .replace('/etc/rancher/k3s/config.yaml.d', str(root) + '/dropins')
                       .replace('/usr/local/sbin/gonf-network-migration', str(script))
-                      .replace('/usr/local/sbin/gonf-endpoint-rollback', str(fixtures / 'endpoint')))
+                      .replace('/usr/local/sbin/gonf-endpoint-rollback', str(fixtures / 'endpoint'))
+                      .replace('/sys/class/net/wg0', str(root / 'wg0')))
     # All network/service commands are replaced, with no host network access.
     fake = '''#!/usr/bin/env bash
 set -eu
@@ -276,3 +277,147 @@ elif args[:2] == ['connection', 'modify']:
     assert 'wg0' not in log.read_text()
     print('PASS: request flock dispatch (negative old deadlock), owned /32 replacement '
           '(negative old append), stage/promote, expiry/boot/endpoint/confirm recovery')
+
+    # Synthetic sysfs only: never inspect or create a live controller wg0.
+    wg_present = root / 'wg0'
+    mark_file = root / 'fwmark'
+    failure_file = root / 'wg-failure'
+    mark_file.write_text('off')
+    (fixtures / 'wg').write_text('''#!/usr/bin/env python3
+import os, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+args = sys.argv[1:]
+with Path(os.environ['FIXTURE_LOG']).open('a') as log:
+    log.write('wg ' + ' '.join(args) + '\\n')
+mark = root / 'fwmark'
+failure = root / 'wg-failure'
+mode = failure.read_text() if failure.exists() else ''
+if args == ['show', 'wg0', 'fwmark']:
+    if mode == 'query':
+        sys.exit(7)
+    print(mark.read_text())
+elif args[:3] == ['set', 'wg0', 'fwmark'] and len(args) == 4:
+    assert args[3] == mark.read_text(), 'Fixture refuses any changed mark'
+    if mode == 'set':
+        sys.exit(8)
+    if mode == 'verify':
+        mark.write_text('0x42')  # Simulate an unexpected concurrent/tool change.
+else:
+    raise AssertionError('Unreviewed WireGuard mutation or query')
+''')
+    (fixtures / 'wg').chmod(0o755)
+
+    def wg_calls():
+        return [line for line in log.read_text().splitlines()
+                if line.startswith('wg ')]
+
+    def recovery_journal(expired=False, endpoint=False):
+        journal(expired=expired, endpoint=endpoint)
+        (pending / 'standalone').touch()
+
+    # No interface at early boot: physical recovery still completes without
+    # running a WireGuard command, even if the tools executable exists.
+    log.write_text('')
+    recovery_journal(expired=True)
+    run('watchdog')
+    assert not pending.exists() and not wg_calls()
+
+    wg_present.mkdir()
+    # Stage activation retains its old-primary contract and does not refresh.
+    profile.write_text('uuid=00000000-0000-0000-0000-000000000000\n')
+    (state / 'stage-approved').touch()
+    log.write_text('')
+    run('stage', 'shared')
+    assert pending.exists() and not wg_calls()
+    run('rollback')
+    assert wg_calls() == ['wg show wg0 fwmark', 'wg set wg0 fwmark off',
+                          'wg show wg0 fwmark']
+
+    # Real request/dispatch promotion and complete OLD runtime restore both
+    # reapply exactly the original metadata, including a nonzero uint32 mark.
+    for mark in ('off', '0x1234', '0xffffffff'):
+        mark_file.write_text(mark)
+        profile.write_text('uuid=00000000-0000-0000-0000-000000000000\n')
+        (state / 'promote-approved').touch()
+        log.write_text('')
+        request('promote', 'shared')
+        assert pending.exists() and mark_file.read_text() == mark
+        assert wg_calls() == ['wg show wg0 fwmark', 'wg set wg0 fwmark ' + mark,
+                              'wg show wg0 fwmark']
+        calls = log.read_text().splitlines()
+        assert calls.index('ip -6 route flush dev enp0s5 proto ra') < calls.index(
+            'wg show wg0 fwmark')
+        log.write_text('')
+        request('rollback')
+        assert not pending.exists() and mark_file.read_text() == mark
+        assert wg_calls() == ['wg show wg0 fwmark', 'wg set wg0 fwmark ' + mark,
+                              'wg show wg0 fwmark']
+        calls = log.read_text().splitlines()
+        assert calls.index('ip -6 route restore') < calls.index('wg show wg0 fwmark')
+        before_repeat = log.read_text()
+        run('rollback')
+        assert log.read_text() == before_repeat, 'Repeated rollback changed WG metadata'
+
+    # Both native expiry and boot-runtime recovery share the same helper path.
+    mark_file.write_text('off')
+    log.write_text('')
+    recovery_journal(expired=True)
+    run('watchdog')
+    assert not pending.exists() and 'wg set wg0 fwmark off' in wg_calls()
+    log.write_text('')
+    recovery_journal(endpoint=True)
+    run('restore-boot')
+    assert (pending / 'boot-restored').exists() and not wg_calls()
+    run('restore-after-boot')
+    assert not pending.exists()
+    calls = log.read_text().splitlines()
+    assert next(i for i, line in enumerate(calls) if line.startswith('endpoint restore-runtime ')) < calls.index('wg show wg0 fwmark')
+    before_repeat = log.read_text()
+    run('restore-after-boot')
+    run('rollback')
+    assert log.read_text() == before_repeat
+
+    # Invalid metadata and either command failure must retain recovery, never
+    # archive an incomplete restore or resume a marked k3s service too early.
+    for mark in ('', '0', '0x100000000', '0xG', 'off extra'):
+        recovery_journal()
+        mark_file.write_text(mark)
+        log.write_text('')
+        run('rollback', success=False)
+        assert pending.exists() and not any(line.startswith('wg set ') for line in wg_calls())
+        mark_file.write_text('off')
+        run('rollback')
+        assert not pending.exists()
+    for failure in ('query', 'set', 'verify'):
+        recovery_journal()
+        (pending / 'k3s-restarted').touch()
+        mark_file.write_text('off')
+        failure_file.write_text(failure)
+        log.write_text('')
+        run('rollback', success=False)
+        assert pending.exists() and 'systemctl restart k3s' not in log.read_text()
+        failure_file.unlink()
+        mark_file.write_text('off')
+        log.write_text('')
+        run('rollback')
+        assert not pending.exists()
+        calls = log.read_text().splitlines()
+        assert calls.index('wg set wg0 fwmark off') < calls.index('systemctl restart k3s')
+
+    # A failed refresh during promotion also keeps the complete journal and
+    # its unconsumed approval. Recovery can retry after the metadata tool works.
+    profile.write_text('uuid=00000000-0000-0000-0000-000000000000\n')
+    (state / 'promote-approved').touch()
+    failure_file.write_text('set')
+    log.write_text('')
+    run('promote', 'shared', success=False)
+    assert pending.exists() and (state / 'promote-approved').exists()
+    failure_file.unlink()
+    run('rollback')
+    assert not pending.exists()
+    assert not any('wg-quick' in line or 'wireguard' in line
+                   for line in log.read_text().splitlines() if line.startswith('systemctl '))
+    print('PASS: same-value fwmark source-cache refresh: absent/off/nonzero, '
+          'stage unchanged, promote/expiry/boot restore, idempotent rollback, '
+          'invalid/query/set/verify failures retain journal; no other WG mutation/restart')

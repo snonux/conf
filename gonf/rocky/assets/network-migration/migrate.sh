@@ -40,6 +40,18 @@ _archive() {
     local outcome=$1
     mv "$pending" "$state/$outcome-$(date +%s)-$$"
 }
+_refresh_wg_source_cache() {
+    local mark current
+    # A same-value fwmark update clears WireGuard's cached local UDP source.
+    # Before wg-quick at boot there is no interface/cache to refresh.
+    [[ -e /sys/class/net/wg0 ]] || return 0
+    mark=$(wg show wg0 fwmark)
+    [[ $mark == off || $mark =~ ^0x[0-9a-fA-F]{1,8}$ ]] ||
+        _fail 'Unrecognized WireGuard fwmark'
+    wg set wg0 fwmark "$mark"
+    current=$(wg show wg0 fwmark)
+    [[ $current == "$mark" ]] || _fail 'WireGuard fwmark changed'
+}
 _restore_persistent() {
     local profile
     profile=$(<"$pending/profile-path")
@@ -71,6 +83,7 @@ _restore_runtime() {
     ip -6 route restore < "$pending/route6"
     sysctl -q -w "net.ipv6.conf.$iface.accept_ra=$(<"$pending/accept-ra")"
     _endpoint restore-runtime
+    _refresh_wg_source_cache
 }
 _rollback() {
     [[ -d $pending ]] || return 0
@@ -202,6 +215,9 @@ _activate() {
     ip -6 route flush dev "$iface" proto ra
     if [[ $ipv6_policy == ula ]]; then
         ip -6 address add "$ula/64" dev "$iface"
+    fi
+    if [[ $action == promote ]]; then
+        _refresh_wg_source_cache
     fi
     if [[ $action == promote && $role == k3s ]]; then
         mkdir -p /etc/rancher/k3s/config.yaml.d
