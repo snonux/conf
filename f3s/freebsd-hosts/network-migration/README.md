@@ -57,8 +57,12 @@ immortal static aliases. RA resumes where previously enabled. Boot rollback uses
 persistent settings. DHCP and an active DHCPv6 client require separate review.
 
 Alias200/201/202 are reserved to this helper; collisions fail before mutation.
-Promotion replaces the physical primary with the new address and keeps the
-old as alias200. It never restarts netif or destroys a bridge. No retirement
+Promotion selects the first non-CARP physical address and keeps the old as
+alias200. It rotates only owned aliases, keeping the desired address present;
+it never uses an implicit address replacement that could overwrite a CARP VIP.
+A foreign ordinary IPv4 alias refuses promotion before arming. CARP rows may
+precede the physical primary in ifconfig output after rotation. The helper never
+restarts netif or destroys a bridge. No retirement
 command exists. Runtime rollback replaces only that primary and this helper's
 addresses; it does not clear the interface. Scoped rc.conf keys are restored
 with sysrc, preserving CARP and unrelated managed settings. The entire

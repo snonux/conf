@@ -67,6 +67,7 @@ elif cmd == 'ifconfig':
     def detach_gateway_routes(ip):
         # FreeBSD removes routes through the detached connected subnet,
         # including when ifconfig replaces the primary with another subnet.
+        if ip == s.get('carp',{}).get('vip'): return
         prefix=ip.rsplit('.',1)[0]+'.'
         for key in ('default4','return'):
             if s.get(key) and s[key].startswith(prefix): s[key]=None
@@ -75,8 +76,12 @@ elif cmd == 'ifconfig':
     if len(a)==1 or len(a)==2:
         print('re0: flags=UP')
         if len(a)==1 or a[1]=='inet':
-            for ip in s['v4']: print(' inet',ip,'netmask 0xffffff00 broadcast 192.168.1.255')
-            print(' inet 192.168.1.138 netmask 0xffffffff vhid 1')
+            for ip in s['v4']:
+                if ip == s.get('carp',{}).get('vip'):
+                    print(' inet',ip,'netmask 0xffffffff vhid',s['carp']['vhid'])
+                else: print(' inet',ip,'netmask 0xffffff00 broadcast 192.168.1.255')
+            if len(a)==1 and s.get('carp',{}).get('vip') in s['v4']:
+                print(' carp:',s['carp']['state'],'vhid',s['carp']['vhid'])
         if len(a)==1 or a[1]=='inet6':
             print(' inet6 fe80::1%re0 prefixlen 64 scopeid 0x1')
             for ip in s['v6']:
@@ -104,8 +109,10 @@ elif cmd == 'ifconfig':
                 s.setdefault('v6_properties',{})[ip]=props
         else:
             assert family=='inet', a
-            detach_gateway_routes(s[field][0])
-            s[field][0]=ip
+            # Native FreeBSD removes the first address and appends the new
+            # one. A CARP alias can consequently become the first row.
+            detach_gateway_routes(s[field].pop(0))
+            s[field].append(ip)
 elif cmd == 'route':
     if 'get' in a and a[-1]=='default' and s.get('advance_default_query_to'):
         s['now']=s.pop('advance_default_query_to')
@@ -264,6 +271,30 @@ def main():
         run('stage', 'isolated', ok=False)  # Human/cabling gate stays closed.
         calls = json.loads(db.read_text())['calls']
         assert not any('netif' in ' '.join(call) or 'bridge' in ' '.join(call) for call in calls)
+        # Reproduce f1: a real CARP row moves ahead of ordinary addresses
+        # after primary replacement. It must survive promotion AND rollback.
+        carp_seed=json.loads(json.dumps(initial))
+        carp_seed.update(v4=['192.168.1.130','192.168.1.138'],now=3000,calls=[],
+                         carp={'vip':'192.168.1.138','vhid':1,'state':'BACKUP'})
+        db.write_text(json.dumps(carp_seed))
+        rcconf.write_text(''.join(f'{k}={shlex.quote(v)}\n' for k,v in carp_seed['keys'].items()))
+        run('stage'); carp_stage=run('confirm')
+        carp_new=run('promote','shared','300')
+        assert '192.168.1.138' in carp_new['v4'], carp_new['v4']
+        assert [ip for ip in carp_new['v4'] if ip!='192.168.1.138']==['10.20.0.130','192.168.1.130']
+        carp_old=run('rollback')
+        assert '192.168.1.138' in carp_old['v4'], carp_old['v4']
+        assert [ip for ip in carp_old['v4'] if ip!='192.168.1.138']==['192.168.1.130','10.20.0.130']
+        assert carp_old['carp']==carp_seed['carp'] and carp_old['keys']==carp_stage['keys']
+        assert all(not(call[0]=='ifconfig' and '192.168.1.138' in call) for call in carp_old['calls'])
+        # A different ordinary alias is not CARP. Refuse rotation before
+        # mutation rather than hiding or deleting another owner's address.
+        carp_old['v4'].append('192.168.1.199')
+        db.write_text(json.dumps(carp_old)); before_foreign=json.loads(db.read_text())
+        foreign=run('promote','shared','300',ok=False)
+        assert foreign['v4']==before_foreign['v4'] and foreign['keys']==before_foreign['keys']
+        assert not (state/'pending').exists()
+        print('PASS: CARP address/role survives native primary reordering and rollback; foreign aliases refuse',flush=True)
         # Confirmed-NEW boot protection is an isolated lease over an immutable
         # accepted OLD snapshot. Ordinary pending is never edited or bypassed.
         guard = state / 'confirmed-boot-guard'

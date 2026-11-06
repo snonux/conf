@@ -37,6 +37,50 @@ v4_rows() {
         }'
 }
 
+# CARP rows may precede the physical addresses after an address is deleted.
+# Do not mistake a vhid's VIP for the host's primary or hide a foreign primary.
+physical_primary() {
+    rows=$(ifconfig "$iface" inet) || return
+    printf '%s\n' "$rows" | awk '
+        $1 == "inet" && $0 !~ /[[:space:]]vhid[[:space:]]/ { print $2; exit }'
+}
+
+check_primary_rotation() {
+    rows=$(ifconfig "$iface" inet) || return
+    foreign=$(printf '%s\n' "$rows" | awk -v a="$old" -v b="$lab" -v c="$recovery" '
+        $1 == "inet" && $0 !~ /[[:space:]]vhid[[:space:]]/ &&
+        $2 != a && $2 != b && $2 != c { print $2 }')
+    [ -z "$foreign" ] || fail 'unmanaged physical IPv4 alias requires review before primary rotation'
+}
+
+# Keep the desired address present while rotating only preceding owned
+# addresses. An implicit SIOCSIFADDR replacement can delete a CARP VIP;
+# explicit alias operations never replace another owner's first address.
+select_primary() {
+    rotation_target=$1
+    if ! v4_rows | awk '{print $1}' | grep -qxF "$rotation_target"; then
+        mask=$(awk -v a="$rotation_target" '$1==a {print $2}' "$pending/v4")
+        [ -n "$mask" ] || fail 'saved physical primary mask missing'
+        ifconfig "$iface" inet "$rotation_target" netmask "$mask" alias
+    fi
+    while :; do
+        rotation_current=$(physical_primary) || return
+        [ "$rotation_current" != "$rotation_target" ] || break
+        case $rotation_current in
+            "$old"|"$lab"|"$recovery") ifconfig "$iface" inet "$rotation_current" delete;;
+            *) fail 'unmanaged physical primary prevents safe rotation';;
+        esac
+    done
+}
+
+restore_v4_aliases() {
+    while read -r address mask; do
+        if ! v4_rows | awk '{print $1}' | grep -qxF "$address"; then
+            ifconfig "$iface" inet "$address" netmask "$mask" alias
+        fi
+    done < "$pending/v4"
+}
+
 v6_rows() {
     rows=$(ifconfig "$iface" inet6) || return
     printf '%s\n' "$rows" | awk '
@@ -170,8 +214,7 @@ arm() {
     date +%s > "$state/preparing/v6-captured-at"
     save_v6_metadata > "$state/preparing/v6-metadata" || fail 'unsupported native IPv6 metadata; no address changed'
     awk '{print $1}' "$state/preparing/v4" | grep -qxF "$old" || fail 'retained old host IPv4 is missing'
-    rows=$(ifconfig "$iface" inet) || return
-    printf '%s\n' "$rows" | awk '$1=="inet" {print $2; exit}' > "$state/preparing/primary"
+    physical_primary > "$state/preparing/primary"
     primary=$(cat "$state/preparing/primary")
     [ "$primary" = "$old" ] || [ "$primary" = "$lab" ] || fail 'unexpected primary; refusing CARP replacement'
     ifconfig "$iface" inet6 | grep 'nd6 options=.*ACCEPT_RTADV' > "$state/preparing/ra" || :
@@ -272,12 +315,8 @@ promote() {
     if [ "$profile" = isolated ]; then
         v4_rows | awk '{print $1}' | grep -qxF "$recovery" || fail 'stage isolated recovery alias first'
     fi
-    primary=$(cat "$pending/primary")
-    if [ "$primary" != "$lab" ]; then
-        ifconfig "$iface" inet "$lab" delete
-        ifconfig "$iface" inet "$lab/24"
-        ifconfig "$iface" inet "$old/24" alias
-    fi
+    select_primary "$lab"
+    restore_v4_aliases
     set_return_route
     sysrc -f /etc/rc.conf "ifconfig_${iface}=inet $lab/24" "ifconfig_${iface}_alias200=inet $old/24" >/dev/null
     sysrc -f /etc/rc.conf -x "ifconfig_${iface}_alias201" >/dev/null
@@ -286,17 +325,10 @@ promote() {
 }
 
 restore_runtime() {
-    # Restore primary by replacing the primary only. Never clear the interface:
-    # CARP alias0 and vm-bhyve bridge membership must survive the transaction.
+    # Rotate only owned addresses back to the saved physical primary. Never
+    # clear the interface or replace a CARP alias; bridge membership survives.
     primary=$(cat "$pending/primary")
-    current=$(ifconfig "$iface" inet | awk '$1=="inet" {print $2; exit}')
-    if [ "$current" != "$primary" ]; then
-        if v4_rows | awk '{print $1}' | grep -qxF "$primary"; then
-            ifconfig "$iface" inet "$primary" delete
-        fi
-        mask=$(awk -v a="$primary" '$1==a {print $2}' "$pending/v4")
-        ifconfig "$iface" inet "$primary" netmask "$mask"
-    fi
+    select_primary "$primary"
     for address in "$old" "$lab" "$recovery"; do
         if ! awk '{print $1}' "$pending/v4" | grep -qxF "$address"; then
             if v4_rows | awk '{print $1}' | grep -qxF "$address"; then
@@ -304,11 +336,7 @@ restore_runtime() {
             fi
         fi
     done
-    while read -r address mask; do
-        if ! v4_rows | awk '{print $1}' | grep -qxF "$address"; then
-            ifconfig "$iface" inet "$address" netmask "$mask" alias
-        fi
-    done < "$pending/v4"
+    restore_v4_aliases
     set_default4 "$(cat "$pending/default4")"
     if [ -s "$pending/return" ]; then
         if route -n get -inet 10.99.0.2 | grep -Eq 'destination: 10\.99\.0\.2$'; then
@@ -416,8 +444,7 @@ guard_boot_id() (
 )
 
 guard_new_primary() {
-    physical_rows=$(ifconfig "$iface" inet)
-    [ "$(printf '%s\n' "$physical_rows" | awk '$1=="inet" {print $2; exit}')" = "$lab" ] || fail 'NEW primary required'
+    [ "$(physical_primary)" = "$lab" ] || fail 'NEW physical primary required'
     v4_rows | awk '{print $1}' | grep -qxF "$old" || fail 'retained OLD alias missing'
     [ "$(sysrc -n "ifconfig_$iface")" = "inet $lab/24" ] || fail 'NEW persistent primary required'
     [ "$(sysrc -n "ifconfig_${iface}_alias200")" = "inet $old/24" ] || fail 'persistent OLD alias required'
@@ -546,6 +573,7 @@ esac
 case "${1:-}" in
     stage|promote)
         action=$1; profile=${2:-shared}; seconds=${3:-900}
+        if [ "$action" = promote ]; then check_primary_rotation; fi
         arm
         if [ "$action" = stage ]; then stage; else promote; fi
         echo 'Pending: fresh old/new connections and service checks required before confirm.'
