@@ -1,5 +1,24 @@
 # f3 confirmed-NEW boot — host accepted; guest primaries pending
 
+## Cache helper installed without activation — 2026-11-06, 08:56 UTC
+
+Confaacb97e adds the same-value WireGuard source-cache refresh after promotion
+and runtime restoration. Full offline real-dispatch fixtures, Bash syntax and
+shellcheck passed independently. Scoped Gonf Prepare installed only that script:
+local14-record plan, preview7ok/2would and apply7ok/2changed passed. Root verified
+helper82cd200f…/unchanged metadata, original physical/profile/WG/boot/all markers,
+protected f3 NEW state and8closed owned actors. Originalbc5 remains immutable;
+the accepted Stage amendment changes only helper bytes/SHA and nothing else.
+No promotion, cache setter, reboot or confirmation ran; native transport and
+independent900 recovery proof are still open.
+
+File-only installation checks were scoped to Rocky and parentf3 after three
+read-only refusals for unrelated r-node NFS-monitor jobs. Actual network
+activation keeps strict full-eight-host/1035/no-job admission. The user also
+permits full k3s maintenance and gradual restart for the later node rollout;
+no cluster stop has occurred. IQ `CLUSTER-MAINTENANCE.md` owns that revised
+availability scope; network rollback and final full-cluster health remain.
+
 ## Instrumented guest diagnostic closed — 2026-11-06, 08:09 UTC
 
 Fresh admission passed; exactly one captured OLD pass passed2/2/all4 and one
