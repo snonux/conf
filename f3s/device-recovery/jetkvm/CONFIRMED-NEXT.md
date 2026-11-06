@@ -12,7 +12,24 @@ fixed media phases with explicit startup/decode timing, renew/keep/repeat and
 typed cleanup twice/native21; current v32 state is confirmed and cleaned. See
 [NATIVE-RUNTIME-2026-11-05.md](NATIVE-RUNTIME-2026-11-05.md).
 
-## Current checkpoint — 2026-11-06, 03:33 UTC
+## Current checkpoint — 2026-11-06, 05:12 UTC
+
+v41 FAILED management boot proof after successful setup, one normal reboot and
+old-address HTTP/H264 recovery. Early boot+20s observation prematurely required
+a result before the original readiness deadline, but the late boot+331s snapshot
+also had no result; the native continuation outcome remains unknown. Long
+observer-held lock and discarded failure diagnostics are concrete source gaps,
+with actual timing causality unproved. No blind reboot retry is granted.
+
+Cleanup is terminal: exact hook/empty parent retired, whole failed nine-file
+journal archived verbatim, original seven restored, all authentication/fresh9,
+archive/native/path/process/stream checks independently verified by root. Helper
+remains c29/d81, no managed namespace or hook exists, and historical metadata is
+unchanged. A separate source-only observer/diagnostic correction is in progress;
+no replacement helper, primary migration or fleet action ran. See the
+[v41 evidence](NATIVE-RUNTIME-2026-11-05.md#v41-failed-deferred-boot-with-completed-cleanup--2026-11-06).
+
+## Earlier checkpoint — 2026-11-06, 03:33 UTC
 
 The v39 failed six-file store is archived verbatim and the original historical
 seven-file store was restored under its exact locks. File-only v40 then installed

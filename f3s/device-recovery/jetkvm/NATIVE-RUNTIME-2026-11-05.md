@@ -16,6 +16,50 @@ table 1000 and priority 1140 for controller `10.99.0.2/32`. Vendor DHCP, factory
 MAC and original addresses/default remained unchanged. The initial macvlan trials installed/issued no hook, boot allowance, primary
 transaction, management receipt or confirmation.
 
+## v41 failed deferred boot with completed cleanup — 2026-11-06
+
+The c29/d81 helper was unchanged. The whole operator used frozen58-file source
+manifest `11845e20…`, with1208 external pins verified and five focused suites
+independently passed by root. Setup and one normal force=false reboot request
+passed. An observed outage was followed by original-address HTTP and H264
+recovery. Fixed-management boot acceptance FAILED; no primary/fleet acceptance.
+
+The complete initial snapshot returned0 at native boot+20.13s. Authorization
+was consumed into the new kernel, worker and waiter were live, ownership was
+zero, and no deferred result existed. The original readiness deadline was
+boot+30.87s, ordinary expiry boot+120.87s. The observer prematurely required a
+terminal result. Its original independent observation at boot+331.28s still had
+no result: both PID/birth roles were gone, active was expired, and ownership,
+modules, child, uppers, table and rule were absent. Both saved snapshots pass
+the separate DHCP-owner validator. The native continuation outcome remains
+unknown; neither snapshot proves an ensured path or accepts boot expiry.
+
+Source review found that the full observer holds the helper lock through lengthy
+process/owner scans (the initial command took13.9288s), while failure-result
+persistence waits only one second for the same lock. Actual lock overlap was
+not timestamped, so this is a concrete interference mechanism, not proven sole
+causality. Collector/validator errors and detached stderr were not retained.
+A source-only correction is preparing short lock holds/revalidation, bounded
+pending observation under the original deadlines, and private fixed-code
+terminal diagnostics. No replacement helper or successor reboot is deployed.
+
+The whole trial ended05:11:36 with exit1 and cleanup proven. Exact hook/empty
+created parent retirement and whole nine-file failed-journal reconciliation
+passed; failed bytes/inodes remain in
+`/userdata/jkrecover-v41-terminal-journal-20261106`, and the original seven-file
+store was restored verbatim. Native helper remains c29/d81; historical journal
+boot/deadline were not relabelled to the new kernel. Root independently checked
+all five authentication scopes and fresh9 checks, request/recovery PC closure,
+all six reconciliation predicates,152/183-file durable archive hashes, final
+path-mapped native journal admission, and process/group/stream termination.
+No managed network or hook remains. Current kernel is
+`09aac103-233a-4962-8e4e-a0f58925364c`. The prospective configuration projection
+passed; earlier v39 configuration failures remain failed.
+
+Private evidence: `~/.local/state/conf/s14-jetkvm-deferred-boot-v41-operator-20261106/`
+and `s14-jetkvm-v41-root-terminal-verification-private.json` in the parent state
+directory. Boot, primary and fleet remain open; no blind retry is authorized.
+
 ## v40 corrected helper file-only stage — 2026-11-06
 
 At03:33, the first device received helper c29b9a51…/4657137 bytes,
