@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,9 @@ const Helper = "/usr/local/sbin/gonf-endpoint-migration"
 type Recovery struct {
 	RequiresRoot
 	Platform string
+	// InstallDirectory supports Fedora's sbin -> bin alias. Runtime paths
+	// remain stable; validation writes directly into the real directory.
+	InstallDirectory string
 }
 
 type trial struct {
@@ -42,8 +46,12 @@ func (g Recovery) Prepare() {
 	}
 	check := Command("test", List("!", "-d", state+"/pending"))
 	locking := Command("/bin/sh", List("-ec", `case "$(uname -s)" in Linux|NetBSD) command -v flock >/dev/null ;; FreeBSD|OpenBSD) perl -MFcntl=:flock -e 'exit 0' ;; *) exit 1 ;; esac`))
-	EnsureDir("/usr/local/sbin", RootOwned)
-	helper := InstallFile(Helper, paths.GonfAsset("endpointfiles", "guard"), RootExec,
+	installDirectory := g.InstallDirectory
+	if installDirectory == "" {
+		installDirectory = "/usr/local/sbin"
+	}
+	EnsureDir(installDirectory, RootOwned)
+	helper := InstallFile(filepath.Join(installDirectory, filepath.Base(Helper)), paths.GonfAsset("endpointfiles", "guard"), RootExec,
 		WithValidation("/bin/sh", List("-n", CandidatePath)), DependsOn(check, locking))
 	setup := Sh(Helper+" setup", DependsOn(helper))
 	CronAt("gonf-endpoint-migration", "* * * * *", Helper+" watchdog", DependsOn(setup))

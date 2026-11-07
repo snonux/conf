@@ -47,7 +47,7 @@ func (System) OptsHosts() TaskOptions { return TaskOptions{WhenHostnameContains(
 // Mode 0644 root:root is Fedora's stock for the file; before gonf it had
 // drifted to 0664 root:wheel.
 func (System) Hosts() {
-	fleetfiles.MergeHosts(etchosts.EarthHostsBlock())
+	fleetfiles.MergeHostsIn(etchosts.EarthHostsBlock(), "/usr/local/bin")
 }
 
 func (System) OptsWireguard() TaskOptions {

@@ -31,7 +31,7 @@ import (
 // keeps the prefixes that differ from it.
 func Register() {
 	workstation.Register()
-	RegisterMethods(endpointfiles.Recovery{Platform: "linux"}, WithPrefix("system_endpoints_"), WhenHostnameContains("earth"))
+	RegisterMethods(endpointfiles.Recovery{Platform: "linux", InstallDirectory: "/usr/local/bin"}, WithPrefix("system_endpoints_"), WhenHostnameContains("earth"))
 	RegisterMethods(triggerfish.Base{}, WithPrefix("triggerfish_"), OnCluster(cluster.NameTriggerfish))
 	RegisterMethods(endpointfiles.Recovery{Platform: "openbsd"}, WithPrefix("triggerfish_endpoints_"), OnCluster(cluster.NameTriggerfish))
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
