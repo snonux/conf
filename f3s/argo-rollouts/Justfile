@@ -3,7 +3,7 @@
 
 NAMESPACE := "cicd"
 RELEASE_NAME := "argo-rollouts"
-CHART_VERSION := "2.43.8"
+CHART_VERSION := "2.43.9"
 
 install:
     helm repo add argo https://argoproj.github.io/argo-helm || true

@@ -11,8 +11,16 @@ change to an existing installation; applying ingress.yaml does not delete the
 old public ingress.
 
 The chart version is pinned in the Justfile (`CHART_VERSION`, currently
-`10.10.5` = Argo CD v3.5.5, as shown by `helm list -n cicd`). Bump it on purpose;
+`10.15.0` = Argo CD v3.6.1, verified on 2026-11-07). Bump it on purpose;
 `just upgrade` never floats to the latest chart.
+
+The 3.5 → 3.6 upgrade passed the server dry run and Helm atomic rollout.
+API health/version, repository access and all 40 Application health checks
+passed; Application/Project specs and admin/Redis credentials were preserved.
+The five network-policy apps intentionally awaiting source publication remain
+OutOfSync. Backups and the previous chart are stored privately under
+`~/.local/state/conf/j34-app-upgrades-20261107/`; the previous Helm revision is
+21. No source push was performed.
 
 Redis is explicitly overridden to `8.10.2-alpine` in `values.yaml`; chart
 10.10.5 otherwise ships 8.6.4. Verified on 2026-10-19: runtime 8.10.2,

@@ -4,6 +4,11 @@ Progressive delivery controller (canary, blue-green), namespace `cicd` next
 to ArgoCD, single instance. ArgoCD app `argocd-apps/cicd/argo-rollouts.yaml`;
 `just install | upgrade | uninstall | status | logs` for manual Helm use.
 
+ArgoCD owns the active deployment. On 2026-11-07 its upstream chart was upgraded
+from 2.43.8 to 2.43.9 (controller v1.10.2); the Application is Synced/Healthy and
+the controller is Ready. The older Helm release record is retained and does not
+describe the current ArgoCD-managed version. Use the Application for upgrades.
+
 ```sh
 kubectl get pods -n cicd -l app.kubernetes.io/name=argo-rollouts
 kubectl get crd | grep rollout

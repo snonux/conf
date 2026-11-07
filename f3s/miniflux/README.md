@@ -23,6 +23,25 @@ just status | logs [lines] | logs-postgres | port-forward [8080] | port-forward-
 just sync | argocd-status | restart | restart-postgres | psql
 ```
 
+## Application upgrade (2026-11-08)
+
+Miniflux 2.3.5 is running. Health, the authenticated user/feed APIs, invalid-token
+rejection and the runtime version passed verification. Database counts remained
+2 users, 38 feeds and 195 entries. PostgreSQL remains on 18.6.
+
+Automatic sync is temporarily disabled for this Application because the matching
+chart changes are local and source pushes are prohibited. ArgoCD therefore
+reports the image difference as OutOfSync. Publish the matching source before
+re-enabling `spec.syncPolicy.automated.enabled`; an earlier manual sync would
+restore the old image.
+
+The application was stopped for a consistent pre-upgrade custom-format dump at
+`~/.local/state/conf/j34-app-upgrades-20261107/miniflux-before-2.3.5.dump`.
+Its archive listing passed validation. The saved Application/Deployment objects
+are in the same private directory. A schema rollback requires stopping the
+application and restoring that database together with the old 2.3.3 image;
+restoring it loses writes made after the backup.
+
 ## PostgreSQL 18 (2026-10-17)
 
 The database was dumped from PG17 and restored into PG18.6. The 2 users,
