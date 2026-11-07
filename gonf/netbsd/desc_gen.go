@@ -10,6 +10,30 @@ func (Goprecords) DescUptimed() string {
 	return "Installs /etc/uptimed.conf (LOG_MAXIMUM_ENTRIES=0), the custom rc.d script, and enables the daemon"
 }
 
+func (NetworkMigration) DescConfirm() string {
+	return "Accepts independently verified network and service state"
+}
+
+func (NetworkMigration) DescPrepare() string {
+	return "Installs dormant transactions, a no-op watchdog and ordered boot recovery"
+}
+
+func (NetworkMigration) DescPromote() string {
+	return "Dispatches NEW primary selection while retaining OLD access"
+}
+
+func (NetworkMigration) DescRollback() string {
+	return "Dispatches restoration independently of the SSH origin"
+}
+
+func (NetworkMigration) DescStage() string {
+	return "Dispatches a guarded shared-wire dual-address transaction"
+}
+
+func (NetworkMigration) DescStatus() string {
+	return "Reports pending and accepted modes without exposing WireGuard keys"
+}
+
 func (Periodic) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
 }

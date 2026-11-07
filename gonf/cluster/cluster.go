@@ -151,6 +151,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		WithPlatform("netbsd/arm64"),
 	)
 	pi0 = Host("pi0", netbsdPi,
+		WithData(netbsd.MigrationHost{Interface: "mue0", OldIPv4: "192.168.1.125", LabIPv4: "10.20.0.125", RecoveryIPv4: "10.98.0.125", ULA: "fd02:ca0b:f1cb:20::125", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.125", Platform: "netbsd"}),
 		// Hours are local time (Europe/Sofia since 2026-09-25). The pkgs
 		// window must fall while the k3s cluster is up: the custom repo
@@ -166,6 +167,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		WithData(goprecords.ClientHost{Host: "pi0"}),
 	)
 	pi1 = Host("pi1", netbsdPi,
+		WithData(netbsd.MigrationHost{Interface: "mue0", OldIPv4: "192.168.1.126", LabIPv4: "10.20.0.126", RecoveryIPv4: "10.98.0.126", ULA: "fd02:ca0b:f1cb:20::126", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "192.168.1.126", Platform: "netbsd"}),
 		WithData(netbsd.UnattendedSchedule{PkgsHour: "22", RebootHour: "22"}),
 		// After the 22:10 pkgs / 22:50 reboot window.
