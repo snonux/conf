@@ -1,15 +1,31 @@
 # Resolver migration — task 524
 
-Pi3 now has source-owned dormant recovery files, a dormant firewall candidate
-and the future VIP wildcard installed. None is activated: before/after profiles,
-addresses/routes, loaded firewall, container identity/start/restarts, live DNS
-files and boot are unchanged, and OLD UDP/TCP DNS passed. Evidence is private at
-`524-pis-20261107/pi3-dormant-deploy/accepted.json`.
+Both resolvers completed shared-wire acceptance on 2026-11-07: NEW-primary
+10.20.0.127/.128, default gateway 10.20.0.1, retained OLD addresses, native ULA
+and the controller /32 return route through 192.168.1.2. Each separately
+confirmed Stage and Promote after fresh OLD/NEW management, UDP/TCP DNS and
+admin HTTP checks, then passed an actual confirmed NEW boot. Both former
+transaction deadlines elapsed without changing the accepted state.
 
-Pi2 recovered on 2026-11-07; fresh trusted SSH and OLD UDP/TCP DNS passed on
-both hosts, permitting serial native recovery trials. Renumbering remains
-incomplete until those trials, final boot and reapply acceptance pass. No
-physical rescue, power cycle or console dependency is part of this procedure.
+Pi2 proved the common recovery controller with actual 900-second expiry and
+an unconfirmed normal boot. NetworkManager, compose and private TOML were
+restored to their exact saved hashes; OLD management and both resolvers' DNS
+passed afterwards. Pi3 used that reviewed common proof after matching native
+interface, image, healthcheck and Compose preflight. One resolver stayed healthy
+through each serial service change and boot. No power cycle or console was used.
+
+Owned approval gates are removed and no network/firewall transaction remains
+pending. Source reapply changed no managed file or service and preserved the
+boot, container identity/start/restarts, NM fields and protected hashes. Its raw
+summary reports one changed resource because the read-only pending-state test
+is an executed Command; Docker, daemon reload and restorecon were skipped.
+Private reproducible evidence is under
+`524-pis-20261107/native-20261107T1050/`, particularly each
+`piN-final-acceptance-accepted.json` and the Pi2 expiry/boot receipts.
+
+The live wildcard remains OLD VIP 192.168.1.138. Only the future VIP file is
+dormant, outside active mounts/includes. Activation remains coordinated with
+storage/ingress acceptance and the canonical mapping step, task 924.
 
 `pihole_network_prepare` reuses the existing Linux snapshot/PID1 watchdog and
 boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
@@ -71,7 +87,11 @@ schedules or infer writer inactivity from an update stamp.
 
 Verification completed locally: Go build/vet/errcheck, ARM64 cross-build, real
 helper dispatch fixtures (including eth0/ULA expiry and boot restoration with no
-k3s/Flannel operations), shell syntax/shellcheck and native nft packet tests in
-disposable namespaces. These checks prove preparation, not native deployment,
-DNS service acceptance or a Pi reboot. Read-only baseline and prepared plans
-are private under `~/.local/state/conf/524-pis-20261107/`.
+k3s/Flannel operations, private service-state recovery and unhealthy-restore
+journal retention), shell syntax/shellcheck and native nft packet tests in
+disposable namespaces. Actual laptop wg2 identity 10.99.0.2 passed management
+and DNS on both NEW endpoints. The dormant phone identity's rules have namespace
+coverage; no actual phone handshake is claimed. A single OLD Pi3 TCP DNS timeout
+during post-router refresh did not reproduce in subsequent complete matrices or
+the deadline monitor; the failed observation is retained without assigning a
+cause. All 68 deadline-monitor endpoint observations passed UDP and TCP.

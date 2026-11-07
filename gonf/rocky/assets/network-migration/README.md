@@ -120,6 +120,19 @@ Run `python3 check-offline.py` here for disposable command-fixture validation.
 Bash/shellcheck and Go checks supplement it; native expiry/reboot and fresh
 remote connection proof remain explicitly unperformed.
 
+Resolver role (`524`, accepted 2026-11-07): explicit `role=resolver` uses
+`eth0` with native ULA and no k3s/Flannel actions. A staged Pi-hole compose
+candidate joins the same journal/watchdog: snapshot compose and private TOML,
+apply after network staging, and restore both during timed/boot rollback.
+Restoration stops FTL before recopying TOML to defeat its shutdown write and
+waits for Docker health before archiving the journal. The resolver boot runtime
+unit orders after Docker without blocking network-online. Pi2 passed actual
+combined expiry and boot recovery; both Pis passed confirmed NEW boots and
+former-deadline observations. See the
+[resolver record](../../../pihole/assets/network-migration/README.md) for current
+service, wildcard and fresh-client acceptance. These results do not imply new
+native acceptance for other host roles.
+
 References: [NetworkManager properties](https://networkmanager.dev/docs/api/1.42/nm-settings-nmcli.html)
 (primary address order, manual IPv6 and route policy),
 [systemd timers](https://www.freedesktop.org/software/systemd/man/252/systemd.timer.html),
