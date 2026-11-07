@@ -18,6 +18,9 @@ import time
 
 STATE = Path('/var/db/gonf-storage-migration')
 PENDING = STATE / 'pending'
+PF_PENDING = STATE / 'pf-pending'
+PF_CONFIG = Path('/etc/pf.conf')
+PF_DIGEST = Path('/var/db/gonf-pf.sha256')
 RC = Path('/etc/rc.conf')
 ALIASES = ('ifconfig_re0_alias0', 'ifconfig_re0_alias1')
 FILES = (Path('/usr/local/etc/stunnel/stunnel.conf'),
@@ -85,7 +88,21 @@ def active(service):
 
 def stop(service):
     if active(service):
-        run(['/usr/sbin/service', service, 'onestop'])
+        run(['/usr/sbin/service', service, 'onestop'], required=False)
+        if active(service):
+            raise RuntimeError('service remains active after stop')
+
+
+def drain_hooks():
+    deadline = time.monotonic() + 60
+    while True:
+        rows = run(['/bin/ps', '-axo', 'args=']).stdout.decode().splitlines()
+        hooks = [row for row in rows if '/usr/local/bin/carpcontrol.sh' in row.split()]
+        if not hooks:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError('existing CARP hook did not finish')
+        time.sleep(0.1)
 
 
 def hold():
@@ -96,13 +113,14 @@ def hold():
     if carp_allowed():
         raise RuntimeError('CARP fence did not take effect')
     (STATE / 'held').touch(mode=0o600)
+    drain_hooks()
     for service in ('stunnel', 'nfsd', 'mountd', 'nfsuserd', 'relayd'):
         stop(service)
 
 
 def arm(seconds):
     gate('approved', fresh=True)
-    if PENDING.exists() or (STATE / 'held').exists():
+    if PENDING.exists() or PF_PENDING.exists() or (STATE / 'held').exists():
         raise RuntimeError('unfinished storage transaction')
     if not 60 <= seconds <= 1800:
         raise RuntimeError('deadline must be 60..1800 seconds')
@@ -229,6 +247,51 @@ def release_old():
     (STATE / 'held').unlink()
 
 
+def pf_arm(seconds):
+    gate('approved', fresh=True)
+    if PENDING.exists() or PF_PENDING.exists() or (STATE / 'held').exists():
+        raise RuntimeError('overlapping PF or storage transaction')
+    if not 60 <= seconds <= 900:
+        raise RuntimeError('PF deadline must be 60..900 seconds')
+    if run(['/sbin/pfctl', '-s', 'Running'], required=False).returncode != 0:
+        raise RuntimeError('PF is not already enabled')
+    metadata = []
+    for path in (PF_CONFIG, PF_DIGEST):
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+            raise RuntimeError('unexpected PF file metadata')
+        metadata.append({'path': str(path), 'uid': info.st_uid, 'gid': info.st_gid,
+                         'mode': stat.S_IMODE(info.st_mode)})
+    temporary = STATE / 'pf-preparing'
+    temporary.mkdir(mode=0o700)
+    for index, path in enumerate((PF_CONFIG, PF_DIGEST)):
+        shutil.copyfile(path, temporary / str(index))
+        (temporary / str(index)).chmod(0o600)
+    write(temporary / 'manifest.json', {'node': node(), 'deadline': int(time.time()) + seconds,
+                                      'files': metadata})
+    temporary.rename(PF_PENDING)
+
+
+def pf_restore(*, boot=False):
+    value = json.loads((PF_PENDING / 'manifest.json').read_text())
+    if value['node'] != node():
+        raise RuntimeError('PF transaction names another member')
+    enabled = run(['/sbin/pfctl', '-s', 'Running'], required=False).returncode == 0
+    if not boot and not enabled:
+        raise RuntimeError('runtime PF unexpectedly disabled')
+    if enabled:
+        run(['/sbin/pfctl', '-nf', str(PF_PENDING / '0')])
+    for index, metadata in enumerate(value['files']):
+        path = Path(metadata['path'])
+        shutil.copyfile(PF_PENDING / str(index), path)
+        os.chown(path, metadata['uid'], metadata['gid'])
+        path.chmod(metadata['mode'])
+    if enabled:
+        run(['/sbin/pfctl', '-f', str(PF_CONFIG)])
+    # A failed load retains the journal for the next native watchdog tick.
+    PF_PENDING.rename(STATE / ('pf-restored-' + str(time.time_ns())))
+
+
 def main():
     if os.geteuid() != 0:
         raise RuntimeError('root required')
@@ -237,7 +300,18 @@ def main():
     with (STATE / 'lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         action = sys.argv[1]
-        if action == 'arm':
+        if action == 'pf-arm':
+            pf_arm(int(sys.argv[2]))
+        elif action == 'pf-confirm':
+            gate('pf-accepted', fresh=True)
+            value = json.loads((PF_PENDING / 'manifest.json').read_text())
+            if value['node'] != node() or time.time() >= value['deadline']:
+                raise RuntimeError('PF transaction expired or names another member')
+            PF_PENDING.rename(STATE / ('pf-accepted-' + str(time.time_ns())))
+        elif action == 'pf-rollback':
+            if PF_PENDING.exists():
+                pf_restore()
+        elif action == 'arm':
             arm(int(sys.argv[2]))
         elif action == 'hold':
             manifest()
@@ -255,6 +329,10 @@ def main():
             if PENDING.exists():
                 rollback()
         elif action in ('watchdog', 'boot'):
+            if PF_PENDING.exists():
+                value = json.loads((PF_PENDING / 'manifest.json').read_text())
+                if action == 'boot' or time.time() >= value['deadline']:
+                    pf_restore(boot=action == 'boot')
             if PENDING.exists() and (action == 'boot' or time.time() >= manifest()['deadline']):
                 rollback()
             if action == 'boot' and (STATE / 'held').exists():
@@ -276,7 +354,7 @@ def main():
             print(json.dumps({'node': node(), 'pending': PENDING.exists(),
                               'deadline': value.get('deadline'),
                               'held': (STATE / 'held').exists(),
-                              'carp_allowed': carp_allowed()}))
+                              'carp_allowed': carp_allowed(), 'pf_pending': PF_PENDING.exists()}))
         else:
             raise RuntimeError('unsupported storage action')
 

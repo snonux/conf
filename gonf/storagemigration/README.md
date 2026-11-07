@@ -248,3 +248,15 @@ Run `python3 f3s/freebsd-hosts/storage-migration/check-offline.py` for actual
 helper dispatch against disposable files and fake native calls. It verifies
 expired-deadline restore, boot persistence, alias/config restore, unrelated file
 preservation, repeat rollback and refusal to re-enable without pair attestation.
+
+
+The narrow wg2 laptop PF prerequisite has a separate journal in `pf-pending`.
+`pf-arm 60..900` saves only `/etc/pf.conf` and its managed loaded-file digest;
+PF and storage transactions refuse to overlap in either direction. Apply the
+additive VIP-only rule through `freebsd_firewall_config`, without flushing
+states. The existing watchdog/early boot hook restores the old owned PF files
+and reloads the old rules when PF is running; a failed load retains the journal
+for retry. On boot with PF not yet running, its ordinary rc.d startup consumes
+the restored file. Fresh OLD/NEW management and exact loaded-rule checks precede
+`pf-confirm` with a fresh `pf-accepted` gate; an expired journal cannot confirm.
+This prerequisite is accepted before arming the coordinated storage transaction.
