@@ -120,4 +120,4 @@ paul IN MX 42 fishfinger.buetow.org.
 *    IN MX 10 fishfinger.buetow.org.
 *    IN MX 20 blowfish.buetow.org.
 
-*.f3s.lan IN A 192.168.1.138
+*.f3s.lan 60 IN A 192.168.1.138
