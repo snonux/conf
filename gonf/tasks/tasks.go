@@ -51,6 +51,7 @@ func Register() {
 	RegisterMethods(netbsd.Periodic{}, WithPrefix("pis_netbsd_periodic_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterOnCluster(cluster.NameNetBSDPis, netbsd.Goprecords{})
 	RegisterMethods(netbsd.NetworkMigration{}, WithPrefix("pis_netbsd_network_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterMethods(netbsd.ShellyEndpoints{}, WithPrefix("pis_netbsd_shelly_"), OnCluster(cluster.NameNetBSDPis))
 
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.

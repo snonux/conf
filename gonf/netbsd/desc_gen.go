@@ -42,6 +42,14 @@ func (Periodic) DescLogs() string {
 	return "Creates /var/log/daily.log and weekly.log (0640) and rotates them with newsyslog"
 }
 
+func (ShellyEndpoints) DescActivate() string {
+	return "Adopts verified plug endpoints while preserving all other defaults"
+}
+
+func (ShellyEndpoints) DescPrepare() string {
+	return "Installs an inactive partial configuration without changing callers"
+}
+
 func (Unattended) DescNewsyslog() string {
 	return "Appends unattended-upgrade log rotation to /etc/newsyslog.conf"
 }
