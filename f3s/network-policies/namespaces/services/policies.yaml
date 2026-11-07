@@ -59,10 +59,6 @@ spec:
     - ipBlock:
         cidr: 10.42.2.1/32
     - ipBlock:
-        cidr: 10.99.0.2/32
-    - ipBlock:
-        cidr: 10.99.0.3/32
-    - ipBlock:
         cidr: 10.20.0.120/32
     - ipBlock:
         cidr: 10.20.0.121/32
@@ -193,10 +189,6 @@ spec:
         cidr: 10.42.2.0/32
     - ipBlock:
         cidr: 10.42.2.1/32
-    - ipBlock:
-        cidr: 10.99.0.2/32
-    - ipBlock:
-        cidr: 10.99.0.3/32
     - ipBlock:
         cidr: 10.20.0.120/32
     - ipBlock:
@@ -725,10 +717,6 @@ spec:
         cidr: 10.42.2.0/32
     - ipBlock:
         cidr: 10.42.2.1/32
-    - ipBlock:
-        cidr: 10.99.0.2/32
-    - ipBlock:
-        cidr: 10.99.0.3/32
     - ipBlock:
         cidr: 10.20.0.120/32
     - ipBlock:

@@ -9,13 +9,16 @@ credentials, Garage identities/layout, log permissions/keys, safety thresholds
 and WG monitoring targets were preserved. See IQ's current migration handoff
 for native expiry/boot and real service evidence. No source was pushed.
 
-Ten existing network policies received42 equivalent lab-host /32 additions,
+Ten existing network policies received30 equivalent lab-host /32 additions,
 retaining old entries/ports/selectors and exact UID/Argo tracking annotations.
 The five actual owning apps in cicd are manual and pinned; their specs and
 revisions were not changed. WG0-only Prometheus read proxies were retained,
 including the auto-owned object: the inactive renderer's wg2 counterparts are
 not an instruction to expose proxy8080 outside the existing port contract.
 Manual apps can stay OutOfSync until separately authorized source publication.
+The candidate's twelve WG2 client translations were withdrawn during final
+verification: existing WG0 client permissions do not imply WG2 pod/backend
+permissions. Only thirty equivalent lab-host entries remain added.
 
 The operational candidates below describe the historical OLD-to-NEW handoff.
 After canonical inventory adoption, use normal owner tasks: address candidate
