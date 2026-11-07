@@ -40,9 +40,18 @@ if [ -e {base}/pause-copy ]; then
 fi
 exec /bin/cp "$@"''',
         'systemctl': f'''case "$1" in
-is-active) test ! -e {base}/inactive ;;
+is-active)
+    if [ -f {base}/delayed-active ]; then
+        remaining=$(cat {base}/delayed-active)
+        if [ "$remaining" -gt 0 ]; then
+            echo $((remaining-1)) > {base}/delayed-active
+            exit 1
+        fi
+    fi
+    test ! -e {base}/inactive ;;
 restart)
     test ! -e {base}/fail-runtime || exit 1
+    if [ -f {base}/delay-after-restart ]; then echo 2 > {base}/delayed-active; fi
     cat {base}/local/etc/apcupsd/apcupsd.conf > {base}/runtime
     echo restarted >> {base}/calls ;;
 *) exit 2 ;;
@@ -51,6 +60,12 @@ esac''',
 inspect:*) echo healthy ;;
 compose:stop) echo daemon-shutdown-write > {base}/pihole/etc-pihole/pihole.toml ;;
 compose:up) test ! -e {base}/fail-runtime ;;
+*) exit 2 ;;
+esac''',
+        'pfctl': f'''case "$1" in
+-s) test ! -e {base}/inactive ;;
+-nf) test -s "$2" ;;
+-f) test ! -e {base}/fail-runtime && cat "$2" > {base}/pf-runtime ;;
 *) exit 2 ;;
 esac''',
     }.items():
@@ -69,6 +84,8 @@ esac''',
         '/var/lib/f3s-pihole-migration': str(base / 'dns-stage'),
         '/home/paul/pihole': str(base / 'pihole'),
         '/etc/hosts': str(base / 'etc/hosts'),
+        '/etc/pf.conf': str(base / 'etc/pf.conf'),
+        '/var/db/gonf-pf.sha256': str(base / 'pf-digest'),
         '/etc/rc': str(base / 'etc/rc'),
         '/etc/ssh/authorized_keys.d/f3sctl': str(base / 'authorized-key'),
         '/bin/ksh': '/bin/sh',
@@ -161,7 +178,11 @@ esac''',
     put(ups, 'OLD endpoint\n', 0o640)
     put(Path(str(ups) + '.triggerfish-candidate'), 'NEW endpoint\n')
     run('arm', 'ups', '900')
+    put(base / 'delay-after-restart', '')
     run('apply', 'ups')
+    assert (base / 'delayed-active').read_text().strip() == '0'
+    (base / 'delay-after-restart').unlink()
+    (base / 'delayed-active').unlink()
     assert (base / 'runtime').read_text() == 'NEW endpoint\n'
     put(base / 'fail-runtime', '')
     expire()
@@ -194,8 +215,32 @@ esac''',
     run('arm', 'ups', '900', ok=False)
     ups.unlink()
 
+    # The existing Firewall owner publishes PF; the guard restores both files
+    # and reloads the saved policy if a failed/expired trial needs recovery.
+    run('arm', 'pf', '900', ok=False)
+    put(node, 'f3\n')
+    put(platform, 'FreeBSD\n')
+    policy = base / 'etc/pf.conf'
+    put(policy, 'OLD policy\n', 0o644)
+    put(base / 'pf-digest', 'OLD checksum\n')
+    run('arm', 'pf', '900')
+    put(policy, 'NEW policy\n', 0o644)
+    put(base / 'pf-digest', 'NEW checksum\n')
+    run('apply', 'pf')
+    assert (base / 'pf-runtime').read_text() == 'NEW policy\n'
+    expire()
+    put(base / 'fail-runtime', '')
+    run('watchdog', ok=False)
+    assert policy.read_text() == 'OLD policy\n' and (state / 'pending').exists()
+    (base / 'fail-runtime').unlink()
+    run('watchdog')
+    assert not (state / 'pending').exists()
+    assert (base / 'pf-runtime').read_text() == 'OLD policy\n'
+    assert (base / 'pf-digest').read_text() == 'OLD checksum\n'
+
     # DNS rollback stops FTL before restoring its TOML and retains failed health.
     put(node, 'pi2\n')
+    put(platform, 'Linux\n')
     for name in ('docker-compose.yml', 'etc-pihole/pihole.toml', 'etc-dnsmasq.d/99-f3s-lan-wildcard.conf'):
         put(base / 'pihole' / name, 'ORIGINAL ' + name + '\n')
     put(base / 'dns-stage/99-f3s-lan-hosts.conf', 'host-record=test.example,10.20.0.130\n')

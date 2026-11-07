@@ -43,6 +43,7 @@ allowed() {
     case "$node:$1" in
         f[0-3]:hosts|r[0-2]:hosts|pi[0-3]:hosts|rocky:hosts|freebsd:hosts|blowfish:hosts|fishfinger:hosts|triggerfish:hosts|earth*:hosts) ;;
         f[0-2]:garage|f[0-3]:ups|f[0-3]:pins|f[0-3]:fan) ;;
+        f3:pf) ;;
         f[0-3]:dtail|r[0-2]:dtail|pi[0-3]:dtail|pi[0-1]:controller|pi[2-3]:dns) ;;
         *) fail 'profile is outside this node role' ;;
     esac
@@ -54,6 +55,7 @@ files() {
         garage) printf '%s\n' /usr/local/etc/garage.toml ;;
         ups) printf '%s\n' /usr/local/etc/apcupsd/apcupsd.conf ;;
         pins) printf '%s\n' /etc/ssh/authorized_keys.d/f3sctl ;;
+        pf) printf '%s\n' /etc/pf.conf /var/db/gonf-pf.sha256 ;;
         fan) printf '%s\n' /usr/local/etc/rc.conf.d/shellyfans /usr/local/sbin/shelly-fans-on ;;
         controller) printf '%s\n' /usr/local/etc/f3sctl.json ;;
         dtail)
@@ -67,6 +69,7 @@ service_name() {
 }
 
 active() {
+    if [ "$1" = pf ]; then pfctl -s Running >/dev/null 2>&1; return; fi
     service_name=$(service_name "$1")
     [ -n "$service_name" ] || return 1
     case "$os" in
@@ -102,6 +105,10 @@ bounded() {
 restart() {
     case "$1" in
         hosts|controller|fan|pins) return 0 ;;
+        pf)
+            bounded sh -ec 'pfctl -nf /etc/pf.conf && exec pfctl -f /etc/pf.conf' || return
+            active pf
+            return ;;
         dns)
             bounded sh -c 'cd /home/paul/pihole && exec docker compose up -d --force-recreate --timeout 10 --wait --wait-timeout 90'
             return ;;
@@ -113,7 +120,14 @@ restart() {
         NetBSD) bounded "/etc/rc.d/$service_name" restart || return ;;
         *) fail 'unsupported service platform' ;;
     esac
-    active "$1"
+    # rc.d may return before a daemon has published its pidfile.
+    checks=0
+    while [ "$checks" -lt 10 ]; do
+        if active "$1"; then return 0; fi
+        checks=$((checks+1))
+        sleep 1
+    done
+    return 1
 }
 
 manifest() {
@@ -195,7 +209,7 @@ case "$action" in
         printf '%s\n' "$profile" > "$next/profile"
         printf '%s\n' "$(($(date +%s)+seconds))" > "$next/deadline"
         case "$profile" in
-            garage|ups|dtail)
+            garage|ups|dtail|pf)
                 active "$profile" || fail 'existing service is not active'
                 touch "$next/service-active" ;;
             dns)
@@ -225,7 +239,7 @@ case "$action" in
             lease
             [ "$requested" = "$profile" ] || fail 'another profile owns the lease'
             case "$profile" in
-                garage|ups|dtail|dns)
+                garage|ups|dtail|dns|pf)
                     [ "$(date +%s)" -lt "$(($(cat "$pending/deadline")-135))" ] || fail 'insufficient service window' ;;
             esac
         else
@@ -237,6 +251,10 @@ case "$action" in
             copy_file /var/lib/f3s-pihole-migration/99-f3s-lan-wildcard.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-wildcard.conf
             copy_file /var/lib/f3s-pihole-migration/99-f3s-lan-hosts.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf
             restart dns
+        elif [ "$profile" = pf ]; then
+            # Firewall.Config remains the sole configuration owner. This
+            # validates/reloads its published file before lease confirmation.
+            restart pf
         else
             if [ "$profile" = controller ]; then
                 cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-legacy ||

@@ -106,7 +106,7 @@ func invoke(action string) {
 		return
 	}
 	switch t.Profile {
-	case "hosts", "ups", "garage", "dtail", "controller", "fan", "pins", "dns":
+	case "hosts", "ups", "garage", "dtail", "controller", "fan", "pins", "dns", "pf":
 	default:
 		Refuse("endpoint trial", action, fmt.Errorf("unsupported profile"))
 		return
