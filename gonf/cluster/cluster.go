@@ -250,7 +250,7 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 func registerFreeBSD() {
 	// f0 has the UPS on USB and serves its status on its LAN address; f1-f3
 	// poll it there (by IP, so apcupsd never depends on name resolution).
-	const upsServer = "192.168.1.130:3551"
+	const upsServer = "10.20.0.130:3551"
 	// Baseline keys that differ between the f-hosts, as found live on
 	// 2026-09-25 (task dk2). f3 is not a k3s host and lacks the 300 s
 	// rcshutdown_timeout, clear_tmp_enable and cryptodev_load; left as is.
@@ -272,8 +272,8 @@ func registerFreeBSD() {
 		WithData(f01Baseline),
 		WithData(freebsd.CarpNode{}), // CARP MASTER by default (advskew 0)
 		WithData(k3sBhyve),
-		WithData(freebsd.UPSServer{NISIP: "192.168.1.130"}),
-		WithData(garage.Node{RPCPublicAddr: "192.168.1.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
+		WithData(freebsd.UPSServer{NISIP: "10.20.0.130"}),
+		WithData(garage.Node{RPCPublicAddr: "10.20.0.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.131", LabIPv4: "10.20.0.131", RecoveryIPv4: "10.98.0.131", ULA: "fd02:ca0b:f1cb:20::131", SharedGateway: "192.168.1.2"}),
@@ -287,7 +287,7 @@ func registerFreeBSD() {
 		WithData(freebsd.CarpNode{AdvSkew: 100}), // CARP standby, loses to f0
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
-		WithData(garage.Node{RPCPublicAddr: "192.168.1.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
+		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
 	f2 := Host("f2", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.132", LabIPv4: "10.20.0.132", RecoveryIPv4: "10.98.0.132", ULA: "fd02:ca0b:f1cb:20::132", SharedGateway: "192.168.1.2"}),
@@ -300,7 +300,7 @@ func registerFreeBSD() {
 		WithData(f2Baseline),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
-		WithData(garage.Node{RPCPublicAddr: "192.168.1.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
+		WithData(garage.Node{RPCPublicAddr: "10.20.0.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
 	f3 := Host("f3", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.133", LabIPv4: "10.20.0.133", RecoveryIPv4: "10.98.0.133", ULA: "fd02:ca0b:f1cb:20::133", SharedGateway: "192.168.1.2"}),
