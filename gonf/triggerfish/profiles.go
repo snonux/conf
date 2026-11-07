@@ -215,6 +215,7 @@ pass in on $lab_if inet proto icmp from <lab> to 10.20.0.1 keep state
 # Pi-hole DNS contract: both peers, both DNS transports, only the resolver pair.
 pass in on wg2 inet proto { tcp udp } from { 10.99.0.2, 10.99.0.3 } to { 10.20.0.127, 10.20.0.128 } port 53 tag gonf_transit keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to <lab> port { 22, 80, 443 } tag gonf_transit keep state
+pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.138 port 2323 tag gonf_transit keep state
 pass in on wg2 inet proto tcp from 10.99.0.3 to <lab> port 443 tag gonf_transit keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to 10.99.0.1 port 22 keep state
 pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag gonf_transit keep state
