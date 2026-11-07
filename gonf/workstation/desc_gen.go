@@ -48,6 +48,10 @@ func (System) DescNFSClientMigrationStatus() string {
 	return "Reports Earth's pending endpoint transaction"
 }
 
+func (System) DescNFSClientStunnel() string {
+	return "Manages Earth's accepted NFS TLS endpoint without restarting transport"
+}
+
 func (System) DescTimezone() string { return "Points /etc/localtime at Europe/Sofia (earth, zen)" }
 
 func (System) DescUptimed() string { return "Installs and enables the uptimed daemon (earth, zen)" }

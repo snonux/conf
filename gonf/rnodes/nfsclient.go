@@ -7,8 +7,8 @@ import (
 )
 
 // NFS client side of the r-nodes: the k3s volumes are an NFSv4 mount of
-// f3s-storage-ha (the CARP VIP 192.168.1.138 on f0/f1) tunnelled through a
-// local stunnel client, 127.0.0.1:2323 -> 192.168.1.138:2323 with mutual TLS.
+// f3s-storage-ha (the CARP VIP 10.20.0.138 on f0/f1) tunnelled through a
+// local stunnel client, 127.0.0.1:2323 -> 10.20.0.138:2323 with mutual TLS.
 // These tasks adopt the live r0-r2 state of 2026-09-25 (blog part 6, "Client
 // Configuration for NFS via Stunnel", is outdated where it says soft mount).
 //
@@ -35,7 +35,7 @@ verify = 2
 
 [nfs-ha]
 accept = 127.0.0.1:2323
-connect = 192.168.1.138:2323
+connect = 10.20.0.138:2323
 `
 )
 

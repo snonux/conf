@@ -2,6 +2,7 @@ package rnodes
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/snonux/conf/gonf/storagemigration"
 	. "github.com/snonux/gonf/api"
@@ -40,7 +41,7 @@ func (Maintenance) OptsNFSClientMigrationCandidate() TaskOptions { return TaskOp
 // NFSClientMigrationCandidate stages transport changes without touching mounts.
 func (Maintenance) NFSClientMigrationCandidate() {
 	EachHostNamed(func(host string, _ K3sNode) {
-		content, err := storagemigration.Client(fmt.Sprintf(stunnelConfFormat, host))
+		content, err := storagemigration.Client(strings.ReplaceAll(fmt.Sprintf(stunnelConfFormat, host), storagemigration.LabVIP, storagemigration.OldVIP))
 		if err != nil {
 			Refuse("NFS client candidate", host, err)
 			return

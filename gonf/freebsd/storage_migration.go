@@ -24,6 +24,7 @@ func (Carp) MigrationCandidate() {
 		line := carpAliasLine(n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@")
 		line = strings.ReplaceAll(line, carpVIP, storagemigration.LabVIP+"/32")
 		compat := strings.Replace(carpAliasLine(n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@"), "alias0=", "alias1=", 1)
+		compat = strings.ReplaceAll(compat, carpVIP, storagemigration.OldVIP+"/32")
 		File(rcConf+".carp"+storagemigration.Suffix,
 			WithContent("# INACTIVE TEMPLATE; not a shell configuration.\n# Both addresses MUST share existing vhid1 on BOTH members.\n# Secret reference: "+CarpPassSecret()+"\n"+line+"\n"+compat+"\n"), RootOwned)
 	})

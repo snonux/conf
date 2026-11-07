@@ -2,6 +2,7 @@ package freebsd
 
 import (
 	"strconv"
+	"strings"
 
 	. "github.com/snonux/gonf/api"
 
@@ -107,8 +108,9 @@ exit 1`
 
 // carpVIP and carpVhid identify the storage VIP in the rc.conf alias line.
 const (
-	carpVIP  = "192.168.1.138/32"
-	carpVhid = "1"
+	carpVIP       = "10.20.0.138/32"
+	carpCompatVIP = "192.168.1.138/32"
+	carpVhid      = "1"
 )
 
 // CarpPassSecret is the logical secret reference of the vhid 1 password.
@@ -249,7 +251,7 @@ func (Carp) LoaderConf() {
 
 // DescRcConf returns the description for the CARP alias line.
 func (Carp) DescRcConf() string {
-	return "rc.conf ifconfig_re0_alias0 (CARP vhid 1, VIP 192.168.1.138, per-host advskew, password from the vault) on f0/f1; next boot, no netif restart"
+	return "rc.conf ifconfig_re0_alias0 (CARP vhid 1, VIP 10.20.0.138 plus OLD compatibility under same vhid, per-host advskew, password from the vault) on f0/f1; next boot, no netif restart"
 }
 
 // RcConf owns the rc.conf line that creates the CARP VIP at boot. The
@@ -262,7 +264,10 @@ func (Carp) DescRcConf() string {
 func (Carp) RcConf() {
 	pass := MustSecret(CarpPassSecret())
 	EachHostWith(func(n CarpNode) {
+		compat := strings.Replace(carpAliasLine(n, pass), "alias0=", "alias1=", 1)
+		compat = strings.ReplaceAll(compat, carpVIP, carpCompatVIP)
 		File(rcConf, WithKeyedLine(`ifconfig_re0_alias0=`, carpAliasLine(n, pass)),
+			WithKeyedLine(`ifconfig_re0_alias1=`, compat),
 			RootOwned, WithName("rc-conf-carp"))
 	})
 }
