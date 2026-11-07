@@ -1,7 +1,13 @@
 # NetBSD controller migration — task 624
 
-Preparation at this checkpoint: local checks and native candidate validation
-only. No address transaction or reboot has run. Pi0/pi1 run NetBSD11.0 on mue0;
+Live checkpoint, 2026-11-07: Prepare passed on both controllers without changing
+protected runtime or services. Pi0's first native Stage returned success and
+fresh OLD/NEW/recovery-source SSH/HTTP, local ULA HTTP and public WG IPv4/IPv6
+passed. Its unconfirmed deadline is 1794040291 (08:31:31 UTC). An optional
+native mue0 packet capture stalled around 08:20 UTC, after which Pi0 stopped
+responding; the cause is unproven. Keep its timer untouched and Pi1 OLD-only
+until recovery is established. No native expiry or boot acceptance is claimed.
+Pi0/pi1 run NetBSD11.0 on mue0;
 tun0 remains owned by their existing userspace WireGuard service. The user
 deferred Pi2; healthy Pi3 stays on its old DNS address. Work is serial and must
 retain one working controller/static backend throughout.
@@ -57,7 +63,10 @@ retaining OLD. Shared return is10.99.0.2/32 through192.168.1.2. Isolated aliases
 and return routes require the later igc1 gate; cables remain untouched.
 Verify public WG IPv4/IPv6, static site, CGI/SSH controller paths and an actual
 harmless WoL packet for an already-on host; do not turn hosts off just to test
-power. Archive native evidence before retiring owned approvals, then reapply
+power. Capture broadcast traffic on another LAN host with promiscuous mode
+disabled; do not repeat the stalled native mue0 capture. Pi1's unchanged
+controller sent the expected f3 magic payload, verified externally on f0.
+Archive native evidence before retiring owned approvals, then reapply
 unchanged Prepare and check persistence. Native recovery, services, WoL, cleanup
 and final review remain mandatory before task completion.
 
