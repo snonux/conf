@@ -31,11 +31,13 @@ const (
 	shellyFansRcScript = "/usr/local/etc/rc.d/shellyfans"
 )
 
-// Scripts installs shelly-fans-on and /usr/local/etc/rc.d/shellyfans (0555
-// root:wheel; not run).
+// Scripts installs the fan helper, rc service and managed address override without running them.
 func (ShellyFans) Scripts() {
 	InstallFile(shellyFansScript, paths.FHostAsset("shelly-fans/shelly-fans-on"), Perm(0o555, Root))
 	InstallFile(shellyFansRcScript, paths.FHostAsset("shelly-fans/shellyfans.rc"), Perm(0o555, Root))
+	EnsureDir("/usr/local/etc/rc.conf.d", RootOwned)
+	File("/usr/local/etc/rc.conf.d/shellyfans", RootOwned,
+		WithContent("# Managed rack fan address; the standalone helper uses the same default.\nshellyfans_ip=\"10.30.0.28\"\n"))
 }
 
 // DescRcConf returns the description for the shellyfans rc.conf key.

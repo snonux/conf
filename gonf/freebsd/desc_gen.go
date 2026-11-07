@@ -117,7 +117,7 @@ func (ShellyFans) DescMigrationCandidate() string {
 }
 
 func (ShellyFans) DescScripts() string {
-	return "Installs shelly-fans-on and /usr/local/etc/rc.d/shellyfans (0555 root:wheel; not run)"
+	return "Installs the fan helper, rc service and managed address override without running them"
 }
 
 func (StorageMigration) DescArm() string {
