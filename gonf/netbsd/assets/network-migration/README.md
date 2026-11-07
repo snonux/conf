@@ -1,16 +1,17 @@
 # NetBSD controller migration — task 624
 
-Live checkpoint, 2026-11-07: Prepare passed on both controllers without changing
-protected runtime or services. Pi0's clean native 900-second expiry passed at
-08:55 UTC: original addresses/default/return route/NPF restored, filtering active
-and loaded, fresh OLD SSH/HTTP restored, and boot unchanged. The native journal
-was archived before further changes. Actual unconfirmed boot fallback also passed with Pi1 available. Pi0 has an
-accepted dual-address Stage; final promotion/confirmed boot remain pending.
-The first Promote exposed native deletion of default/controller routes when
-removing the OLD primary. Exact snapshot recovery restored accepted Stage. The
-helper now rebuilds routes after address changes, adding a missing default; the
-fixture models this native side effect. Corrected native promotion/rollback and
-confirmed-boot proofs remain required.
+Live checkpoint, 2026-11-07: both controllers have confirmed NEW primaries and
+default10.20.0.1 with OLD/ULA/shared return retained, after actual confirmed
+boots and management, website, authenticated controller, mesh and external WoL
+checks. Original static WG and DTail are preserved. The native clean900s expiry
+and actual unconfirmed boot fallback passed on Pi0. The first Promote exposed
+NetBSD's deletion of routes tied to the removed primary; the corrected helper
+rebuilds default/return routes after address changes. The fixture catches the
+original defect, and corrected native Promote/rollback passed before acceptance.
+All native former deadlines passed; native archives preceded exact owned-gate
+cleanup. Unchanged-source Prepare preserved protected runtime on both controllers,
+and fresh OLD/NEW/recovery-source access passed. Final narrow review passed
+with no blocking findings; the earlier capture incident remains unexplained.
 
 An earlier optional native mue0 packet capture stalled and Pi0 became unreachable.
 The earlier timer did execute rollback at 08:32:01 UTC, but access remained down
@@ -63,7 +64,8 @@ status; preserve private configs/hashes, exact routes and tun0 identity. Install
 Prepare and prove no runtime/service change. Check cron/boot prerequisites and
 native dispatch independence before creating root0600 exact-host activation and
 action approvals. Stage shared; verify OLD/new/controller-bound recovery SSH,
-HTTP/ULA/mesh and unchanged power controls. Let the real 900-second watchdog
+HTTP/ULA/mesh and unchanged power controls. On the native Pi0 canary, let the
+real 900-second watchdog
 restore with its SSH origin gone before manual recovery. Verify original
 persistent/runtime/NPF state and repeated rollback no-op.
 
