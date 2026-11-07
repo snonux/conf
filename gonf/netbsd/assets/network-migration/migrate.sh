@@ -168,7 +168,7 @@ apply() {
         fail 'already promoted; use status rather than downgrading Stage'
     fi
     crontab -l | grep -Fq "$helper watchdog" || fail 'independent cron missing'
-    pgrep -x cron >/dev/null || fail 'cron is not running'
+    pgrep -f '^/usr/sbin/cron($|[[:space:]])' >/dev/null || fail 'cron is not running'
     [ -x /etc/rc.d/gonf_network_migration ] || fail 'boot hook missing'
     grep -qx 'gonf_network_migration=YES' /etc/rc.conf.d/gonf_network_migration || fail 'boot hook disabled'
     npfctl validate "$candidate"

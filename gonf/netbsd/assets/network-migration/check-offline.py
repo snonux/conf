@@ -53,7 +53,10 @@ elif name=='date':print(m['clock'])
 elif name=='stat':print('0:'+oct(Path(args[-1]).stat().st_mode&0o777)[2:])
 elif name=='sync':pass
 elif name=='ndp':print('Flags: nud auto_linklocal')
-elif name=='pgrep':sys.exit(0 if m['cron']else 1)
+elif name=='pgrep':
+ # NetBSD's observed process name is /usr/sbin/cron, not Linux's basename.
+ valid=args==['-f','^/usr/sbin/cron($|[[:space:]])']
+ sys.exit(0 if m['cron']and valid else 1)
 elif name=='crontab':print(str(r/'helper')+' watchdog' if m['cron']else '')
 elif name=='ifconfig':
  if args==['mue0']:
