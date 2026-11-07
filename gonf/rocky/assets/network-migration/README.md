@@ -3,8 +3,9 @@
 The bounded r2 native canary passed timed NetworkManager rollback, actual boot
 recovery, fresh old/new management, confirmation and scoped reapply on
 2026-11-05; see the [v14 execution record](../../../../f3s/freebsd-hosts/network-migration/V14-CANARY.md#native-results--2026-11-05).
-Other nodes still require their own guarded acceptance. Covers r0–r2/enp0s5 only. Other Rocky hosts have
-separate interfaces/ULA requirements and are deliberately excluded.
+Other nodes still require their own guarded acceptance. The original k3s role
+covers r0–r2/enp0s5. Reviewed standalone and resolver roles have separate
+interface/IPv6 and service requirements, documented below.
 
 All `rocky_network_migration_*` tasks are Operational. Prepare installs dormant
 root-owned tools and units, with no daemon reload, enable, address change or
@@ -117,8 +118,8 @@ cannot guarantee an unreachable controller's source rollback. No whole-tunnel
 reload or actual endpoint change is performed by this helper.
 
 Run `python3 check-offline.py` here for disposable command-fixture validation.
-Bash/shellcheck and Go checks supplement it; native expiry/reboot and fresh
-remote connection proof remain explicitly unperformed.
+Bash/shellcheck and Go checks supplement it; offline checks do not replace
+per-host native expiry/reboot and fresh remote connection proof.
 
 Resolver role (`524`, accepted 2026-11-07): explicit `role=resolver` uses
 `eth0` with native ULA and no k3s/Flannel actions. A staged Pi-hole compose
