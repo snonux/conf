@@ -328,13 +328,21 @@ promote() {
     # snapshots that accepted dual-address stage, rather than resetting it.
     v4_rows | awk '{print $1}' | grep -qxF "$lab" || fail 'stage lab address first'
     if [ "$profile" = isolated ]; then
-        v4_rows | awk '{print $1}' | grep -qxF "$recovery" || fail 'stage isolated recovery alias first'
+        # arm already captured the current-cabling profile and checked igc1.
+        # Add recovery here so an accepted lab primary needs no second Stage
+        # that would persist a duplicate lab alias alongside its primary.
+        sysrc -f /etc/rc.conf "ifconfig_${iface}_alias202=inet $recovery/24" >/dev/null
+        if ! v4_rows | awk '{print $1}' | grep -qxF "$recovery"; then
+            ifconfig "$iface" inet "$recovery/24" alias
+        fi
     fi
     select_primary "$lab"
     restore_v4_aliases
     set_return_route
     sysrc -f /etc/rc.conf "ifconfig_${iface}=inet $lab/24" "ifconfig_${iface}_alias200=inet $old/24" >/dev/null
-    sysrc -f /etc/rc.conf -x "ifconfig_${iface}_alias201" >/dev/null
+    if sysrc -f /etc/rc.conf -n "ifconfig_${iface}_alias201" >/dev/null 2>&1; then
+        sysrc -f /etc/rc.conf -x "ifconfig_${iface}_alias201" >/dev/null
+    fi
     sysrc -f /etc/rc.conf defaultrouter=10.20.0.1 >/dev/null
     set_default4 10.20.0.1
     refresh_wg_runtime

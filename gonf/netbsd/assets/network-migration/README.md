@@ -20,9 +20,10 @@ acceptance; its cause remains unproven. No native capture was repeated. Actual
 WoL is instead verified by an external nonpromiscuous capture on f0, and the
 clean trial above restored connectivity without reboot or intervention.
 Pi0/pi1 run NetBSD11.0 on mue0;
-tun0 remains owned by their existing userspace WireGuard service. The user
-deferred Pi2; healthy Pi3 stays on its old DNS address. Work is serial and must
-retain one working controller/static backend throughout.
+tun0 remains owned by their existing userspace WireGuard service. Pi2 was
+deferred during the earlier controller rollout; task524 later accepted both
+resolvers on their NEW addresses. Work is serial and must retain one working
+controller/static backend throughout.
 
 `pis_netbsd_network_prepare` installs a base-sh helper, dormant NPF candidate,
 minute cron watchdog and an enabled no-op rc hook. Without pending or accepted
@@ -73,7 +74,14 @@ Prove actual NetBSD boot fallback on one controller while the other stays up.
 Then separately Stage/confirm, Promote/confirm and observe former deadlines.
 Promote requires an accepted Stage and selects NEW/default10.20.0.1 while
 retaining OLD. Shared return is10.99.0.2/32 through192.168.1.2. Isolated aliases
-and return routes require the later igc1 gate; cables remain untouched.
+and return routes require the later igc1 gate. An accepted `promote shared`
+profile can transition directly with `request promote isolated` after the
+human-confirmed igc1 connection and dedicated recovery proof. It retains the
+NEW primary/default and OLD/ULA, adds the reserved98 address and replaces only
+the laptop /32 return gateway with98.1. The same complete900s snapshot restores
+the prior accepted mode, addresses, routes and NPF on expiry/unconfirmed boot;
+confirmation persists `promote isolated` for subsequent boots. Re-running Stage
+on an already promoted host remains forbidden. No cable is changed by the helper.
 Verify public WG IPv4/IPv6, static site, CGI/SSH controller paths and an actual
 harmless WoL packet for an already-on host; do not turn hosts off just to test
 power. Capture broadcast traffic on another LAN host with promiscuous mode

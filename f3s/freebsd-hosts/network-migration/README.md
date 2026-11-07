@@ -74,12 +74,22 @@ The shared profile routes laptop wg2 `10.99.0.2/32` through reachable
 `192.168.1.2`; it does not point at uncabled `10.98.0.1`. The isolated profile
 adds the reserved `10.98.0.N` alias on the same re0 and routes that laptop
 through `10.98.0.1`. Its later explicit CLI invocation requires a separate
-root-only `igc1-approved` gate after shared acceptance, human test-device
-cabling, fresh authenticated recovery proof, and the coordinated production
-cable transition. Do not create that marker during shared staging. Accepted
+root-only `igc1-approved` gate after shared acceptance, actual human-confirmed
+igc1 connectivity and fresh dedicated recovery proof. Do not create it while
+the recovery gateway is reachable only on a hypothetical future cable path. Accepted
 isolated snapshots keep the recovery address/route on rollback. Never roll a
 moved host back to an old-cabling snapshot: take a new snapshot of the tested
 current-cabling state before another disruptive operation.
+
+After shared promotion, `promote isolated` can add the reserved recovery alias
+directly under its newly armed snapshot and explicit igc1 gate. It persists
+alias202 without writing another lab alias201, keeps the accepted NEW primary,
+default, OLD/ULA and CARP, and returns laptop traffic through98.1. A separate
+isolated Stage is unnecessary. The user-confirmed dual-uplink preparation
+topology permits testing this path before the old switch uplink is removed;
+its actual igc1 recovery must already be proved, and the cable-removal human
+gate still applies. Unconfirmed recovery restores the shared NEW snapshot,
+including removal of its new alias202 from cached rc.conf at boot.
 
 Each transaction is separate. Confirm Stage after fresh old/new sessions and
 service checks, then arm Promote separately. Confirm is an operator assertion

@@ -177,7 +177,13 @@ apply() {
     [ "$topology" != isolated ] || gate igc1-approved
     if [ "$action" = promote ]; then
         [ -f "$accepted" ] || fail 'accept Stage first'
-        grep -qx "stage $topology" "$accepted" || fail 'accept Stage first'
+        if ! grep -qx "stage $topology" "$accepted"; then
+            # Shared-wire promotion is already accepted. The separately gated
+            # igc1 transition adds recovery without downgrading NEW via Stage.
+            if [ "$topology" != isolated ] || ! grep -qx 'promote shared' "$accepted"; then
+                fail 'accept Stage first'
+            fi
+        fi
         has4 "$lab" || fail 'accepted lab address missing'
     elif [ -f "$accepted" ] && grep -q '^promote ' "$accepted"; then
         fail 'already promoted; use status rather than downgrading Stage'

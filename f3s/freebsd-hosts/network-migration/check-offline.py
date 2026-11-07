@@ -249,7 +249,8 @@ def main():
         def run(*args, ok=True):
             result = subprocess.run([str(helper), *args], env=env,
                                     capture_output=True, text=True)
-            assert (result.returncode == 0) == ok, (args, result.stdout, result.stderr)
+            assert (result.returncode == 0) == ok, (args, result.stdout, result.stderr,
+                                                   json.loads(db.read_text())['calls'][-5:])
             return json.loads(db.read_text())
 
         def boot_with_cached_rc(expected):
@@ -334,6 +335,38 @@ def main():
         run('stage', 'isolated', ok=False)  # Human/cabling gate stays closed.
         calls = json.loads(db.read_text())['calls']
         assert not any('netif' in ' '.join(call) or 'bridge' in ' '.join(call) for call in calls)
+        # Add recovery directly to an already confirmed lab primary. A second
+        # Stage would otherwise persist a duplicate lab alias beside primary.
+        run('promote'); run('confirm')
+        shared_new = json.loads(db.read_text())
+        run('promote', 'isolated', ok=False)
+        assert not (state / 'pending').exists()
+        missing_gate = json.loads(db.read_text())
+        for field in ('keys', 'v4', 'v6', 'default4', 'return'):
+            assert missing_gate[field] == shared_new[field], field
+        (state / 'igc1-approved').touch()
+        recovery_new = run('promote', 'isolated')
+        assert recovery_new['v4'] == ['10.20.0.130', '192.168.1.130', '10.98.0.130']
+        assert recovery_new['default4'] == shared_new['default4'] == '10.20.0.1'
+        assert recovery_new['return'] == '10.98.0.1'
+        assert recovery_new['keys']['ifconfig_re0_alias202'] == 'inet 10.98.0.130/24'
+        assert 'ifconfig_re0_alias201' not in recovery_new['keys']
+        assert recovery_new['v6'] == shared_new['v6']
+        recovery_new['now'] += 901
+        db.write_text(json.dumps(recovery_new)); run('watchdog')
+        restored_new = json.loads(db.read_text())
+        for field in ('keys', 'v4', 'v6', 'default4', 'return'):
+            assert restored_new[field] == shared_new[field], field
+        run('promote', 'isolated')
+        boot_with_cached_rc(shared_new)
+        assert not (state / 'pending').exists()
+        run('promote', 'isolated'); confirmed_recovery = run('confirm')
+        assert confirmed_recovery['keys']['ifconfig_re0_alias202'] == 'inet 10.98.0.130/24'
+        assert confirmed_recovery['return'] == '10.98.0.1'
+        (state / 'igc1-approved').unlink()
+        if sys.argv[1:] == ['--recovery-only']:
+            print('PASS: direct shared-NEW recovery, missing-gate refusal, persistence, expiry and boot rollback', flush=True)
+            return
         # Reproduce f1: a real CARP row moves ahead of ordinary addresses
         # after primary replacement. It must survive promotion AND rollback.
         carp_seed=json.loads(json.dumps(initial))

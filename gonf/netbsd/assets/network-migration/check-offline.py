@@ -142,10 +142,10 @@ else:raise AssertionError(name)
         assert (p.returncode == 0) == success, (args, p.stdout, p.stderr)
         return p.stdout
 
-    def request(action, success=True):
+    def request(action, success=True, topology='shared'):
         before = set(state.glob('request.*'))
         start = time.monotonic()
-        run('request', action, 'shared')
+        run('request', action, topology)
         elapsed = time.monotonic() - start
         created = set(state.glob('request.*')) - before
         assert len(created) == 1
@@ -238,6 +238,49 @@ else:raise AssertionError(name)
     gate('stage-approved'); request('stage', success=False)
     assert not pending.exists() and model() == promoted
 
+    # A rack already promoted on the shared wire must be able to add the
+    # dedicated recovery path without downgrading its primary through Stage.
+    gate('promote-approved')
+    request('promote', success=False, topology='isolated')
+    assert not pending.exists() and model() == promoted, 'missing igc1 gate mutated NEW'
+    gate('igc1-approved')
+    request('promote', topology='isolated')
+    isolated = model()
+    assert isolated['v4'] == ['198.51.100.125/24', '192.0.2.125/24', '203.0.113.125/24']
+    assert isolated['gateway'] == promoted['gateway'] == '10.20.0.1'
+    assert isolated['return'] == '10.98.0.1' and isolated['ula']
+    edit(clock=10901)
+    run('watchdog'); edit(clock=10000)
+    assert model() == promoted, 'recovery expiry did not restore promoted shared profile'
+    assert (state / 'accepted').read_text().strip() == 'promote shared'
+    gate('promote-approved'); request('promote', topology='isolated')
+    run('boot')
+    assert model() == promoted, 'unconfirmed recovery boot did not restore shared NEW'
+    gate('promote-approved'); request('promote', topology='isolated'); confirm()
+    edit(v4=['192.0.2.125/24'], ula=False, gateway='192.0.2.1',
+         npf_active=False, loaded_npf='not yet loaded at boot')
+    run('boot')
+    booted = model()
+    assert booted['v4'][0] == '198.51.100.125/24'
+    assert set(booted['v4']) == set(isolated['v4'])
+    assert booted['gateway'] == '10.20.0.1' and booted['return'] == '10.98.0.1'
+    assert (state / 'accepted').read_text().strip() == 'promote isolated'
+
+    # The new transition is narrow: a claimed prior promotion cannot replace
+    # the required staged lab address or accept an unrelated profile state.
+    for invalid in ('promote shared', 'promote unrelated'):
+        reset()
+        (state / 'accepted').write_text(invalid+'\n')
+        if invalid == 'promote unrelated':
+            edit(v4=['198.51.100.125/24', '192.0.2.125/24'], ula=True,
+                 gateway='10.20.0.1', **{'return': '192.0.2.2'})
+            # Keep the otherwise valid promoted state; only its accepted
+            # profile is invalid, so a missing lab alias cannot mask admission.
+        gate('activation-approved'); gate('promote-approved'); gate('igc1-approved')
+        before_invalid = model()
+        request('promote', success=False, topology='isolated')
+        assert not pending.exists() and model() == before_invalid
+
     reset()
     edit(reject_reload=True)
     gate('activation-approved'); gate('stage-approved')
@@ -253,4 +296,5 @@ else:raise AssertionError(name)
     run('watchdog', success=False)
     assert pending.exists() and npf.read_text() == 'foreign NPF edit'
     print('PASS: actual request/flock dispatch, gates, immutable900s deadline, '
-          'expiry/NPF restore, partial failure, unconfirmed/confirmed boot and foreign-edit refusal')
+          'expiry/NPF restore, shared-NEW to isolated recovery, partial failure, '
+          'unconfirmed/confirmed boot and foreign-edit refusal')
