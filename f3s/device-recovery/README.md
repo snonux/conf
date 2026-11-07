@@ -1,5 +1,28 @@
 # Device recovery preparation (s14)
 
+**2026-11-07 task724:** Shelly1/2 now confirmed at10.30.0.28/.29. Both
+passed native former-deadline, exact configuration/output and routed Pi caller
+checks; script1 remains boot-enabled/running, Matter off, no pending restore.
+Pi0/Pi1 adopt only the two plug endpoints through operational
+`pis_netbsd_shelly_prepare` / `pis_netbsd_shelly_activate` (source0104db1).
+The partial configuration preserves other compiled defaults and refuses custom
+existing configs rather than overwriting them. Native missing-gate refusal,
+normal no-override CLI/CGI, guarded fan OFF/ON and idempotent AC ON passed.
+Owned approvals were archived/removed; unchanged-source reapply preserved
+controller configuration and protected network state. No MCU reboot or rack
+AC cut occurred. The first Shelly2 confirmation window was missed: its native
+timer restored OLD and guarded acknowledgement preceded a successful fresh
+trial. Private evidence: `~/.local/state/conf/724-devices-20261107/`.
+
+The rack is intentionally shut down for the next storage/endpoint work, with
+fans and AC ON. Existing f-host boot fan helper addresses and broader canonical
+mappings still belong to task924; this checkpoint does not claim full service
+endpoint cutover or cluster restart. Four prepared JetKVM factory-MAC
+reservations match source/IQ and native future DHCP syntax passes. Shared-wire
+DHCP remains disabled; JetKVM devices and AP management/radio/DHCP are untouched.
+Final native review passed with no blocking findings.
+
+
 **2026-11-06: JetKVM plan simplified on user instruction.** Keep vendor DHCP,
 use the four prepared MAC reservations, and verify new leases/device identity/
 video/HID after the final human-confirmed rack move. Custom JetKVM helper,
