@@ -54,9 +54,11 @@ func (NetworkMigration) Prepare() {
 			paths.GonfAsset("netbsd", "network-migration/rc.d"), RootExec, DependsOn(script))
 		EnsureDir("/etc/rc.conf.d", RootOwned)
 		File("/etc/rc.conf.d/gonf_network_migration", WithContent("gonf_network_migration=YES\n"), RootPrivate)
-		File("/var/log/gonf-network-migration.log", RootPrivate)
+		log := Command("/bin/sh", List("-ec",
+			"umask 077; : >> /var/log/gonf-network-migration.log; chmod 600 /var/log/gonf-network-migration.log"),
+			WithName("network-migration-private-log"))
 		CronAt("netbsd-network-watchdog", "* * * * *",
-			"/usr/local/sbin/gonf-network-migration watchdog >>/var/log/gonf-network-migration.log 2>&1", DependsOn(script))
+			"/usr/local/sbin/gonf-network-migration watchdog >>/var/log/gonf-network-migration.log 2>&1", DependsOn(script, log))
 	})
 }
 
