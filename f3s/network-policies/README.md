@@ -384,3 +384,14 @@ WireGuard packets have not been tested while the tunnels are inactive.
 Two normal post-cleanup active/passive monitoring cycles passed with no
 critical, unknown or stale checks; only the pre-existing failed-Job warning
 remains. No production workload restart or storage/SSH/VPN change was made.
+
+
+### 824 storage relay address prerequisite (2026-11-07)
+
+The accepted storage/ingress VIP retains OLD compatibility under the same CARP
+vhid. The two existing kube-system web receiver policies additionally admit only
+`10.20.0.130/32`, `.131/32` and `.138/32` on their existing web ports, retaining
+all old sources. Native f0 source A/B isolated the missing allow: the same NEW
+backend refused the NEW relay source while the retained OLD source completed
+verified TLS/HTTP. No direct wg2 backend trust, other namespace allowance,
+selector/port change, default-deny replacement or Argo activation is included.

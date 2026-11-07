@@ -246,6 +246,25 @@ class Policies(unittest.TestCase):
                 self.assert_path({'ip': address}, 'services', {'app': database}, 5432, False)
             self.assert_path({'ip': address}, 'monitoring', PROM, 9090, False)
 
+    def test_migrated_storage_relays_reach_only_existing_web_receivers(self):
+        receivers = [(TRAEFIK, (8000, 8443)),
+                     ({'svccontroller.k3s.cattle.io/svcname': 'traefik',
+                       'svccontroller.k3s.cattle.io/svcnamespace': 'kube-system'}, (80, 443))]
+        for address in ['10.20.0.130', '10.20.0.131', '10.20.0.138',
+                        '192.168.1.130', '192.168.1.131', '192.168.1.138']:
+            for labels, ports in receivers:
+                for port in ports:
+                    self.assert_path({'ip': address}, 'kube-system', labels, port, True)
+                    self.assert_path({'ip': address}, 'kube-system', labels, port, False, 'UDP')
+                self.assert_path({'ip': address}, 'kube-system', labels, 9100, False)
+            self.assert_path({'ip': address}, 'services', {'app': 'miniflux-postgres'}, 5432, False)
+        # Neither adjacent lab hosts nor direct wg2 clients inherit relay trust.
+        for address in ['10.20.0.129', '10.20.0.132', '10.20.0.133',
+                        '10.20.0.139', '10.99.0.2', '10.99.0.3']:
+            for labels, ports in receivers:
+                for port in ports:
+                    self.assert_path({'ip': address}, 'kube-system', labels, port, False)
+
     def test_cross_node_nodeport_snat_is_a_documented_receiver_bypass(self):
         # Observed KUBE-EXT/MARK-MASQ/POSTROUTING rules rewrite a cross-node
         # NodePort path before the remote receiver's source-ipset match.
