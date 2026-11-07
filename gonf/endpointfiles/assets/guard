@@ -43,7 +43,7 @@ allowed() {
     case "$node:$1" in
         f[0-3]:hosts|r[0-2]:hosts|pi[0-3]:hosts|rocky:hosts|freebsd:hosts|blowfish:hosts|fishfinger:hosts|triggerfish:hosts|earth*:hosts) ;;
         f[0-2]:garage|f[0-3]:ups|f[0-3]:pins|f[0-3]:fan) ;;
-        f3:pf) ;;
+        f[0-3]:pf) ;;
         f[0-3]:dtail|r[0-2]:dtail|pi[0-3]:dtail|pi[0-1]:controller|pi[2-3]:dns) ;;
         *) fail 'profile is outside this node role' ;;
     esac
@@ -248,6 +248,7 @@ case "$action" in
         if [ "$profile" = hosts ]; then
             /usr/local/sbin/gonf-fleet-hosts apply /usr/local/etc/gonf-fleet-hosts
         elif [ "$profile" = dns ]; then
+            copy_file /var/lib/f3s-pihole-migration/docker-compose.yml /home/paul/pihole/docker-compose.yml
             copy_file /var/lib/f3s-pihole-migration/99-f3s-lan-wildcard.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-wildcard.conf
             copy_file /var/lib/f3s-pihole-migration/99-f3s-lan-hosts.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf
             restart dns

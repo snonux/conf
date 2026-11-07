@@ -45,16 +45,29 @@ func (Deployment) MigrationDNS() {
 }
 
 func (Deployment) OptsMigrationCurrentDNS() TaskOptions { return TaskOptions{Operational()} }
+func (Deployment) OptsMigrationDNSCanary() TaskOptions  { return TaskOptions{Operational()} }
+
+// MigrationDNSCanary stages a conf-only disposable record to prove directory loading.
+func (Deployment) MigrationDNSCanary() { stageCurrentDNS(true) }
 
 // MigrationCurrentDNS stages accepted host records and the current wildcard.
 func (Deployment) MigrationCurrentDNS() {
+	stageCurrentDNS(false)
+}
+
+func stageCurrentDNS(canary bool) {
 	const staging = "/var/lib/f3s-pihole-migration"
 	rows, err := hostDNSRows()
 	if err != nil {
 		Refuse("Pi-hole hosts", staging, err)
 		return
 	}
+	if canary {
+		rows += "host-record=gonf-924-dns-canary.lan.buetow.org,192.0.2.24,60\n"
+	}
 	EnsureDir(staging, RootPrivate)
+	InstallFile(staging+"/docker-compose.yml", paths.PiholeAsset("docker-compose.yml"), RootPrivate,
+		WithValidation("docker", List("compose", "--env-file", piholeDir+"/.env", "-f", CandidatePath, "config", "--quiet")))
 	File(staging+"/99-f3s-lan-hosts.conf", WithContent(rows), RootPrivate,
 		WithValidation("sh", List("-ec", `docker exec -i pihole pihole-FTL dnsmasq-test --conf-file=- < "$1"`, "dnsmasq-check", CandidatePath)))
 	InstallFile(staging+"/99-f3s-lan-wildcard.conf", paths.PiholeAsset("dnsmasq.d/99-f3s-lan-wildcard.conf"), RootPrivate,
@@ -92,8 +105,13 @@ func (Deployment) Compose() {
 		paths.PiholeAsset("docker-compose.yml"), Perm(0o644, "paul:paul"))
 	wildcard := InstallFile(piholeDir+"/etc-dnsmasq.d/99-f3s-lan-wildcard.conf",
 		paths.PiholeAsset("dnsmasq.d/99-f3s-lan-wildcard.conf"), RootOwned)
-	hosts := File(piholeDir+"/etc-dnsmasq.d/99-f3s-lan-hosts.conf", WithContent(rows), RootOwned,
+	// Privileged validators require a root-owned parent chain; the live mount
+	// lives below paul's home, so validate the same bytes outside that tree.
+	const validatedDir = "/var/lib/gonf-pihole"
+	EnsureDir(validatedDir, RootPrivate)
+	validated := File(validatedDir+"/99-f3s-lan-hosts.conf", WithContent(rows), RootPrivate,
 		WithValidation("sh", List("-ec", `docker exec -i pihole pihole-FTL dnsmasq-test --conf-file=- < "$1"`, "dnsmasq-check", CandidatePath)))
+	hosts := File(piholeDir+"/etc-dnsmasq.d/99-f3s-lan-hosts.conf", WithContent(rows), RootOwned, DependsOn(validated))
 	Command("docker", List("compose", "up", "-d", "--force-recreate", "--wait", "--wait-timeout", "90"), WithDir(piholeDir),
 		WithName("sh -c cd "+piholeDir+" && docker compose up -d"),
 		OnChange(compose, wildcard, hosts))

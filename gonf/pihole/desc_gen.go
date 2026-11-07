@@ -14,6 +14,10 @@ func (Deployment) DescMigrationDNS() string {
 	return "Stages a future wildcard outside every active container mount"
 }
 
+func (Deployment) DescMigrationDNSCanary() string {
+	return "Stages a conf-only disposable record to prove directory loading"
+}
+
 func (Deployment) DescMigrationService() string {
 	return "Stages the resolver service for the existing recovery transaction"
 }

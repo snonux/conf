@@ -15,7 +15,12 @@ new narrow owners cover the Pis and standalone guests. Generated frontend
 hosts/DNS fragments come from the same renderer (`go generate ./etchosts`).
 Explicit DNS records exclude the wildcard, whose address has a separate cache
 gate. Pi-hole stages validated files outside its live mounts and is changed
-one resolver at a time.
+one resolver at a time. Its compose environment explicitly enables Pi-hole v6's
+`misc.etc_dnsmasq_d` setting; a disposable record present only in that directory
+proved loading independently of host-network `/etc/hosts`. Actual expiry and
+boot trials restored the prior compose, private state and DNS fragments before
+normal adoption. The normal owner validates generated records in a root-owned
+staging directory before publishing into the existing home-directory mount.
 
 These are source changes, not a fleet acceptance claim. Task924 annotations
 record native deployment progress. The historical q14 preparation below

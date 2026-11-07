@@ -217,6 +217,7 @@ esac''',
 
     # The existing Firewall owner publishes PF; the guard restores both files
     # and reloads the saved policy if a failed/expired trial needs recovery.
+    put(node, 'pi0\n')
     run('arm', 'pf', '900', ok=False)
     put(node, 'f3\n')
     put(platform, 'FreeBSD\n')
@@ -243,10 +244,12 @@ esac''',
     put(platform, 'Linux\n')
     for name in ('docker-compose.yml', 'etc-pihole/pihole.toml', 'etc-dnsmasq.d/99-f3s-lan-wildcard.conf'):
         put(base / 'pihole' / name, 'ORIGINAL ' + name + '\n')
+    put(base / 'dns-stage/docker-compose.yml', 'NEW compose DNS directory enabled\n')
     put(base / 'dns-stage/99-f3s-lan-hosts.conf', 'host-record=test.example,10.20.0.130\n')
     put(base / 'dns-stage/99-f3s-lan-wildcard.conf', 'address=/.example/10.20.0.138\n')
     run('arm', 'dns', '900')
     run('apply', 'dns')
+    assert (base / 'pihole/docker-compose.yml').read_text() == 'NEW compose DNS directory enabled\n'
     expire()
     put(base / 'fail-runtime', '')
     run('watchdog', ok=False)
@@ -255,6 +258,7 @@ esac''',
     (base / 'fail-runtime').unlink()
     run('watchdog')
     assert not (state / 'pending').exists()
+    assert (base / 'pihole/docker-compose.yml').read_text() == 'ORIGINAL docker-compose.yml\n'
     assert not (base / 'pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf').exists()
 
     # Native OpenBSD hook shape is syntax/ordering tested, not a reboot claim.
