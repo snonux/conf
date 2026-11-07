@@ -1,4 +1,29 @@
-# Dependent service candidates (r14)
+# Dependent service endpoints (r14 preparation, 924 rollout)
+
+## 924 acceptance checkpoint (2026-11-07)
+
+UPS master/client endpoints, Garage RPC advertisements, all11 lab dserver
+binds, both Pi power-control inventories and all four fan boot helpers now
+use their accepted NEW addresses. Normal owning-recipe reapply passed;
+credentials, Garage identities/layout, log permissions/keys, safety thresholds
+and WG monitoring targets were preserved. See IQ's current migration handoff
+for native expiry/boot and real service evidence. No source was pushed.
+
+Ten existing network policies received42 equivalent lab-host /32 additions,
+retaining old entries/ports/selectors and exact UID/Argo tracking annotations.
+The five actual owning apps in cicd are manual and pinned; their specs and
+revisions were not changed. WG0-only Prometheus read proxies were retained,
+including the auto-owned object: the inactive renderer's wg2 counterparts are
+not an instruction to expose proxy8080 outside the existing port contract.
+Manual apps can stay OutOfSync until separately authorized source publication.
+
+The operational candidates below describe the historical OLD-to-NEW handoff.
+After canonical inventory adoption, use normal owner tasks: address candidate
+methods deliberately validate OLD input and are not a routine reapply path.
+The lab-switch port1 cable is pre-positioned while its old uplink stays connected;
+normal routing remains shared on igc0, with no physical-isolation claim.
+
+## Historical r14 preparation
 
 Prepared only. Current inventory, active configurations, aggregate tasks and
 canonical names retain their existing values. No live service, network, power
