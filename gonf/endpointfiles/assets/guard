@@ -1,0 +1,286 @@
+#!/bin/sh
+# Bounded rollback of this migration's owned endpoint files. Never print files.
+set -eu
+umask 077
+PATH=/usr/local/sbin:/usr/local/bin:/usr/pkg/sbin:/usr/pkg/bin:/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+os=$(uname -s)
+case "$os" in Linux) state=/var/lib/gonf-endpoint-migration ;; *) state=/var/db/gonf-endpoint-migration ;; esac
+pending=$state/pending
+node=$(hostname -s)
+action=${1:-}
+profile=${2:-}
+
+fail() { printf '%s\n' "endpoint migration refused: $1" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail 'root required'
+[ ! -L "$state" ] || fail 'state directory is a symlink'
+mkdir -p "$state"
+chmod 700 "$state"
+
+lock=$state/lock
+[ ! -L "$lock" ] && [ ! -d "$lock" ] || fail 'unsafe lock'
+# The open descriptor owns the kernel lock. Never unlink/reclaim its pathname:
+# another dispatcher may already have opened the same inode.
+exec 9>>"$lock"
+case "$os" in
+    Linux|NetBSD) flock -n 9 9>&9 || fail 'transaction busy' ;;
+    FreeBSD|OpenBSD)
+        # Perl is already installed on these hosts (base on OpenBSD). flock(2)
+        # attaches to the inherited open description, retained by this shell.
+        perl -MFcntl=:flock -e 'open(my $lock, ">&=9") or die "lock descriptor\n"; flock($lock, LOCK_EX|LOCK_NB) or die "transaction busy\n";' 9>&9 || fail 'lock unavailable or busy' ;;
+    *) fail 'unsupported lock platform' ;;
+esac
+created_next=
+temporary=
+cleanup() {
+    [ -z "$created_next" ] || rm -rf "$created_next"
+    [ -z "$temporary" ] || rm -f "$temporary"
+}
+trap cleanup 0
+trap 'exit 1' HUP INT TERM
+
+allowed() {
+    case "$node:$1" in
+        f[0-3]:hosts|r[0-2]:hosts|pi[0-3]:hosts|rocky:hosts|freebsd:hosts|blowfish:hosts|fishfinger:hosts|triggerfish:hosts|earth*:hosts) ;;
+        f[0-2]:garage|f[0-3]:ups|f[0-3]:pins|f[0-3]:fan) ;;
+        f[0-3]:dtail|r[0-2]:dtail|pi[0-3]:dtail|pi[0-1]:controller|pi[2-3]:dns) ;;
+        *) fail 'profile is outside this node role' ;;
+    esac
+}
+
+files() {
+    case "$1" in
+        hosts) printf '%s\n' /etc/hosts ;;
+        garage) printf '%s\n' /usr/local/etc/garage.toml ;;
+        ups) printf '%s\n' /usr/local/etc/apcupsd/apcupsd.conf ;;
+        pins) printf '%s\n' /etc/ssh/authorized_keys.d/f3sctl ;;
+        fan) printf '%s\n' /usr/local/etc/rc.conf.d/shellyfans /usr/local/sbin/shelly-fans-on ;;
+        controller) printf '%s\n' /usr/local/etc/f3sctl.json ;;
+        dtail)
+            case "$os" in FreeBSD) printf '%s\n' /usr/local/etc/dserver/dtail.json ;; *) printf '%s\n' /etc/dserver/dtail.json ;; esac ;;
+        dns) printf '%s\n' /home/paul/pihole/docker-compose.yml /home/paul/pihole/etc-pihole/pihole.toml /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-wildcard.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf ;;
+    esac
+}
+
+service_name() {
+    case "$1" in garage) printf garage ;; ups) printf apcupsd ;; dtail) printf dserver ;; esac
+}
+
+active() {
+    service_name=$(service_name "$1")
+    [ -n "$service_name" ] || return 1
+    case "$os" in
+        Linux) systemctl is-active --quiet "$service_name" ;;
+        FreeBSD) service "$service_name" onestatus >/dev/null 2>&1 ;;
+        NetBSD) "/etc/rc.d/$service_name" status >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
+
+bounded() {
+    "$@" 9>&- >/dev/null 2>&1 &
+    command_pid=$!
+    (
+        exec 9>&-
+        sleep 120 &
+        sleeper=$!
+        trap 'if [ -n "$sleeper" ]; then kill "$sleeper" 2>/dev/null || :; fi; exit 0' TERM HUP INT
+        wait "$sleeper" || exit 0
+        sleeper=
+        kill -TERM "$command_pid" 2>/dev/null || exit 0
+        sleep 5
+        kill -KILL "$command_pid" 2>/dev/null || :
+    ) &
+    timeout_pid=$!
+    command_result=0
+    wait "$command_pid" || command_result=$?
+    kill -TERM "$timeout_pid" 2>/dev/null || :
+    wait "$timeout_pid" 2>/dev/null || :
+    return "$command_result"
+}
+
+restart() {
+    case "$1" in
+        hosts|controller|fan|pins) return 0 ;;
+        dns)
+            bounded sh -c 'cd /home/paul/pihole && exec docker compose up -d --force-recreate --timeout 10 --wait --wait-timeout 90'
+            return ;;
+    esac
+    service_name=$(service_name "$1")
+    case "$os" in
+        Linux) bounded systemctl restart "$service_name" || return ;;
+        FreeBSD) bounded service "$service_name" onerestart || return ;;
+        NetBSD) bounded "/etc/rc.d/$service_name" restart || return ;;
+        *) fail 'unsupported service platform' ;;
+    esac
+    active "$1"
+}
+
+manifest() {
+    [ -d "$pending" ] && [ ! -L "$pending" ] || fail 'no pending transaction'
+    [ "$(cat "$pending/node")" = "$node" ] || fail 'snapshot belongs to another node'
+    profile=$(cat "$pending/profile")
+    allowed "$profile"
+}
+
+lease() {
+    manifest
+    [ ! -e "$pending/restoring" ] || fail 'restore already started'
+    [ "$(date +%s)" -lt "$(cat "$pending/deadline")" ] || fail 'deadline expired'
+}
+
+copy_file() {
+    source=$1 destination=$2
+    [ -f "$source" ] && [ ! -L "$source" ] || fail 'candidate is not a regular file'
+    [ ! -L "$destination" ] || fail 'destination is a symlink'
+    [ ! -e "$destination" ] || [ -f "$destination" ] || fail 'destination is not a regular file'
+    temporary=$(mktemp "${destination}.gonf.XXXXXXXX")
+    if [ -f "$destination" ]; then cp -p "$destination" "$temporary"; else chmod 644 "$temporary"; fi
+    cat "$source" > "$temporary"
+    mv "$temporary" "$destination"
+    temporary=
+    if [ "$os" = Linux ] && command -v restorecon >/dev/null 2>&1; then restorecon "$destination" >/dev/null; fi
+}
+
+restore_files() {
+    i=0
+    for destination in $(files "$profile"); do
+        if [ -e "$pending/$i.absent" ]; then
+            [ ! -L "$destination" ] || fail 'new managed path is a symlink'
+            rm -f "$destination"
+        else
+            [ ! -L "$destination" ] || fail 'managed path is a symlink'
+            temporary=$(mktemp "${destination}.gonf.XXXXXXXX")
+            cp -p "$pending/$i" "$temporary"
+            mv "$temporary" "$destination"
+            temporary=
+            if [ "$os" = Linux ] && command -v restorecon >/dev/null 2>&1; then restorecon "$destination" >/dev/null; fi
+        fi
+        i=$((i+1))
+    done
+}
+
+restore() {
+    manifest
+    touch "$pending/restoring"
+    # FTL writes TOML when stopping. Stop it BEFORE restoring the saved TOML.
+    if [ "$profile" = dns ] && [ "${1:-}" != boot ]; then
+        bounded sh -c 'cd /home/paul/pihole && exec docker compose stop --timeout 10' || fail 'DNS stop failed; journal retained'
+    fi
+    restore_files
+    if [ "${1:-}" = boot ]; then
+        touch "$pending/boot-restored"
+        return
+    fi
+    if [ -e "$pending/service-active" ] || [ "$profile" = dns ]; then
+        restart "$profile" || fail 'runtime restore failed; journal retained'
+    fi
+    archive=$(mktemp -d "$state/restored-$(date +%s).XXXXXXXX")
+    mv "$pending" "$archive/journal"
+}
+
+case "$action" in
+    setup) [ ! -e "$pending" ] || fail 'pending transaction prevents setup' ;;
+    arm)
+        allowed "$profile"
+        [ ! -e "$pending" ] || fail 'transaction already pending'
+        seconds=${3:-900}
+        case "$seconds" in ''|*[!0-9]*) fail 'invalid deadline' ;; esac
+        [ "$seconds" -ge 60 ] && [ "$seconds" -le 1800 ] || fail 'deadline must be 60..1800'
+        next=$state/preparing
+        [ ! -e "$next" ] || fail 'unfinished preparation'
+        mkdir "$next"
+        created_next=$next
+        printf '%s\n' "$node" > "$next/node"
+        printf '%s\n' "$profile" > "$next/profile"
+        printf '%s\n' "$(($(date +%s)+seconds))" > "$next/deadline"
+        case "$profile" in
+            garage|ups|dtail)
+                active "$profile" || fail 'existing service is not active'
+                touch "$next/service-active" ;;
+            dns)
+                [ "$(docker inspect --format '{{.State.Health.Status}}' pihole 2>/dev/null)" = healthy ] || fail 'existing resolver is not healthy' ;;
+        esac
+        i=0
+        for source in $(files "$profile"); do
+            [ ! -L "$source" ] || fail 'owned file is a symlink'
+            [ ! -e "$source" ] || [ -f "$source" ] || fail 'owned path is not a regular file'
+            if [ -f "$source" ]; then
+                cp -p "$source" "$next/$i"
+            else
+                case "$profile:$source" in
+                    fan:*|dns:*/99-f3s-lan-hosts.conf) touch "$next/$i.absent" ;;
+                    *) fail 'required owned file is missing' ;;
+                esac
+            fi
+            i=$((i+1))
+        done
+        mv "$next" "$pending"
+        created_next=
+        sync ;;
+    apply)
+        allowed "$profile"
+        requested=$profile
+        if [ -d "$pending" ]; then
+            lease
+            [ "$requested" = "$profile" ] || fail 'another profile owns the lease'
+            case "$profile" in
+                garage|ups|dtail|dns)
+                    [ "$(date +%s)" -lt "$(($(cat "$pending/deadline")-135))" ] || fail 'insufficient service window' ;;
+            esac
+        else
+            [ "$profile" = hosts ] && [ -f "$state/accepted-hosts" ] || fail 'arm this profile first'
+        fi
+        if [ "$profile" = hosts ]; then
+            /usr/local/sbin/gonf-fleet-hosts apply /usr/local/etc/gonf-fleet-hosts
+        elif [ "$profile" = dns ]; then
+            copy_file /var/lib/f3s-pihole-migration/99-f3s-lan-wildcard.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-wildcard.conf
+            copy_file /var/lib/f3s-pihole-migration/99-f3s-lan-hosts.conf /home/paul/pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf
+            restart dns
+        else
+            if [ "$profile" = controller ]; then
+                cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-legacy ||
+                    cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-candidate || fail 'custom controller settings require a merged candidate'
+            fi
+            for destination in $(files "$profile"); do copy_file "$destination.triggerfish-candidate" "$destination"; done
+            if [ -e "$pending/service-active" ]; then restart "$profile"; fi
+        fi
+        [ ! -d "$pending" ] || touch "$pending/applied" ;;
+    confirm)
+        requested=$profile
+        lease
+        [ "$requested" = "$profile" ] || fail 'confirmation profile mismatch'
+        [ -f "$pending/applied" ] || fail 'no applied candidate'
+        touch "$state/accepted-$profile"
+        archive=$(mktemp -d "$state/accepted-$profile-$(date +%s).XXXXXXXX")
+        mv "$pending" "$archive/journal" ;;
+    rollback) if [ -d "$pending" ]; then restore; fi ;;
+    boot) if [ -d "$pending" ]; then restore boot; fi ;;
+    watchdog)
+        if [ -d "$pending" ]; then
+            manifest
+            if [ -e "$pending/restoring" ] || [ "$(date +%s)" -ge "$(cat "$pending/deadline")" ]; then restore; fi
+        fi ;;
+    status)
+        if [ -d "$pending" ]; then
+            manifest
+            printf 'pending profile=%s deadline=%s\n' "$profile" "$(cat "$pending/deadline")"
+        else printf '%s\n' 'no pending transaction'; fi ;;
+    install-openbsd-boot)
+        [ "$os" = OpenBSD ] || fail 'wrong boot platform'
+        target=/etc/rc
+        if ! grep -q '^# BEGIN gonf endpoint files$' "$target"; then
+            [ "$(grep -c '^rootdisk_nodes$' "$target")" = 1 ] || fail 'unsupported rc anchor'
+            next=$(mktemp /etc/rc.gonf-endpoints.XXXXXXXX)
+            cp -p "$target" "$next"
+            awk '/^rootdisk_nodes$/ {print "# BEGIN gonf endpoint files"; print "/usr/local/sbin/gonf-endpoint-migration boot || exit 1"; print "# END gonf endpoint files"} {print}' "$target" > "$next"
+            /bin/ksh -n "$next"
+            awk '/^mount -uw \/$/ {mounted=NR} /^# BEGIN gonf endpoint files$/ {hook=NR; count++} /^sysctl_conf$/ {sys=NR} END {exit !(count==1 && mounted<hook && hook<sys)}' "$next"
+            [ -f "$state/openbsd-rc-before" ] || cp -p "$target" "$state/openbsd-rc-before"
+            mv "$next" "$target"
+        fi
+        awk '/^mount -uw \/$/ {mounted=NR} /^# BEGIN gonf endpoint files$/ {hook=NR; count++} /^sysctl_conf$/ {sys=NR} END {exit !(count==1 && mounted<hook && hook<sys)}' "$target"
+        expected=$(printf '%s\n' '# BEGIN gonf endpoint files' '/usr/local/sbin/gonf-endpoint-migration boot || exit 1' '# END gonf endpoint files')
+        [ "$(sed -n '/^# BEGIN gonf endpoint files$/,/^# END gonf endpoint files$/p' "$target")" = "$expected" ] || fail 'boot block changed' ;;
+    *) fail 'unknown action' ;;
+esac

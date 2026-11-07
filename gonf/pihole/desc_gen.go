@@ -6,6 +6,10 @@ func (Deployment) DescCompose() string {
 	return "Installs ~paul/pihole/docker-compose.yml and the LAN wildcard, recreates on change"
 }
 
+func (Deployment) DescMigrationCurrentDNS() string {
+	return "Stages accepted host records and the current wildcard"
+}
+
 func (Deployment) DescMigrationDNS() string {
 	return "Stages a future wildcard outside every active container mount"
 }

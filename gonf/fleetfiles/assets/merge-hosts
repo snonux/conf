@@ -1,0 +1,55 @@
+#!/bin/sh
+# Manage only the supplied fleet names and marker block; preserve local rows.
+set -eu
+umask 077
+
+action=${1:-}
+candidate=${2:-}
+target=/etc/hosts
+case "$action" in check|apply) ;; *) exit 2 ;; esac
+[ -f "$candidate" ] && [ -s "$candidate" ] && [ ! -L "$candidate" ] || exit 1
+[ -f "$target" ] && [ ! -L "$target" ] || exit 1
+temporary=$(mktemp "${target}.gonf.XXXXXXXX")
+trap 'rm -f "$temporary"' 0
+trap 'exit 1' HUP INT TERM
+cp -p "$target" "$temporary"
+awk '
+NR == FNR {
+    if ($0 !~ /^[[:space:]]*#/ && NF > 1)
+        for (i = 2; i <= NF && $i !~ /^#/; i++) managed[$i] = 1
+    fleet = fleet $0 "\n"
+    next
+}
+$0 == "# BEGIN GONF fleet" { if (block || ++begins > 1) exit 3; block = 1; next }
+$0 == "# END GONF fleet" { if (!block || ++ends > 1) exit 3; block = 0; next }
+block { next }
+/^[[:space:]]*#/ || NF < 2 { print; next }
+{
+    names = ""; comment = ""; removed = 0
+    for (i = 2; i <= NF; i++) {
+        if ($i ~ /^#/) {
+            for (; i <= NF; i++) comment = comment (comment == "" ? "" : " ") $i
+            break
+        }
+        if ($i in managed) removed = 1
+        else names = names " " $i
+    }
+    if (!removed) print
+    else if (names != "") print $1 names (comment == "" ? "" : " " comment)
+    else if (comment != "") print comment
+}
+END {
+    if (block || begins != ends) exit 3
+    print "# BEGIN GONF fleet"
+    printf "%s", fleet
+    print "# END GONF fleet"
+}
+' "$candidate" "$target" > "$temporary"
+if [ "$action" = check ]; then
+    cmp -s "$temporary" "$target"
+else
+    if ! cmp -s "$temporary" "$target"; then
+        mv "$temporary" "$target"
+        if command -v restorecon >/dev/null 2>&1; then restorecon "$target"; fi
+    fi
+fi

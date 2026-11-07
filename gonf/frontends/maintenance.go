@@ -1,10 +1,12 @@
 package frontends
 
 import (
+	"os"
 	"strings"
 
 	. "github.com/snonux/gonf/api"
 
+	"github.com/snonux/conf/gonf/fleetfiles"
 	"github.com/snonux/conf/gonf/goprecords"
 	"github.com/snonux/conf/gonf/paths"
 )
@@ -61,6 +63,16 @@ func (Maintenance) Myname() {
 // daemon (Gogios checks run as _gogios).
 func (Maintenance) WireGuardHosts() {
 	File("/etc/hosts", WithLines(WireGuardHostLines()...), RootOwned)
+}
+
+// Hosts merges accepted LAN and unchanged mesh names, retaining public/local rows.
+func (Maintenance) Hosts() {
+	raw, err := os.ReadFile(legacyFrontendAsset("etc/hosts-fleet.inc"))
+	if err != nil {
+		Refuse("frontend fleet hosts", "/etc/hosts", err)
+		return
+	}
+	fleetfiles.MergeHosts(strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n"))
 }
 
 // Uptimed installs and enables the uptimed service.

@@ -1,0 +1,86 @@
+{
+  "inventory": {
+    "hosts": [
+      {
+        "name": "f0",
+        "role": "f",
+        "ip": "10.20.0.130",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl",
+        "mac": "e8:ff:1e:d7:1c:ac",
+        "standalone": false,
+        "storage": "master"
+      },
+      {
+        "name": "f1",
+        "role": "f",
+        "ip": "10.20.0.131",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl",
+        "mac": "e8:ff:1e:d7:1e:44",
+        "standalone": false,
+        "storage": "backup"
+      },
+      {
+        "name": "f2",
+        "role": "f",
+        "ip": "10.20.0.132",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl",
+        "mac": "e8:ff:1e:d7:1c:a0",
+        "standalone": false
+      },
+      {
+        "name": "f3",
+        "role": "f",
+        "ip": "10.20.0.133",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl",
+        "mac": "e8:ff:1e:d7:f3:d7",
+        "standalone": true
+      },
+      {
+        "name": "r0",
+        "role": "cluster",
+        "ip": "10.20.0.120",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl"
+      },
+      {
+        "name": "r1",
+        "role": "cluster",
+        "ip": "10.20.0.121",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl"
+      },
+      {
+        "name": "r2",
+        "role": "cluster",
+        "ip": "10.20.0.122",
+        "ssh_port": 22,
+        "ssh_user": "f3sctl"
+      },
+      {
+        "name": "blowfish",
+        "role": "gateway",
+        "ip": "192.168.2.110",
+        "ssh_port": 2,
+        "ssh_user": "f3sctl"
+      },
+      {
+        "name": "fishfinger",
+        "role": "gateway",
+        "ip": "192.168.2.111",
+        "ssh_port": 2,
+        "ssh_user": "f3sctl"
+      }
+    ],
+    "broadcast": "10.20.0.255",
+    "shelly_ip": "10.30.0.28",
+    "shelly_ac_ip": "10.30.0.29"
+  },
+  "peer_nodes": [
+    "10.20.0.125",
+    "10.20.0.126"
+  ]
+}

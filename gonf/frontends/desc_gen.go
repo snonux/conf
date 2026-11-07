@@ -20,6 +20,10 @@ func (Maintenance) DescGoprecords() string {
 	return "Installs optional hourly uptimed uploads to goprecords (root cron, output to syslog)"
 }
 
+func (Maintenance) DescHosts() string {
+	return "Merges accepted LAN and unchanged mesh names, retaining public/local rows"
+}
+
 func (Maintenance) DescIRCBouncer() string { return "Installs and enables the fishfinger IRC bouncer" }
 
 func (Maintenance) DescMyname() string { return "Sets each frontend's OpenBSD hostname" }

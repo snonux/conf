@@ -16,17 +16,10 @@ var earthWireGuard = []frontends.WireGuardAddress{
 	{Name: "uranus", IPv4: "192.168.2.205", IPv6: "fd42:beef:cafe:2::205"},
 }
 
-// EarthHostsBlock returns the laptop's fleet block, sharing server inventory
-// while keeping its additional laptop-only names out of the server templates.
+// EarthHostsBlock returns the accepted fleet and unchanged mesh on the laptop.
+// Its canonical router stays upstream; native ULA uses only explicit lan6 names.
 func EarthHostsBlock() []string {
-	lines := append([]string{"# LAN (192.168.1.0/24)"}, LANLines()...)
-	for _, h := range earthLAN {
-		line := h.ip + " " + h.name + " " + h.name + ".lan " + h.name + ".lan.buetow.org"
-		for _, alias := range h.aliases {
-			line += " " + alias
-		}
-		lines = append(lines, line)
-	}
+	lines := append([]string{"# Accepted LAN; OLD and reserved recovery aliases retained"}, acceptedView("upstream").HostsBlock...)
 	lines = append(lines, "# WireGuard mesh wg0 (wireguardmeshgenerator)")
 	peers := append(frontends.StandaloneWireGuardAddresses(), earthWireGuard...)
 	return append(lines, frontends.WireGuardHostLines(peers...)...)

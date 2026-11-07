@@ -3,6 +3,8 @@ package triggerfish
 
 import (
 	"fmt"
+	"github.com/snonux/conf/gonf/etchosts"
+	"github.com/snonux/conf/gonf/fleetfiles"
 
 	"github.com/snonux/conf/gonf/goprecords"
 	"github.com/snonux/conf/gonf/paths"
@@ -20,13 +22,15 @@ func (Base) Doas() {
 		WithValidation("/usr/bin/doas", List("-C", CandidatePath)))
 }
 
-// Hostname sets the persistent and running LAN hostname and its local mapping.
+// Hostname sets the persistent and running LAN hostname.
 func (Base) Hostname() {
 	const fqdn = "triggerfish.lan.buetow.org"
 	conf := File("/etc/myname", WithContent(fqdn+"\n"), RootOwned)
-	File("/etc/hosts", WithKeyedLine("192.168.1.2", "192.168.1.2\t"+fqdn+" triggerfish triggerfish.lan triggrefish.lan.buetow.org"), RootOwned)
 	Sh("/bin/hostname "+fqdn, OnChange(conf))
 }
+
+// Hosts merges the fleet while retaining the router's upstream canonical address.
+func (Base) Hosts() { fleetfiles.MergeHosts(etchosts.EarthHostsBlock()) }
 
 // Uptimed installs uprecords and enables persistent uptime collection.
 func (Base) Uptimed() {

@@ -4,8 +4,10 @@ package triggerfish
 
 func (Base) DescDoas() string { return "Enables passwordless administration for wheel members" }
 
-func (Base) DescHostname() string {
-	return "Sets the persistent and running LAN hostname and its local mapping"
+func (Base) DescHostname() string { return "Sets the persistent and running LAN hostname" }
+
+func (Base) DescHosts() string {
+	return "Merges the fleet while retaining the router's upstream canonical address"
 }
 
 func (Base) DescNetwork() string {

@@ -10,6 +10,10 @@ func (Goprecords) DescUptimed() string {
 	return "Installs the uptimed package, conf (LOG_MAXIMUM_ENTRIES=0), the chronyc waitsync drop-in (no RTC on these Pis), and enables the daemon"
 }
 
+func (HostFile) DescConfig() string {
+	return "Merges accepted fleet names while retaining unrelated local rows"
+}
+
 func (KernelAudit) DescPackages() string {
 	return "Installs ksh, unzip, jq and curl for rocky-kernel-audit"
 }

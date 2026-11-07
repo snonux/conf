@@ -1,5 +1,5 @@
 // Package etchosts is the one inventory of the homelab /etc/hosts rows the
-// f3s hosts share: the LAN names (192.168.1.0/24) and the wg0 mesh names.
+// f3s hosts share: accepted LAN names with retained aliases, and wg0 mesh names.
 // The f-host recipe (freebsd.Base.Hosts) and the r-node recipe
 // (rnodes.Base.Hosts) render the rows from here into their own OS-specific
 // file skeleton, so a new host is one row here, not one edit per template.
@@ -39,10 +39,10 @@ var lanHosts = []lanHost{
 	{name: "r1", ip: "192.168.1.121", migration: migrationHost{zone: labZone, recovery: true, ula: "fd02:ca0b:f1cb:20::121"}},
 	{name: "r2", ip: "192.168.1.122", migration: migrationHost{zone: labZone, recovery: true, ula: "fd02:ca0b:f1cb:20::122"}},
 	{name: "rocky", ip: "192.168.1.123", migration: migrationHost{zone: labZone, recovery: true}},
-	{name: "pi0", ip: "192.168.1.125", migration: migrationHost{zone: labZone, recovery: true}},
-	{name: "pi1", ip: "192.168.1.126", migration: migrationHost{zone: labZone, recovery: true}},
-	{name: "pi2", ip: "192.168.1.127", migration: migrationHost{zone: labZone, recovery: true}},
-	{name: "pi3", ip: "192.168.1.128", migration: migrationHost{zone: labZone, recovery: true}},
+	{name: "pi0", ip: "192.168.1.125", migration: migrationHost{zone: labZone, recovery: true, ula: "fd02:ca0b:f1cb:20::125"}},
+	{name: "pi1", ip: "192.168.1.126", migration: migrationHost{zone: labZone, recovery: true, ula: "fd02:ca0b:f1cb:20::126"}},
+	{name: "pi2", ip: "192.168.1.127", migration: migrationHost{zone: labZone, recovery: true, ula: "fd02:ca0b:f1cb:20::127"}},
+	{name: "pi3", ip: "192.168.1.128", migration: migrationHost{zone: labZone, recovery: true, ula: "fd02:ca0b:f1cb:20::128"}},
 }
 
 // TemplateData returns fresh LAN and wg0 rows for a hosts template.
@@ -50,17 +50,9 @@ func TemplateData() Data {
 	return Data{LAN: LANLines(), WireGuard: WireGuardLines()}
 }
 
-// LANLines returns the LAN rows, "IP name name.lan name.lan.buetow.org".
+// LANLines returns accepted fleet rows for lab hosts, retaining explicit aliases.
 func LANLines() []string {
-	lines := make([]string, 0, len(lanHosts))
-	for _, h := range lanHosts {
-		line := h.ip + " " + h.name + " " + h.name + ".lan " + h.name + ".lan.buetow.org"
-		for _, alias := range h.aliases {
-			line += " " + alias
-		}
-		lines = append(lines, line)
-	}
-	return lines
+	return acceptedView("lab").HostsBlock
 }
 
 // WireGuardLines returns the wg0 rows, all IPv4 then all IPv6, for the
@@ -70,4 +62,14 @@ func LANLines() []string {
 // frontends.StandaloneWireGuardAddresses, which the frontends also ping.
 func WireGuardLines() []string {
 	return frontends.WireGuardHostLines(frontends.StandaloneWireGuardAddresses()...)
+}
+
+func acceptedView(view string) MigrationCandidate {
+	data, err := RenderMigration("accepted", view)
+	if err != nil {
+		// This inventory is compiled source, never remote or user input. Refuse
+		// the controller command before it can publish an invalid fleet block.
+		panic(err)
+	}
+	return data
 }

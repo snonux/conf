@@ -2,12 +2,24 @@
 
 package netbsd
 
+func (Controller) DescConfig() string {
+	return "Preserves custom configuration and installs the accepted inventory"
+}
+
+func (Controller) DescMigrationCandidate() string {
+	return "Stages the full overlay and its recognized legacy input"
+}
+
 func (Goprecords) DescUpload() string {
 	return "Installs the goprecords upload client, token and hourly root cron (output to syslog) and retires the duplicate legacy root uploader"
 }
 
 func (Goprecords) DescUptimed() string {
 	return "Installs /etc/uptimed.conf (LOG_MAXIMUM_ENTRIES=0), the custom rc.d script, and enables the daemon"
+}
+
+func (HostFile) DescConfig() string {
+	return "Merges accepted fleet names while retaining local and loopback rows"
 }
 
 func (NetworkMigration) DescConfirm() string {

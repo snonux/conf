@@ -42,6 +42,16 @@ func (Apcupsd) MigrationCandidate() {
 	})
 }
 
+func (Apcupsd) OptsMigrationCompatibleServer() TaskOptions { return TaskOptions{Operational()} }
+
+// MigrationCompatibleServer stages both-address NIS access during client handoff.
+func (Apcupsd) MigrationCompatibleServer() {
+	EachHostWith(func(s UPSServer) {
+		s.NISIP = "0.0.0.0"
+		upsCandidate(serverConfData(s))
+	})
+}
+
 // OptsMigrationCandidate keeps the fan override out of normal aggregates.
 func (ShellyFans) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
 
@@ -51,6 +61,14 @@ func (ShellyFans) MigrationCandidate() {
 	EnsureDir("/usr/local/etc/rc.conf.d", RootOwned)
 	File("/usr/local/etc/rc.conf.d/shellyfans.triggerfish-candidate",
 		WithContent("# Inactive: merge after Shelly address/recovery acceptance.\nshellyfans_ip=\"10.30.0.28\"\n"), RootOwned)
+	raw, err := os.ReadFile(paths.FHostAsset("shelly-fans/shelly-fans-on"))
+	if err != nil {
+		Refuse("fan helper candidate", shellyFansScript, err)
+		return
+	}
+	content := strings.ReplaceAll(string(raw), "192.168.1.28", "10.30.0.28")
+	File(shellyFansScript+".triggerfish-candidate", WithContent(content), Perm(0o555, Root),
+		WithValidation("/bin/sh", List("-n", CandidatePath)))
 }
 
 func upsCandidate(data apcupsdConfData) {

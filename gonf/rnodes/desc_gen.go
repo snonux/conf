@@ -7,7 +7,7 @@ func (Base) DescFirewalldOff() string {
 }
 
 func (Base) DescHosts() string {
-	return "Renders /etc/hosts (stock header, registry.lan -> 127.0.0.1, LAN and wg0 rows from the shared etchosts inventory)"
+	return "Merges accepted fleet names, retaining registry loopback and local rows"
 }
 
 func (Base) DescNvme() string {

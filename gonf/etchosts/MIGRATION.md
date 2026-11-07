@@ -1,4 +1,29 @@
-# Inactive hosts and DNS migration candidates (q14)
+# Hosts and DNS migration (q14 preparation, 924 rollout)
+
+## 924 source and deployment status
+
+The normal hosts owners now use the `accepted` renderer: verified lab/Shelly
+addresses are canonical, while AP management and DHCP-only JetKVM canonical
+names retain their current addresses. Old aliases remain; recovery aliases
+reserve the later physical recovery network and do not prove it is connected.
+Native Pi ULA addresses are explicit `lan6` aliases only. WG rows are unchanged.
+
+`fleetfiles` merges only fleet names and its marker block, preserving local
+rows and unrelated aliases. Initial adoption requires an armed `endpointfiles`
+hosts transaction. Existing owners cover f/r hosts, router, frontends and Earth;
+new narrow owners cover the Pis and standalone guests. Generated frontend
+hosts/DNS fragments come from the same renderer (`go generate ./etchosts`).
+Explicit DNS records exclude the wildcard, whose address has a separate cache
+gate. Pi-hole stages validated files outside its live mounts and is changed
+one resolver at a time.
+
+These are source changes, not a fleet acceptance claim. Task924 annotations
+record native deployment progress. The historical q14 preparation below
+describes the original sources and proposal; it must not be replayed as a
+current deployment runbook. In particular, task824 has already accepted both
+storage VIP addresses on the **same existing vhid**, retaining one owner.
+
+## Historical q14 preparation
 
 These sources prepare the allocation in IQ's
 `topics/infra/openbsdrouter-plan/ADDRESS-RECOVERY.md` (2026-11-04).

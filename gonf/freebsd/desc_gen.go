@@ -6,12 +6,16 @@ func (Apcupsd) DescMigrationCandidate() string {
 	return "Stages UPS configuration without rebinding or restarting"
 }
 
+func (Apcupsd) DescMigrationCompatibleServer() string {
+	return "Stages both-address NIS access during client handoff"
+}
+
 func (Base) DescDoas() string {
 	return "Installs doas.conf (nopass :wheel + f3sctl agent rules), validated with doas -C first"
 }
 
 func (Base) DescHosts() string {
-	return "Renders /etc/hosts (stock header, LAN and wg0 mesh rows from the shared etchosts inventory)"
+	return "Merges accepted fleet names while preserving unrelated local rows"
 }
 
 func (Base) DescPackages() string {
@@ -50,6 +54,10 @@ func (Firewall) DescConfig() string {
 
 func (Goprecords) DescUpload() string {
 	return "Installs the goprecords upload client, token and hourly root cron (output to syslog)"
+}
+
+func (GuestHosts) DescConfig() string {
+	return "Merges the fleet while preserving this guest's local rows"
 }
 
 func (Microcode) DescPackage() string {

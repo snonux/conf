@@ -2,6 +2,7 @@ package frontends
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -458,6 +459,16 @@ func renderZoneTemplate(zone string, f3sHosts []string) (string, error) {
 	content, err := renderControllerTemplate(assetPath, zoneTemplateData{F3SHosts: hosts})
 	if err != nil {
 		return "", err
+	}
+	if zone == Domain {
+		// Generated from the shared inventory by go generate ./etchosts.
+		// Keeping the immutable fragment avoids a frontends↔etchosts import
+		// cycle and leaves the separately cache-gated wildcard in its owner.
+		lan, err := os.ReadFile(legacyFrontendAsset("var/nsd/zones/master/accepted-lan.inc"))
+		if err != nil {
+			return "", fmt.Errorf("read accepted LAN records: %w", err)
+		}
+		content = strings.TrimRight(content, "\n") + "\n\n; Accepted LAN records (generated)\n" + string(lan)
 	}
 	content = strings.ReplaceAll(content,
 		"fishfinger.buetow.org. hostmaster.buetow.org.", DNSPublisher+"."+Domain+". hostmaster."+Domain+".")

@@ -25,6 +25,7 @@ type migrationHost struct {
 	target   string
 	recovery bool
 	ula      string
+	hold     bool // Canonical DHCP device address waits for its measured lease.
 }
 
 // MigrationCandidate contains inactive fragments, never complete /etc/hosts
@@ -43,19 +44,20 @@ type MigrationCandidate struct {
 // Device-ID names deliberately live outside the service wildcard namespace.
 var migrationDevices = []lanHost{
 	{name: "openwrt", ip: "192.168.1.101", migration: migrationHost{zone: apZone, target: "10.30.0.2"}},
-	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", migration: migrationHost{zone: labZone, target: "10.20.0.151"}},
-	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", migration: migrationHost{zone: labZone, target: "10.20.0.158"}},
-	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", migration: migrationHost{zone: labZone, target: "10.20.0.191"}},
-	{name: "jetkvm-cee6ab4df2f88754", ip: "192.168.1.245", migration: migrationHost{zone: labZone, target: "10.20.0.198"}},
+	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", migration: migrationHost{zone: labZone, target: "10.20.0.151", hold: true}},
+	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", migration: migrationHost{zone: labZone, target: "10.20.0.158", hold: true}},
+	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", migration: migrationHost{zone: labZone, target: "10.20.0.191", hold: true}},
+	{name: "jetkvm-cee6ab4df2f88754", ip: "192.168.1.245", migration: migrationHost{zone: labZone, target: "10.20.0.198", hold: true}},
 }
 
-// RenderMigration prepares an offline candidate. staging keeps canonical old
+// RenderMigration prepares a mapping view. staging keeps canonical old
 // addresses; target promotes lab/Wi-Fi endpoints but holds AP management old;
 // ap-target additionally promotes the AP, for use only after d24 acceptance.
+// accepted promotes verified endpoints while holding AP and DHCP-only devices.
 // routerView is upstream, lab or wifi; it controls only the canonical router
 // name. Nothing here installs a file, registers a task or claims acceptance.
 func RenderMigration(profile, routerView string) (MigrationCandidate, error) {
-	if profile != "staging" && profile != "target" && profile != "ap-target" {
+	if profile != "staging" && profile != "target" && profile != "ap-target" && profile != "accepted" {
 		return MigrationCandidate{}, fmt.Errorf("unknown migration profile %q", profile)
 	}
 	if routerView != "upstream" && routerView != "lab" && routerView != "wifi" {
@@ -109,7 +111,8 @@ func migrationRows(h lanHost, profile, routerView string) ([]string, error) {
 		return nil, err
 	}
 	canonical := target
-	if profile == "staging" || (h.migration.zone == apZone && profile != "ap-target") {
+	if profile == "staging" || (h.migration.zone == apZone && profile != "ap-target") ||
+		(profile == "accepted" && h.migration.hold) {
 		canonical = h.ip
 	}
 	rows := []string{canonical + " " + strings.Join(names, " "), migrationAlias(h.ip, h.name, "old"), migrationAlias(target, h.name, "new")}

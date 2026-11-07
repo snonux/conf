@@ -4,6 +4,7 @@ import (
 	. "github.com/snonux/gonf/api"
 
 	"github.com/snonux/conf/gonf/etchosts"
+	"github.com/snonux/conf/gonf/fleetfiles"
 	"github.com/snonux/conf/gonf/paths"
 )
 
@@ -37,18 +38,10 @@ const (
 	wireGuardDomain = "wireguard_t"
 )
 
-// Hosts renders /etc/hosts (stock header, registry.lan -> 127.0.0.1, LAN and
-// wg0 rows from the shared etchosts inventory).
-//
-// Hosts renders the whole file from the rows the f-hosts' /etc/hosts
-// (freebsd.Base.Hosts) shares. The hand-made file listed the wg0 names twice,
-// in "IP short fqdn" and in "IP fqdn short" form, and lacked f3, rocky, the
-// Pis; registry.lan.buetow.org -> 127.0.0.1 (the in-cluster
-// registry's NodePort on the node itself, f3s blog part 7) stays.
+// Hosts merges accepted fleet names, retaining registry loopback and local rows.
 func (Base) Hosts() {
-	hosts := InstallFile(etcHosts, paths.RNodeAsset(baseAssetsPath+"hosts.tmpl"),
-		RootOwned, WithTemplateData(etchosts.TemplateData()))
-	relabel(etcHosts, hosts)
+	data := etchosts.TemplateData()
+	fleetfiles.MergeHosts(append(data.LAN, data.WireGuard...))
 }
 
 // SSHD installs the sshd auth drop-in (root by key, no passwords), validated

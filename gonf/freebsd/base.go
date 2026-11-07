@@ -4,6 +4,7 @@ import (
 	. "github.com/snonux/gonf/api"
 
 	"github.com/snonux/conf/gonf/etchosts"
+	"github.com/snonux/conf/gonf/fleetfiles"
 	"github.com/snonux/conf/gonf/paths"
 )
 
@@ -45,17 +46,10 @@ const (
 // them.
 var basePackages = List("bash", "doas", "git", "helix", "jq", "ksh", "rsync", "tmux")
 
-// Hosts renders /etc/hosts (stock header, LAN and wg0 mesh rows from the
-// shared etchosts inventory).
-//
-// Hosts renders the whole file: the rows were hand-appended and had to be
-// de-duplicated anyway, so a line edit would leave the junk in place. The
-// LAN and wg0 rows come from gonf/etchosts, the inventory the r-nodes'
-// /etc/hosts (rnodes.Base.Hosts) shares; hosts.tmpl only holds the FreeBSD
-// stock header.
+// Hosts merges accepted fleet names while preserving unrelated local rows.
 func (Base) Hosts() {
-	InstallFile(etcHosts, paths.FHostAsset(baseAssetsPath+"hosts.tmpl"),
-		RootOwned, WithTemplateData(etchosts.TemplateData()))
+	data := etchosts.TemplateData()
+	fleetfiles.MergeHosts(append(data.LAN, data.WireGuard...))
 }
 
 // Doas installs doas.conf (nopass :wheel + f3sctl agent rules), validated
