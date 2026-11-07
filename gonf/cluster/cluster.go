@@ -152,7 +152,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 	)
 	pi0 = Host("pi0", netbsdPi,
 		WithData(netbsd.MigrationHost{Interface: "mue0", OldIPv4: "192.168.1.125", LabIPv4: "10.20.0.125", RecoveryIPv4: "10.98.0.125", ULA: "fd02:ca0b:f1cb:20::125", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.125", Platform: "netbsd"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.125", Platform: "netbsd"}),
 		// Hours are local time (Europe/Sofia since 2026-09-25). The pkgs
 		// window must fall while the k3s cluster is up: the custom repo
 		// pkgrepo.f3s.buetow.org runs on it, and at the old 02:xx window the
@@ -168,7 +168,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 	)
 	pi1 = Host("pi1", netbsdPi,
 		WithData(netbsd.MigrationHost{Interface: "mue0", OldIPv4: "192.168.1.126", LabIPv4: "10.20.0.126", RecoveryIPv4: "10.98.0.126", ULA: "fd02:ca0b:f1cb:20::126", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.126", Platform: "netbsd"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.126", Platform: "netbsd"}),
 		WithData(netbsd.UnattendedSchedule{PkgsHour: "22", RebootHour: "22"}),
 		// After the 22:10 pkgs / 22:50 reboot window.
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "23"}),
@@ -185,14 +185,14 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 	)
 	pi2 = Host("pi2", rockyPi,
 		WithData(rocky.MigrationHost{Interface: "eth0", OldIPv4: "192.168.1.127", LabIPv4: "10.20.0.127", RecoveryIPv4: "10.98.0.127", ULA: "fd02:ca0b:f1cb:20::127", SharedGateway: "192.168.1.2", Role: "resolver"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.127", Platform: "linux"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.127", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
 		WithData(goprecords.ClientHost{Host: "pi2"}),
 	)
 	pi3 = Host("pi3", rockyPi,
 		WithData(rocky.MigrationHost{Interface: "eth0", OldIPv4: "192.168.1.128", LabIPv4: "10.20.0.128", RecoveryIPv4: "10.98.0.128", ULA: "fd02:ca0b:f1cb:20::128", SharedGateway: "192.168.1.2", Role: "resolver"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.128", Platform: "linux"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.128", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
 		WithData(goprecords.ClientHost{Host: "pi3"}),
@@ -213,19 +213,19 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 	)
 	r0 := Host("r0", rnode,
 		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.120", LabIPv4: "10.20.0.120", RecoveryIPv4: "10.98.0.120", ULA: "fd02:ca0b:f1cb:20::120", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.120", Platform: "linux"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.120", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.120"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
 	r1 := Host("r1", rnode,
 		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.121", LabIPv4: "10.20.0.121", RecoveryIPv4: "10.98.0.121", ULA: "fd02:ca0b:f1cb:20::121", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.121", Platform: "linux"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.121", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.121"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
 	r2 := Host("r2", rnode,
 		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.122", LabIPv4: "10.20.0.122", RecoveryIPv4: "10.98.0.122", ULA: "fd02:ca0b:f1cb:20::122", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.122", Platform: "linux"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.122", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
 	)
@@ -263,7 +263,7 @@ func registerFreeBSD() {
 	)
 	f0 := Host("f0", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.130", LabIPv4: "10.20.0.130", RecoveryIPv4: "10.98.0.130", ULA: "fd02:ca0b:f1cb:20::130", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.130", Platform: "freebsd"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.130", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
 		WithData(f0Zrepl), WithData(f0Keys),
@@ -277,7 +277,7 @@ func registerFreeBSD() {
 	)
 	f1 := Host("f1", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.131", LabIPv4: "10.20.0.131", RecoveryIPv4: "10.98.0.131", ULA: "fd02:ca0b:f1cb:20::131", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.131", Platform: "freebsd"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.131", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
 		WithData(f1Zrepl), WithData(f1Keys),
@@ -291,7 +291,7 @@ func registerFreeBSD() {
 	)
 	f2 := Host("f2", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.132", LabIPv4: "10.20.0.132", RecoveryIPv4: "10.98.0.132", ULA: "fd02:ca0b:f1cb:20::132", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.132", Platform: "freebsd"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.132", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
 		WithData(f2Zrepl), WithData(f2Keys),
@@ -304,7 +304,7 @@ func registerFreeBSD() {
 	)
 	f3 := Host("f3", fhost,
 		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.133", LabIPv4: "10.20.0.133", RecoveryIPv4: "10.98.0.133", ULA: "fd02:ca0b:f1cb:20::133", SharedGateway: "192.168.1.2"}),
-		WithData(dtail.ServerHost{BindAddress: "192.168.1.133", Platform: "freebsd"}),
+		WithData(dtail.ServerHost{BindAddress: "10.20.0.133", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),
 		WithData(f3Zrepl), WithData(f3Keys),
