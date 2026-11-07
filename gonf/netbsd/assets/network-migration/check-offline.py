@@ -69,16 +69,28 @@ elif name=='ifconfig':
   family,address,action=args[1:]
   if family=='inet':
    if action=='alias'and address not in m['v4']:m['v4'].append(address)
-   elif action=='delete':m['v4']=[a for a in m['v4']if a.split('/')[0]!=address]
+   elif action=='delete':
+    primary=m['v4'][0].split('/')[0]if m['v4']else None
+    m['v4']=[a for a in m['v4']if a.split('/')[0]!=address]
+    # Native NetBSD removed both routes when the primary address was deleted.
+    if address==primary:m['gateway']=None;m['return']='absent'
   else:m['ula']=action=='alias'
   save()
  else:raise AssertionError(args)
 elif name=='route':
  a=[x for x in args if x!='-n']
- if a==['get','default']:print('destination: default\\ngateway: '+m['gateway'])
+ if a==['get','default']:
+  if m['gateway']is None:sys.exit(1)
+  print('destination: default\\ngateway: '+m['gateway'])
  elif a==['get','10.99.0.2']:
+  if m['return']=='absent'and m['gateway']is None:sys.exit(1)
   print('destination: '+('default'if m['return']=='absent'else '10.99.0.2')+'\\ngateway: '+m['return'])
- elif a[:2]==['change','default']:m['gateway']=a[2];save()
+ elif a[:2]==['change','default']:
+  if m['gateway']is None:sys.exit(1)
+  m['gateway']=a[2];save()
+ elif a[:2]==['add','default']:
+  if m['gateway']is not None:sys.exit(1)
+  m['gateway']=a[2];save()
  elif len(a)>=3 and a[1:3]==['-host','10.99.0.2']:
   m['return']='absent'if a[0]=='delete'else a[3];save()
  else:raise AssertionError(args)
@@ -200,6 +212,12 @@ else:raise AssertionError(name)
     request('promote')
     assert model()['v4'] == ['198.51.100.125/24', '192.0.2.125/24']
     assert model()['gateway'] == '10.20.0.1'
+    assert model()['return'] == '192.0.2.2', 'primary deletion lost controller route'
+    edit(clock=10901)
+    run('watchdog')
+    edit(clock=10000)
+    assert model() == stage_state, 'promotion expiry failed after native route deletion'
+    gate('promote-approved'); request('promote')
     # Model a crash after publishing NEW but before removing pending. The real
     # boot branch must prefer the complete pending snapshot, not this file.
     (state / 'accepted').write_text('promote shared\n')

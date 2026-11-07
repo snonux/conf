@@ -40,8 +40,21 @@ default_gateway() {
     rows=$(route -n get default) || return
     printf '%s\n' "$rows" | awk '$1=="gateway:" {print $2}'
 }
+set_default() {
+    desired=$1
+    if current=$(default_gateway); then
+        [ "$current" = "$desired" ] || route -n change default "$desired"
+    else
+        route -n add default "$desired"
+    fi
+}
 return_gateway() {
-    rows=$(route -n get 10.99.0.2) || return
+    # Removing the primary IPv4 can remove routes tied to that address.
+    # With no default either, a missing host route is still simply absent.
+    if ! rows=$(route -n get 10.99.0.2); then
+        echo absent
+        return
+    fi
     printf '%s\n' "$rows" | awk '
         $1=="destination:" {dest=$2} $1=="gateway:" {gw=$2}
         END {if(dest=="10.99.0.2") print gw; else print "absent"}'
@@ -94,16 +107,18 @@ runtime() {
     has6 || ifconfig "$iface" inet6 "$ula/64" alias
     if [ "$topology" = isolated ]; then
         has4 "$recovery" || ifconfig "$iface" inet "$recovery/24" alias
-        set_return 10.98.0.1
     else
         if has4 "$recovery"; then ifconfig "$iface" inet "$recovery" delete; fi
-        set_return "$shared_gateway"
     fi
     if [ "$mode" = promote ]; then
         select_primary "$lab"
         has4 "$old" || ifconfig "$iface" inet "$old/24" alias
-        route -n change default 10.20.0.1
+        set_default 10.20.0.1
     fi
+    # NetBSD deletes routes associated with an IPv4 address when it is removed.
+    # Rebuild routes only after primary/alias changes have finished.
+    if [ "$topology" = isolated ]; then set_return 10.98.0.1
+    else set_return "$shared_gateway"; fi
     reload_filter
 }
 snapshot() {
@@ -147,7 +162,7 @@ restore() {
     if [ -f "$pending/ula" ]; then
         has6 || ifconfig "$iface" inet6 "$ula/64" alias
     elif has6; then ifconfig "$iface" inet6 "$ula" delete; fi
-    route -n change default "$(cat "$pending/default")"
+    set_default "$(cat "$pending/default")"
     set_return "$(cat "$pending/return")"
     reload_filter
     archive rolled-back
