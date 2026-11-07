@@ -1,12 +1,18 @@
 # Resolver migration — task 524
 
-Local preparation only. No Pi address, service, firewall or recovery unit has
-been changed by this task. Pi2 currently answers ICMP but refuses SSH, HTTP and
-DTail; UDP/TCP DNS times out. Pi3 is healthy and must remain unchanged while it
-is the sole working resolver. Restore dependable authenticated access and DNS
-on Pi2 before any serial migration. The separate outage's cause is unproven.
-The user's console/other-maintenance context is pending; no power action is
-authorized or performed by this preparation.
+Pi3 now has source-owned dormant recovery files, a dormant firewall candidate
+and the future VIP wildcard installed. None is activated: before/after profiles,
+addresses/routes, loaded firewall, container identity/start/restarts, live DNS
+files and boot are unchanged, and OLD UDP/TCP DNS passed. Evidence is private at
+`524-pis-20261107/pi3-dormant-deploy/accepted.json`.
+
+The user explicitly deferred Pi2 on 2026-11-07 and requested other work continue.
+Pi2's unexplained SSH/HTTP/DTail/DNS outage is not a gate for unrelated hosts.
+Pi3 stays on its working old address while it is the sole resolver. Live resolver
+renumbering remains incomplete; do not mark task524 done or claim it is ready
+for the final rack cutover. Pi0/pi1 work proceeds separately, using working
+Pi3 DNS and retained OLD aliases. No Pi2 power action or renewed console request
+is authorized by this deferral.
 
 `pihole_network_prepare` reuses the existing Linux snapshot/PID1 watchdog and
 boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
