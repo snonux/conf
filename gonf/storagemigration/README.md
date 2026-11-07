@@ -1,9 +1,9 @@
-# Storage endpoint migration preparation (p14 / 824)
+# Storage endpoint migration (p14 preparation / 824 acceptance)
 
-Prepared only. No VIP, network, service, mount, DNS or canonical source changes
-are made by these recipes. All five candidate tasks are Operational and omitted
-from ordinary aggregates. This sequence belongs to guarded task 824; passing
-these offline checks is not live acceptance or authorization to skip its gates.
+Task824 was accepted natively on2026-11-07. The five candidate tasks remain
+Operational and inactive; ordinary source owners now preserve the accepted
+configuration. The runbook below records the guarded cutover, not an instruction
+to re-arm its OLD-only transaction against the accepted NEW state.
 
 Candidate tasks (use `./gonf.sh -list` to inspect):
 
@@ -25,12 +25,12 @@ reference existing installed paths. r-node rendering reuses its active template;
 earth's documented layout must be compared privately against its actual file
 before promotion. Abort on differing TLS settings rather than overwriting them.
 
-Existing active owners remain unchanged: `Carp.RcConf`, `NFS.StunnelConf`,
-`Relayd.Daemon`, `Maintenance.NFSClientStunnel` and earth's existing host config.
-The old assets and `carpVIP` remain canonical. Do not copy a candidate live while
-ordinary gonf reapply would still undo it. At acceptance, promote endpoint
-parameters in these same owners and their tracked sources as one reviewed
-change; do not add another recipe owning alias0 or either active config path.
+Existing active owners remain `Carp.RcConf`, `NFS.StunnelConf`, `Relayd.Daemon`,
+`Maintenance.NFSClientStunnel` and Earth's named `System.NFSClientStunnel`.
+They now preserve NEW alias0 plus OLD compatibility alias1 under the same vhid1,
+dual stunnel/relayd listeners, NEW relay backends and all four NEW client
+endpoints. Named owned reapply and an actual confirmed-NEW f0/r0 boot passed.
+OLD endpoints and host management aliases remain until the separate924 gates.
 
 ## Approved 824 execution contract (2026-11-07)
 
@@ -260,3 +260,32 @@ for retry. On boot with PF not yet running, its ordinary rc.d startup consumes
 the restored file. Fresh OLD/NEW management and exact loaded-rule checks precede
 `pf-confirm` with a fresh `pf-accepted` gate; an expired journal cannot confirm.
 This prerequisite is accepted before arming the coordinated storage transaction.
+
+
+## Accepted native outcome — 2026-11-07
+
+Commits78482c2/98cca2b prepared and corrected the guarded transaction;
+68f3003 adopted the reviewed canonical sources after actual TLS/NFS acceptance.
+Native independent expiry, PF/host/client boot restore, fresh OLD/NEW management,
+mutual TLS and missing/untrusted-client rejection passed. Both VIPs share vhid1
+on f0/f1; f0 is the writable MASTER, f1 the read-only BACKUP. Controlled f1 reads
+used the replicated probe through a fresh `ro,nosharecache` mount. Return-f0
+writes passed on every client, including both Earth exports. A guest that mounted
+f1 during boot needed a normal clean remount after return to f0 (ESTALE); no
+transparent writable failover or handle continuity is claimed.
+
+All transaction deadlines were confirmed without extension; their former times
+passed. Normal monitor/zrepl/failback controls were restored, exact test files and
+gates cleaned/archived, and the original cluster recovered gradually. Original
+etcd cluster/member IDs, three Node UIDs and all51 workload UID/spec hashes were
+preserved. Verified application HTTPS passed through NEW/OLD VIPs, both relay
+origins to all NEW backends, and the public WireGuard ingress path.
+
+The necessary web-policy /32 additions are local commit7d852ea. The existing
+manual Argo Application stays pinned to a1112b9 with tracking preserved and no
+self-heal; its expected OutOfSync remains until an approved publication/revision
+reconciliation. No push occurred. Incremental zrepl completed; sender retention
+pruning still cannot destroy the two pre-existing Oct17 held snapshots
+(`qf3-upgrade` / `qf3-pre-upgrade`). Those holds were not changed. DNS still returns
+OLD VIP, and broad924 endpoint maps, cabling and task914 remain outside this
+change. Private receipts are under `~/.local/state/conf/824-storage-20261107/`.
