@@ -3,10 +3,14 @@
 Live checkpoint, 2026-11-07: Prepare passed on both controllers without changing
 protected runtime or services. Pi0's first native Stage returned success and
 fresh OLD/NEW/recovery-source SSH/HTTP, local ULA HTTP and public WG IPv4/IPv6
-passed. Its unconfirmed deadline is 1794040291 (08:31:31 UTC). An optional
+passed. Its unconfirmed deadline was 1794040291 (08:31:31 UTC). An optional
 native mue0 packet capture stalled around 08:20 UTC, after which Pi0 stopped
-responding; the cause is unproven. Keep its timer untouched and Pi1 OLD-only
-until recovery is established. No native expiry or boot acceptance is claimed.
+responding; the cause is unproven. At 08:32:45 UTC, after expiry and the next
+watchdog window, OLD/NEW/overlay SSH and direct f0 LAN probes still failed.
+Automatic recovery is not demonstrated; the native journal cannot yet be read.
+Keep Pi1 OLD-only until Pi0 is restored and inspected. An independent Pi0
+restart was requested for incident recovery, not as migration acceptance.
+No native expiry or boot acceptance is claimed.
 Pi0/pi1 run NetBSD11.0 on mue0;
 tun0 remains owned by their existing userspace WireGuard service. The user
 deferred Pi2; healthy Pi3 stays on its old DNS address. Work is serial and must
