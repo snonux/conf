@@ -14,7 +14,10 @@ func (Firewall) OptsStage() TaskOptions { return TaskOptions{Operational()} }
 
 // Stage installs a candidate and guarded firewall activation tools without loading rules.
 func (Firewall) Stage() {
-	hostfirewall.Stage(hostfirewall.Profile{Interface: "eth0"})
+	hostfirewall.Stage(hostfirewall.Profile{
+		Interface: "eth0",
+		Rules:     paths.GonfAsset("pihole", "network-migration/firewall.nft"),
+	})
 }
 
 // OptsMigrationStage keeps resolver migration out of ordinary deployments.

@@ -6,13 +6,10 @@ addresses/routes, loaded firewall, container identity/start/restarts, live DNS
 files and boot are unchanged, and OLD UDP/TCP DNS passed. Evidence is private at
 `524-pis-20261107/pi3-dormant-deploy/accepted.json`.
 
-The user explicitly deferred Pi2 on 2026-11-07 and requested other work continue.
-Pi2's unexplained SSH/HTTP/DTail/DNS outage is not a gate for unrelated hosts.
-Pi3 stays on its working old address while it is the sole resolver. Live resolver
-renumbering remains incomplete; do not mark task524 done or claim it is ready
-for the final rack cutover. Pi0/pi1 work proceeds separately, using working
-Pi3 DNS and retained OLD aliases. No Pi2 power action or renewed console request
-is authorized by this deferral.
+Pi2 recovered on 2026-11-07; fresh trusted SSH and OLD UDP/TCP DNS passed on
+both hosts, permitting serial native recovery trials. Renumbering remains
+incomplete until those trials, final boot and reapply acceptance pass. No
+physical rescue, power cycle or console dependency is part of this procedure.
 
 `pihole_network_prepare` reuses the existing Linux snapshot/PID1 watchdog and
 boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
@@ -42,6 +39,20 @@ loader, two independent OLD SSH sessions and its own rollback timer. Preserve
 old candidate/confirmed state and unrelated Docker/firewalld rules. Never load
 the candidate directly with `nft -f` on a host. At accepted policy transition,
 update canonical staging so it cannot overwrite the selected migration policy.
+Canonical `pihole_firewall_stage` now stages that same migration policy.
+
+Pi-hole's original `LOCAL` mode rejects routed wg2 clients, even when the host
+guard permits them. Canonical compose uses `SINGLE` on `eth0` (plus Pi-hole's
+automatic loopback listener), leaving source authorization to the scoped guard.
+`pihole_migration_service` stages this compose outside the live directory.
+When that candidate exists, the existing resolver network transaction snapshots
+both compose and private `pihole.toml` before mutation, then applies the candidate
+and recreates only that resolver. Timed rollback restores compose and TOML;
+runtime restoration stops FTL and restores TOML again after its shutdown write.
+Boot persistent restoration precedes networking, and the resolver runtime hook
+waits for Docker before restoring the service. There is no second controller.
+Prove application restoration through native expiry and unconfirmed boot before
+accepting the changed service. Do not deploy a candidate during a pending trial.
 
 `pihole_migration_dns` stages the future VIP wildcard under
 `/var/lib/f3s-pihole-migration/`, outside active bind mounts and dnsmasq includes.
@@ -51,8 +62,8 @@ and ingress, including the authoritative public-zone update and cache handling.
 
 For each Pi, record synchronized time, persistent NM profile/runtime, Docker
 identity/image/state, live DNS configuration and private backup before mutation.
-Pi3's read-only baseline confirms eth0, aarch64, healthy pinned Pi-hole, no wg0
-and no network migration helper. Pi2's baseline still requires restored access.
+Fresh native baselines confirm eth0, aarch64, healthy pinned Pi-hole and no wg0
+on both resolvers. Each has private root-owned pre-mutation backups.
 Keep one resolver serving DNS while proving native timed restoration, fresh
 OLD/NEW/recovery SSH and actual UDP/TCP DNS, then confirm separately. Check both
 resolvers and existing Wi-Fi behavior between hosts. Do not change task914's

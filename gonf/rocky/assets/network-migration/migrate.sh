@@ -6,6 +6,8 @@ readonly state=/var/lib/gonf-network-migration
 readonly pending=$state/pending
 readonly helper=/usr/local/sbin/gonf-network-migration
 readonly endpoint=/usr/local/sbin/gonf-endpoint-rollback
+readonly resolver_dir=/home/paul/pihole
+readonly resolver_candidate=/var/lib/f3s-pihole-migration/docker-compose.yml
 [[ $EUID == 0 ]] || exit 1
 # Root-owned recipe output; no operator-supplied shell expressions.
 # shellcheck disable=SC1091
@@ -68,6 +70,11 @@ _restore_persistent() {
         _fail 'Unsupported saved profile path'
     cp -a "$pending/profile" "$profile"
     restorecon "$profile"
+    if [[ -d $pending/resolver ]]; then
+        cp -a "$pending/resolver/compose" "$resolver_dir/docker-compose.yml"
+        cp -a "$pending/resolver/pihole.toml" "$resolver_dir/etc-pihole/pihole.toml"
+        restorecon "$resolver_dir/docker-compose.yml" "$resolver_dir/etc-pihole/pihole.toml"
+    fi
     if [[ ! -f $pending/standalone ]]; then
         if [[ -f $pending/flannel-existed ]]; then
             cp -a "$pending/flannel" /etc/rancher/k3s/config.yaml.d/60-network-migration.yaml
@@ -93,6 +100,14 @@ _restore_runtime() {
     sysctl -q -w "net.ipv6.conf.$iface.accept_ra=$(<"$pending/accept-ra")"
     _endpoint restore-runtime
     _refresh_wg_source_cache
+    if [[ -d $pending/resolver ]]; then
+        # FTL writes TOML during shutdown. Restore once more after it stops so
+        # an old container cannot overwrite the saved configuration on exit.
+        (cd "$resolver_dir" && docker compose stop --timeout 10)
+        cp -a "$pending/resolver/pihole.toml" "$resolver_dir/etc-pihole/pihole.toml"
+        restorecon "$resolver_dir/etc-pihole/pihole.toml"
+        (cd "$resolver_dir" && docker compose up -d --timeout 10 --wait --wait-timeout 90)
+    fi
 }
 _rollback() {
     [[ -d $pending ]] || return 0
@@ -120,6 +135,11 @@ _snapshot() {
     mkdir "$state/snapshot"
     # A partial snapshot is never treated as a complete recovery journal.
     cp -a "$profile" "$state/snapshot/profile"
+    if [[ $role == resolver && -f $resolver_candidate ]]; then
+        mkdir "$state/snapshot/resolver"
+        cp -a "$resolver_dir/docker-compose.yml" "$state/snapshot/resolver/compose"
+        cp -a "$resolver_dir/etc-pihole/pihole.toml" "$state/snapshot/resolver/pihole.toml"
+    fi
     printf '%s\n' "$profile" > "$state/snapshot/profile-path"
     printf '%s\n' "$uuid" > "$state/snapshot/uuid"
     ip -4 address save dev "$iface" scope global > "$state/snapshot/address4"
@@ -227,6 +247,11 @@ _activate() {
     fi
     if [[ $action == promote ]]; then
         _refresh_wg_source_cache
+    fi
+    if [[ -d $pending/resolver ]]; then
+        install -o paul -g paul -m 644 "$resolver_candidate" "$resolver_dir/docker-compose.yml"
+        restorecon "$resolver_dir/docker-compose.yml"
+        (cd "$resolver_dir" && docker compose up -d --timeout 10 --wait --wait-timeout 90)
     fi
     if [[ $action == promote && $role == k3s ]]; then
         mkdir -p /etc/rancher/k3s/config.yaml.d

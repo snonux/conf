@@ -79,6 +79,9 @@ func (NetworkMigration) Prepare() {
 			asset := unit
 			if role != "k3s" && unit == "gonf-network-rollback-runtime.service" {
 				asset = "standalone-runtime.service"
+				if role == "resolver" {
+					asset = "resolver-runtime.service"
+				}
 			}
 			InstallFile("/etc/systemd/system/"+unit, paths.GonfAsset("rocky", "network-migration/"+asset), RootOwned, DependsOn(script))
 		}

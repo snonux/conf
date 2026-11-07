@@ -10,6 +10,10 @@ func (Deployment) DescMigrationDNS() string {
 	return "Stages a future wildcard outside every active container mount"
 }
 
+func (Deployment) DescMigrationService() string {
+	return "Stages the resolver service for the existing recovery transaction"
+}
+
 func (Firewall) DescMigrationStage() string {
 	return "Installs dormant resolver source permissions without loading rules"
 }

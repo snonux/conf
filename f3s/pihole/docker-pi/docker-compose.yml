@@ -12,6 +12,9 @@ services:
       WEBPASSWORD: ${WEBPASSWORD}
       DNS1: ${DNS1}
       DNS2: ${DNS2}
+      # Routed VPN clients are admitted by the host's scoped source guard.
+      FTLCONF_dns_listeningMode: 'SINGLE'
+      FTLCONF_dns_interface: 'eth0'
     volumes:
       - ./etc-pihole:/etc/pihole
       - ./etc-dnsmasq.d:/etc/dnsmasq.d

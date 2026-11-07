@@ -29,6 +29,10 @@ with tempfile.TemporaryDirectory(prefix='rocky-migration-fixture-') as directory
                       .replace('/usr/local/sbin/gonf-network-migration', str(script))
                       .replace('/usr/local/sbin/gonf-endpoint-rollback', str(fixtures / 'endpoint'))
                       .replace('/sys/class/net/wg0', str(root / 'wg0')))
+    script.write_text(script.read_text()
+                      .replace('/home/paul/pihole', str(root / 'resolver'))
+                      .replace('/var/lib/f3s-pihole-migration', str(root / 'resolver-candidate'))
+                      .replace('install -o paul -g paul -m 644', 'install -m 644'))
     # All network/service commands are replaced, with no host network access.
     fake = '''#!/usr/bin/env bash
 set -eu
@@ -311,6 +315,67 @@ elif args[:2] == ['connection', 'modify']:
     run('restore-after-boot')
     assert not pending.exists() and dropin.read_text() == 'unrelated preexisting content'
     assert 'k3s' not in log.read_text() and 'wg0' not in log.read_text()
+
+    # A resolver service change shares the existing network journal and
+    # watchdog. FTL's shutdown write must not overwrite restored TOML.
+    resolver = root / 'resolver'
+    (resolver / 'etc-pihole').mkdir(parents=True)
+    candidate_dir = root / 'resolver-candidate'
+    candidate_dir.mkdir()
+    compose = resolver / 'docker-compose.yml'
+    toml = resolver / 'etc-pihole' / 'pihole.toml'
+    compose.write_text('original compose')
+    toml.write_text('original private TOML')
+    (candidate_dir / 'docker-compose.yml').write_text('desired compose')
+    (fixtures / 'docker').write_text('''#!/usr/bin/env python3
+import os, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+with Path(os.environ['FIXTURE_LOG']).open('a') as f:
+    f.write('docker ' + ' '.join(sys.argv[1:]) + '\\n')
+toml = root / 'resolver/etc-pihole/pihole.toml'
+if sys.argv[1:3] == ['compose', 'stop']:
+    assert sys.argv[3:] == ['--timeout', '10']
+    toml.write_text('FTL writes at shutdown')
+else:
+    assert sys.argv[1:] == ['compose', 'up', '-d', '--timeout', '10', '--wait', '--wait-timeout', '90']
+    if (root / 'resolver/docker-compose.yml').read_text() == 'desired compose':
+        toml.write_text('desired TOML')
+    if (root / 'docker-failure').exists() or (root / 'docker-unhealthy').exists():
+        sys.exit(1)
+''')
+    (fixtures / 'docker').chmod(0o755)
+    (state / 'stage-approved').touch()
+    request('stage', 'shared')
+    assert compose.read_text() == 'desired compose'
+    assert toml.read_text() == 'desired TOML'
+    assert (pending / 'resolver/compose').read_text() == 'original compose'
+    (pending / 'deadline').write_text('1')
+    run('watchdog')
+    assert compose.read_text() == 'original compose'
+    assert toml.read_text() == 'original private TOML'
+    (state / 'stage-approved').touch()
+    request('stage', 'shared')
+    run('restore-boot')
+    assert compose.read_text() == 'original compose'
+    assert toml.read_text() == 'original private TOML'
+    run('restore-after-boot')
+    assert not pending.exists() and toml.read_text() == 'original private TOML'
+    # Failed desired recreation retains a complete recovery journal.
+    (root / 'docker-failure').touch()
+    (state / 'stage-approved').touch()
+    run('stage', 'shared', success=False)
+    assert pending.exists()
+    (root / 'docker-failure').unlink()
+    (root / 'docker-unhealthy').touch()
+    run('rollback', success=False)
+    assert pending.exists(), 'Unhealthy restored service cleared recovery journal'
+    (root / 'docker-unhealthy').unlink()
+    run('rollback')
+    assert not pending.exists() and compose.read_text() == 'original compose'
+    assert toml.read_text() == 'original private TOML'
+    print('PASS: resolver service timed/boot/failure restore preserves compose '
+          'and private TOML after FTL shutdown, with the same watchdog')
     conf.write_text(standalone_conf)
     (fixtures / 'ip').write_text(original_ip_fixture)
     print('PASS: resolver eth0/ULA stage, expiry, promotion and boot restore '

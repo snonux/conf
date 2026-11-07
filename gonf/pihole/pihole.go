@@ -23,6 +23,16 @@ const piholeDir = "/home/paul/pihole"
 // OptsMigrationDNS keeps future ingress addresses out of ordinary deployments.
 func (Deployment) OptsMigrationDNS() TaskOptions { return TaskOptions{Operational()} }
 
+// OptsMigrationService keeps guarded resolver service staging out of ordinary deployments.
+func (Deployment) OptsMigrationService() TaskOptions { return TaskOptions{Operational()} }
+
+// MigrationService stages the resolver service for the existing recovery transaction.
+func (Deployment) MigrationService() {
+	const staging = "/var/lib/f3s-pihole-migration"
+	EnsureDir(staging, RootPrivate)
+	InstallFile(staging+"/docker-compose.yml", paths.PiholeAsset("docker-compose.yml"), RootPrivate)
+}
+
 // MigrationDNS stages a future wildcard outside every active container mount.
 func (Deployment) MigrationDNS() {
 	const staging = "/var/lib/f3s-pihole-migration"
