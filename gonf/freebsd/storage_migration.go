@@ -23,8 +23,9 @@ func (Carp) MigrationCandidate() {
 	EachHostWith(func(n CarpNode) {
 		line := carpAliasLine(n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@")
 		line = strings.ReplaceAll(line, carpVIP, storagemigration.LabVIP+"/32")
+		compat := strings.Replace(carpAliasLine(n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@"), "alias0=", "alias1=", 1)
 		File(rcConf+".carp"+storagemigration.Suffix,
-			WithContent("# INACTIVE TEMPLATE; not a shell configuration.\n# Secret reference: "+CarpPassSecret()+"\n"+line+"\n"), RootOwned)
+			WithContent("# INACTIVE TEMPLATE; not a shell configuration.\n# Both addresses MUST share existing vhid1 on BOTH members.\n# Secret reference: "+CarpPassSecret()+"\n"+line+"\n"+compat+"\n"), RootOwned)
 	})
 }
 
@@ -36,7 +37,7 @@ func (NFS) WhenMigrationCandidate() TaskOption { return WhenHostnameIn(carpMembe
 
 // MigrationCandidate stages the new server listener using existing TLS paths.
 func (NFS) MigrationCandidate() {
-	storageCandidate(stunnelConf, paths.FHostAsset("nfs/stunnel.conf"), storagemigration.Server)
+	storageCandidate(stunnelConf, paths.FHostAsset("nfs/stunnel.conf"), storagemigration.CompatibleServer)
 }
 
 // OptsMigrationCandidate keeps ingress preparation outside ordinary applies.
@@ -47,7 +48,7 @@ func (Relayd) WhenMigrationCandidate() TaskOption { return WhenHostnameIn(carpMe
 
 // MigrationCandidate stages VIP listeners and LAN backends without reloading.
 func (Relayd) MigrationCandidate() {
-	storageCandidate(relaydConf, paths.FHostAsset("relayd/relayd.conf"), storagemigration.Relayd)
+	storageCandidate(relaydConf, paths.FHostAsset("relayd/relayd.conf"), storagemigration.CompatibleRelayd)
 }
 
 func storageCandidate(destination, source string, render func(string) (string, error)) {

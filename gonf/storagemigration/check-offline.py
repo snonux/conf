@@ -22,8 +22,22 @@ func must(ok bool, message string) { if !ok { panic(message) } }
 func main() {
  server, err := os.ReadFile("../f3s/freebsd-hosts/nfs/stunnel.conf"); if err != nil { panic(err) }
  relay, err := os.ReadFile("../f3s/freebsd-hosts/relayd/relayd.conf"); if err != nil { panic(err) }
+ if strings.Contains(string(server), "[nfs-tls-compat]") {
+  global, _, _ := strings.Cut(string(server), "[nfs-tls]"); _, service, _ := strings.Cut(string(server), "[nfs-tls-compat]")
+  server = []byte(global+"[nfs-tls]"+service)
+ }
+ if strings.Contains(string(relay), "\n\n# Retained until old clients migrate.\n") {
+  primary, _, _ := strings.Cut(string(relay), "\n\n# Retained until old clients migrate.\n")
+  trailing := len(relay)-len(strings.TrimRight(string(relay), "\n"))
+  relay = []byte(strings.ReplaceAll(primary,"10.20.0.","192.168.1.")+strings.Repeat("\n",trailing))
+ }
  got, err := sm.Server(string(server)); must(err == nil, "server render")
  must(strings.ReplaceAll(got, sm.LabVIP, sm.OldVIP) == string(server), "server changed unrelated policy")
+ compatible, err := sm.CompatibleServer(string(server)); must(err == nil, "compatible server render")
+ must(strings.Count(compatible, "accept = "+sm.LabVIP+":2323") == 1 && strings.Count(compatible, "accept = "+sm.OldVIP+":2323") == 1, "compatible server lost one endpoint")
+ must(strings.Count(compatible, "verify = 2") == 2 && strings.Count(compatible, "requireCert = yes") == 2, "compatible server changed mutual TLS")
+ repeated, err := sm.CompatibleServer(compatible); must(err == nil && repeated == compatible, "compatible server reapply drift")
+ _, err = sm.CompatibleServer(compatible+"\n[extra]\naccept = 127.0.0.1:2323\n"); must(err != nil, "compatible server accepted extra service")
  for _, bad := range []string{"", got, string(server)+string(server),
   "accept = "+sm.OldVIP+":23230\n",
   "# accept = "+sm.OldVIP+":2323\naccept = 127.0.0.1:2323\n",
@@ -36,6 +50,11 @@ func main() {
  }
  got, err = sm.Relayd(string(relay)); must(err == nil, "relayd render")
  must(strings.ReplaceAll(got, "10.20.0.", "192.168.1.") == string(relay), "relayd changed unrelated config")
+ compatible, err = sm.CompatibleRelayd(string(relay)); must(err == nil, "compatible relayd render")
+ must(strings.Count(compatible, "listen on "+sm.LabVIP) == 2 && strings.Count(compatible, "listen on "+sm.OldVIP) == 2, "compatible relayd lost listeners")
+ must(strings.Count(compatible, "table <k3s_nodes>") == 1 && strings.Contains(compatible, "10.20.0.120 10.20.0.121 10.20.0.122"), "compatible relayd changed backend ownership")
+ repeated, err = sm.CompatibleRelayd(compatible); must(err == nil && repeated == compatible, "compatible relayd reapply drift")
+ _, err = sm.CompatibleRelayd(compatible+compatible); must(err != nil, "compatible relayd accepted duplicate promotion")
  for _, bad := range []string{"", got, strings.ReplaceAll(string(relay), "192.168.1.121", "192.168.1.120"), strings.ReplaceAll(string(relay), "192.168.1.121", "10.20.0.121"), string(relay)+string(relay)} {
   _, err = sm.Relayd(bad); must(err != nil, "relayd accepted drift, duplicate or mixed subnet")
  }

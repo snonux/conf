@@ -23,6 +23,34 @@ func Server(source string) (string, error) {
 	return endpoint(source, "accept")
 }
 
+// CompatibleServer retains the old TLS endpoint on the same CARP owner.
+// Both services use the existing certificates and client verification policy.
+func CompatibleServer(source string) (string, error) {
+	if strings.Contains(source, "[nfs-tls-compat]") {
+		global, _, _ := strings.Cut(source, "[nfs-tls]")
+		_, service, _ := strings.Cut(source, "[nfs-tls-compat]")
+		original := global + "[nfs-tls]" + service
+		if strings.Count(original, "[") != 1 {
+			return "", fmt.Errorf("unexpected compatibility services")
+		}
+		expected, err := CompatibleServer(original)
+		if err != nil || expected != source {
+			return "", fmt.Errorf("compatibility TLS policy drift")
+		}
+		return source, nil
+	}
+	primary, err := Server(source)
+	if err != nil {
+		return "", err
+	}
+	const section = "[nfs-tls]"
+	if strings.Count(source, section) != 1 || strings.Count(source, "[") != 1 {
+		return "", fmt.Errorf("expected exactly one NFS TLS service")
+	}
+	_, service, _ := strings.Cut(source, section)
+	return strings.TrimRight(primary, "\n") + "\n\n[nfs-tls-compat]" + service, nil
+}
+
 // Client preserves the client identity, loopback listener and TLS policy.
 func Client(source string) (string, error) {
 	return endpoint(source, "connect")
@@ -69,6 +97,38 @@ func Relayd(source string) (string, error) {
 		}
 	}
 	return listeners(strings.Join(lines, ""))
+}
+
+// CompatibleRelayd retains old ingress listeners using the new backend table.
+// Both VIPs must belong to the same vhid on both existing CARP members.
+func CompatibleRelayd(source string) (string, error) {
+	const marker = "\n\n# Retained until old clients migrate.\n"
+	if strings.Contains(source, marker) {
+		if strings.Count(source, marker) != 1 {
+			return "", fmt.Errorf("duplicate compatibility relay blocks")
+		}
+		primary, _, _ := strings.Cut(source, marker)
+		trailing := len(source) - len(strings.TrimRight(source, "\n"))
+		original := strings.ReplaceAll(primary, "10.20.0.", "192.168.1.") + strings.Repeat("\n", trailing)
+		expected, err := CompatibleRelayd(original)
+		if err != nil || expected != source {
+			return "", fmt.Errorf("compatibility relay policy drift")
+		}
+		return source, nil
+	}
+	primary, err := Relayd(source)
+	if err != nil {
+		return "", err
+	}
+	start := strings.Index(primary, `relay "lan_http" {`)
+	if start < 0 || strings.Count(primary, "relay ") != 2 ||
+		strings.Count(primary, `relay "lan_https" {`) != 1 {
+		return "", fmt.Errorf("expected canonical HTTP and HTTPS relay blocks")
+	}
+	compat := strings.ReplaceAll(primary[start:], LabVIP, OldVIP)
+	compat = strings.ReplaceAll(compat, `"lan_http"`, `"lan_http_compat"`)
+	compat = strings.ReplaceAll(compat, `"lan_https"`, `"lan_https_compat"`)
+	return strings.TrimRight(primary, "\n") + marker + compat, nil
 }
 
 // endpoint requires exactly one complete active directive. It deliberately

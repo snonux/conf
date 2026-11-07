@@ -5,6 +5,35 @@ import (
 	. "github.com/snonux/gonf/api"
 )
 
+func storageClientOptions() TaskOptions {
+	return TaskOptions{Operational(), WhenLinux(), WhenHostnameIn("earth")}
+}
+
+func (System) OptsNFSClientMigrationPrepare() TaskOptions  { return storageClientOptions() }
+func (System) OptsNFSClientMigrationArm() TaskOptions      { return storageClientOptions() }
+func (System) OptsNFSClientMigrationStage() TaskOptions    { return storageClientOptions() }
+func (System) OptsNFSClientMigrationConfirm() TaskOptions  { return storageClientOptions() }
+func (System) OptsNFSClientMigrationRollback() TaskOptions { return storageClientOptions() }
+func (System) OptsNFSClientMigrationStatus() TaskOptions   { return storageClientOptions() }
+
+// NFSClientMigrationPrepare installs dormant Earth deadline and boot recovery.
+func (System) NFSClientMigrationPrepare() { storagemigration.PrepareClient() }
+
+// NFSClientMigrationArm saves Earth's existing transport with a bounded deadline.
+func (System) NFSClientMigrationArm() { Sh(storagemigration.ClientHelper + " arm 900") }
+
+// NFSClientMigrationStage moves Earth's endpoint after its NFS mounts are released.
+func (System) NFSClientMigrationStage() { Sh(storagemigration.ClientHelper + " stage") }
+
+// NFSClientMigrationConfirm accepts Earth's verified new TLS transport.
+func (System) NFSClientMigrationConfirm() { Sh(storagemigration.ClientHelper + " confirm") }
+
+// NFSClientMigrationRollback restores Earth's original TLS transport.
+func (System) NFSClientMigrationRollback() { Sh(storagemigration.ClientHelper + " rollback") }
+
+// NFSClientMigrationStatus reports Earth's pending endpoint transaction.
+func (System) NFSClientMigrationStatus() { Sh(storagemigration.ClientHelper + " status") }
+
 // OptsNFSClientMigrationCandidate restricts preparation to earth by name.
 func (System) OptsNFSClientMigrationCandidate() TaskOptions {
 	return TaskOptions{Operational(), WhenLinux(), WhenHostnameIn("earth")}

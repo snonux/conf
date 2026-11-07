@@ -1,0 +1,10 @@
+#!/bin/sh
+# PROVIDE: gonf_storage_hold
+# REQUIRE: DAEMON devd stunnel relayd nfsd mountd nfsuserd
+# BEFORE: LOGIN
+# KEYWORD: nojail
+. /etc/rc.subr
+name=gonf_storage_hold
+start_cmd='/usr/local/sbin/gonf-storage-migration boot-hold'
+stop_cmd=':'
+run_rc_command "$1"

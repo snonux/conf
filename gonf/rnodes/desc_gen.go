@@ -58,8 +58,32 @@ func (Maintenance) DescNFSClientIdmapd() string {
 	return "Sets the NFSv4 id-mapping Domain in /etc/idmapd.conf"
 }
 
+func (Maintenance) DescNFSClientMigrationArm() string {
+	return "Saves the existing transport with a fifteen-minute deadline"
+}
+
 func (Maintenance) DescNFSClientMigrationCandidate() string {
 	return "Stages transport changes without touching mounts"
+}
+
+func (Maintenance) DescNFSClientMigrationConfirm() string {
+	return "Accepts the verified new transport without retiring OLD"
+}
+
+func (Maintenance) DescNFSClientMigrationPrepare() string {
+	return "Installs dormant deadline and pre-stunnel boot recovery"
+}
+
+func (Maintenance) DescNFSClientMigrationRollback() string {
+	return "Restores the original transport without changing mounts"
+}
+
+func (Maintenance) DescNFSClientMigrationStage() string {
+	return "Moves the TLS endpoint while writers and monitors are held"
+}
+
+func (Maintenance) DescNFSClientMigrationStatus() string {
+	return "Reports the client transaction without TLS credentials"
 }
 
 func (Maintenance) DescNFSClientPackages() string {

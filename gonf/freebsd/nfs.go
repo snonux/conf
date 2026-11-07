@@ -85,7 +85,7 @@ var nfsSysctls = List(
 // zrepl lags. The text is the hand-added crontab line, byte for byte (% is
 // escaped for cron), so gonf adopts it. f0 only: on f1 /data/nfs is the
 // read-only zrepl sink and the touch would fail.
-const liveCheckCommand = `test -f /data/nfs/nfs.DO_NOT_REMOVE && /usr/bin/touch /data/nfs/nfs.LIVE_CHECK && /bin/date +\%s > /data/nfs/nfs.LIVE_CHECK`
+const liveCheckCommand = `test ! -d /var/db/gonf-storage-migration/pending && test ! -e /var/db/gonf-storage-migration/held && test -f /data/nfs/nfs.DO_NOT_REMOVE && /usr/bin/touch /data/nfs/nfs.LIVE_CHECK && /bin/date +\%s > /data/nfs/nfs.LIVE_CHECK`
 
 // DescRcConf returns the description for the rc.conf keys.
 func (NFS) DescRcConf() string {

@@ -112,6 +112,46 @@ func (ShellyFans) DescScripts() string {
 	return "Installs shelly-fans-on and /usr/local/etc/rc.d/shellyfans (0555 root:wheel; not run)"
 }
 
+func (StorageMigration) DescArm() string {
+	return "Saves the existing owned configuration with a fifteen-minute deadline"
+}
+
+func (StorageMigration) DescConfirm() string {
+	return "Archives the transaction after native acceptance on both members"
+}
+
+func (StorageMigration) DescEnable() string {
+	return "Advertises the shared address set after a fresh matching-pair audit"
+}
+
+func (StorageMigration) DescHold() string {
+	return "Fences CARP and stops storage hooks and listeners without stopping cron"
+}
+
+func (StorageMigration) DescPrepare() string {
+	return "Installs dormant native deadline and pre-netif boot recovery"
+}
+
+func (StorageMigration) DescReconcile() string {
+	return "Applies the existing CARP hook after the election settles"
+}
+
+func (StorageMigration) DescReleaseOld() string {
+	return "Enables restored CARP only after both old address sets match"
+}
+
+func (StorageMigration) DescRollback() string {
+	return "Restores old owned configuration while retaining the CARP fence"
+}
+
+func (StorageMigration) DescStage() string {
+	return "Installs dual endpoints only after both members are attested fenced"
+}
+
+func (StorageMigration) DescStatus() string {
+	return "Reports pending and fenced state without reading secret values"
+}
+
 func (Unattended) DescNewsyslog() string {
 	return "Appends unattended-upgrade log rotation to /etc/newsyslog.conf"
 }

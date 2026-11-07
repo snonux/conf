@@ -72,6 +72,7 @@ func Register() {
 
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
+	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
 	RegisterMethods(freebsd.NetworkMigration{}, WithPrefix("freebsd_guest_network_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.ZfsKeys{}, WithPrefix("freebsd_zfskeys_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.ShellyFans{}, WithPrefix("freebsd_shellyfans_"), OnCluster(cluster.NameFreeBSD))

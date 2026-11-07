@@ -1,4 +1,4 @@
-# Storage endpoint migration preparation (p14)
+# Storage endpoint migration preparation (p14 / 824)
 
 Prepared only. No VIP, network, service, mount, DNS or canonical source changes
 are made by these recipes. All five candidate tasks are Operational and omitted
@@ -31,6 +31,38 @@ The old assets and `carpVIP` remain canonical. Do not copy a candidate live whil
 ordinary gonf reapply would still undo it. At acceptance, promote endpoint
 parameters in these same owners and their tracked sources as one reviewed
 change; do not add another recipe owning alias0 or either active config path.
+
+## Approved 824 execution contract (2026-11-07)
+
+Full k3s downtime and gradual original-member recovery are authorized. Hold
+all r-nodes with their existing exact-node mode0600 maintenance gate and verify
+native start refusal before any storage mutation. Never reset/bootstrap etcd or
+remove datastore contents. This replaces the earlier continuous-quorum wording.
+
+Keep OLD endpoint compatibility until task924. Both VIP addresses belong to the
+**same existing vhid1**, on **both existing members**, with unchanged password
+and skews. Stop CARP participation on both hosts before changing their address
+sets: FreeBSD CARP authenticates the set, so mixed sets can elect two masters.
+Never create a second independent vhid/owner for the compatibility VIP. The
+server and ingress candidates now retain old listeners and use new backends.
+The active owners remain unchanged until guarded native admission/review.
+
+The existing f1 production receiver remains `readonly=on`, including while
+MASTER. Acceptance is f0 NFS writes, f1 failover reads, then return-to-f0 writes.
+Do not make the sink writable, roll it back, or claim writable failover.
+
+Automatic timeout/boot fallback restores the old owned aliases and service
+configuration **with CARP held disabled**. This deliberately leaves storage
+unavailable while preserving independent old/new host management. Re-enable
+CARP only after a fresh controller audit proves that BOTH members have matching
+restored address sets and the original known data ownership. Autonomous
+re-enablement on one restored member could otherwise create split brain with
+an unreachable partner still using the new set. Keep writers gated throughout.
+Rollback must not restore an entire stale rc.conf over unrelated task914 keys.
+
+Do not use promiscuous capture on either NetBSD Pi: a previous capture coincided
+with loss of remote services. Prefer router-side capture, with `-p`, only when
+necessary. Pi controllers must remain independent of the hosts they recover.
 
 ## Before the maintenance window
 
@@ -72,9 +104,9 @@ change; do not add another recipe owning alias0 or either active config path.
 ## Quiesce, then change one coherent endpoint
 
 1. Record and suspend application writers and job/controllers that could restart
-   them; scale or pause only the NFS consumers, including external clients and
-   earth transfers. Flush/sync and release mounts cleanly. Keep etcd quorum:
-   never stop two k3s servers together. If clean quiescence cannot be verified,
+   them, including external clients and earth transfers. Flush/sync and release
+   mounts cleanly. Use the approved full-cluster maintenance gate; preserve
+   original etcd membership/data and recover quorum gradually after acceptance. If clean quiescence cannot be verified,
    abort; do not use lazy/forced unmount or killing pinned writers as a shortcut.
 2. Stop `nfs-mount-monitor.timer` on every r-node, wait for any running monitor
    service to finish and record its counter. It can write/remount/restart stunnel,
@@ -85,14 +117,14 @@ change; do not add another recipe owning alias0 or either active config path.
    VIP state (devd stop affects other hooks; keep the window short and restore its
    prior state). Explicitly stop NFS/stunnel on both and ingress as required.
    Verify the previous owner flushed data and the replica checkpoint is known.
-4. Remove old 192.168.1.138 from **both** members, in running and persistent state,
-   before installing new 10.20.0.138 on either. Verify neither answers old VIP and
-   neither serves a writable replica. Never use simultaneous old/new VIPs,
-   separate vhids, independent owners or a mixed-subnet CARP pair as rollback.
-   Keep host management addresses; only the service VIP is exclusive.
-5. Through existing owners, install one consistent new alias0 on both (same
-   vhid1, existing secret, f0 skew0/f1 skew100), stunnel server accept .138:2323,
-   relayd VIP80/443 and new r-node backends .120-.122. Publish both hosts' durable
+4. With CARP disabled on BOTH members, configure both .138 addresses under
+   the same existing vhid1 in running and persistent state on BOTH. Verify
+   neither currently answers either VIP and neither serves a writable replica.
+   Never enable mismatched address sets or independent compatibility owners.
+   Keep host management addresses throughout.
+5. Through existing owners, install consistent NEW alias0 and OLD alias1 on
+   both (same vhid1, existing secret, f0 skew0/f1 skew100), dual stunnel server
+   accepts .138:2323, dual relayd VIP80/443 and new r-node backends .120-.122. Publish both hosts' durable
    state before allowing automatic hooks. Select f0 as the initial owner, verify
    f1 BACKUP and no authentication-counter increase, then restore devd/hooks.
    Start the server through existing CARP control on the known writable owner;
@@ -107,7 +139,7 @@ change; do not add another recipe owning alias0 or either active config path.
 
 - Prove exactly one CARP MASTER, one BACKUP and one writable authoritative data
   owner; inspect NFS/stunnel processes and sockets (stunnel only on MASTER).
-  New VIP listens on2323/80/443; old VIP has no owner/listeners. Host old/new SSH
+  Both VIPs listen on2323/80/443 through the same elected owner. Host old/new SSH
   remain reachable through fresh sessions.
 - From **each r-node and earth**, establish fresh TLS sessions to new VIP with
   existing client certs; reject missing/untrusted client certs. Check logs for
@@ -118,10 +150,10 @@ change; do not add another recipe owning alias0 or either active config path.
 - Test ingress with explicit target IP and unchanged Host/SNI names before DNS:
   HTTP and HTTPS to new VIP, real application response/certificate, and each
   r-node backend. Verify public wg0 ingress and application source policies.
-- Controlled failover requires the documented storage/dataset takeover procedure
-  and zrepl checkpoint evidence; CARP election alone is not storage failover.
-  Keep writers paused during any writable-owner transfer. Verify VIP, TLS/NFS
-  and relayd on f1, then return to the intended owner using the same discipline.
+- Controlled failover requires zrepl checkpoint evidence. Keep application
+  writers and write-probing monitors paused. Verify both VIPs, fresh TLS/NFS
+  reads and relayd on f1 with its sink still readonly; then restore f0 and prove
+  fresh writes. This is the existing read-only failover contract.
 - q14 owns hosts/Pi-hole/public wildcard candidates: see
   [etchosts/MIGRATION.md](../etchosts/MIGRATION.md). Its offline CLI
   `go run ./cmd/hosts-migration -profile target -router-view lab` (in gonf/)
@@ -152,8 +184,9 @@ last accepted writable dataset ownership/replication direction; do not overwrite
 newer data with a stale replica. If data ownership is uncertain, remain quiesced
 and diagnose remotely rather than promoting another writer.
 
-Return old VIP to one known owner; verify the other BACKUP and authentication
-counters. Restore devd and start the storage services through the existing CARP
+Keep CARP disabled after automatic restore. Once BOTH restored address sets
+are audited together, return old VIP to one known owner; verify the other
+BACKUP and authentication counters. Restore devd and start the storage services through the existing CARP
 control, restart clients serially, and repeat old-endpoint TLS/NFS read/write and
 ingress tests including earth and both DNS resolvers. Reconnect old management
 by literal IP from a new session. Restore saved watchdog, cron, failback,
@@ -165,3 +198,53 @@ prefixes back onto igc0 or require a cable move.
 Run `python3 gonf/storagemigration/check-offline.py` from the repository root for
 public renderer/property/negative checks. These checks neither contact hosts nor
 claim that native parsers, deadlines, reboot recovery or service acceptance passed.
+
+
+## Dormant 824 native transaction helper
+
+`StorageMigration.Prepare` installs the Python3.12 helper, a minutely native
+cron watchdog, and an early boot hook ordered after sysctl and before netif.
+It stages only inactive candidates. It does not arm a deadline or stop a service.
+The helper remains a candidate until independent review and native expiry/boot
+proofs pass. An offline fixture is not evidence of native recovery.
+
+All helper state is root-private in `/var/db/gonf-storage-migration`. A coordinator
+creates an exact-node, root-owned mode0600 gate only after checking its stated
+fact. `approved`, `pair-held`, `stunnel-validated`, `pair-matching`, `accepted`
+and `old-pair-matching` attestations expire after120seconds. No gate supplies
+shell code or credentials. Create the gate immediately before its operation.
+
+- `arm 60..1800`: snapshot owned alias0/alias1 values and stunnel/relayd configs,
+  current service states and an absolute deadline. Refuse existing transactions,
+  aliases or a NEW VIP already present. Do not snapshot/restore all rc.conf.
+- `hold`: stop devd, set `net.inet.carp.allow=0`, then stop NFS, stunnel and relayd.
+  Cron continues, preserving task914 schedules and the rollback watchdog.
+- After BOTH members are held, attest `pair-held` on each. Validate the relayd
+  candidate with its installed native parser. Separately validate stunnel using
+  an isolated loopback listener/ephemeral port fixture with existing TLS files;
+  never start a candidate against production VIPs as a syntax check. Then attest
+  `stunnel-validated` and `stage` each member before enabling either.
+- `stage`: compare saved managed state, update owned alias0NEW/alias1OLD, install
+  dual stunnel/relayd candidates and add NEW under existing vhid1. It refuses a
+  changed backup or deadline with less than30seconds remaining.
+- Independently compare BOTH complete address sets, skews, unchanged secret
+  fingerprint (privately), firewall admission and candidate configs. Attest
+  `pair-matching`, then `enable` f0 followed by f1. Once election settles,
+  `reconcile` applies the existing carpcontrol.sh to the observed state; devd
+  does not replay transitions missed while stopped. This never forces MASTER.
+- `watchdog` restores on expiry; `boot` restores any unconfirmed transaction
+  regardless of deadline. Both leave a persistent held marker and CARP disabled.
+  Repeating `rollback` after restore is a no-op. The boot hook retains the fence
+  even after the transaction has been archived.
+- After BOTH restored members are freshly audited, attest `old-pair-matching`,
+  `release-old` on each, then apply the existing CARP hook to settled election
+  state. Native old-endpoint acceptance must pass before writers resume.
+- After dual-endpoint acceptance AND canonical owner/source promotion so reapply
+  retains the accepted state, attest `accepted` and `confirm` each transaction.
+  Archive receipts and remove only the coordinator's exact gates. No OLD host
+  management address or OLD service compatibility endpoint is retired here.
+
+Run `python3 f3s/freebsd-hosts/storage-migration/check-offline.py` for actual
+helper dispatch against disposable files and fake native calls. It verifies
+expired-deadline restore, boot persistence, alias/config restore, unrelated file
+preservation, repeat rollback and refusal to re-enable without pair attestation.
