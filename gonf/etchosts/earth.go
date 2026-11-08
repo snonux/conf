@@ -17,9 +17,10 @@ var earthWireGuard = []frontends.WireGuardAddress{
 }
 
 // EarthHostsBlock returns the accepted fleet and unchanged mesh on the laptop.
-// Its canonical router stays upstream; native ULA uses only explicit lan6 names.
+// Its canonical router uses authenticated wg2 management; native ULA uses only
+// explicit lan6 names. The upstream alias still names the WireGuard endpoint.
 func EarthHostsBlock() []string {
-	lines := append([]string{"# Accepted LAN; OLD and reserved recovery aliases retained"}, acceptedView("upstream").HostsBlock...)
+	lines := append([]string{"# Accepted LAN; OLD and reserved recovery aliases retained"}, acceptedView("vpn").HostsBlock...)
 	lines = append(lines, "# WireGuard mesh wg0 (wireguardmeshgenerator)")
 	peers := append(frontends.StandaloneWireGuardAddresses(), earthWireGuard...)
 	return append(lines, frontends.WireGuardHostLines(peers...)...)

@@ -28,6 +28,16 @@ describes the original sources and proposal; it must not be replayed as a
 current deployment runbook. In particular, task824 has already accepted both
 storage VIP addresses on the **same existing vhid**, retaining one owner.
 
+## Laptop router management after Wi-Fi cutover — 2026-11-08
+
+Earth uses the `vpn` router view: canonical `triggerfish`, `triggerfish.lan`
+and `triggerfish.lan.buetow.org` resolve to10.99.0.1 over wg2. Upstream
+192.168.1.2 remains under explicit old/upstream aliases and remains the tunnel
+endpoint. Direct Wi-Fi SSH to that upstream address is not permitted by the
+router policy. The laptop's `system_hosts` owner applies this view; other hosts'
+router views and published DNS are unchanged. Verified native getent, route
+viawg2/source99.2 and fresh `ssh paul@triggerfish.lan` after owner deployment.
+
 ## Historical q14 preparation
 
 These sources prepare the allocation in IQ's
@@ -54,8 +64,8 @@ configuration are untouched; that observed lease is not a new static allocation.
 
 Each JSON result contains a fleet `HostsBlock`, a separate unchanged
 `WireGuardBlock`, Pi-hole dnsmasq lines, and an authoritative LAN zone fragment.
-Choose `router-view upstream` for the controller/frontends/upstream view,
-`lab` for lab clients, and `wifi` only for the accepted Wi-Fi stage. Router
+Choose `router-view upstream` for frontends/upstream clients, `vpn` for
+Earth management, `lab` for lab clients, and `wifi` for Wi-Fi gateway names. Router
 aliases `triggerfish.upstream.lan`, `.lab.lan` and `.wifi.lan` always identify
 the explicit zone addresses. Staging requires the upstream canonical view.
 The misspelled existing `triggrefish.lan.buetow.org` alias is preserved.

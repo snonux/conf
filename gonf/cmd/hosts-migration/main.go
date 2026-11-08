@@ -14,7 +14,7 @@ import (
 
 func main() {
 	profile := flag.String("profile", "staging", "staging, accepted (DHCP/AP held), target, or ap-target (after d24)")
-	view := flag.String("router-view", "upstream", "canonical router name: upstream, lab, or wifi")
+	view := flag.String("router-view", "upstream", "canonical router name: upstream, lab, wifi, or vpn")
 	format := flag.String("format", "json", "json, hosts, authoritative-hosts, or dnsmasq-hosts")
 	flag.Parse()
 	if flag.NArg() != 0 {

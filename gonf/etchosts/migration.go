@@ -54,13 +54,13 @@ var migrationDevices = []lanHost{
 // addresses; target promotes lab/Wi-Fi endpoints but holds AP management old;
 // ap-target additionally promotes the AP, for use only after d24 acceptance.
 // accepted promotes verified endpoints while holding AP and DHCP-only devices.
-// routerView is upstream, lab or wifi; it controls only the canonical router
+// routerView is upstream, lab, wifi or vpn; it controls only the canonical router
 // name. Nothing here installs a file, registers a task or claims acceptance.
 func RenderMigration(profile, routerView string) (MigrationCandidate, error) {
 	if profile != "staging" && profile != "target" && profile != "ap-target" && profile != "accepted" {
 		return MigrationCandidate{}, fmt.Errorf("unknown migration profile %q", profile)
 	}
-	if routerView != "upstream" && routerView != "lab" && routerView != "wifi" {
+	if routerView != "upstream" && routerView != "lab" && routerView != "wifi" && routerView != "vpn" {
 		return MigrationCandidate{}, fmt.Errorf("unknown router view %q", routerView)
 	}
 	if profile == "staging" && routerView != "upstream" {
@@ -150,6 +150,8 @@ func migrationTarget(h lanHost, view string) (string, error) {
 			return "10.20.0.1", nil
 		case "wifi":
 			return "10.30.0.1", nil
+		case "vpn":
+			return "10.99.0.1", nil
 		default:
 			return h.ip, nil
 		}
