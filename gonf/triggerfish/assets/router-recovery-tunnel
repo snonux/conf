@@ -1,0 +1,31 @@
+#!/bin/ksh
+# Temporary outbound SSH management; no network configuration or rollback here.
+set -eu
+umask 077
+
+dir=/etc/gonf/router-recovery
+config=$dir/ssh_config
+control=$dir/control
+
+case ${1:-} in
+start)
+    test -f "$dir/enabled" || exit 0
+    if /usr/bin/ssh -F "$config" -S "$control" -O check gateway \
+        >/dev/null 2>&1; then
+        exit 0
+    fi
+    # The fixed remote listener also prevents duplicate successful clients.
+    exec /usr/bin/ssh -F "$config" -fNT -M -S "$control" gateway \
+        >>"$dir/client.log" 2>&1
+    ;;
+stop)
+    if /usr/bin/ssh -F "$config" -S "$control" -O check gateway \
+        >/dev/null 2>&1; then
+        /usr/bin/ssh -F "$config" -S "$control" -O exit gateway
+    fi
+    ;;
+*)
+    print -u2 'usage: router-recovery-tunnel start|stop'
+    exit 2
+    ;;
+esac

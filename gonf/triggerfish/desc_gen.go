@@ -26,6 +26,22 @@ func (Profiles) DescCandidates() string {
 	return "Stages four inactive network, firewall and service configuration bundles"
 }
 
+func (RecoveryTunnel) DescInterrupt() string {
+	return "Stops the owned client while leaving its reconnect job enabled"
+}
+
+func (RecoveryTunnel) DescPrepare() string {
+	return "Installs the private SSH client and its pinned public gateway identity"
+}
+
+func (RecoveryTunnel) DescRetire() string {
+	return "Disables reconnects, stops the owned SSH process and removes its files"
+}
+
+func (RecoveryTunnel) DescStart() string {
+	return "Enables the dedicated reconnect job and starts the outbound tunnel"
+}
+
 func (Rollback) DescActivate() string {
 	return "Applies only the frozen, armed and explicitly reviewed trial"
 }
