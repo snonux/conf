@@ -15,7 +15,10 @@ spec:
     spec:
       containers:
       - name: ipv6test
-        image: registry.lan.buetow.org:30001/ipv6test:1.6.2
+        # Built from ~/git/ipv6test/docker-image (httpd 2.4.70 on Alpine 3.24,
+        # unchanged CGI). Tags are immutable: rebuild under a new tag, never
+        # re-push an existing one.
+        image: registry.lan.buetow.org:30001/ipv6test:1.6.2-runtime20261108
         ports:
         - containerPort: 8080
         securityContext:
