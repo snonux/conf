@@ -1,0 +1,110 @@
+# OpenWrt AP network recovery (task d24)
+
+Prepared source only. This helper has not been installed on OpenWrt and native
+recovery has not been accepted. The user paused live Wi-Fi work on 2026-11-08
+while household TV uses the AP. Do not install, reload, reboot, arm a trial or
+change cabling until the user resumes that work.
+
+The intended final DHCP server is **Triggerfish**, on port2/igc2,
+10.30.0.1/24, with pool 10.30.0.100–239. OpenWrt becomes the bridge/AP at
+10.30.0.2, with its DHCP/RA/DHCPv6 services disabled appropriately. The old
+192.168.1.101 management address stays until its separate retirement gate.
+The general Wi-Fi pool must never start on the current shared home/lab wire.
+OpenWrt's existing DHCP configuration remains active during this preparation.
+
+Read IQ `topics/infra/openbsdrouter-plan/NEXT-SESSION.md`, `RECOVERY.md` and
+`ADDRESS-RECOVERY.md`, and task d24's full annotations before live work.
+Triggerfish changes remain conf/gonf-owned. This directory supplies only the
+currently unmanaged AP's recovery implementation; it is not a cutover command.
+
+## Ownership and recovery protocol
+
+`ap-network-recovery.sh` is intended for
+`/usr/sbin/f3s-ap-network-recovery` (root-owned 0755).
+`f3s_ap_recovery.init` is intended for `/etc/init.d/f3s_ap_recovery`
+(root-owned 0755). Its procd instance owns the watchdog independently of the
+operator's SSH session. Enabling it creates the S18 boot hook, preceding the
+observed AP's S19dnsmasq and S20network hooks. Those native ordering and
+supervision assumptions still need live verification.
+
+The helper requires `/etc/f3s-ap-recovery`, root-owned mode 0700. It owns its
+lock, transaction snapshots and history there. Backups contain private UCI
+configuration; never print or commit them. Only `network`, `dhcp` and `firewall`
+are replaced. Wireless and SSH configuration are outside its write set.
+Do not modify UCI through LuCI or another operator during a pending trial.
+
+The executable offers these operations:
+
+| Operation | Effect |
+| --- | --- |
+| `status` | Reports token, phase, deadline and pending status, or no transaction. |
+| `arm TOKEN SECONDS CANDIDATE` | Requires active watchdog/boot hook and no UCI edits; validates and freezes private before/candidate files, socket baseline and durable pending state. No live configuration replacement. |
+| `activate TOKEN` | Applies the frozen candidate and reloads firewall/network, restarts dnsmasq/odhcpd. Partial failures remain pending. |
+| `confirm TOKEN services-verified` | Requires a fresh established IPv4 SSH socket targeting 10.30.0.2:22, absent from the pre-arm snapshot, matching live candidate bytes and an unexpired trial; clears pending state. |
+| `restore TOKEN` | Restores saved files and reloads services; clears pending only after success. |
+| `tick` | Restores an expired pending trial, including an invalid clock or changed boot identity. Called by watchdog. |
+| `boot` | Restores an unconfirmed previous-boot trial's files before normal networking starts. |
+| `watch` | Runs a tick every two seconds; procd respawns a failed watchdog. |
+
+Tokens are unique 8–64-character strings containing letters, digits, underscores
+or hyphens. Timeouts are integer seconds from 60 to 1800, without leading zeroes.
+The candidate directory must be root-owned mode 0700 and contain regular,
+non-symlink `network`, `dhcp` and `firewall` files. Native UCI validates their
+syntax. LAN must remain static on br-lan and retain 192.168.1.101/24. This is
+only a minimum safety check, not validation of the entire intended policy.
+
+Prepare candidate UCI changes with isolated `uci -c DIR -t SAVEDIR` directories;
+never use global `uci set` to prepare an inactive candidate. Keep wireless
+credentials and radio settings unchanged. The planned staged candidate also
+needs a measured return path for new-address management and appropriate scoped
+DNS/rebind handling; no candidate generator or approved candidate exists here.
+
+`services-verified` is an operator assertion, not an automated service test.
+Before confirmation, establish fresh old and new management sessions and
+actually verify the required DNS, client, controller and device behavior.
+Never substitute an old multiplexed session or a fabricated SSH environment.
+Snapshots persist after confirmation/restoration for evidence. A confirmed
+transaction is not automatically reverted at the next boot.
+
+## Offline verification
+
+Run locally, without contacting the AP:
+
+```sh
+sh -n f3s/device-recovery/openwrt/ap-network-recovery.sh
+sh -n f3s/device-recovery/openwrt/f3s_ap_recovery.init
+shellcheck -s sh f3s/device-recovery/openwrt/ap-network-recovery.sh \
+  f3s/device-recovery/openwrt/f3s_ap_recovery.init
+python3 f3s/device-recovery/openwrt/check-offline.py
+```
+
+The 11 fixtures exercise the production shell with real private files, hashing,
+replacement and locking. They cover expiry, early boot restoration, fresh-socket
+confirmation, deadline rejection, token reuse, frozen candidates, reload failure,
+corrupt snapshots, old-address retention and invalid-clock fallback. UCI,
+procd, sockets and boot/uptime are simulated; passing fixtures do not prove
+native UCI grammar, process supervision, network reachability or a real reboot.
+
+## Native acceptance still required
+
+Once Wi-Fi work is resumed, preserve the private full AP backup and first verify
+no pending UCI edits or conflicting owned paths. Install the helper/init and
+empty private state, enable/start the watchdog without arming a trial, then
+verify its real procd ownership, enabled boot hook, no-transaction status and
+unchanged network/DHCP/firewall/wireless hashes. Record exact receipts and any
+live worker handle; do not relaunch an unknown in-flight operation.
+
+Before applying any network candidate, re-establish an independent controller
+attachment (the earlier Mars11 proof is historical; Earth is now back on the
+original Wi-Fi), check the accepted router recovery tunnel and stage only the
+required scoped management flow through gonf. Prove timed expiry and persistent
+boot restoration on the existing wire, including actual running services and
+fresh SSH, before accepting a staged configuration. A real AP reboot interrupts
+Wi-Fi and must wait for the user's resumption. Owner reapply and confirmed-state
+persistence also require native proof. Task d24 remains incomplete and has not
+had its final independent review.
+
+Physical gates b24/e24 remain explicit human actions. Check the still-unanswered
+AP PoE source before issuing cable instructions. The intended topology is
+ISP→Triggerfish port0, lab switch→port1, OpenWrt→port2 and future cameras→port3.
+A carrier or ping does not satisfy either physical gate.
