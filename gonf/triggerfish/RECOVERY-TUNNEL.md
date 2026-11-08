@@ -84,15 +84,25 @@ the confirmed repatch it goes directly to the ISP router.
 
 ## Retire after final topology acceptance
 
-**k34 completion gate still open:** serialize helper start/stop before relying
-on retirement. The current helper has no interprocess lock; a cron invocation
-that passed the enabled-marker check can race retirement and start a client
-after its control socket has been removed. Do not run retirement until that
-race is fixed and a bounded native cleanup/restart canary has passed.
+The helper uses base Perl's advisory file lock to serialize Start and Stop.
+Start rechecks the enabled marker under that lock; Stop waits for an in-flight
+Start, failing after 60 seconds rather than letting gonf delete credentials
+while startup is still in progress. The daemonized SSH client does not inherit
+the lock. A bounded native cleanup/restart canary is required for acceptance.
+
+Offline regression checks exercise the production helper with real Perl
+processes and advisory locks, rewriting only its paths, SSH transport and
+timeout in a private fixture. The fixture timeout is one second; production
+uses 60 seconds. Actual client/server and cron behavior is checked natively.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 f3s/device-recovery/router-tunnel/check-offline.py -v
+```
 
 Task j24 owns retirement. First run `triggerfish_recovery_retire` through a
 separate accepted management path. It disables the marker and reconnect job,
 stops the client by its owned control socket, then removes only its own files.
+The empty private directory is removed without pruning unexpected contents.
 Next run `frontends_router_recovery_retire` on blowfish to remove the exact
 owned authorized-key line. Verify no listener or reconnect job remains, all
 pre-existing authorized-key bytes and unrelated cron lines are unchanged, and

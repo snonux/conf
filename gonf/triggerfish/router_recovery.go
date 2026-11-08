@@ -49,7 +49,7 @@ func (RecoveryTunnel) Prepare() {
 `, g.Address, g.User, g.SSHPort, d, d, g.ListenPort)), RootPrivate,
 			WithValidation("/usr/bin/ssh", List("-G", "-F", CandidatePath, "gateway")))
 		InstallFile(d+"/run", paths.GonfAsset("triggerfish", "router-recovery-tunnel"), RootExec,
-			WithValidation("/bin/ksh", List("-n", CandidatePath)))
+			WithValidation("/usr/bin/perl", List("-c", CandidatePath)))
 	})
 }
 
@@ -84,6 +84,8 @@ func (RecoveryTunnel) Retire() {
 	const d = routerrecovery.Directory
 	disabled := NoFile(d + "/enabled")
 	cron := NoCron(routerrecovery.CronName, DependsOn(disabled))
-	stop := Sh(d+"/run stop", DependsOn(cron))
-	NoFile(List(d+"/identity", d+"/known_hosts", d+"/ssh_config", d+"/run", d+"/client.log", d+"/control"), DependsOn(stop))
+	stop := Sh(d+"/run stop", OnlyIf("test", List("-x", d+"/run")), DependsOn(cron))
+	files := NoFile(List(d+"/identity", d+"/known_hosts", d+"/ssh_config", d+"/run", d+"/client.log", d+"/control", d+"/lock"), DependsOn(stop))
+	// No prune: unexpected files refuse removal rather than being discarded.
+	NoDir(d, DependsOn(files))
 }
