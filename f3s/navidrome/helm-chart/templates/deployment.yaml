@@ -5,9 +5,10 @@ metadata:
   namespace: services
 spec:
   replicas: 1
-  # SQLite DB on an RWO NFS PVC: only one writer at a time. Use Recreate so the
-  # old pod releases the DB lock before the new pod starts; otherwise the
-  # new pod blocks indefinitely on the SQLite open.
+  # SQLite DB on an RWO NFS PVC, opened with vfs=unix-excl (configmap.yaml):
+  # the running process holds an exclusive lock on navidrome.db. Use Recreate
+  # so the old pod releases that lock before the new pod starts; otherwise the
+  # new pod fails with "database is locked" and restarts until it is free.
   strategy:
     type: Recreate
   selector:
@@ -17,6 +18,9 @@ spec:
     metadata:
       labels:
         app: navidrome
+      annotations:
+        # Restart the pod when the config file (DbPath) changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       initContainers:
       - name: nfs-check
@@ -40,15 +44,48 @@ spec:
         - name: navidrome-data
           mountPath: /data
           readOnly: true
+      # One-time cold backup before 0.64.2 migrates the schema (task 444).
+      # Recreate has already stopped the old pod, so the DB is closed and a
+      # byte copy (plus any leftover WAL) is consistent and loses no writes.
+      # It runs on whatever sync deploys this chart, so pushing the commit
+      # cannot upgrade an unbacked DB. Skipped once the backup exists; rename
+      # or remove it before a later re-upgrade from 0.63.2. Rollback: README.
+      - name: pre-upgrade-backup
+        image: busybox:1.36.1
+        command:
+        - sh
+        - -c
+        - |
+          set -eu
+          cd /data
+          b=navidrome-before-0.64.2.db
+          if [ -e "$b" ]; then
+            echo "pre-upgrade backup $b already present; skipping"
+            exit 0
+          fi
+          rm -f "$b.part" "$b-wal"
+          cp -p navidrome.db "$b.part"
+          cmp navidrome.db "$b.part"
+          if [ -e navidrome.db-wal ]; then
+            cp -p navidrome.db-wal "$b-wal"
+            cmp navidrome.db-wal "$b-wal"
+          fi
+          mv "$b.part" "$b"
+          echo "pre-upgrade backup written and compared: /data/$b"
+        volumeMounts:
+        - name: navidrome-data
+          mountPath: /data
       # No nodeSelector: /data and /music are both on the NFS export that is
       # mounted on every r-node, so the pod can run on r0, r1 or r2. The
       # init container above refuses to start on a node without the mount
       # (.nfs-sentinel in both directories).
       containers:
       - name: navidrome
-        # 0.64.2 still stalls authenticated requests with this NFS SQLite DB.
-        # See README before retrying; rollback also requires the older database.
-        image: deluan/navidrome:0.63.2
+        # 0.64.2 needs the unix-excl DbPath from configmap.yaml on this NFS
+        # DB; with the default DSN it stalls logins (task 444, see README).
+        # Pinned by digest. Rollback to 0.63.2 needs the pre-upgrade database
+        # backup as well, because 0.64 migrates the schema.
+        image: deluan/navidrome:0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52
         # Memory from the 14-day peak working set (67Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:
@@ -74,6 +111,13 @@ spec:
         # The cache is disposable and is rebuilt on demand after a restart.
         - name: ND_CACHEFOLDER
           value: /cache
+        # DbPath lives in the config file: ND_DBPATH is ignored by 0.64.2.
+        - name: ND_CONFIGFILE
+          value: /config/navidrome.toml
+        # Scan inside the server process. The default external scanner is a
+        # second process, which cannot open the exclusively locked DB.
+        - name: ND_DEVEXTERNALSCANNER
+          value: "false"
         startupProbe:
           httpGet:
             path: /ping
@@ -107,6 +151,9 @@ spec:
           mountPath: /music
         - name: navidrome-cache
           mountPath: /cache
+        - name: navidrome-config
+          mountPath: /config
+          readOnly: true
       volumes:
       - name: navidrome-data
         persistentVolumeClaim:
@@ -120,6 +167,9 @@ spec:
       - name: navidrome-music
         persistentVolumeClaim:
           claimName: navidrome-music-pvc
+      - name: navidrome-config
+        configMap:
+          name: navidrome-config
 ---
 apiVersion: v1
 kind: Service

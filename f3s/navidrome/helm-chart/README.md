@@ -1,6 +1,7 @@
 # Navidrome
 
-Subsonic-compatible music server, `deluan/navidrome:0.63.2`, port 4533.
+Subsonic-compatible music server, `deluan/navidrome:0.64.2` (pinned by
+digest), port 4533.
 Namespace `services`, ArgoCD app `navidrome`, runs on any r-node (both
 volumes are NFS hostPath; shared music PVC with
 [beets-art](../../beets-art/helm-chart/README.md)).
@@ -22,7 +23,8 @@ cache kept node-local (the reason it had left NFS: ~19 s image-cache init).
 
 Env in `templates/deployment.yaml`: `ND_SCANSCHEDULE=1h`, `ND_LOGLEVEL=info`,
 `ND_BASEURL=""`, `ND_CACHEFOLDER=/cache`, `ND_ENABLESHARING=false` (preserves
-the pre-0.63 sharing default). Add music by copying into the music dir on the NFS server;
+the pre-0.63 sharing default), `ND_CONFIGFILE=/config/navidrome.toml` and
+`ND_DEVEXTERNALSCANNER=false` (see [SQLite on NFS](#sqlite-on-nfs-unix-excl)). Add music by copying into the music dir on the NFS server;
 the hourly scan finds it. Users are managed in the web UI (first visit creates
 the admin).
 
@@ -33,9 +35,76 @@ just status | logs [lines] | port-forward [4533] | sync | argocd-status | restar
 Clients: play:Sub, substreamer (iOS); DSub, Ultrasonic, substreamer
 (Android); Sublime Music, Sonixd.
 
+## SQLite on NFS (unix-excl)
+
+`templates/configmap.yaml` sets the database DSN in the config file:
+
+```toml
+DbPath = "file:/data/navidrome.db?vfs=unix-excl&_busy_timeout=15000&_journal_mode=WAL&_foreign_keys=on&synchronous=normal"
+```
+
+Why (task 444, 2026-11-08): the r-nodes mount the export over NFSv4.2
+through stunnel (`local_lock=none`). With SQLite's default `unix` VFS every
+transaction locks `navidrome.db` and its mmap'd WAL index
+(`navidrome.db-shm`) through NFS LOCK/LOCKU calls, each flushing and
+invalidating the client cache. A copy of the DB on r1 managed about 50 write
+and 230 point-read transactions per second that way. 0.63.2 fits in that;
+0.64.2's new artwork queue (about 2,800 albums and artists to resolve after
+the upgrade) does not, so logins and album queries timed out. That was the
+regression in the October trials. Threads hung in
+`fcntl -> do_unlk -> nfs_iocounter_wait` on `navidrome.db-shm`.
+
+`vfs=unix-excl` holds one exclusive POSIX lock for the life of the process
+and keeps the WAL index in heap memory (no `-shm` file). The connections in
+the pool keep normal WAL semantics. The same NFS copy then managed about
+12,700 writes/s and 48,000 point reads/s.
+
+Constraints that follow:
+
+- `DbPath` must come from the config file. 0.64.2 has no viper default for
+  `dbpath`, so `ND_DBPATH` is silently ignored. The private-cache retry in
+  October never took effect for that reason.
+- The `file:` prefix is required: go-sqlite3 passes `vfs=` to SQLite only
+  for `file:` URIs. Upstream's default `cache=shared` has no effect without
+  `file:`, so it was never in force here and is left out.
+- No second process can open the DB while Navidrome runs. The scanner runs
+  in-process (`ND_DEVEXTERNALSCANNER=false`, a developer option). The native
+  CLI (`navidrome user|backup|doctor`) works only with the pod stopped.
+  An online `sqlite3` backup from another process fails. Back up from a ZFS
+  snapshot of `zdata/enc/nfsdata` or with the pod stopped.
+- A second pod (rollout overlap, node partition) fails with `database is
+  locked` and restarts until the lock is free; `Recreate` avoids overlap.
+
+Copied-DB fixture on the same NFS export, 0.64.2, this config, chart pod spec:
+startup 4 s (1 min 26 s with the default DSN), login 0.06 s, wrong password
+401, existing song, playlist, star, play queue and the first 64 KiB of the
+stream unchanged, album list 0.27 s, and a 12-minute soak without errors.
+With the default DSN the same copy timed out on login. Evidence:
+`~/.local/state/conf/444-navidrome-20261108/`.
+
+## Upgrade and rollback
+
+0.64 migrates the schema (canonical IDs, artwork tables). The
+`pre-upgrade-backup` init container copies the closed DB to
+`/data/navidrome-before-0.64.2.db` (plus `-wal` if present) and compares the
+copy before the first 0.64.2 start, and skips that step once the file exists.
+0.64 changes song and playlist IDs to canonical ones. Library IDs, users,
+passwords, stars, play counts and play queues are kept.
+
+Rollback to 0.63.2:
+
+1. Disable Argo auto-sync for `navidrome`, scale the Deployment to 0.
+2. In `/data/nfs/k3svolumes/navidrome/data`: move `navidrome.db`, `-wal` and
+   `-shm` aside, copy `navidrome-before-0.64.2.db` to `navidrome.db` (and its
+   `-wal` if present).
+3. Revert the chart commit (image, configmap, env), push, re-enable auto-sync.
+
+Writes made under 0.64.2 (plays, stars, playlists, users) are lost on
+rollback. Never roll back the shared NFS dataset for this.
+
 ## Lyrics
 
-Navidrome 0.63.2 reads existing lyrics from matching sidecar files or embedded
+Navidrome 0.64.2 reads existing lyrics from matching sidecar files or embedded
 metadata. Its default `LyricsPriority` is
 `.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded`; the first available source wins.
 For `Artist/Album/Song.mp3`, place `Song.lrc` or `Song.txt` in that same folder.
@@ -53,8 +122,9 @@ switching the image tag.
 
 The 2026-10-15 trial of 0.64.2 stalled authentication and API requests while
 its new artwork workers contended in SQLite on this deployment. Private-cache and rollback-
-journal trials did not resolve that. This deployment uses 0.63.2, which includes
-the structured lyrics support from 0.63 without the 0.64 artwork changes.
+journal trials did not resolve that (the private-cache DSN was set through the
+ignored `ND_DBPATH`). The deployment then stayed on 0.63.2 until task 444
+found the cause; see [SQLite on NFS](#sqlite-on-nfs-unix-excl).
 The trial database is preserved as
 `/data/navidrome-after-0.64.2-trial-20261015.db` before restoring the pre-upgrade
 backup and migrating it to 0.63.2.
@@ -81,7 +151,5 @@ Subsonic album/song browsing, and an original audio stream (65,536 bytes).
 Invalid credentials and a missing track were rejected. The account was then
 deleted with the native CLI while the server was stopped.
 
-Rechecked upstream on 2026-10-19: 0.64.2 is still the latest stable release.
-There is no newer release to retry for the recorded NFS/SQLite regression;
-the live deployment remains on 0.63.2. This is still an exception to task
-qf3's latest-stable upgrade requirement.
+Rechecked upstream on 2026-10-19 and again on 2026-11-08: 0.64.2 is still the
+latest stable release (digest `sha256:38dc2727...`).

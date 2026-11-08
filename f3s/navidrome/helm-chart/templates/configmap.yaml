@@ -1,0 +1,41 @@
+# Navidrome config file (ND_CONFIGFILE in deployment.yaml).
+#
+# DbPath must be set here, not as ND_DBPATH: Navidrome 0.64.2 registers no
+# viper default for "dbpath", so the environment variable is silently ignored.
+#
+# Why the custom DSN: the SQLite DB lives on the NFS export (NFSv4.2 through
+# stunnel, local_lock=none). With SQLite's default "unix" VFS every
+# transaction takes and drops POSIX locks on navidrome.db and its WAL index
+# (navidrome.db-shm, mmap'd on NFS); each one is an NFS LOCK/LOCKU round trip
+# plus a page-cache flush and invalidation. On r1 that caps SQLite at about
+# 50 write and 230 point-read transactions per second. 0.63.2 fits in that
+# budget; 0.64.2's new artwork queue (~2,800 items after the upgrade) does
+# not, and logins and album queries time out (task 444, 2026-11-08).
+#
+# vfs=unix-excl takes one exclusive POSIX lock on navidrome.db for the life of
+# the process and keeps the WAL index in heap memory (no -shm file). The
+# pooled connections inside the process still get normal WAL semantics
+# (readers alongside one writer, busy_timeout between writers). Same NFS
+# copy: ~12,700 writes/s and ~48,000 point reads/s.
+#
+# Consequences, all intended:
+# - The "file:" prefix is required: go-sqlite3 passes the URI parameters
+#   (vfs=...) to SQLite only for file: URIs. cache=shared is left out on
+#   purpose; upstream's default DSN has no file: prefix, so its cache=shared
+#   never took effect and connections were already private.
+# - No second process can open the DB while Navidrome runs. That is why
+#   ND_DEVEXTERNALSCANNER=false keeps the scanner in-process, and why the
+#   native CLI (user, backup, doctor) only works with the pod stopped.
+#   Back up via ZFS snapshots of the NFS dataset or with the pod stopped.
+# - A second pod cannot share the DB by accident: it fails with "database is
+#   locked" and restarts until the old process has released the lock.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: navidrome-config
+  namespace: services
+  labels:
+    app: navidrome
+data:
+  navidrome.toml: |
+    DbPath = "file:/data/navidrome.db?vfs=unix-excl&_busy_timeout=15000&_journal_mode=WAL&_foreign_keys=on&synchronous=normal"
