@@ -14,8 +14,11 @@ enabled with only the scoped `/f3s.lan.buetow.org/` exception. Radio settings,
 wireless credentials and firewall were preserved. A real DHCP exchange on
 AP br-lan obtained30.102 with the expected gateway/DNS; this is not a Wi-Fi
 radio-client test. The actual laptop Wi-Fi client subsequently passed HTTPS/public/private DNS
-and fresh wg2 router/lab SSH after its reboot. Strict isolation, phone and
-Shelly acceptance remain separate.
+and fresh wg2 router/lab SSH after its reboot. Interface-bound Wi-Fi
+isolation probes matched native pflog blocks on igc2, and pi0/pi1 read-only
+Shelly status passed through igc2. A fresh test DHCPDISCOVER on Wi-Fi got a
+single offer, from 10.30.0.1. No RA or DHCPv6 reply answered a solicit
+(task f24, 2026-11-08). Phone wg2 from Wi-Fi still needs the user to test it.
 
 Router profiles `wifi-prepare` and `wifi-first` preserve lab20/ULA and camera40
 on igc0, recovery98 on igc1, while putting Wi-Fi30 only on igc2. The first
@@ -141,11 +144,11 @@ Wi-Fi and remains a separate explicit recorded trial. Owner reapply and confirme
 `ap-confirmed-reapply-accepted.json` and `ap-confirmed-boot-accepted.json`: exact
 private journal/config hashes, changed boot ID, fresh new-IP root authentication,
 watchdog/S18, gateway/DNS and DHCP/RA-off settings. Task d24 is complete after final independent review round1/2 found no
-blocking issues. Remaining Wi-Fi isolation/phone/Shelly acceptance belongs to
-downstream task f24.
+blocking issues. Downstream task f24 has every software acceptance item
+verified. It still needs the user's phone wg2 test from Wi-Fi and a final review.
 
 Physical gates b24/e24 require explicit human confirmation. The user confirmed
-only the AP move for e24; b24 remains unfulfilled. The AP uses an inline PoE
+only the AP move, which closed e24; b24 remains unfulfilled. The AP uses an inline PoE
 injector without switching; retain its power and AP-facing lead. The intended topology is
 ISP→Triggerfish port0, lab switch→port1, OpenWrt→port2 and future cameras→port3.
 A carrier or ping does not satisfy either physical gate.
