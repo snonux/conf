@@ -1,6 +1,12 @@
-all:
-	docker build -t anki-sync-server:26.09.3 --build-arg ANKI_VERSION=26.09.3 .
-f3s:	
-	docker build -t anki-sync-server:26.09.3 --build-arg ANKI_VERSION=26.09.3 .
-	docker tag anki-sync-server:26.09.3 r0.lan.buetow.org:30001/anki-sync-server:26.09.3
-	docker push r0.lan.buetow.org:30001/anki-sync-server:26.09.3
+VERSION := "26.09.4"
+IMAGE := "r0.lan.buetow.org:30001/anki-sync-server:" + VERSION
+
+build:
+    podman build --format docker -t {{IMAGE}} --build-arg ANKI_VERSION={{VERSION}} .
+
+push:
+    podman push --tls-verify=false {{IMAGE}}
+
+all: build
+
+f3s: build push

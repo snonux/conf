@@ -3,11 +3,11 @@ APP_NAME := "anki-sync-server"
 
 # Build Docker image
 build:
-    just -f docker-image-Justfile build
+    just -f docker-image/Justfile build
 
 # Push image to registry
 push:
-    just -f docker-image-Justfile push
+    just -f docker-image/Justfile push
 
 # Build and push
 build-push: build push

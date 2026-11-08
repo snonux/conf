@@ -16,6 +16,8 @@ spec:
     namespace: services
   syncPolicy:
     automated:
+      # Keep manual until the matching 26.09.4 chart is published.
+      enabled: false
       prune: true
       selfHeal: true
     syncOptions:

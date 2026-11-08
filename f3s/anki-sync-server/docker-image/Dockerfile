@@ -1,6 +1,7 @@
 FROM rust:1.99.1-alpine3.24 AS builder
 
 ARG ANKI_VERSION
+ARG CARGO_BUILD_JOBS=2
 
 RUN apk update && apk add --no-cache build-base protobuf && rm -rf /var/cache/apk/*
 
@@ -10,7 +11,7 @@ RUN cargo install --git https://github.com/ankitects/anki.git \
 --locked \
 anki-sync-server
 
-FROM alpine:3.24.2
+FROM alpine:3.24.4
 
 # Default PUID and PGID values (can be overridden at runtime). Use these to
 # ensure the files on the volume have the permissions you need.
