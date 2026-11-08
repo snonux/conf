@@ -140,8 +140,9 @@ passed in `ap-boot-accepted.json`. A real AP reboot interrupts
 Wi-Fi and remains a separate explicit recorded trial. Owner reapply and confirmed-state actual boot persistence also passed in
 `ap-confirmed-reapply-accepted.json` and `ap-confirmed-boot-accepted.json`: exact
 private journal/config hashes, changed boot ID, fresh new-IP root authentication,
-watchdog/S18, gateway/DNS and DHCP/RA-off settings. Task d24 remains incomplete and has not
-had its final independent review.
+watchdog/S18, gateway/DNS and DHCP/RA-off settings. Task d24 is complete after final independent review round1/2 found no
+blocking issues. Remaining Wi-Fi isolation/phone/Shelly acceptance belongs to
+downstream task f24.
 
 Physical gates b24/e24 require explicit human confirmation. The user confirmed
 only the AP move for e24; b24 remains unfulfilled. The AP uses an inline PoE
