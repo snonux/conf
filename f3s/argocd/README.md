@@ -22,13 +22,17 @@ OutOfSync. Backups and the previous chart are stored privately under
 `~/.local/state/conf/j34-app-upgrades-20261107/`; the previous Helm revision is
 21. No source push was performed.
 
-Redis is explicitly overridden to `8.10.2-alpine` in `values.yaml`; chart
-10.10.5 otherwise ships 8.6.4. Verified on 2026-10-19: runtime 8.10.2,
-authenticated PING and write/read/delete pass, missing and incorrect passwords
-are rejected, ArgoCD API health/version pass, and a hard application refresh
-reconciles the current Git revision. Only the Redis pod template changed.
-Redis is an ephemeral cache (`--save "" --appendonly no`, no PVC); rollback is
-to `8.6.4-alpine` followed by the same Helm upgrade. ArgoCD rebuilds the cache.
+Redis is explicitly overridden to `8.10.3-alpine` in `values.yaml`.
+Verified 2026-11-08: Helm revision 23 is deployed; only the Redis Deployment
+spec changed. Runtime version, authenticated PING, a unique SET/GET/DEL
+roundtrip and rejection of missing/incorrect credentials passed. Existing
+Secret data and Application/Project specs were preserved (motionEye's
+separate manual sync hold was the only concurrent Application spec change).
+The chart's ECR image and official Docker image have the same immutable
+config ID; the chart's exact reference is cached and CRI-verified on all
+three nodes. Redis is an ephemeral cache (`--save "" --appendonly no`, no
+PVC). Rollback is Helm revision 22, retaining the current credentials;
+ArgoCD rebuilds its cache.
 
 Files: `values.yaml`, `persistent-volumes.yaml` (10Gi hostPath PV for the
 repo-server), `ingress.yaml`. The Application manifests live in

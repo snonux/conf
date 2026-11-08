@@ -12,8 +12,8 @@ redis-ha:
 redis:
   enabled: true
   image:
-    # The current ArgoCD chart still defaults to Redis 8.6.4.
-    tag: 8.10.2-alpine
+    # Pin the stable Redis patch independently of the ArgoCD chart default.
+    tag: 8.10.3-alpine
   # Memory from the 14-day peak working set (36Mi), limit well above it
   # (audit 2026-09-25 #19).
   resources:
