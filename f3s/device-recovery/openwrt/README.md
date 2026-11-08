@@ -3,8 +3,12 @@
 Installed on the AP on 2026-11-08 with **no transaction armed**. Native
 checks accepted exact installed source hashes, a root watchdog owned by procd,
 stable polling, the enabled S18 hook and unchanged network/DHCP/firewall/wireless
-hashes. Actual timed restoration, boot restoration and a network candidate have
-not yet been accepted. Private receipt:
+hashes. Native live timed restoration is now accepted: the new alias and exact f0
+return route worked, a fresh new-IP authenticated SSH succeeded, originating
+connections closed, then the independent watchdog restored all files and running
+LAN/DHCP state and a fresh old-IP login passed. Boot restoration and explicit
+confirmation/persistence remain unaccepted. The alias candidate is prepared but
+currently restored/inactive. Private receipt:
 `~/.local/state/conf/d24-ap-preparation-20261108/watchdog-installed-native-verified.json`.
 The user explicitly resumed Triggerfish migration after the household TV pause;
 physical cable gates and independent-controller requirements still apply.
@@ -70,7 +74,7 @@ adds `ap_migration` (10.30.0.2/24 on `@lan`) and `ap_migration_admin`
 Run it on the AP with a new private path under
 `/etc/f3s-ap-recovery/candidates/NAME`; it refuses pending transactions, existing
 owned sections and reused directories. Native UCI validation passed for
-`stage-20261108`; nothing is active yet. A final cutover candidate is separate.
+`stage-20261108`; its live expiry trial passed and it is now restored/inactive. A final cutover candidate is separate.
 
 `services-verified` is an operator assertion, not an automated service test.
 Before confirmation, establish fresh old and new management sessions and
@@ -113,9 +117,9 @@ live worker handle; do not relaunch an unknown in-flight operation.
 Before applying any network candidate, re-establish an independent controller
 attachment (Earth returned to Mars11 after the user resumed migration; check
 its current attachment and establish a fresh independent router session), check the accepted router recovery tunnel and stage only the
-required scoped management flow through gonf. Prove timed expiry and persistent
-boot restoration on the existing wire, including actual running services and
-fresh SSH, before accepting a staged configuration. A real AP reboot interrupts
+required scoped management flow through gonf. Timed expiry on the existing wire passed (private `ap-expiry-accepted.json`).
+Prove persistent boot restoration, including actual running services and fresh
+SSH, before confirming a staged configuration. A real AP reboot interrupts
 Wi-Fi and remains a separate explicit recorded trial. Owner reapply and confirmed-state
 persistence also require native proof. Task d24 remains incomplete and has not
 had its final independent review.
