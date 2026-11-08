@@ -1,8 +1,8 @@
-FROM alpine:3.24.2
+FROM alpine:3.24.4
 RUN adduser -D -u 1000 radicale \
     && apk add --no-cache python3 py3-pip \
     && python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir radicale==3.8.3 bcrypt \
+    && /opt/venv/bin/pip install --no-cache-dir radicale==3.9.0 bcrypt \
     && mkdir /auth /collections /etc/radicale \
     && chown radicale /auth /collections
 COPY config /etc/radicale/config

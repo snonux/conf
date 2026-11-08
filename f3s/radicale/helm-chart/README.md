@@ -19,10 +19,28 @@ helm install radicale . --namespace services --create-namespace
 
 ## Image
 
-Radicale 3.8.3 is built from `../docker-image` (Alpine 3.24.2, UID 1000).
+Radicale 3.9.0 is built from `../docker-image` (Alpine 3.24.4, UID 1000).
 The image contains configuration only; the existing PVC supplies `/auth/htpasswd`.
 
 ```sh
-podman build -t r0.lan.buetow.org:30001/radicale:3.8.3 ../docker-image
-podman push --tls-verify=false r0.lan.buetow.org:30001/radicale:3.8.3
+podman build -t r0.lan.buetow.org:30001/radicale:3.9.0 ../docker-image
+podman push --tls-verify=false r0.lan.buetow.org:30001/radicale:3.9.0
 ```
+
+## Verified upgrade, 2026-11-08
+
+The tested local image, published registry image and running CRI config ID
+match. A quiesced auth/collections archive was downloaded and SHA-256 checked
+before startup (`~/.local/state/conf/j34-app-upgrades-20261107/`). All 669
+existing content objects retain their hashes.
+
+A unique temporary DAV account verified MKCALENDAR, PUT/GET, PROPFIND,
+a time-range REPORT and deletion. Anonymous and wrong-password requests were
+rejected. Its account, event, calendar and owned user directory were removed;
+the original authentication file bytes were restored. Existing credentials
+and calendars were not reset.
+
+Automatic sync is held in the live and local Application until this matching
+chart is published. Do not reconcile from the old remote source. Restore the
+previous image and selected backup directories with the writer stopped if
+rollback is needed; never roll back the shared NFS dataset for one app.
