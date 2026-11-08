@@ -16,7 +16,7 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: postgres:18.6-bookworm
+          image: docker.io/library/postgres:18.6-bookworm@sha256:f1ea2a1a4fb7b68d4836be1fdcb8a6466a89b072158bf9d97663600538c294c5
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -112,7 +112,7 @@ spec:
               readOnly: true
       containers:
         - name: miniflux-postgres
-          image: postgres:18.6-bookworm
+          image: docker.io/library/postgres:18.6-bookworm@sha256:f1ea2a1a4fb7b68d4836be1fdcb8a6466a89b072158bf9d97663600538c294c5
           # Memory from the 14-day peak working set (90Mi), limit well above
           # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
           resources:
