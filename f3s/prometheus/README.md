@@ -15,6 +15,15 @@ policies, Service specs, storage and disabled components were preserved.
 The old Helm release record is stale; manage this stack through its ArgoCD
 Application.
 
+The chart source uses ArgoCD's native OCI support at
+`oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack`, with
+`path: .` and tag `93.1.0`. The publisher's OCI archive was verified
+byte-for-byte against the HTTP chart (SHA-256
+`9d727ffda3995720dd66a46c94ee6f18eecf1c8fe560ec47824f9335b05145d2`).
+This replaced intermittent HTTP 504s from GitHub's chart release-asset URL.
+ArgoCD compared the OCI manifest digest successfully, without restarting
+monitoring pods; no repository credential is needed for this public source.
+
 Before the upgrade, private resource/CRD backups and an r0 etcd snapshot
 were saved, and f0's atomic filesystem snapshot
 `zdata/enc/nfsdata@j34-before-prometheus-93-20261108` was held with tag

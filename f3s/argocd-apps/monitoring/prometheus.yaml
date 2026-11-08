@@ -9,9 +9,9 @@ spec:
   project: default
 
   sources:
-    # Source 1: Upstream Helm chart from prometheus-community
-    - repoURL: https://prometheus-community.github.io/helm-charts
-      chart: kube-prometheus-stack
+    # Source 1: Official OCI chart; avoids GitHub release-asset HTTP 504s.
+    - repoURL: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
+      path: .
       targetRevision: 93.1.0
       helm:
         releaseName: prometheus
