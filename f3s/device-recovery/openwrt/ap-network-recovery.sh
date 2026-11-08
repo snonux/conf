@@ -19,6 +19,15 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 now() {
     awk 'NR==1 && $1 ~ /^[0-9]+([.][0-9]+)?$/ { print int($1); valid=1; exit } END { if (!valid) exit 1 }' "$uptime_file"
 }
+private_directory() {
+    test -d "$1" && test ! -L "$1" || return 1
+    # This AP has no stat command/applet. Read only ls's metadata fields;
+    # ignore filenames and subsequent lines, including embedded newlines.
+    # shellcheck disable=SC2012
+    LC_ALL=C ls -ldn "$1" | awk '
+        NR == 1 { valid = ($1 == "drwx------" && $3 == "0") }
+        END { exit !valid }'
+}
 phase() { printf '%s\n' "$1" > "$current/phase.tmp"; mv "$current/phase.tmp" "$current/phase"; }
 pending() { test -f "$current/pending"; }
 validate_token() {
@@ -73,7 +82,7 @@ esac
 
 test "$(id -u)" = 0 || fail 'root required'
 test -d "$state" && test ! -L "$state" || fail 'private state directory required'
-test "$(stat -c '%u:%a' "$state")" = 0:700 || fail 'unsafe state directory'
+private_directory "$state" || fail 'unsafe state directory'
 exec 9>>"$state/lock"
 flock -x 9
 
@@ -90,7 +99,7 @@ arm)
     "$service" running || fail 'independent watchdog required'
     test -z "$(uci changes)" || fail 'uncommitted UCI changes exist'
     test -d "$4" && test ! -L "$4" || fail 'candidate directory required'
-    test "$(stat -c '%u:%a' "$4")" = 0:700 || fail 'unsafe candidate directory'
+    private_directory "$4" || fail 'unsafe candidate directory'
     boot=$(cat "$boot_id")
     test -n "$boot" || fail 'stable boot identity unavailable'
     started=$(now) || fail 'monotonic clock unavailable'

@@ -24,8 +24,13 @@ name = Path(sys.argv[0]).name
 args = sys.argv[1:]
 if name == "id":
     print(0)
-elif name == "stat":
-    print("0:" + oct(Path(args[-1]).stat().st_mode & 0o777)[2:])
+elif name == "ls":
+    import stat
+    path = Path(args[-1])
+    mode = stat.filemode(path.stat().st_mode)
+    owner_file = base / (path.name + "-owner")
+    owner = owner_file.read_text().strip() if owner_file.exists() else "0"
+    print(mode + " 1 " + owner + " 0 0 Jan 1 2026 " + str(path))
 elif name == "netstat":
     print((base / "sockets").read_text(), end="")
 elif name == "uci":
@@ -82,7 +87,7 @@ class Recovery(unittest.TestCase):
         io = self.root / "bin/io"
         io.write_text(IO)
         io.chmod(0o700)
-        for name in ["uci", "stat", "id", "netstat"]:
+        for name in ["uci", "ls", "id", "netstat"]:
             (self.root / "bin" / name).symlink_to(io)
         service = self.root / "init/f3s_ap_recovery"
         service.write_text("#!/bin/sh\ntest \"$1\" = running\n")
@@ -136,6 +141,23 @@ class Recovery(unittest.TestCase):
 
     def pending(self):
         return (self.root / "state/current/pending").exists()
+
+    def test_private_directory_metadata_is_required(self):
+        candidate = self.root / "candidate"
+        candidate.chmod(0o755)
+        self.run_guard("arm", "trial-token1", "60", candidate, ok=False)
+        candidate.chmod(0o700)
+        (self.root / "candidate-owner").write_text("123")
+        self.run_guard("arm", "trial-token1", "60", candidate, ok=False)
+        (self.root / "candidate-owner").unlink()
+        self.arm()
+
+    def test_filename_cannot_forge_private_directory_metadata(self):
+        candidate = self.root / "candidate"
+        forged = self.root / "candidate\ndrwx------ 1 0 0 0 Jan 1 2026 forged"
+        candidate.rename(forged)
+        forged.chmod(0o755)
+        self.run_guard("arm", "trial-token1", "60", forged, ok=False)
 
     def test_expiry_restores_files_and_services(self):
         self.activate()

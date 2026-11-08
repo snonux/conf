@@ -1,9 +1,13 @@
 # OpenWrt AP network recovery (task d24)
 
-Prepared source only. This helper has not been installed on OpenWrt and native
-recovery has not been accepted. The user paused live Wi-Fi work on 2026-11-08
-while household TV uses the AP. Do not install, reload, reboot, arm a trial or
-change cabling until the user resumes that work.
+Installed on the AP on 2026-11-08 with **no transaction armed**. Native
+checks accepted exact installed source hashes, a root watchdog owned by procd,
+stable polling, the enabled S18 hook and unchanged network/DHCP/firewall/wireless
+hashes. Actual timed restoration, boot restoration and a network candidate have
+not yet been accepted. Private receipt:
+`~/.local/state/conf/d24-ap-preparation-20261108/watchdog-installed-native-verified.json`.
+The user explicitly resumed Triggerfish migration after the household TV pause;
+physical cable gates and independent-controller requirements still apply.
 
 The intended final DHCP server is **Triggerfish**, on port2/igc2,
 10.30.0.1/24, with pool 10.30.0.100–239. OpenWrt becomes the bridge/AP at
@@ -24,10 +28,13 @@ currently unmanaged AP's recovery implementation; it is not a cutover command.
 `f3s_ap_recovery.init` is intended for `/etc/init.d/f3s_ap_recovery`
 (root-owned 0755). Its procd instance owns the watchdog independently of the
 operator's SSH session. Enabling it creates the S18 boot hook, preceding the
-observed AP's S19dnsmasq and S20network hooks. Those native ordering and
-supervision assumptions still need live verification.
+observed AP's S19dnsmasq and S20network hooks. Native supervision and the enabled hook are verified; execution through an
+actual AP reboot still needs acceptance.
 
-The helper requires `/etc/f3s-ap-recovery`, root-owned mode 0700. It owns its
+The helper requires `/etc/f3s-ap-recovery`, root-owned mode 0700.
+The native AP has no `stat` command or BusyBox stat applet; the helper checks
+the first numeric `ls -ldn` metadata row for owner0 and mode0700, ignoring
+filenames and later lines. Native preflight confirmed that output format. It owns its
 lock, transaction snapshots and history there. Backups contain private UCI
 configuration; never print or commit them. Only `network`, `dhcp` and `firewall`
 are replaced. Wireless and SSH configuration are outside its write set.
@@ -78,29 +85,32 @@ shellcheck -s sh f3s/device-recovery/openwrt/ap-network-recovery.sh \
 python3 f3s/device-recovery/openwrt/check-offline.py
 ```
 
-The 11 fixtures exercise the production shell with real private files, hashing,
+The 13 fixtures exercise the production shell with real private files, hashing,
 replacement and locking. They cover expiry, early boot restoration, fresh-socket
 confirmation, deadline rejection, token reuse, frozen candidates, reload failure,
-corrupt snapshots, old-address retention and invalid-clock fallback. UCI,
+corrupt snapshots, old-address retention, invalid-clock fallback, private
+directory ownership/modes and filenames containing forged metadata lines. UCI,
 procd, sockets and boot/uptime are simulated; passing fixtures do not prove
 native UCI grammar, process supervision, network reachability or a real reboot.
 
 ## Native acceptance still required
 
-Once Wi-Fi work is resumed, preserve the private full AP backup and first verify
+For a later owner reapply, preserve the private full AP backup and first verify
 no pending UCI edits or conflicting owned paths. Install the helper/init and
 empty private state, enable/start the watchdog without arming a trial, then
 verify its real procd ownership, enabled boot hook, no-transaction status and
-unchanged network/DHCP/firewall/wireless hashes. Record exact receipts and any
+unchanged network/DHCP/firewall/wireless hashes. Initial installation passed
+these checks. Do not erase an existing transaction to reapply. Record exact
+receipts and any
 live worker handle; do not relaunch an unknown in-flight operation.
 
 Before applying any network candidate, re-establish an independent controller
-attachment (the earlier Mars11 proof is historical; Earth is now back on the
-original Wi-Fi), check the accepted router recovery tunnel and stage only the
+attachment (Earth returned to Mars11 after the user resumed migration; check
+its current attachment and establish a fresh independent router session), check the accepted router recovery tunnel and stage only the
 required scoped management flow through gonf. Prove timed expiry and persistent
 boot restoration on the existing wire, including actual running services and
 fresh SSH, before accepting a staged configuration. A real AP reboot interrupts
-Wi-Fi and must wait for the user's resumption. Owner reapply and confirmed-state
+Wi-Fi and remains a separate explicit recorded trial. Owner reapply and confirmed-state
 persistence also require native proof. Task d24 remains incomplete and has not
 had its final independent review.
 
