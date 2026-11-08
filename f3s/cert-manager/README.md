@@ -7,7 +7,7 @@ Full LAN path: [`../docs/lan-access-setup-guide.md`](../docs/lan-access-setup-gu
 
 | File | Content |
 |---|---|
-| `cert-manager.yaml` | upstream cert-manager v1.21.2, unmodified (see its header for the upgrade path) |
+| `cert-manager.yaml` | upstream cert-manager v1.21.3, with a provenance header (see below for the upgrade path) |
 | `kustomization.yaml` | how ArgoCD renders the directory: lists every manifest and patches memory requests/limits into the three Deployments (`just upgrade` applies it with `kubectl apply -k .`; `just install` bootstraps with the plain files and ArgoCD adds the patches); it also marks the CRDs `Prune=false,Delete=false` for ArgoCD |
 | `self-signed-issuer.yaml` | self-signed ClusterIssuer |
 | `ca-certificate.yaml` | CA `selfsigned-ca` (secret `selfsigned-ca-secret`), issuer `selfsigned-ca-issuer` |
@@ -30,7 +30,7 @@ just uninstall
 
 Follow <https://cert-manager.io/docs/releases/upgrading/>: one minor version
 at a time, latest patch of each, and check the Kubernetes range in the
-supported-releases table (1.21 needs k8s >= 1.33; the cluster runs 1.32).
+supported-releases table (1.21 supports Kubernetes 1.33–1.36; the cluster runs 1.36.5).
 With static manifests the CRDs ship inside `cert-manager.yaml`, so there is
 no Helm `installCRDs`/`crds.enabled` handling to worry about.
 
@@ -52,6 +52,24 @@ Things the 1.14 -> 1.20 upgrade changed for this setup:
   (trusted by clients) survives renewal; the leaves set `Always` explicitly.
 - 1.18: `revisionHistoryLimit` defaults to 1, so only the latest
   CertificateRequest per Certificate is kept.
+
+## Verified upgrade, 2026-11-08
+
+Version 1.21.3 is deployed. The upstream release asset SHA-256 was verified,
+Kustomize rendering and a server dry run passed, and the three deployments
+run the staged immutable image IDs. All four existing Certificates and both
+ClusterIssuers are Ready; their CA and TLS Secret bytes are unchanged. A
+throwaway certificate was issued by `selfsigned-ca-issuer`, verified with
+OpenSSL against the existing CA and requested hostname, and removed with
+its owned namespace.
+
+Private resource, CRD and Secret backups precede the upgrade. The original
+1.21.2 source remains available in Git for rollback; retain the current
+Secrets when restoring it. Automatic sync is explicitly disabled in the
+live Application and its local manifest because publishing is on hold.
+The expected OutOfSync state must not be reconciled from the old remote
+source. After publishing these matching manifests, sync the Application
+and restore its original `prune: true, selfHeal: true` policy.
 
 ## One certificate per namespace
 
