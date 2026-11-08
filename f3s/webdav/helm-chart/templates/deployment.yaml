@@ -35,7 +35,7 @@ spec:
           mountPath: /mnt
           readOnly: true
       - name: setup
-        image: httpd:2.4.69
+        image: docker.io/library/httpd:2.4.69@sha256:f6a86043744215e4be90cf8804375d90022a711d892c9aa2d7085c089ee2cb54
         command:
         - /bin/bash
         - -c
@@ -57,7 +57,7 @@ spec:
           mountPath: /lock-dir
       containers:
       - name: webdav
-        image: httpd:2.4.69
+        image: docker.io/library/httpd:2.4.69@sha256:f6a86043744215e4be90cf8804375d90022a711d892c9aa2d7085c089ee2cb54
         # Memory from the 14-day peak working set (15Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:
