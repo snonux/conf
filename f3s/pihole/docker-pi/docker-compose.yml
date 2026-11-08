@@ -4,7 +4,7 @@
 # here deliberately and deploy one Pi at a time (see f3s/pihole/README.md).
 services:
   pihole:
-    image: pihole/pihole:2026.10.0
+    image: pihole/pihole:2026.10.1
     container_name: pihole
     network_mode: host
     environment:

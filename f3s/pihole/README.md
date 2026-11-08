@@ -8,8 +8,16 @@ DNS and ad blocking. Production runs on pi2 (192.168.1.127) and pi3
 ## On the Pis
 
 Docker Compose in `~/pihole` on each Pi. The desired image is
-`pihole/pihole:2026.10.0`. Both Pis run that version as of 2026-10-25.
-Pi3 was upgraded after the approved logind repair restored prompt SSH/sudo;
+`pihole/pihole:2026.10.1` (task 344, 2026-11-08). This refreshes the ARM64
+runtime to Alpine 3.24.3 while retaining Core 6.5 / Web 6.6.1 / FTL 6.8.
+Each Pi retains a verified stopped backup at
+`/var/backups/344-pihole-20261108/pihole-before.tgz` (root-private), with
+verified copies on Earth under `~/.local/state/conf/344-pihole-20261108/`.
+Full parsed Pi-hole configuration, credentials, upstreams and dnsmasq files
+are compared against those backups. The ordinary recipe must be applied
+while the old container is running, as described below.
+
+Historical October maintenance: Pi3 was upgraded after the approved logind repair restored prompt SSH/sudo;
 no rack power cycle or reboot was needed. See the
 [recovery record](pi3-recovery-plan.md) for scope, rollback and verification.
 The pre-upgrade pi2 state archive is root-readable at
@@ -21,7 +29,9 @@ file, `.env`, and both state directories; restore the old state as well as
 the old image if rolling back. The archive listing was checked before deployment.
 
 For an upgrade, change the tracked image pin, pre-pull it, and back up the
-stopped service state before applying only `pihole_compose` to one Pi. Verify
+stopped service state. Restart the unchanged old container and wait for it to
+be healthy before applying only `pihole_compose` to one Pi: the dnsmasq
+validator executes inside that container. Keep the other resolver healthy. Verify
 DNS, UI and the native authenticated API before touching the other resolver.
 Restore both the stopped state and old image if rollback is required. The containers use
 `network_mode: host` and `TZ=Europe/Sofia`.
