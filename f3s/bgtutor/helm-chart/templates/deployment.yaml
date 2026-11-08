@@ -37,7 +37,7 @@ spec:
           readOnly: true
       # Fail before serving if uploaded citizenship assets are incomplete.
       - name: validate-citizenship
-        image: registry.lan.buetow.org:30001/bgtutor:0.30.0
+        image: registry.lan.buetow.org:30001/bgtutor:0.30.0-runtime20261108
         command: ["/usr/local/bin/bgtutor", "validate"]
         args: ["--mode", "citizenship", "--data-dir", "/data"]
         volumeMounts:
@@ -46,7 +46,7 @@ spec:
           readOnly: true
       containers:
       - name: bgtutor
-        image: registry.lan.buetow.org:30001/bgtutor:0.30.0
+        image: registry.lan.buetow.org:30001/bgtutor:0.30.0-runtime20261108
         imagePullPolicy: Always
         # The image entrypoint is "bgtutor serve"; BGTUTOR_DATA_DIR and
         # BGTUTOR_ADDR are set here explicitly so the chart documents them.

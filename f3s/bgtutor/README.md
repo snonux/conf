@@ -14,7 +14,7 @@ available by starting a separate server with `BGTUTOR_MODE=podcast`.
 ## Runtime
 
 - Namespace `services`, Deployment `bgtutor`, Service `bgtutor-service`.
-- Image `registry.lan.buetow.org:30001/bgtutor:0.30.0`.
+- Image `registry.lan.buetow.org:30001/bgtutor:0.30.0-runtime20261108` (app0.30.0, Go1.27.3, pinned Debian13 distroless CA/runtime).
 - Secret `bgtutor-secret`, key `BGTUTOR_TOKEN`; retain it when updating.
 - NFS volume `/data/nfs/k3svolumes/bgtutor/data`, mounted at `/data`.
 - Prepared content is in `citizenship-test/`; personal files are
@@ -52,19 +52,28 @@ with the folder. Content is reloaded on requests, so content-only updates need
 no restart. Uploading without `--delete` also retains existing files: remove
 retired prepared files explicitly when needed.
 
+Use a fresh immutable tag for runtime-only rebuilds too; appVersion stays the
+application release and the chart version increments. BGTUTOR_TAG can override
+the build helper tag. Never overwrite a deployed tag.
+
 For a new release, change the image tag in `docker-image/Justfile`, both images
 in `helm-chart/templates/deployment.yaml`, and `helm-chart/Chart.yaml` together.
 Validate with `helm lint`, `helm template` and a Kubernetes server dry run.
 Commit only the workload files and push conf master to Forgejo; ArgoCD deploys
 it automatically. See `HANDOVER.md` for verification and rollback.
 
+The image defaults to nonroot, but the current production chart explicitly
+runs UID0 for its existing NFS personal-data permissions. This runtime rebuild
+preserves that baseline; task c44 owns the separate verified permission/UID
+migration. Do not describe production as nonroot until that task is accepted.
+
 ## Verify
 
 ```sh
-kubectl --context=wg0 -n cicd annotate application bgtutor argocd.argoproj.io/refresh=hard --overwrite
-kubectl --context=wg0 -n services rollout status deployment/bgtutor --timeout=120s
-kubectl --context=wg0 -n services logs -l app=bgtutor -c validate-citizenship
-export BGTUTOR_TOKEN="$(kubectl --context=wg0 -n services get secret bgtutor-secret -o jsonpath='{.data.BGTUTOR_TOKEN}' | base64 -d)"
+kubectl -n cicd annotate application bgtutor argocd.argoproj.io/refresh=hard --overwrite
+kubectl -n services rollout status deployment/bgtutor --timeout=120s
+kubectl -n services logs -l app=bgtutor -c validate-citizenship
+export BGTUTOR_TOKEN="$(kubectl -n services get secret bgtutor-secret -o jsonpath='{.data.BGTUTOR_TOKEN}' | base64 -d)"
 python3 smoke-test-citizenship.py https://bgtutor-mcp.f3s.buetow.org --write
 unset BGTUTOR_TOKEN
 ```
@@ -78,3 +87,19 @@ vocabulary item. It does not record fake mastery or mock scores. The older
 Refresh the connector's discovered tools after updating from podcast mode.
 Keep the existing token; ask the connected AI to start Bulgarian citizenship
 preparation. The server's initialization instructions direct its live teaching.
+
+## Runtime refresh acceptance — 2026-11-08 (task944)
+
+Image0.30.0-runtime20261108 is a runtime-only rebuild of release0.30.0 using
+pinned Go1.27.3 and Debian13 distroless nonroot bases. Both the server and
+validate-citizenship init container use the same image. The Go race-test target
+includes only the two checked-in sample JSON fixtures; personal libraries and
+credentials remain excluded by .dockerignore. Do not overwrite the original
+0.30.0 release tag or this immutable runtime tag.
+
+Native backups and verification receipts are private under
+~/.local/state/conf/944-bgtutor-20261108/. Recovery snapshot on storage master:
+zdata/enc/nfsdata@944-before-bgtutor-runtime-20261108, hold944-bgtutor-runtime.
+Never roll back shared NFS; stop this writer and restore only its selected
+files/tree, preserving later learner changes. The current runtime-only rollback
+is the original0.30.0 image in citizenship mode; no schema change was made.

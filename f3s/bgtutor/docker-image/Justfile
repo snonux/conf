@@ -1,12 +1,13 @@
 ENGINE := env_var_or_default("CONTAINER_ENGINE", "podman")
 REGISTRY := env_var_or_default("BGTUTOR_REGISTRY", "r0.lan.buetow.org:30001")
 IMAGE := "bgtutor"
-TAG := "0.30.0"
+TAG := env_var_or_default("BGTUTOR_TAG", "0.30.0-runtime20261108")
 # Standalone source checkout; override BGTUTOR_SRC when it lives elsewhere.
 SRC := env_var_or_default("BGTUTOR_SRC", "/home/paul/git/bgtutor-mcp")
 
 build:
-    {{ENGINE}} build -f {{SRC}}/Dockerfile -t {{IMAGE}}:{{TAG}} {{SRC}}
+    {{ENGINE}} build --target test -f {{SRC}}/Dockerfile {{SRC}}
+    {{ENGINE}} build --target runtime -f {{SRC}}/Dockerfile -t {{IMAGE}}:{{TAG}} {{SRC}}
 
 push:
     {{ENGINE}} tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
