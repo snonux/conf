@@ -5,7 +5,8 @@ Photo/video backup, `https://immich.f3s.buetow.org` (LAN ingress in
 sources: `f3s/immich/helm-chart` (PVs/PVCs, PostgreSQL with pgvector,
 Traefik middleware, LAN ingress) and upstream chart `immich` 0.12.0
 (release `immich`: server, machine learning, Valkey). Server and machine
-learning images are pinned to `v3.3.3` in the ArgoCD application.
+learning images are pinned to `v3.3.6` in the ArgoCD application. Valkey is
+`9.1.3-alpine`, pinned by digest.
 
 | Volume | Size | hostPath |
 |---|---|---|
@@ -50,7 +51,32 @@ kubectl rollout restart deployment -l app.kubernetes.io/instance=immich -n servi
 kubectl rollout restart deployment/immich-postgres -n services
 ```
 
-## Last upgrade verification (2026-10-17)
+## Patch verification (2026-11-08)
+
+Updated server and ML to [v3.3.6](https://github.com/immich-app/immich/releases/tag/v3.3.6)
+and Valkey to [9.1.3](https://github.com/valkey-io/valkey/releases/tag/9.1.3).
+The chart remains 0.12.0. PostgreSQL remains 18.6 with VectorChord 1.1.1
+and pgvector 0.8.5. All three new images were cached and checked through CRI
+on r0-r2 before rollout. Helm rendering and server-side dry run passed.
+
+Verified runtime versions, authenticated APIs, ML-backed smart search, original
+photo/video bytes and thumbnails, and a unique PNG upload/download/thumbnail
+round trip. The owned test image and its queued face-detection job were removed.
+Invalid API credentials were rejected. Library totals remained 79,170 photos,
+5,805 videos and 139,274,748,846 bytes; queue pause states, paused backlogs and
+failure counts were preserved. Valkey PING, owned SET/GET/DEL and saved-RDB
+validation passed. Automatic sync was restored to its original policy;
+ArgoCD reports Synced/Healthy.
+
+The server and ML were stopped for coherent database/queue backups. The private
+directory `~/.local/state/conf/j34-app-upgrades-20261107/` contains
+`immich-before-v3.3.6.dump` (311,603,739 bytes),
+`immich-valkey-before-9.1.3.rdb` (16,162,760 bytes), their verified hashes and
+archive checks in `immich-backups-ready.json`, plus the previous Application
+and Deployment objects. Restore only with writers stopped and after accounting
+for changes since the backup. No source push was performed.
+
+## Upgrade verification (2026-10-17)
 
 Upgraded the server and machine-learning images from v3.0.3 to v3.3.3.
 Helm rendering and Kubernetes server-side validation passed. Both deployments
