@@ -84,9 +84,9 @@ stub upstream and local nginx, using the production config and pinned image;
 it does not contact the cluster. The chart archive includes its dependencies.
 
 ```sh
-helm pull https://github.com/prometheus-community/helm-charts/releases/download/kube-prometheus-stack-92.10.1/kube-prometheus-stack-92.10.1.tgz --destination /tmp
-podman pull docker.io/library/nginx:1.30.6-alpine@sha256:c59d1f8b1e0e42da75be973424cd72e23f7f8adfb54e982f4d1cd0216a5a5576
-HELM_CHART=/tmp/kube-prometheus-stack-92.10.1.tgz python3 -m unittest discover -s f3s/prometheus/tests -v
+helm pull oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack --version 93.1.0 --destination /tmp
+podman pull docker.io/library/nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311
+HELM_CHART=/tmp/kube-prometheus-stack-93.1.0.tgz python3 -m unittest discover -s f3s/prometheus/tests -v
 just --justfile f3s/prometheus/Justfile --dry-run firing-alerts
 ```
 

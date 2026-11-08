@@ -1,7 +1,7 @@
 """Offline render checks and real local nginx negative-route checks.
 
 Requires PyYAML, Helm, Podman and the pinned nginx image already pulled.
-HELM_CHART must point to the kube-prometheus-stack 92.10.1 chart archive.
+HELM_CHART must point to the kube-prometheus-stack 93.1.0 chart archive.
 Never contacts Kubernetes or the production Prometheus API.
 """
 

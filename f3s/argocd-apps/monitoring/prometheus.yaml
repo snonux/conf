@@ -292,6 +292,8 @@ spec:
 
   syncPolicy:
     automated:
+      # Keep held until the matching read-proxy source is published.
+      enabled: false
       prune: true
       selfHeal: true
     syncOptions:
