@@ -1,5 +1,5 @@
 apiVersion: v2
 name: wallabag
 description: A Helm chart for deploying Wallabag.
-version: 0.1.0
-appVersion: "2.6.14"
+version: 0.1.1
+appVersion: "2.6.15"
