@@ -1,13 +1,22 @@
-REGISTRY := "r0.lan.buetow.org:30001"
+ENGINE := env_var_or_default("CONTAINER_ENGINE", "podman")
+REGISTRY := env_var_or_default("GOPRECORDS_REGISTRY", "r0.lan.buetow.org:30001")
 IMAGE := "goprecords"
-TAG := "0.6.2"
-SRC := "/home/paul/git/goprecords"
+# Immutable tag: <app version>-runtime<build date>. Set GOPRECORDS_TAG to a NEW
+# tag for every rebuild (base, toolchain or app); never re-push a deployed tag.
+TAG := env_var_or_default("GOPRECORDS_TAG", "0.6.2-runtime20261108")
+# Standalone source checkout; its Dockerfile pins the Go and Alpine bases.
+SRC := env_var_or_default("GOPRECORDS_SRC", "/home/paul/git/goprecords")
 
+# The test stage (vet, unit and fixture tests) must pass before the runtime
+# image is tagged.
 build:
-	docker build -t {{IMAGE}}:{{TAG}} {{SRC}}
+	{{ENGINE}} build --target test -f {{SRC}}/Dockerfile {{SRC}}
+	{{ENGINE}} build --target runtime -f {{SRC}}/Dockerfile -t {{IMAGE}}:{{TAG}} \
+		--label org.opencontainers.image.version={{TAG}} \
+		--label org.opencontainers.image.source=https://github.com/snonux/goprecords {{SRC}}
 
 push:
-	docker tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
-	docker push {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+	{{ENGINE}} tag {{IMAGE}}:{{TAG}} {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+	{{ENGINE}} push --tls-verify=false {{REGISTRY}}/{{IMAGE}}:{{TAG}}
 
 all: build push
