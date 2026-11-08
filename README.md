@@ -285,6 +285,27 @@ print secret values.
 Most app directories have the same `Justfile`: `status`, `logs`,
 `port-forward`, `sync` (ArgoCD refresh), `argocd-status`, `restart`.
 
+## Triggerfish (LAN OpenBSD)
+
+`./gonf.sh cluster triggerfish triggerfish` manages `paul@triggerfish.lan.buetow.org`
+on SSH port 22 with doas: validated passwordless wheel configuration, the persistent/running hostname
+`triggerfish.lan.buetow.org` and its local hosts mapping, the
+official uptimed package (including uprecords), unlimited record retention,
+and hourly goprecords uploads at minute 19. The required token lives in the
+ignored `gonf/secrets/frontends/etc/goprecords/triggerfish.token` file.
+Gonf push builds and installs its OpenBSD runtime automatically; no custom
+package repository is needed. `/etc/installurl` remains the official mirror.
+
+The legacy `triggerfish_network` task is operational-only and refuses to
+replace the active router owner. Current migration profiles and rollback are
+managed through `gonf/triggerfish`: Wi-Fi `10.30.0.1/24` and DHCP are on
+igc2; the AP is `10.30.0.2` with DHCP disabled. Lab `10.20.0.1/24` and its
+ULA remain on igc0, while igc1 carries the temporary recovery subnet
+`10.98.0.0/24`. The AP data cable has moved to port2; ISP/lab-switch isolation
+and the normal lab-prefix transfer remain pending. Consult IQ's
+`topics/infra/openbsdrouter-plan/NEXT-SESSION.md` for current acceptance,
+physical gates and the next migration profile; do not replay legacy setup.
+
 ## Workstation system configuration
 
 Root-owned recipes previously in dotfiles now live in `gonf/workstation`.

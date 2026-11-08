@@ -110,3 +110,8 @@ secrets: deleting them needs separate, explicit approval.
 
 Never put secret values in task names, inventory values, plan fixtures, logs
 or commits.
+
+Triggerfish uses the required file-backed secret
+`frontends/etc/goprecords/triggerfish.token` (0600, ignored by git), issued
+for the `triggerfish` API identity. The `triggerfish_upload` task refuses to
+record without it.
