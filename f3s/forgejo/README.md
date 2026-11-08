@@ -10,18 +10,26 @@ Internet -> relayd (OpenBSD, TLS) -> WireGuard -> Traefik -> svc forgejo:80 -> p
 git+ssh  -> relayd :2022 (TCP) ----> NodePort 30222 -------------------------> pod:2222
 ```
 
-- Image `codeberg.org/forgejo/forgejo:16.0.6-rootless`: UID/GID 1000, all
+- Image `codeberg.org/forgejo/forgejo:17.0.1-rootless`: UID/GID 1000, all
   capabilities dropped.
 - SQLite, one writer (`replicas: 1`, strategy `Recreate`). The DB sits on
   the NFS data volume, so WAL is off: `SQLITE_JOURNAL_MODE=DELETE`, 60 s busy
   timeout. If `locking protocol` errors come back, move the DB to local block
   storage or PostgreSQL.
-- Volumes: `/var/lib/gitea` (repos, DB) and `/etc/gitea` (`app.ini`), both
+- Volumes: `/var/lib/gitea` (repos, DB, active config and SSH keys) and
+  retained `/etc/gitea` mount, both
   guarded by `.nfs-sentinel` (see
   [`../docs/nfs-sentinel-initcontainer.md`](../docs/nfs-sentinel-initcontainer.md)).
 - Installer locked (`INSTALL_LOCK=true`), registration disabled.
 
-Forgejo 17.0.0 is held back: [its release warning](https://codeberg.org/forgejo/forgejo/releases/tag/v17.0.0) advises against upgrading because Git operations can fail. The deployed 16.0.6 is the patched previous stable line.
+17.0.0 was held because of upstream Git regressions. Version 17.0.1 includes
+the follow-up Git fixes and is deployed (verified 2026-11-08). The old hold
+must not be interpreted as a reason to deploy 17.0.0.
+
+The active configuration is `/var/lib/gitea/custom/conf/app.ini`
+(`data/custom/conf/app.ini` on NFS), not the retained `/etc/gitea` mount.
+SSH host keys live under `data/ssh`. The old and new rootless images use the
+same paths; no configuration was moved during the upgrade.
 
 ## First install
 
@@ -87,10 +95,26 @@ just sync            # ArgoCD refresh
 
 ## Backup and restore
 
-ZFS snapshots and zrepl replication of `/data/nfs` (`zdata/enc/nfsdata`)
-cover repos, DB and `app.ini`. Restore: roll back the snapshot, restart the
-deployment. `app.ini` holds `SECRET_KEY` and `INTERNAL_TOKEN`; restore data
-and config together or sessions and stored credentials break.
+Before the 17.0.1 migration, the writer was stopped and f0's snapshot
+`zdata/enc/nfsdata@j34-before-forgejo17-20261108` was held with tag
+`j34-forgejo-upgrade`, covering the complete Forgejo tree. A private archive
+of the active configuration, database and SSH keys was downloaded and
+SHA-256 checked under `~/.local/state/conf/j34-app-upgrades-20261107/`.
+
+For rollback, stop writes and preserve any post-upgrade changes first.
+Restore only the selected Forgejo tree from the snapshot with the previous
+16.0.6 image; a binary-only downgrade cannot undo a database migration.
+Never roll back the shared NFS dataset for one application. Keep data,
+configuration and keys consistent when restoring.
+
+After migration: all 96 repositories and their Git refs, selected database
+row counts, configuration secrets and SSH host keys are unchanged. SQLite
+quick_check is clean and journaling remains DELETE. The exact image config
+ID, CLI/API health/version, anonymous Git HEAD through ArgoCD's repo-server,
+and authenticated Git HEAD from the existing Rocky SSH identity all passed.
+A fresh ArgoCD Git comparison also passed. No Git push was performed.
+Automatic sync is held in the live and local Application until the matching
+17.0.1 chart is published; do not reconcile from the old remote source.
 
 The retired cgit git-server's data at `/data/nfs/k3svolumes/git-server` and
 its final ZFS snapshot are still on disk; delete only with explicit
