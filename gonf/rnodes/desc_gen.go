@@ -46,6 +46,14 @@ func (K3s) DescCoreDNSPrepare() string {
 	return "Retains the bundled DNS resources while suppressing their manifest"
 }
 
+func (K3s) DescMetricsServer() string {
+	return "Deploys the pinned metrics AddOn with unchanged TLS and permissions"
+}
+
+func (K3s) DescMetricsServerPrepare() string {
+	return "Retains metrics resources while suppressing the bundled deployment"
+}
+
 func (K3s) DescRegistries() string {
 	return "Installs /etc/rancher/k3s/registries.yaml (registry.lan.buetow.org:30001 -> http://localhost:30001); no k3s restart"
 }

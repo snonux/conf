@@ -43,3 +43,25 @@ do not uninstall DNS or restore application data. If deliberately returning
 ownership to the bundle later, plan that as a separate coordinated change.
 Task z34 native backups: `/root/z34-coredns-20261108/` on each node; Earth
 receipts: `~/.local/state/conf/z34-coredns-20261108/`.
+
+## Metrics-server
+
+`rnodes_k3s_metrics_server_prepare` stages the nested
+`metrics-server/metrics-server-deployment.yaml.skip` on every server.
+Then `rnodes_k3s_metrics_server` installs identical
+`conf-metrics-server.yaml` user AddOns. Only the packaged ServiceAccount and
+Deployment move to this AddOn; the other six packaged files keep their
+original RBAC, Service and APIService ownership.
+
+The k3s 1.37.2 copy changes only the pinned v0.9.1 image and
+maxUnavailable=0. Preserve its UID 1000, kubelet certificate checks, arguments
+and aggregation configuration. Do not add an insecure TLS option to get a
+rollout working. Verify fresh metrics for all three nodes, pod metrics,
+APIService availability and unauthenticated API rejection after rollout and a
+startup canary. No HPA was deployed at task 044 acceptance.
+
+Rollback the image in the managed AddOn through gonf on all servers; retain
+the skip markers while this AddOn owns the deployment. Review the source
+copy against future k3s bundles. Native backups:
+`/root/044-metrics-20261108/`; Earth receipts:
+`~/.local/state/conf/044-metrics-20261108/`.

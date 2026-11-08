@@ -123,6 +123,32 @@ func (K3s) CoreDNS() {
 		paths.RNodeAsset(k3sAssetsPath+"conf-coredns.yaml"), RootPrivate)
 }
 
+// MetricsServerPrepare retains metrics resources while suppressing the bundled deployment.
+//
+// MetricsServerPrepare skips only the deployment manifest; the remaining
+// packaged RBAC, Service and APIService stay managed by k3s. Stage all servers
+// before activating the identical managed replacement manifest.
+func (K3s) MetricsServerPrepare() {
+	EnsureDir(k3sManifests+"/metrics-server", RootPrivate)
+	File(k3sManifests+"/metrics-server/metrics-server-deployment.yaml.skip",
+		WithContent("# Deployment is managed by conf-metrics-server.yaml.\n"), RootPrivate)
+}
+
+func (K3s) OptsMetricsServer() TaskOptions {
+	return TaskOptions{Needs(K3s.MetricsServerPrepare)}
+}
+
+// MetricsServer deploys the pinned metrics AddOn with unchanged TLS and permissions.
+//
+// MetricsServer changes the image and retains the old replica until the new
+// one is Ready. It preserves the package's arguments, nonroot user, kubelet
+// certificate validation and API aggregation resources.
+func (K3s) MetricsServer() {
+	EnsureDir(k3sManifests, RootPrivate)
+	InstallFile(k3sManifests+"/conf-metrics-server.yaml",
+		paths.RNodeAsset(k3sAssetsPath+"conf-metrics-server.yaml"), RootPrivate)
+}
+
 // VersionMonitor installs an hourly read-only release-channel check and textfile metrics.
 func (K3s) VersionMonitor() {
 	python := Package("python3")
