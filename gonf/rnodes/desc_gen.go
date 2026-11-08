@@ -38,6 +38,14 @@ func (K3s) DescConfig() string {
 	return "Renders /etc/rancher/k3s/config.yaml (etcd metrics, event-ttl, controller-manager bind, wg0 node-ip/advertise-address); no k3s restart"
 }
 
+func (K3s) DescCoreDNS() string {
+	return "Deploys the managed DNS AddOn with its pinned image and original DNS settings"
+}
+
+func (K3s) DescCoreDNSPrepare() string {
+	return "Retains the bundled DNS resources while suppressing their manifest"
+}
+
 func (K3s) DescRegistries() string {
 	return "Installs /etc/rancher/k3s/registries.yaml (registry.lan.buetow.org:30001 -> http://localhost:30001); no k3s restart"
 }

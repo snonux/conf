@@ -46,6 +46,7 @@ const (
 	k3sConfig       = k3sConfigDir + "/config.yaml"
 	k3sRegistries   = k3sConfigDir + "/registries.yaml"
 	k3sAssetsPath   = "k3s/"
+	k3sManifests    = "/var/lib/rancher/k3s/server/manifests"
 	k3sVersionCheck = "/usr/bin/timeout -k 5s 30s /usr/local/sbin/k3s-version-metrics"
 )
 
@@ -95,6 +96,31 @@ func (K3s) ServiceLBImage() {
 		paths.RNodeAsset(k3sAssetsPath+"servicelb-cloud-config.json"), RootPrivate)
 	InstallFile(k3sConfigDir+"/config.yaml.d/60-servicelb.yaml",
 		paths.RNodeAsset(k3sAssetsPath+"60-servicelb.yaml"), RootPrivate)
+}
+
+// CoreDNSPrepare retains the bundled DNS resources while suppressing their manifest.
+//
+// CoreDNSPrepare uses k3s's supported .skip mechanism, which does not uninstall
+// existing resources. Stage this on every server before deploying CoreDNS.
+func (K3s) CoreDNSPrepare() {
+	EnsureDir(k3sManifests, RootPrivate)
+	File(k3sManifests+"/coredns.yaml.skip",
+		WithContent("# CoreDNS is managed by conf-coredns.yaml.\n"), RootPrivate)
+}
+
+func (K3s) OptsCoreDNS() TaskOptions {
+	return TaskOptions{Needs(K3s.CoreDNSPrepare)}
+}
+
+// CoreDNS deploys the managed DNS AddOn with its pinned image and original DNS settings.
+//
+// CoreDNS leaves k3s in charge of applying the AddOn and updating NodeHosts.
+// The tracked manifest preserves the bundle's resources; maxUnavailable=0
+// keeps the single old DNS replica until its replacement is ready.
+func (K3s) CoreDNS() {
+	EnsureDir(k3sManifests, RootPrivate)
+	InstallFile(k3sManifests+"/conf-coredns.yaml",
+		paths.RNodeAsset(k3sAssetsPath+"conf-coredns.yaml"), RootPrivate)
 }
 
 // VersionMonitor installs an hourly read-only release-channel check and textfile metrics.
