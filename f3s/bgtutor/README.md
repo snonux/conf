@@ -14,7 +14,7 @@ available by starting a separate server with `BGTUTOR_MODE=podcast`.
 ## Runtime
 
 - Namespace `services`, Deployment `bgtutor`, Service `bgtutor-service`.
-- Image `registry.lan.buetow.org:30001/bgtutor:0.30.0-runtime20261108` (app0.30.0, Go1.27.3, pinned Debian13 distroless CA/runtime).
+- Image `registry.lan.buetow.org:30001/bgtutor:0.30.0-runtime20261108-sdk141` (app0.30.0, Go1.27.3, pinned Debian13 distroless CA/runtime).
 - Secret `bgtutor-secret`, key `BGTUTOR_TOKEN`; retain it when updating.
 - NFS volume `/data/nfs/k3svolumes/bgtutor/data`, mounted at `/data`.
 - Prepared content is in `citizenship-test/`; personal files are
@@ -90,8 +90,9 @@ preparation. The server's initialization instructions direct its live teaching.
 
 ## Runtime refresh acceptance — 2026-11-08 (task944)
 
-Image0.30.0-runtime20261108 is a runtime-only rebuild of release0.30.0 using
-pinned Go1.27.3 and Debian13 distroless nonroot bases. Both the server and
+Image0.30.0-runtime20261108-sdk141 is a maintenance rebuild of release0.30.0 using
+pinned Go1.27.3 and Debian13 distroless nonroot bases, plus the merged
+MCP SDK1.4.1 security fixes. Both the server and
 validate-citizenship init container use the same image. The Go race-test target
 includes only the two checked-in sample JSON fixtures; personal libraries and
 credentials remain excluded by .dockerignore. Do not overwrite the original
@@ -99,7 +100,21 @@ credentials remain excluded by .dockerignore. Do not overwrite the original
 
 Native backups and verification receipts are private under
 ~/.local/state/conf/944-bgtutor-20261108/. Recovery snapshot on storage master:
-zdata/enc/nfsdata@944-before-bgtutor-runtime-20261108, hold944-bgtutor-runtime.
+zdata/enc/nfsdata@944-before-bgtutor-sdk141-20261108, hold944-bgtutor-sdk141.
+The earlier first-candidate snapshot/hold944-bgtutor-runtime is retained too.
 Never roll back shared NFS; stop this writer and restore only its selected
 files/tree, preserving later learner changes. The current runtime-only rollback
-is the original0.30.0 image in citizenship mode; no schema change was made.
+is the previous accepted0.30.0 runtime image in citizenship mode, with no
+schema change. That older candidate lacks the MCP SDK1.4.1 security fixes;
+any emergency downgrade must account for that regression.
+
+Verify the SDK transport protections read-only, with the existing token in the
+environment (never a command argument or log):
+
+```sh
+python3 test-mcp-transport-security.py https://bgtutor-mcp.f3s.buetow.org
+```
+
+Same-origin discovery must work; untrusted origin and wrong content type must
+return403 and415 respectively. The normal citizenship smoke still verifies
+all tools/content and authentication. These checks do not record fake progress.

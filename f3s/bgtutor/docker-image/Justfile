@@ -1,7 +1,7 @@
 ENGINE := env_var_or_default("CONTAINER_ENGINE", "podman")
 REGISTRY := env_var_or_default("BGTUTOR_REGISTRY", "r0.lan.buetow.org:30001")
 IMAGE := "bgtutor"
-TAG := env_var_or_default("BGTUTOR_TAG", "0.30.0-runtime20261108")
+TAG := env_var_or_default("BGTUTOR_TAG", "0.30.0-runtime20261108-sdk141")
 # Standalone source checkout; override BGTUTOR_SRC when it lives elsewhere.
 SRC := env_var_or_default("BGTUTOR_SRC", "/home/paul/git/bgtutor-mcp")
 
