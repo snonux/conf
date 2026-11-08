@@ -1,5 +1,5 @@
 apiVersion: v2
 name: syncthing
 description: A Helm chart for deploying Syncthing.
-version: 0.1.0
-appVersion: "v2.1.6-ls232"
+version: 0.1.1
+appVersion: "v2.1.7-ls236"

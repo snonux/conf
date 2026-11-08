@@ -36,3 +36,18 @@ ignore list's `device: Galaxy Tab S10 FE` keeps the tablet out. Deployed by
 after `mage buildOpenBSD` in `tools/check_syncthing`; the API key comes from
 `gonf/secrets/frontends/etc/check_syncthing/api.key` (untracked; copy of
 `<apikey>` in the config PV's `config.xml`).
+
+## Verified upgrade, 2026-11-08
+
+Syncthing v2.1.7 (LinuxServer v2.1.7-ls236) is deployed. The running immutable
+image config ID and authenticated REST version were verified. The same two
+peers reconnected; all 12 folders settled idle. Device identity, folder/device
+configuration, GUI credentials and API key are preserved, as are global/local
+file and byte totals. The known tablet backlog remains four files / 20,226,448
+bytes, with its existing four pull errors; it was not reset or hidden.
+
+A quiesced config/index archive was downloaded and SHA-256 verified before
+startup, under `~/.local/state/conf/j34-app-upgrades-20261107/`. Stop the writer
+before restoring it with the previous image; preserve current synced data.
+Automatic sync is held in the live and local Application until this matching
+chart is published. Do not sync from the old remote source in the meantime.
