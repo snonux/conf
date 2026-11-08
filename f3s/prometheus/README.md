@@ -1,11 +1,26 @@
 # Prometheus stack
 
-kube-prometheus-stack 92.10.1, release `prometheus`, namespace `monitoring`,
+kube-prometheus-stack 93.1.0, release `prometheus`, namespace `monitoring`,
 deployed by ArgoCD from `argocd-apps/monitoring/prometheus.yaml`. That
 Application has two sources: the upstream chart with inline
 `valuesObject`, and `f3s/prometheus/manifests/` (rules, dashboards,
 scrape-config secret, Prometheus PV, NodePort). ArgoCD applies only
 `manifests/`; the YAML files at this directory's top level aren't synced.
+
+Verified 2026-11-08: Prometheus 3.16.0, Alertmanager 0.34.2 and operator /
+config-reloader 0.95.1. All 43 scrape targets remain UP with the same job
+coverage. The 92 → 93 upgrade applied the ten monitoring CRDs first;
+ArgoCD then reconciled the chart and admission hooks. Existing network
+policies, Service specs, storage and disabled components were preserved.
+The old Helm release record is stale; manage this stack through its ArgoCD
+Application.
+
+Before the upgrade, private resource/CRD backups and an r0 etcd snapshot
+were saved, and f0's atomic filesystem snapshot
+`zdata/enc/nfsdata@j34-before-prometheus-93-20261108` was held with tag
+`j34-prometheus-upgrade`. It is crash-consistent, not a quiesced TSDB
+backup. Recovery must restore only the affected application's directories
+with its writers stopped; never roll back the shared NFS dataset.
 
 Current values worth knowing:
 
