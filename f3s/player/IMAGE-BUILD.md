@@ -8,8 +8,8 @@ Registry manifest:sha256:b45891f1552397e2c5f8f41f8cc212e79c505c7b92157d25800d38b
 The adjacent Dockerfile refreshes the upstream release's builder/runtime to
 pinned Go1.26 Alpine and Alpine3.24.4 bases. Build context is that exact
 release's player-server directory, with its .dockerignore; never the monorepo
-or a live media directory. The accepted build used --cpu-period100000,
---cpu-quota200000, --memory8g, labels org.opencontainers.image.version=0.18.0
+or a live media directory. The accepted build used `--cpu-period=100000`,
+`--cpu-quota=200000`, `--memory=8g`, labels org.opencontainers.image.version=0.18.0
 and org.opencontainers.image.revision=<full source SHA>. The Dockerfile limits
 Go compilation to2processes. Existing tags/latest were not overwritten; verify
 absence before publishing a NEW immutable tag when building again.
