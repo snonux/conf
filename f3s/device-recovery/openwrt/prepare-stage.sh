@@ -6,7 +6,12 @@ set -f
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 
-test "$#" -eq 1 || exit 1
+case $# in 1|2) ;; *) exit 1 ;; esac
+private_dns=no
+if test "$#" -eq 2; then
+    test "$2" = --private-dns
+    private_dns=yes
+fi
 candidate=$1
 case $candidate in
     /etc/f3s-ap-recovery/candidates/*) ;;
@@ -56,8 +61,24 @@ test "$(candidate_uci get network.lan.ipaddr)" = 192.168.1.101
 test "$(candidate_uci get network.lan.device)" = br-lan
 test "$(candidate_uci get network.ap_migration.device)" = @lan
 test "$(candidate_uci get network.ap_migration.ipaddr)" = 10.30.0.2/24
-cmp /etc/config/dhcp "$candidate/dhcp"
+if test "$private_dns" = yes; then
+    test "$(candidate_uci get dhcp.@dnsmasq[0].rebind_protection)" = 1
+    # Only this private DNS suffix bypasses the existing rebind protection.
+    # Refuse a pre-existing identical exception rather than duplicate it.
+    if candidate_uci -q get dhcp.@dnsmasq[0].rebind_domain 2>/dev/null |
+        grep -Fq /f3s.lan.buetow.org/; then exit 1; fi
+    uci export dhcp > "$candidate/dhcp-before-export"
+    candidate_uci add_list 'dhcp.@dnsmasq[0].rebind_domain=/f3s.lan.buetow.org/'
+    candidate_uci commit dhcp
+    candidate_uci export dhcp > "$candidate/dhcp-after-export"
+    sed "\|^[[:space:]]*list rebind_domain '/f3s[.]lan[.]buetow[.]org/'$|d" \
+        "$candidate/dhcp-after-export" > "$candidate/dhcp-without-new-exception"
+    cmp "$candidate/dhcp-before-export" "$candidate/dhcp-without-new-exception"
+    test "$(candidate_uci get dhcp.@dnsmasq[0].rebind_protection)" = 1
+else
+    cmp /etc/config/dhcp "$candidate/dhcp"
+fi
 cmp /etc/config/firewall "$candidate/firewall"
 test -z "$(uci changes)"
 (cd "$candidate" && sha256sum network dhcp firewall > manifest)
-printf '%s\n' 'Inactive alias and exact f0 return route prepared; DHCP/firewall unchanged.'
+printf 'Inactive alias/f0 route prepared; private DNS exception=%s; DHCP pools/firewall unchanged.\n' "$private_dns"

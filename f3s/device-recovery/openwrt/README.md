@@ -1,24 +1,33 @@
 # OpenWrt AP network recovery (task d24)
 
-Installed on the AP on 2026-11-08 with **no transaction armed**. Native
-checks accepted exact installed source hashes, a root watchdog owned by procd,
-stable polling, the enabled S18 hook and unchanged network/DHCP/firewall/wireless
-hashes. Native live timed restoration is now accepted: the new alias and exact f0
-return route worked, a fresh new-IP authenticated SSH succeeded, originating
-connections closed, then the independent watchdog restored all files and running
-LAN/DHCP state and a fresh old-IP login passed. Boot restoration and explicit
-confirmation/persistence remain unaccepted. The alias candidate is prepared but
-currently restored/inactive. Private receipt:
-`~/.local/state/conf/d24-ap-preparation-20261108/watchdog-installed-native-verified.json`.
-The user explicitly resumed Triggerfish migration after the household TV pause;
-physical cable gates and independent-controller requirements still apply.
+Native acceptance on 2026-11-08 includes independent timed restoration,
+actual unconfirmed reboot restoration, fresh new-IP confirmation, and final
+cutover with OpenWrt DHCP/RA/DHCPv6 disabled. The user explicitly moved only
+the AP data feed to Triggerfish socket3/port2/igc2; the separate ISP/lab cable
+move has not happened. AP power comes from an inline PoE injector, whose power
+and AP-facing cable remain in place.
 
-The intended final DHCP server is **Triggerfish**, on port2/igc2,
-10.30.0.1/24, with pool 10.30.0.100–239. OpenWrt becomes the bridge/AP at
-10.30.0.2, with its DHCP/RA/DHCPv6 services disabled appropriately. The old
-192.168.1.101 management address stays until its separate retirement gate.
-The general Wi-Fi pool must never start on the current shared home/lab wire.
-OpenWrt's existing DHCP configuration remains active during this preparation.
+Triggerfish now serves DHCP on igc2 only, gateway/DNS10.30.0.1 and pool
+10.30.0.100–239. OpenWrt bridges Wi-Fi at10.30.0.2/24 with retained
+192.168.1.101/24, gateway/DNS10.30.0.1. Global DNS rebind protection remains
+enabled with only the scoped `/f3s.lan.buetow.org/` exception. Radio settings,
+wireless credentials and firewall were preserved. A real DHCP exchange on
+AP br-lan obtained30.102 with the expected gateway/DNS; this is not a Wi-Fi
+radio-client test. The actual laptop Wi-Fi client subsequently passed HTTPS/public/private DNS
+and fresh wg2 router/lab SSH after its reboot. Strict isolation, phone and
+Shelly acceptance remain separate.
+
+Router profiles `wifi-prepare` and `wifi-first` preserve lab20/ULA and camera40
+on igc0, recovery98 on igc1, while putting Wi-Fi30 only on igc2. The first
+keeps router DHCP off while AP DHCP is still active; only after AP cutover is
+confirmed may `wifi-first` start DHCP on igc2. Both use the native gonf rollback
+controller. Do not use the older `post-rack` profile for the future lab move
+without preserving Wi-Fi on igc2.
+
+Private receipts live under
+`~/.local/state/conf/d24-ap-preparation-20261108/`, including
+`ap-expiry-accepted.json`, `ap-boot-accepted.json`, `ap-cutover-accepted.json`,
+`wifi-first-accepted.json` and `wifi-dhcp-exchange-verified.json`.
 
 Read IQ `topics/infra/openbsdrouter-plan/NEXT-SESSION.md`, `RECOVERY.md` and
 `ADDRESS-RECOVERY.md`, and task d24's full annotations before live work.
@@ -32,8 +41,8 @@ currently unmanaged AP's recovery implementation; it is not a cutover command.
 `f3s_ap_recovery.init` is intended for `/etc/init.d/f3s_ap_recovery`
 (root-owned 0755). Its procd instance owns the watchdog independently of the
 operator's SSH session. Enabling it creates the S18 boot hook, preceding the
-observed AP's S19dnsmasq and S20network hooks. Native supervision and the enabled hook are verified; execution through an
-actual AP reboot still needs acceptance.
+observed AP's S19dnsmasq and S20network hooks. Native supervision, the enabled hook and restoration through an actual
+unconfirmed AP reboot are verified.
 
 The helper requires `/etc/f3s-ap-recovery`, root-owned mode 0700.
 The native AP has no `stat` command or BusyBox stat applet; the helper checks
@@ -70,11 +79,19 @@ credentials and radio settings unchanged. The planned staged candidate also
 needs a measured return path for new-address management and appropriate scoped
 DNS/rebind handling; `prepare-stage.sh` now prepares only the inactive first-stage candidate. It
 adds `ap_migration` (10.30.0.2/24 on `@lan`) and `ap_migration_admin`
-(f0 10.20.0.130/32 via30.1), preserving main LAN and byte-identical DHCP/firewall.
+(f0 10.20.0.130/32 via30.1), preserving main LAN and byte-identical DHCP/firewall by default. Optional
+`--private-dns` adds only the scoped rebind exception and checks the semantic
+DHCP diff; the DHCP pools and options remain unchanged.
 Run it on the AP with a new private path under
 `/etc/f3s-ap-recovery/candidates/NAME`; it refuses pending transactions, existing
 owned sections and reused directories. Native UCI validation passed for
-`stage-20261108`; its live expiry trial passed and it is now restored/inactive. A final cutover candidate is separate.
+`stage-20261108`; its live expiry and boot restoration trials passed.
+`prepare-cutover.sh` separately prepares the final inactive candidate from
+the confirmed alias stage: primary30.2, old1.101 retained, gateway/DNS30.1,
+DHCP/RA/DHCPv6 disabled and obsolete temporary alias/route removed. It refuses
+reused paths or unexpected baseline settings. Prepare this only when the
+router Wi-Fi gateway is confirmed on igc2 and its DHCP is still disabled;
+activate and confirm through the AP guard before enabling router DHCP.
 
 `services-verified` is an operator assertion, not an automated service test.
 Before confirmation, establish fresh old and new management sessions and
@@ -118,13 +135,16 @@ Before applying any network candidate, re-establish an independent controller
 attachment (Earth returned to Mars11 after the user resumed migration; check
 its current attachment and establish a fresh independent router session), check the accepted router recovery tunnel and stage only the
 required scoped management flow through gonf. Timed expiry on the existing wire passed (private `ap-expiry-accepted.json`).
-Prove persistent boot restoration, including actual running services and fresh
-SSH, before confirming a staged configuration. A real AP reboot interrupts
-Wi-Fi and remains a separate explicit recorded trial. Owner reapply and confirmed-state
-persistence also require native proof. Task d24 remains incomplete and has not
+Persistent boot restoration, actual running services and fresh old-IP SSH
+passed in `ap-boot-accepted.json`. A real AP reboot interrupts
+Wi-Fi and remains a separate explicit recorded trial. Owner reapply and confirmed-state actual boot persistence also passed in
+`ap-confirmed-reapply-accepted.json` and `ap-confirmed-boot-accepted.json`: exact
+private journal/config hashes, changed boot ID, fresh new-IP root authentication,
+watchdog/S18, gateway/DNS and DHCP/RA-off settings. Task d24 remains incomplete and has not
 had its final independent review.
 
-Physical gates b24/e24 remain explicit human actions. Check the still-unanswered
-AP PoE source before issuing cable instructions. The intended topology is
+Physical gates b24/e24 require explicit human confirmation. The user confirmed
+only the AP move for e24; b24 remains unfulfilled. The AP uses an inline PoE
+injector without switching; retain its power and AP-facing lead. The intended topology is
 ISP→Triggerfish port0, lab switch→port1, OpenWrt→port2 and future cameras→port3.
 A carrier or ping does not satisfy either physical gate.

@@ -50,7 +50,7 @@ type routerStage struct {
 // OptsCandidates excludes profile preparation from routine aggregate deployment.
 func (Profiles) OptsCandidates() TaskOptions { return TaskOptions{Operational()} }
 
-// Candidates stages four inactive network, firewall and service configuration bundles.
+// Candidates stages inactive network, firewall and service configuration bundles.
 func (Profiles) Candidates() {
 	EachHost(func(data RouterProfiles) {
 		candidates, err := RenderProfiles(data)
@@ -88,6 +88,9 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 func routerStages() []routerStage {
 	return []routerStage{
 		{"shared-igc0", "igc0", "igc0", "igc0", true, true},
+		// AP may be moved before the separate lab-switch human gate.
+		{"wifi-prepare", "igc0", "igc2", "igc0", true, true},
+		{"wifi-first", "igc0", "igc2", "igc0", true, true},
 		{"post-rack", "igc1", "igc0", "igc0", true, true},
 		{"post-ap", "igc1", "igc2", "igc3", true, true},
 		{"final", "igc1", "igc2", "igc3", false, false},
@@ -258,7 +261,7 @@ func profileDHCP(s routerStage) string {
 		config += jetKVMReservations()
 	}
 	if s.wifi == "igc2" {
-		config += "subnet 10.30.0.0 netmask 255.255.255.0 {\n range 10.30.0.100 10.30.0.239;\n option routers 10.30.0.1;\n option domain-name-servers 10.30.0.1;\n}\n"
+		config += "subnet 10.30.0.0 netmask 255.255.255.0 {\n authoritative;\n range 10.30.0.100 10.30.0.239;\n option routers 10.30.0.1;\n option domain-name-servers 10.30.0.1;\n}\n"
 	}
 	return config
 }
@@ -297,7 +300,7 @@ func profileServices(s routerStage) string {
 	if s.lab == "igc1" {
 		interfaces = append(interfaces, "igc1")
 	}
-	if s.wifi == "igc2" {
+	if s.wifi == "igc2" && s.name != "wifi-prepare" {
 		interfaces = append(interfaces, "igc2")
 	}
 	dhcp := "disabled"

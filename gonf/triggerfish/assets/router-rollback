@@ -16,7 +16,7 @@ SERVICES='dhcpd unbound ntpd rad resolvd'
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in vpn-bootstrap|shared-igc0|post-rack|post-ap) return 0;; *) return 1;; esac; }
+profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap) return 0;; *) return 1;; esac; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  if [[ -d $LOCK ]]; then
@@ -98,7 +98,8 @@ net.inet6.ip6.forwarding=0' ]] || fail 'unexpected sysctl fragment'
   [[ $(awk -v a="$f" '$1=="inet" && $3==a {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing zone prefix'
  done
  case $p in
- shared-igc0) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
+ shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
+ wifi-first) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
  post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
  post-ap) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
@@ -360,7 +361,8 @@ persist_candidate() {
  rcctl set unbound flags "-c /var/unbound/etc/unbound.conf"
  rcctl set ntpd flags ""
  case $(cat "$STATE/profile") in
- shared-igc0) rcctl disable dhcpd;;
+ shared-igc0|wifi-prepare) rcctl disable dhcpd;;
+ wifi-first) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
  post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
  post-ap) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
  esac
@@ -464,7 +466,7 @@ activate() {
  atomic /etc/resolv.conf 'nameserver 127.0.0.1'
  chmod 644 /etc/resolv.conf
  rcctl start ntpd
- [[ $(cat "$STATE/profile") == shared-igc0 ]] || rcctl start dhcpd
+ case $(cat "$STATE/profile") in shared-igc0|wifi-prepare) ;; *) rcctl start dhcpd;; esac
  check_candidate_ipv6
  atomic "$STATE/status" active-unconfirmed
  sync
@@ -727,7 +729,7 @@ confirm() {
   return
  fi
  for role in old new; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/new receipts missing'; done
- if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
+ if [[ $(cat "$STATE/profile") == post-rack || $(cat "$STATE/profile") == post-ap ]]; then
   [[ -s $STATE/proof.recovery ]] || fail 'fresh igc1 recovery receipt missing'
  fi
  [[ ${2:-} == services-checked ]] || fail 'controller service checks must pass before confirmation'

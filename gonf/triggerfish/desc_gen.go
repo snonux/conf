@@ -23,7 +23,7 @@ func (Base) DescUptimed() string {
 }
 
 func (Profiles) DescCandidates() string {
-	return "Stages four inactive network, firewall and service configuration bundles"
+	return "Stages inactive network, firewall and service configuration bundles"
 }
 
 func (RecoveryTunnel) DescInterrupt() string {

@@ -39,7 +39,7 @@ func validateTrialInput(t RouterTrial) error {
 		return errors.New("GONF_ROUTER_TRIAL requires a valid trial token")
 	}
 	switch t.Profile {
-	case "vpn-bootstrap", "shared-igc0", "post-rack", "post-ap":
+	case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap":
 	default:
 		return errors.New("GONF_ROUTER_TRIAL requires a supported profile")
 	}

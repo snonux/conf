@@ -68,7 +68,7 @@ func (Rollback) Readiness() {
 			return
 		}
 		switch t.Profile {
-		case "shared-igc0", "post-rack", "post-ap":
+		case "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap":
 		default:
 			Refuse("File", "router-readiness", fmt.Errorf("physical migration profile required"))
 			return
@@ -162,7 +162,7 @@ func trialCommand(action string, profile bool) {
 		args := List(action, t.Token)
 		if profile {
 			switch t.Profile {
-			case "vpn-bootstrap", "shared-igc0", "post-rack", "post-ap":
+			case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap":
 			default:
 				Refuse("Command", action, fmt.Errorf("a retained-recovery migration profile is required"))
 				return
