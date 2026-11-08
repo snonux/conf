@@ -50,3 +50,19 @@ Knobs in `templates/configmap.yaml`: `embedart.maxwidth` (1200),
 - Wrong art: `just shell`, then `beet mbsync album:"X"`, or drop a
   `cover.jpg` in the folder and `beet embedart -f cover.jpg -- album:"X"`.
 - Corrupt DB: delete `beets-art-state-pvc`; the next run rebuilds it.
+
+## Verified image update, 2026-11-08
+
+Future scheduled jobs use LinuxServer `2.14.1-ls359` (beets itself remains
+2.14.1). The existing scheduled sweep continues with its original image.
+An owned one-shot Job mounted production state/music read-only, used SQLite's
+backup API to make a disposable database copy, and passed quick_check,
+`beet version` and `beet stats`: 1,690 tracks / 197 albums. Both art plugins
+loaded, and the running immutable image config ID matched the staged image.
+The test Job and its disposable copy were removed. No test art sweep modified
+production music. Completion of the current scheduled sweep remains separate.
+
+Automatic sync is held in the live and local Application until this matching
+chart is published; do not reconcile from the old remote source. Rollback of
+the template is the previous `2.14.1-ls356` image; no production DB migration
+was performed by this image test.

@@ -16,6 +16,8 @@ spec:
     namespace: services
   syncPolicy:
     automated:
+      # Keep manual until the matching 2.14.1-ls359 chart is published.
+      enabled: false
       prune: true
       selfHeal: true
     syncOptions:
