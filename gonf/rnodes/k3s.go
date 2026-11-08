@@ -82,6 +82,21 @@ func (K3s) Registries() {
 		RootOwned)
 }
 
+// ServiceLBImage installs the cloud-provider image override without restarting k3s.
+//
+// ServiceLBImage preserves the current cloud-provider defaults and changes only
+// the generated ServiceLB containers' image. The supported extra CCM argument
+// selects our separate JSON config instead of editing k3s's generated file or
+// DaemonSets. Apply with serial k3s restarts; never restart all etcd members.
+func (K3s) ServiceLBImage() {
+	EnsureDir(k3sConfigDir, RootOwned)
+	EnsureDir(k3sConfigDir+"/config.yaml.d", RootOwned)
+	InstallFile(k3sConfigDir+"/servicelb-cloud-config.json",
+		paths.RNodeAsset(k3sAssetsPath+"servicelb-cloud-config.json"), RootPrivate)
+	InstallFile(k3sConfigDir+"/config.yaml.d/60-servicelb.yaml",
+		paths.RNodeAsset(k3sAssetsPath+"60-servicelb.yaml"), RootPrivate)
+}
+
 // VersionMonitor installs an hourly read-only release-channel check and textfile metrics.
 func (K3s) VersionMonitor() {
 	python := Package("python3")

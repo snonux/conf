@@ -1,0 +1,8 @@
+{
+  "lbDefaultPriorityClassName": "system-node-critical",
+  "lbEnabled": true,
+  "lbImage": "docker.io/rancher/klipper-lb:v0.4.18@sha256:fb8981e8c235a6e276dc94033948e60f1a82219c579629b957dfa1d640b64a72",
+  "lbNamespace": "kube-system",
+  "nodeEnabled": true,
+  "rootless": false
+}

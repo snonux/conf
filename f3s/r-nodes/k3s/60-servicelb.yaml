@@ -1,0 +1,5 @@
+# The cloud provider owns generated ServiceLB DaemonSets. Select a managed
+# copy of its config; never edit the generated server/etc/cloud-config.yaml.
+# Appending retains any other CCM arguments. Restart k3s one node at a time.
+kube-cloud-controller-manager-arg+:
+  - cloud-config=/etc/rancher/k3s/servicelb-cloud-config.json
