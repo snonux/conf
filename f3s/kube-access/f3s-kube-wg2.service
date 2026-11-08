@@ -1,0 +1,10 @@
+[Unit]
+Description=f3s Kubernetes API through SSH over wg2
+
+[Service]
+ExecStart=/usr/bin/ssh -N -T -b 10.99.0.2 -p 22 -o BatchMode=yes -o StrictHostKeyChecking=yes -o HostKeyAlias=r0 -o ControlMaster=no -o ControlPath=none -o ExitOnForwardFailure=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 127.0.0.1:16443:127.0.0.1:6443 root@10.20.0.120
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
