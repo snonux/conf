@@ -41,12 +41,15 @@ do not prune it. Clear it with `kubectl delete job -n services <job>`.
 ```sh
 # in ~/git/shuriken.sh first: just build   (bin/shuriken must be current)
 cd ~/git/conf/f3s/shuriken
-just build-push      # -> r0.lan.buetow.org:30001/shuriken:0.14.1, run on the LAN
+just build-push      # -> r0.lan.buetow.org:30001/shuriken:<TAG>, run on the LAN
 ```
 
-Pods pull `registry.lan.buetow.org:30001/shuriken:0.14.1`. On a new release
-bump `TAG` in `docker-image/Justfile`, chart `appVersion` and the CronJob
-`image:` together. The image carries rsync and openssh-client, no jq.
+Pods pull `registry.lan.buetow.org:30001/shuriken:0.14.1-runtime20261108`
+(shuriken 0.14.1 on a digest-pinned Alpine 3.24.4 base, task 744). Tags are
+immutable: for a new release or a base/package refresh, build under a NEW
+tag and bump `TAG` in `docker-image/Justfile`, chart `appVersion` and both
+CronJob `image:` lines together (the unit tests check they agree). The
+image carries rsync and openssh-client, no jq.
 
 ## Storage
 

@@ -81,7 +81,9 @@ spec:
                   readOnly: true
           containers:
             - name: shuriken-sync
-              image: registry.lan.buetow.org:30001/shuriken:0.14.1
+              # shuriken 0.14.1 on Alpine 3.24.4 (task 744). Both CronJobs share
+              # this immutable tag; bump it with docker-image/Justfile TAG.
+              image: registry.lan.buetow.org:30001/shuriken:0.14.1-runtime20261108
               imagePullPolicy: Always
               command: ["/bin/bash", "-c"]
               args:

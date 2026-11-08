@@ -1,10 +1,17 @@
 REGISTRY := "r0.lan.buetow.org:30001"
 IMAGE := "shuriken"
-TAG := "0.14.1"
+# Image tag: shuriken release plus runtime-rebuild suffix. Bump it for every
+# rebuild (new base/packages for the same release too); a pushed tag is
+# immutable and must never be overwritten. Change the CronJob `image:` in
+# helm-chart/templates/{cronjob,sync-cronjob}.yaml and the chart appVersion
+# together with it (tests/test_cronjobs.py checks they agree).
+TAG := "0.14.1-runtime20261108"
 # Source tree for the image build. The Dockerfile lives at the repo root and
 # copies bin/, share/templates, assets/site, src/shuriken.default.conf and
 # docker/entrypoint.sh, so build from the shuriken.sh checkout root. Run
 # `just build` in the shuriken.sh repo first so bin/shuriken is up to date.
+# The Dockerfile pins the Alpine base by digest (shuriken.sh 9270581 and
+# later); build from a clean checkout of the approved commit.
 SRC := "/home/paul/git/shuriken.sh"
 
 build:

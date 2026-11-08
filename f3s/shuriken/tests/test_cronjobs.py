@@ -144,6 +144,22 @@ class CronJobTests(unittest.TestCase):
         self.assertNotIn(1, codes["values"])
         self.assertTrue({137, 143, 255} <= set(codes["values"]))
 
+    def test_both_cronjobs_pull_the_same_immutable_tag(self):
+        # Generation and sync share one image; the tag must match the chart
+        # appVersion and the docker-image/Justfile TAG it was built under,
+        # and must be a pinned tag, never a floating one.
+        root = Path(__file__).resolve().parents[1]
+        app_version = yaml.safe_load((root / "helm-chart/Chart.yaml").read_text())["appVersion"]
+        [tag] = [line.split('"')[1] for line in (root / "docker-image/Justfile").read_text().splitlines()
+                 if line.startswith("TAG :=")]
+        self.assertEqual(app_version, tag)
+        self.assertNotIn(tag, ("latest", ""))
+        for name in ("shuriken", "shuriken-sync"):
+            with self.subTest(job=name):
+                spec = self.resources[name]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+                self.assertEqual(spec["containers"][0]["image"],
+                                 f"registry.lan.buetow.org:30001/shuriken:{tag}")
+
     def test_sync_publishes_reshuffle_with_identical_source_statistics(self):
         for site in ("irregular.ninja", "alt.irregular.ninja"):
             status, backup = self.status(self.NOW - 259200, site)
