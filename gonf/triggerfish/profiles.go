@@ -25,6 +25,11 @@ type RouterProfiles struct {
 	// JetKVMManagement admits only independently reserved shared-wire endpoints.
 	// Populate after IQ allocation and native UDP-range inspection, not discovery.
 	JetKVMManagement []JetKVMManagementEndpoint
+	// WiFiIPv6Candidate additionally renders the inactive o34 profile
+	// "wifi-ipv6-candidate" (see ipv6wifi.go) for offline/native review. The
+	// zero value renders nothing; the rollback helper and trial input do not
+	// accept that profile, so it cannot be staged or activated either way.
+	WiFiIPv6Candidate bool
 }
 
 // JetKVMManagementEndpoint permits laptop management and native ephemeral UDP.
@@ -81,6 +86,10 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	profiles := make(map[string]map[string]string)
 	for _, stage := range routerStages() {
 		profiles[stage.name] = profileFiles(stage, data)
+	}
+	if data.WiFiIPv6Candidate {
+		stage := wifiIPv6Stage()
+		profiles[stage.name] = wifiIPv6Files(stage, data)
 	}
 	return profiles, nil
 }
@@ -166,6 +175,29 @@ func validateJetKVMManagement(data RouterProfiles) error {
 }
 
 func profilePF(s routerStage, data RouterProfiles) string {
+	return profilePFWithIPv6(s, data, localOnlyIPv6Rules())
+}
+
+// localOnlyIPv6Rules is the agreed local-only native IPv6 policy of every
+// migration profile: lab ULA neighbour discovery and router echo, no transit.
+func localOnlyIPv6Rules() string {
+	return labIPv6Rules() + "block drop quick inet6 all\n"
+}
+
+// labIPv6Rules permits only lab ULA neighbour discovery and echo to the router.
+// Shared by the local-only policy and the o34 Wi-Fi IPv6 candidate, which
+// must keep the lab ULA exactly as local as before.
+func labIPv6Rules() string {
+	return `# Native IPv6 is local-only; allow address resolution on the lab link.
+pass quick on $lab_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
+pass in quick on $lab_if inet6 proto icmp6 from fd02:ca0b:f1cb:20::/64 to fd02:ca0b:f1cb:20::1 icmp6-type echoreq keep state
+`
+}
+
+// profilePFWithIPv6 renders the shared IPv4 policy around one IPv6 rule block.
+// The IPv6 block must end in a quick inet6 default deny: every IPv6 rule after
+// it is unreachable, so all IPv6 permits live inside the block.
+func profilePFWithIPv6(s routerStage, data RouterProfiles, ipv6 string) string {
 	rules := fmt.Sprintf(`# Inactive candidate: %s. No blanket pass; wg0/wg1 are not configured here.
 lab_if = "%s"
 wifi_if = "%s"
@@ -183,11 +215,7 @@ table <recorders> persist
 table <camera_updates> persist
 match out on igc0 inet from { 10.20.0.0/24, 10.30.0.0/24 } to ! <nonpublic> nat-to 192.168.1.2
 block return log all
-# Native IPv6 is local-only; allow address resolution on the lab link.
-pass quick on $lab_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
-pass in quick on $lab_if inet6 proto icmp6 from fd02:ca0b:f1cb:20::/64 to fd02:ca0b:f1cb:20::1 icmp6-type echoreq keep state
-block drop quick inet6 all
-`, s.name, s.lab, s.wifi, s.camera)
+`, s.name, s.lab, s.wifi, s.camera) + ipv6
 	// Each zone can arrive only on its current physical interface. In shared
 	// stages this is source filtering, not isolation from same-wire attackers.
 	for _, zone := range []struct{ iface, prefix string }{
