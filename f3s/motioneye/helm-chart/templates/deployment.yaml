@@ -33,7 +33,7 @@ spec:
           readOnly: true
       containers:
       - name: motioneye
-        image: ghcr.io/motioneye-project/motioneye:0.43.1@sha256:45b671af537bec4e715cc5cb7071ec293a602e0a1900d1cbd12ba55946147ba6
+        image: ghcr.io/motioneye-project/motioneye:0.44.0@sha256:7da31d62e6c46ee8b61280f872801e429ec6f3db81bb23aca11c83863939cade
         ports:
         - name: http
           containerPort: 8765
