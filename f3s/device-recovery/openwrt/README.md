@@ -64,7 +64,13 @@ Prepare candidate UCI changes with isolated `uci -c DIR -t SAVEDIR` directories;
 never use global `uci set` to prepare an inactive candidate. Keep wireless
 credentials and radio settings unchanged. The planned staged candidate also
 needs a measured return path for new-address management and appropriate scoped
-DNS/rebind handling; no candidate generator or approved candidate exists here.
+DNS/rebind handling; `prepare-stage.sh` now prepares only the inactive first-stage candidate. It
+adds `ap_migration` (10.30.0.2/24 on `@lan`) and `ap_migration_admin`
+(f0 10.20.0.130/32 via30.1), preserving main LAN and byte-identical DHCP/firewall.
+Run it on the AP with a new private path under
+`/etc/f3s-ap-recovery/candidates/NAME`; it refuses pending transactions, existing
+owned sections and reused directories. Native UCI validation passed for
+`stage-20261108`; nothing is active yet. A final cutover candidate is separate.
 
 `services-verified` is an operator assertion, not an automated service test.
 Before confirmation, establish fresh old and new management sessions and

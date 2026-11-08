@@ -81,6 +81,10 @@ func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
 		WithData(triggerfish.RouterProfiles{
 			RetainProvisioningAlias: true, BootCanary: trial.BootCanary,
+			// AP trial management only; retire this exact flow with j24.
+			TemporaryFlows: []triggerfish.MigrationFlow{
+				{Source: "10.20.0.130", Destination: "10.30.0.2", Protocol: "tcp", Port: 22},
+			},
 			// Shared-wire canary only; the other reserved devices need their own native range proof.
 			JetKVMManagement: []triggerfish.JetKVMManagementEndpoint{
 				{Address: "192.168.11.140", UDPMin: 32768, UDPMax: 60999},
