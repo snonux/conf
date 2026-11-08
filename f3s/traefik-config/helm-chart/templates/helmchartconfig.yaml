@@ -8,7 +8,7 @@ spec:
     # Patch the bundled K3s Traefik without changing the chart or routing values.
     image:
       repository: docker.io/library/traefik
-      tag: "3.7.15"
+      tag: "3.7.17@sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a"
 
     # Local NodePort routing preserves the frontend source and admits only
     # ready local endpoints. relayd TCP checks select the matching nodes.

@@ -1,23 +1,33 @@
-# Traefik Configuration
+# Traefik configuration
 
-k3s HelmChartConfig to customize the bundled Traefik ingress controller.
+Argo application `traefik-config` owns the `kube-system/traefik`
+HelmChartConfig and its forwarding/header middlewares. K3s owns the bundled
+Traefik chart and Helm release; change this chart through GitOps.
 
-## What This Does
+The image override selects Traefik 3.7.17 by its immutable publisher digest
+(task 244, 2026-11-08). The existing chart remains bundled with k3s; no CRD,
+entrypoint, service, port, authentication or NetworkPolicy change is needed.
 
-Configures Traefik to trust `X-Forwarded-For` headers from trusted proxy networks (relayd on frontends).
+Only the TLS-terminating OpenBSD frontends at `192.168.2.110/32` and
+`192.168.2.111/32` are trusted to supply forwarded headers on `web`.
+LAN `websecure` trusts no client-supplied forwarded headers. Both entrypoints
+delete separator aliases and the RFC `Forwarded` header. No PROXY protocol
+parser is enabled. Do not broaden these trusted source ranges.
 
-This allows backend applications to see the real client IP address instead of internal cluster IPs.
+`web` keeps NodePort 31637 and `externalTrafficPolicy: Local`; frontend
+relayd health checks choose nodes with ready local endpoints. TLS and
+Prometheus configuration remain in the same HelmChartConfig.
 
-## Apply
+Validate this configuration with `helm lint helm-chart`, render with
+`helm template traefik-config helm-chart`, and server dry-run the result.
+Before publishing an image update, pull its immutable reference on all three
+nodes and verify the actual bundled chart renders only the intended change.
+Argo applies HelmChartConfig; k3s's Helm controller performs the rollout.
 
-```bash
-kubectl apply -f helmchartconfig.yaml
-```
+Verify both public and LAN HTTPS routes, protected-route rejection, forged
+forwarded-header rejection, TLS, metrics and unchanged service/route policy.
+For rollback, restore the previous image pin through GitOps; do not rewrite
+k3s's generated `traefik.yaml` or roll back application data.
 
-Traefik will automatically restart and pick up the new configuration.
-
-## Trusted Networks
-
-- `192.168.0.0/16` - WireGuard tunnel IPs (relayd frontends)
-- `10.0.0.0/8` - Kubernetes pod/service network
-- `172.16.0.0/12` - Docker bridge networks
+Private 244 backup and acceptance receipts:
+`~/.local/state/conf/244-traefik-20261108/` on Earth.
