@@ -26,7 +26,10 @@ lease or edit its deadline to make a failed trial pass.
 Hosts normal reapply is permitted after an accepted hosts transaction. Other
 service profiles require a fresh lease for helper promotion. Canonical recipe
 sources must be adopted alongside acceptance so ordinary reapply retains the
-accepted values. The helper refuses unknown roles, custom controller settings,
+accepted values. An accepted controller configuration may be updated: arm
+records whether the live `f3sctl.json` is still exactly the owned candidate
+(or legacy file), and apply accepts that file unchanged after the owner has
+published a new candidate (p34). The helper refuses unknown roles, custom controller settings,
 symlinks and special owned files; it never prints configuration contents.
 
 Offline checks run the real dispatcher/merger with temporary paths and mocked

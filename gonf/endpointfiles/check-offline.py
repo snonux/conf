@@ -261,6 +261,39 @@ esac''',
     assert (base / 'pihole/docker-compose.yml').read_text() == 'ORIGINAL docker-compose.yml\n'
     assert not (base / 'pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf').exists()
 
+    # p34: an accepted controller configuration can be updated. Arm records
+    # that the live file was the owned candidate; apply then accepts it
+    # unchanged after the owner published a new candidate. A hand-edited file,
+    # or one changed after arm, stays refused.
+    put(node, 'pi0\n')
+    put(platform, 'NetBSD\n')
+    live = base / 'local/etc/f3sctl.json'
+    candidate = base / 'local/etc/f3sctl.json.triggerfish-candidate'
+    put(base / 'local/etc/f3sctl.json.triggerfish-legacy', '{"legacy":1}\n', 0o644)
+    put(live, '{"accepted":1}\n', 0o644)
+    put(candidate, '{"accepted":1}\n', 0o644)
+    run('arm', 'controller', '900')
+    put(candidate, '{"accepted":1,"shelly_https":true}\n', 0o644)
+    run('apply', 'controller')
+    assert live.read_text() == '{"accepted":1,"shelly_https":true}\n'
+    expire()
+    run('watchdog')
+    assert live.read_text() == '{"accepted":1}\n' and not (state / 'pending').exists()
+    # Changed after arm: refused, live untouched.
+    run('arm', 'controller', '900')
+    put(live, '{"accepted":1,"edited-after-arm":1}\n', 0o644)
+    run('apply', 'controller', ok=False)
+    assert live.read_text() == '{"accepted":1,"edited-after-arm":1}\n'
+    run('rollback', 'controller')
+    assert live.read_text() == '{"accepted":1}\n' and not (state / 'pending').exists()
+    # Hand-edited before arm: no ownership record, refused.
+    put(live, '{"custom":1}\n', 0o644)
+    run('arm', 'controller', '900')
+    assert not (state / 'pending/controller-owned').exists()
+    run('apply', 'controller', ok=False)
+    assert live.read_text() == '{"custom":1}\n'
+    run('rollback', 'controller')
+
     # Native OpenBSD hook shape is syntax/ordering tested, not a reboot claim.
     put(node, 'blowfish\n')
     put(platform, 'OpenBSD\n')

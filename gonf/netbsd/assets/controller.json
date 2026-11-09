@@ -82,5 +82,7 @@
   "peer_nodes": [
     "10.20.0.125",
     "10.20.0.126"
-  ]
+  ],
+  "shelly_https": true,
+  "shelly_http_fallback": true
 }

@@ -214,6 +214,15 @@ case "$action" in
                 touch "$next/service-active" ;;
             dns)
                 [ "$(docker inspect --format '{{.State.Health.Status}}' pihole 2>/dev/null)" = healthy ] || fail 'existing resolver is not healthy' ;;
+            controller)
+                # Arm runs before the owner publishes a new candidate. Record
+                # here whether the live file is still exactly an owned one, so
+                # apply can accept that unchanged file in place of the now
+                # replaced candidate; a hand-edited file stays refused.
+                if cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-candidate ||
+                    cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-legacy; then
+                    touch "$next/controller-owned"
+                fi ;;
         esac
         i=0
         for source in $(files "$profile"); do
@@ -258,8 +267,13 @@ case "$action" in
             restart pf
         else
             if [ "$profile" = controller ]; then
+                # Accept the legacy or current candidate, or the file that was
+                # an owned candidate when this lease was armed and is unchanged
+                # since (an update of an accepted controller configuration).
                 cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-legacy ||
-                    cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-candidate || fail 'custom controller settings require a merged candidate'
+                    cmp -s /usr/local/etc/f3sctl.json /usr/local/etc/f3sctl.json.triggerfish-candidate ||
+                    { [ -d "$pending" ] && [ -e "$pending/controller-owned" ] && cmp -s /usr/local/etc/f3sctl.json "$pending/0"; } ||
+                    fail 'custom controller settings require a merged candidate'
             fi
             for destination in $(files "$profile"); do copy_file "$destination.triggerfish-candidate" "$destination"; done
             if [ -e "$pending/service-active" ]; then restart "$profile"; fi
