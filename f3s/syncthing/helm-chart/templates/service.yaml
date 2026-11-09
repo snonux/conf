@@ -17,3 +17,31 @@ spec:
       targetPort: 22000
   selector:
     app: syncthing
+---
+# n44: direct sync path for the laptop over wg2 (10.99.0.2), so it does not
+# depend on a public relay at home. Port 22000 itself is not reachable from
+# outside the cluster; the laptop dials tcp://10.20.0.12{0,1,2}:32200.
+# Local keeps the client's real source address: the pod's node DNATs without
+# SNAT, so NetworkPolicy syncthing-web can admit exactly 10.99.0.2 instead of
+# node/CNI addresses (which would also let ordinary pods in through the
+# NodePort). Nodes without the pod drop the dial; the laptop lists all three
+# nodes and keeps whichever answers. The router PF and the r-node f3s_guard
+# admit only the laptop on TCP 32200; no public port-forward exists.
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: syncthing
+  name: syncthing-lan
+  namespace: services
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  ports:
+    - name: data
+      port: 22000
+      protocol: TCP
+      targetPort: 22000
+      nodePort: 32200
+  selector:
+    app: syncthing

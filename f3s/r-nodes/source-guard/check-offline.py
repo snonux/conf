@@ -55,7 +55,7 @@ try:
     server = subprocess.Popen([sys.executable, '-c', '''
 import selectors, socket
 sel = selectors.DefaultSelector()
-for port in (22, 80, 443, 6443, 30001, 9999):
+for port in (22, 80, 443, 6443, 30001, 32200, 9999):
     s = socket.socket(socket.AF_INET6)
     s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
     s.bind(('::', port)); s.listen(); sel.register(s, selectors.EVENT_READ)
@@ -94,11 +94,16 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
     probe('192.168.1.236', destinations[0], 6443, False)
     for source in ['192.168.1.50', '10.99.0.4', '10.30.0.2', '10.40.0.11']:
         probe(source, destinations[0], 443, False)
-    for port in [22, 80, 443, 6443, 30001]:
-        probe('10.99.0.2', destinations[0], port, port in [22, 80, 443])
+    # n44: the laptop also reaches the Syncthing NodePort 32200, on lab
+    # addresses only (not old LAN or recovery aliases); the phone does not.
+    for port in [22, 80, 443, 6443, 30001, 32200]:
+        probe('10.99.0.2', destinations[0], port, port in [22, 80, 443, 32200])
         probe('10.99.0.3', destinations[0], port, port == 443)
         probe('10.99.0.2', destinations[2], port, port == 22)
         probe('10.99.0.3', destinations[2], port, False)
+    probe('10.99.0.2', destinations[1], 32200, False)
+    for source in ['10.99.0.4', '192.168.1.50', '10.30.0.2']:
+        probe(source, destinations[0], 32200, False)
     probe('fd02:ca0b:f1cb:20::130', 'fd02:ca0b:f1cb:20::120', 9999, True)
     probe('fd22:c702:acb7::130', 'fd02:ca0b:f1cb:20::120', 9999, True)
     # Verify the pod guard independently, with the host table removed.
@@ -114,7 +119,7 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         probe('10.42.0.2', target, 30001, False)
         after = run('nft', 'list', 'chain', 'inet', 'f3s_nodeport_guard', 'from_pod').stdout
         assert before != after, target
-    print('PASS: native syntax, atomic replacement, mixed addressing, wg2/recovery scope, ULA, independent local/remote pod guard')
+    print('PASS: native syntax, atomic replacement, mixed addressing, wg2/recovery scope (incl. n44 32200), ULA, independent local/remote pod guard')
 finally:
     if server:
         server.terminate()

@@ -443,6 +443,15 @@ spec:
     ports:
     - protocol: TCP
       port: 8384
+  # n44: the laptop's wg2 identity to the sync port, through the Local
+  # NodePort syncthing-lan (32200), which keeps the real source address.
+  # No node/CNI ipBlock: that would admit ordinary pods via the NodePort.
+  - from:
+    - ipBlock:
+        cidr: 10.99.0.2/32
+    ports:
+    - protocol: TCP
+      port: 22000
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

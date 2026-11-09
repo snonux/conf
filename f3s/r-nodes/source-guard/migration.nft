@@ -30,6 +30,9 @@ table inet f3s_guard {
         # Individual routed wg2 identities; never trust the entire VPN range.
         ip saddr 10.99.0.2 ip daddr 10.20.0.0/24 tcp dport { 22, 80, 443 } return
         ip saddr 10.99.0.3 ip daddr 10.20.0.0/24 tcp dport 443 return
+        # n44: laptop to the Syncthing NodePort syncthing-lan, matched by the
+        # router PF permit and NetworkPolicy syncthing-web (10.99.0.2 TCP22000).
+        ip saddr 10.99.0.2 ip daddr 10.20.0.0/24 tcp dport 32200 return
         # Other direct wg2 services require matching reviewed router/host/pod
         # permissions; current wg0/ingress paths retain their independent rules.
         # Essential errors and native NDP; do not restore RA/DHCPv6 trust.

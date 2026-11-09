@@ -233,6 +233,26 @@ class Policies(unittest.TestCase):
                 # After Cluster SNAT, original external identities cannot be distinguished.
                 self.assert_path({'ip': '10.42.1.0'}, namespace, labels, port, True)
 
+    def test_laptop_wg2_reaches_only_the_syncthing_sync_port(self):
+        # n44: the Local NodePort syncthing-lan keeps the laptop's source, so
+        # the receiver admits exactly 10.99.0.2 on TCP 22000 and nothing else.
+        syncthing = {'app': 'syncthing'}
+        self.assert_path({'ip': '10.99.0.2'}, 'services', syncthing, 22000, True)
+        self.assert_path({'ip': '10.99.0.2'}, 'services', syncthing, 22000, False, 'UDP')
+        self.assert_path({'ip': '10.99.0.2'}, 'services', syncthing, 8384, False)
+        # The phone, other wg2/LAN hosts, ordinary pods and rewritten node/CNI
+        # sources (Cluster SNAT) get no sync-port access.
+        for source in [{'ip': '10.99.0.3'}, {'ip': '10.99.0.4'}, {'ip': '10.20.0.130'},
+                       {'ip': '192.168.2.200'}, {'ip': '10.42.0.0'}, {'ip': '10.42.1.1'},
+                       {'ip': '10.20.0.120'}, self.unrelated, self.prometheus]:
+            self.assert_path(source, 'services', syncthing, 22000, False)
+        # Traefik keeps the web GUI, but not the sync port.
+        self.assert_path(self.traefik, 'services', syncthing, 8384, True)
+        self.assert_path(self.traefik, 'services', syncthing, 22000, False)
+        # The laptop gains nothing elsewhere in the namespace.
+        for database in ['immich-postgres', 'miniflux-postgres']:
+            self.assert_path({'ip': '10.99.0.2'}, 'services', {'app': database}, 5432, False)
+
     def test_laptop_and_phone_reach_web_without_database_or_receiver_access(self):
         servicelb = {'svccontroller.k3s.cattle.io/svcname': 'traefik',
                      'svccontroller.k3s.cattle.io/svcnamespace': 'kube-system'}
