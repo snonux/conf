@@ -39,15 +39,15 @@ func validateTrialInput(t RouterTrial) error {
 		return errors.New("GONF_ROUTER_TRIAL requires a valid trial token")
 	}
 	switch t.Profile {
-	case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap":
+	case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap", ipv6UplinkProfileName, ipv6NAT66ProfileName:
 	default:
 		return errors.New("GONF_ROUTER_TRIAL requires a supported profile")
 	}
 	if t.WindowSeconds < 180 || t.WindowSeconds > 1800 {
 		return errors.New("GONF_ROUTER_TRIAL window must be 180–1800 seconds")
 	}
-	if t.BootCanary && t.Profile != "shared-igc0" {
-		return errors.New("GONF_ROUTER_TRIAL boot canary requires the shared profile")
+	if t.BootCanary && !bootCanaryStage(t.Profile) {
+		return errors.New("GONF_ROUTER_TRIAL boot canary requires a canary-capable profile")
 	}
 	if t.ReadinessReviewed && !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(t.CandidateSHA256) {
 		return errors.New("GONF_ROUTER_TRIAL readiness requires the frozen candidate digest")

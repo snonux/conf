@@ -68,7 +68,7 @@ func (Rollback) Readiness() {
 			return
 		}
 		switch t.Profile {
-		case "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap":
+		case "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap", ipv6UplinkProfileName, ipv6NAT66ProfileName:
 		default:
 			Refuse("File", "router-readiness", fmt.Errorf("physical migration profile required"))
 			return
@@ -99,7 +99,7 @@ func (Rollback) Activate() { trialCommand("activate", false) }
 // OptsRebootCanary excludes the bounded reboot test from routine deployment.
 func (Rollback) OptsRebootCanary() TaskOptions { return TaskOptions{Operational()} }
 
-// RebootCanary reboots only a proved, unconfirmed shared-profile boot canary.
+// RebootCanary reboots only a proved, unconfirmed boot canary of a canary-capable profile.
 func (Rollback) RebootCanary() {
 	trialCommand("reboot", false)
 }
@@ -151,8 +151,8 @@ func (Rollback) RestorePrevious() {
 
 func trialCommand(action string, profile bool) {
 	EachHost(func(t RouterTrial) {
-		if action == "reboot" && (!t.BootCanary || t.Profile != "shared-igc0") {
-			Refuse("Command", "reboot", fmt.Errorf("explicit shared-profile boot canary required"))
+		if action == "reboot" && (!t.BootCanary || !bootCanaryStage(t.Profile)) {
+			Refuse("Command", "reboot", fmt.Errorf("explicit boot canary of a canary-capable profile required"))
 			return
 		}
 		if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$`).MatchString(t.Token) {
@@ -162,7 +162,7 @@ func trialCommand(action string, profile bool) {
 		args := List(action, t.Token)
 		if profile {
 			switch t.Profile {
-			case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap":
+			case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap", ipv6UplinkProfileName, ipv6NAT66ProfileName:
 			default:
 				Refuse("Command", action, fmt.Errorf("a retained-recovery migration profile is required"))
 				return

@@ -380,3 +380,37 @@ an absent lab canary, TCP22 proceeded to neighbor resolution while TCP23
 received immediate block-return. A subsequent f3 retry established fresh SSH through wg2 from 10.99.0.2
 to 10.20.0.133:22. Full host timed/boot recovery remains v14 acceptance;
 the initial absent-destination probe alone did not establish it.
+
+## o34 IPv6 stages (NAT66 for Wi-Fi)
+
+The CPE delegates no prefix (DHCPv6 IA_PD answers NoPrefixAvail), so Wi-Fi
+IPv6 uses NAT66. Two stageable profiles share the wifi-first wiring:
+
+- `wifi-ipv6-uplink`: igc0 `inet6 autoconf -temporary` (one stable RFC 7217
+  address and the IPv6 default via the CPE), router-originated IPv6 only,
+  `ip6.forwarding=0`, Wi-Fi unchanged.
+- `wifi-ipv6-nat66`: adds `fd02:ca0b:f1cb:30::1/64` on igc2, `/etc/rad.conf`
+  for igc2 only, `rad` enabled, `ip6.forwarding=1` and
+  `match out on igc0 ... nat-to <nat66_egress>`.
+
+`nat-to (igc0)` is deliberately not used: a dynamic interface pool
+round-robins over every non-link-local igc0 address, including the lab ULA.
+`triggerfish_nat66_egress` installs `/etc/gonf/nat66-egress` and a per-minute
+root cron job that keeps `<nat66_egress>` equal to igc0's stable SLAAC GUA. It
+does nothing while no loaded ruleset declares the table, so a rollback to any
+other profile retires it. Arm refuses the NAT66 profile without the helper.
+
+The helper validates placement (SLAAC only on igc0, Wi-Fi ULA only on igc2,
+rad only for igc2, forwarding only for NAT66, the egress table present).
+Activation enables forwarding only after the candidate PF, solicits on igc0
+after that PF admits RAs, and starts rad last. Acceptance admits stable
+slaacd addresses only where the candidate enables SLAAC; temporary addresses
+or the temporary flag refuse. `/etc/rad.conf` joined the owned file set: timed
+and boot restoration remove it, and runtime restoration stops rad, restores
+forwarding, drops the Wi-Fi IPv6 family and relearns a saved SLAAC prefix
+(restoring to the uplink stage). A snapshot taken before rad.conf ownership
+still restores candidates without rad.conf and refuses a NAT66 candidate.
+The fixed reboot canary is also accepted for `wifi-ipv6-nat66`, so its
+persistence can be proven across a real reboot. Fixture coverage lives in
+`checks/rollback.ksh` (stage refusals, temporary-address refusal, ordering,
+timed/boot/legacy restoration, canary).

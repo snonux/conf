@@ -40,9 +40,13 @@ pfctl() {
  '-f '*)
   print -- "pfctl $*" >> "$BASE/operations"
   if [[ $2 == "$STATE/candidate/pf.conf" ]]; then
-   touch "$BASE/pf-blocks-ra"
+   # Local-only candidates deny RA/RS; the o34 uplink stages pass the CPE's.
+   if grep -Eq '^pass in quick on [$]up6_if inet6 proto icmp6 from fe80::/10 .*icmp6-type routeradv$' "$2"; then
+    rm -f "$BASE/pf-blocks-ra"
+   else touch "$BASE/pf-blocks-ra"; fi
    mkdir -p "$BASE/pf-tables"
    touch "$BASE/pf-tables/recorders" "$BASE/pf-tables/camera_updates"
+   if grep -qx 'table <nat66_egress> persist' "$2"; then touch "$BASE/pf-tables/nat66_egress"; fi
   else rm -f "$BASE/pf-blocks-ra"; fi;;
  '-t '*)
   case $4 in
@@ -129,7 +133,10 @@ rcctl() {
  *) return 0;;
  esac
 }
-crontab() { print -- "* * * * * $SELF tick"; }
+crontab() {
+ print -- "* * * * * $SELF tick"
+ [[ -f $BASE/no-nat66-cron ]] || print -- "* * * * * $BASE/nat66-egress"
+}
 pgrep() {
  if [[ $* == '-x (sysupgrade|syspatch|pkg_add)' && -f $BASE/upgrade-running ]]; then print 12346; return 0; fi
  [[ $* == '-xf /sbin/resolvd' && -f $BASE/native-resolvd ]] || return 1
@@ -146,6 +153,7 @@ sh() {
 }
 sync() { :; }
 slaacctl() {
+ print -- "slaacctl $*" >> "$BASE/operations"
  [[ $1 == send && $2 == solicitation ]] || return 1
  # Real candidate PF denies RA/RS. An early solicitation cannot recover SLAAC.
  [[ ! -f $BASE/pf-blocks-ra ]] || return 1
@@ -520,6 +528,236 @@ cp -p "$fixture/boot-sockets.expected" "$base/sockets"
 "$fixture/run" boot_restore
 if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; then exit 1; fi
 [[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+# o34 IPv6 stages: uplink SLAAC first, then NAT66 on top of the confirmed
+# uplink. Start from a wifi-first runtime and persistent baseline.
+review() {
+ {
+  print -- "candidate-sha256=$(cat "$base/router-state/digest")"
+  print 'provisioning-clients=captured-inventory-no-known-clients'
+  print 'dependencies=r14-reviewed-current-stage-only'
+  print 'wg2=provisioned-and-tested'
+  print 'old-management=fresh-authenticated'
+  print -- "current-cabling=$1"
+ } > "$base/router-readiness/$1"
+ chmod 600 "$base/router-readiness/$1"
+}
+confirm_fresh() {
+ print '' > "$base/router-state/preexisting-connections"
+ print "tcp 0 0 192.168.1.2.22 192.168.1.236.$2 ESTABLISHED" > "$base/sockets"
+ "$fixture/run" proof old "$1" "192.168.1.236 $2 192.168.1.2 22"
+ print "tcp 0 0 10.20.0.1.22 10.99.0.2.$3 ESTABLISHED" > "$base/sockets"
+ "$fixture/run" proof new "$1" "10.99.0.2 $3 10.20.0.1 22"
+ "$fixture/run" confirm "$1" services-checked
+}
+for i in igc0 igc1 igc2 igc3; do print -- "$i: flags=<UP,BROADCAST>" > "$base/interfaces/$i"; done
+{
+ print ' inet 192.168.1.2 netmask 0xffffff00'
+ print ' inet 10.20.0.1 netmask 0xffffff00'
+ print ' inet6 fe80::6662:66ff:fe25:ced9%igc0 prefixlen 64 scopeid 0x1'
+ print ' inet6 fd02:ca0b:f1cb:20::1 prefixlen 64'
+} >> "$base/interfaces/igc0"
+print ' inet 10.98.0.1 netmask 0xffffff00' >> "$base/interfaces/igc1"
+print ' inet 10.30.0.1 netmask 0xffffff00' >> "$base/interfaces/igc2"
+for i in igc0 igc1 igc2 igc3; do cp "$base/router-profiles/wifi-first/hostname.$i" "$fixture/etc/hostname.$i"; done
+rm -f "$base/reboot-requested" "$base/nat66-egress"
+up=$base/router-profiles/wifi-ipv6-uplink
+nat=$base/router-profiles/wifi-ipv6-nat66
+# Every misplaced o34 element refuses at stage, before any journal change.
+cp -Rp "$nat" "$fixture/nat66.saved"
+cp -Rp "$up" "$fixture/uplink.saved"
+cp -p "$base/router-profiles/wifi-first/hostname.igc0" "$fixture/wifi-first-igc0.saved"
+o34_refuses() {
+ expect_fail stage o34bad01 "$1" 180
+ grep -q "$2" "$fixture/failure.log" || { print -u2 -- "wrong refusal for $1: $2"; cat "$fixture/failure.log" >&2; exit 1; }
+ rm -rf "$nat" "$up"
+ cp -Rp "$fixture/nat66.saved" "$nat"
+ cp -Rp "$fixture/uplink.saved" "$up"
+}
+print 'interface igc0' >> "$nat/rad.conf"
+o34_refuses wifi-ipv6-nat66 'rad must serve only igc2'
+sed '/^table <nat66_egress> persist$/d' "$nat/pf.conf" > "$nat/pf.next"; mv "$nat/pf.next" "$nat/pf.conf"
+o34_refuses wifi-ipv6-nat66 'NAT66 egress table missing'
+sed '/f1cb:30::1/d' "$nat/hostname.igc2" > "$nat/igc2.next"; mv "$nat/igc2.next" "$nat/hostname.igc2"
+print 'inet6 alias fd02:ca0b:f1cb:30::1 64' >> "$nat/hostname.igc0"
+o34_refuses wifi-ipv6-nat66 'Wi-Fi ULA only on igc2'
+sed '/^inet6 autoconf -temporary$/d' "$nat/hostname.igc0" > "$nat/igc0.next"; mv "$nat/igc0.next" "$nat/hostname.igc0"
+print 'inet6 autoconf -temporary' >> "$nat/hostname.igc2"
+o34_refuses wifi-ipv6-nat66 'IPv6 autoconfiguration only on the igc0 uplink'
+print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0' > "$nat/sysctl.conf.fragment"
+o34_refuses wifi-ipv6-nat66 'unexpected sysctl fragment'
+print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=1' > "$up/sysctl.conf.fragment"
+o34_refuses wifi-ipv6-uplink 'unexpected sysctl fragment'
+cp -p "$nat/rad.conf" "$up/rad.conf"
+o34_refuses wifi-ipv6-uplink 'rad configuration outside the NAT66 profile'
+print 'inet6 alias fd02:ca0b:f1cb:30::1 64' >> "$up/hostname.igc2"
+o34_refuses wifi-ipv6-uplink 'unexpected Wi-Fi ULA'
+sed 's/^inet6 -autoconf -temporary$/inet6 autoconf -temporary/' "$fixture/wifi-first-igc0.saved" > "$base/router-profiles/wifi-first/hostname.igc0"
+o34_refuses wifi-first 'unexpected IPv6 autoconfiguration line'
+cp -p "$fixture/wifi-first-igc0.saved" "$base/router-profiles/wifi-first/hostname.igc0"
+# A temporary SLAAC address after activation refuses acceptance; the timer
+# then restores the local-only baseline, including the persistent policy.
+print ' inet6 2001:db8:5::77 prefixlen 64 autoconf temporary pltime 100 vltime 200' > "$base/slaac-addresses"
+"$fixture/run" stage o34upl01 wifi-ipv6-uplink 180
+review wifi-ipv6-uplink
+"$fixture/run" arm o34upl01 wifi-ipv6-uplink 180
+expect_fail activate o34upl01
+grep -q 'unexpected physical IPv6 address' "$fixture/failure.log"
+[[ $(cat "$base/router-state/status") == activating ]]
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+if grep -q -e AUTOCONF6 -e 2001:db8:5 "$base/interfaces/igc0"; then exit 1; fi
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 prefixlen 64' "$base/interfaces/igc0"
+grep -qx 'inet6 -autoconf -temporary' "$fixture/etc/hostname.igc0"
+# Uplink stage: stable SLAAC address and solicitation only after its PF.
+print ' inet6 2001:db8:5::7 prefixlen 64 autoconf pltime 100 vltime 200' > "$base/slaac-addresses"
+"$fixture/run" stage o34upl02 wifi-ipv6-uplink 180
+review wifi-ipv6-uplink
+"$fixture/run" arm o34upl02 wifi-ipv6-uplink 180
+: > "$base/operations"
+"$fixture/run" activate o34upl02
+grep -qx 'ifconfig igc0 inet6 autoconf -temporary' "$base/operations"
+grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0' "$base/operations"
+grep -qx 'rcctl disable rad' "$base/operations"
+if grep -q -e 'rcctl start rad' -e 'slaacctl send solicitation igc[123]' "$base/operations"; then exit 1; fi
+awk '/^pfctl -f .*candidate\/pf.conf$/ {pf=NR} /^slaacctl send solicitation igc0$/ {rs=NR} END {exit !(pf && rs > pf)}' "$base/operations"
+grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
+grep -q 'inet6 2001:db8:5::7 .*autoconf' "$base/interfaces/igc0"
+grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
+[[ ! -e $fixture/etc/rad.conf ]]
+cp -p "$base/interfaces/igc0" "$fixture/igc0.active"
+print ' inet6 2001:db8:5::99 prefixlen 64 autoconf temporary pltime 100 vltime 200' >> "$base/interfaces/igc0"
+expect_fail check_candidate_ipv6
+cp -p "$fixture/igc0.active" "$base/interfaces/igc0"
+sed 's/flags=</flags=<AUTOCONF6TEMP,/' "$fixture/igc0.active" > "$base/interfaces/igc0"
+expect_fail check_candidate_ipv6
+cp -p "$fixture/igc0.active" "$base/interfaces/igc0"
+sed 's/flags=</flags=<AUTOCONF6,/' "$base/interfaces/igc2" > "$fixture/igc2.next"
+cp -p "$base/interfaces/igc2" "$fixture/igc2.active"
+mv "$fixture/igc2.next" "$base/interfaces/igc2"
+expect_fail check_candidate_ipv6
+cp -p "$fixture/igc2.active" "$base/interfaces/igc2"
+"$fixture/run" check_candidate_ipv6
+expect_fail reboot_canary o34upl02
+grep -q 'no active boot canary' "$fixture/failure.log"
+confirm_fresh o34upl02 46001 46002
+# NAT66 refuses to arm without its egress helper and timer.
+"$fixture/run" stage o34nat01 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+expect_fail arm o34nat01 wifi-ipv6-nat66 180
+grep -q 'NAT66 egress helper not installed' "$fixture/failure.log"
+print '#!/bin/ksh' > "$base/nat66-egress"
+chmod 700 "$base/nat66-egress"
+touch "$base/no-nat66-cron"
+expect_fail arm o34nat01 wifi-ipv6-nat66 180
+grep -q 'NAT66 egress timer not installed' "$fixture/failure.log"
+[[ ! -f $base/router-state/pending ]]
+rm "$base/no-nat66-cron"
+"$fixture/run" arm o34nat01 wifi-ipv6-nat66 180
+: > "$base/operations"
+"$fixture/run" activate o34nat01
+grep -qx 'rcctl enable rad' "$base/operations"
+cmp -s "$nat/rad.conf" "$fixture/etc/rad.conf"
+grep -q 'inet6 fd02:ca0b:f1cb:30::1 prefixlen 64' "$base/interfaces/igc2"
+grep -qx 'inet6 alias fd02:ca0b:f1cb:30::1 64' "$fixture/etc/hostname.igc2"
+grep -qx 'net.inet6.ip6.forwarding=1' "$fixture/etc/sysctl.conf"
+grep -qx 'kern.maxfiles=12345' "$fixture/etc/sysctl.conf"
+[[ -f $base/pf-tables/nat66_egress ]]
+# Forwarding only after the candidate PF, rad only after forwarding.
+awk '/^pfctl -f .*candidate\/pf.conf$/ {pf=NR}
+ /^sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=1$/ {fw=NR}
+ /^rcctl start rad$/ {rad=NR}
+ END {exit !(pf && fw > pf && rad > fw)}' "$base/operations"
+# Timed restore returns to the confirmed uplink stage: rad, forwarding, Wi-Fi
+# IPv6, rad.conf and the NAT table go; the uplink SLAAC prefix is relearned.
+print 0 > "$base/router-state/deadline"
+: > "$base/operations"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+[[ ! -e $fixture/etc/rad.conf && ! -e $base/pf-tables/nat66_egress ]]
+grep -qx 'rcctl stop rad' "$base/operations"
+grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0' "$base/operations"
+grep -qx 'ifconfig igc2 -inet6' "$base/operations"
+if grep -q -e 'inet6 ' "$base/interfaces/igc2"; then exit 1; fi
+if grep -q 'rcctl -f start rad' "$base/operations"; then exit 1; fi
+grep -qx 'slaacctl send solicitation igc0' "$base/operations"
+grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
+grep -q 'inet6 2001:db8:5::7 .*autoconf' "$base/interfaces/igc0"
+grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
+if grep -q 'f1cb:30' "$fixture/etc/hostname.igc2"; then exit 1; fi
+grep -qx 'net.inet6.ip6.forwarding=0' "$fixture/etc/sysctl.conf"
+grep -qx 'kern.maxfiles=12345' "$fixture/etc/sysctl.conf"
+# Boot restoration of an unconfirmed NAT66 trial restores the persistent
+# uplink files before netstart, rc.conf.local and sysctl included.
+"$fixture/run" stage o34nat02 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm o34nat02 wifi-ipv6-nat66 180
+"$fixture/run" activate o34nat02
+"$fixture/run" boot_restore
+[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+[[ ! -e $fixture/etc/rad.conf ]]
+grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
+if grep -q 'f1cb:30' "$fixture/etc/hostname.igc2"; then exit 1; fi
+grep -qx 'net.inet6.ip6.forwarding=0' "$fixture/etc/sysctl.conf"
+cmp -s "$base/router-state/saved/files$fixture/etc/rc.conf.local" "$fixture/etc/rc.conf.local"
+# A real reboot drops runtime-only state; the mocks keep it, so reset it.
+simulated_reboot() {
+ cp -p "$fixture/igc0.active" "$base/interfaces/igc0"
+ cp -p "$fixture/igc2.active" "$base/interfaces/igc2"
+ rm -f "$base/pf-tables/nat66_egress"
+}
+simulated_reboot
+# The reboot canary is accepted for NAT66 and removed again by boot recovery.
+print 'inet alias 10.20.0.254 255.255.255.0' >> "$nat/hostname.igc0"
+print '# gonf boot canary: 10.20.0.254' >> "$nat/ntpd.conf"
+"$fixture/run" stage o34boot1 wifi-ipv6-nat66 1800
+review wifi-ipv6-nat66
+"$fixture/run" arm o34boot1 wifi-ipv6-nat66 1800
+"$fixture/run" activate o34boot1
+print '' > "$base/router-state/preexisting-connections"
+cat > "$base/sockets" <<'SOCKETS'
+tcp 0 0 192.168.1.2.22 192.168.1.236.46011 ESTABLISHED
+tcp 0 0 10.20.0.1.22 10.99.0.2.46012 ESTABLISHED
+tcp 0 0 10.99.0.1.22 10.99.0.2.46013 ESTABLISHED
+SOCKETS
+"$fixture/run" proof old o34boot1 '192.168.1.236 46011 192.168.1.2 22'
+"$fixture/run" proof new o34boot1 '10.99.0.2 46012 10.20.0.1 22'
+"$fixture/run" proof vpn o34boot1 '10.99.0.2 46013 10.99.0.1 22'
+"$fixture/run" reboot_canary o34boot1
+[[ -f $base/reboot-requested && -f $base/router-state/pending ]]
+"$fixture/run" boot_restore
+if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; then exit 1; fi
+[[ ! -e $fixture/etc/rad.conf ]]
+rm -rf "$nat" && cp -Rp "$fixture/nat66.saved" "$nat"
+rm "$base/reboot-requested"
+simulated_reboot
+# Journals snapshotted before rad.conf ownership omit it from the manifest:
+# a local-only or uplink candidate still restores, a NAT66 candidate refuses.
+strip_rad_manifest() {
+ # rad.conf may be the only absent entry; an empty remainder is valid.
+ grep -vxF "$fixture/etc/rad.conf" "$base/router-state/saved/absent" > "$fixture/absent.next" || :
+ mv "$fixture/absent.next" "$base/router-state/saved/absent"
+ "$fixture/run" atomic "$base/router-state/snapshot-digest" "$("$fixture/run" checksum "$base/router-state/saved")"
+}
+"$fixture/run" stage o34leg01 wifi-ipv6-uplink 180
+review wifi-ipv6-uplink
+"$fixture/run" arm o34leg01 wifi-ipv6-uplink 180
+grep -qxF "$fixture/etc/rad.conf" "$base/router-state/saved/absent"
+strip_rad_manifest
+"$fixture/run" activate o34leg01
+"$fixture/run" restore
+"$fixture/run" stage o34leg02 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm o34leg02 wifi-ipv6-nat66 180
+"$fixture/run" activate o34leg02
+strip_rad_manifest
+expect_fail restore
+grep -q 'incomplete saved file manifest' "$fixture/failure.log"
+[[ -f $base/router-state/pending && -e $fixture/etc/rad.conf ]]
+print -r -- "$fixture/etc/rad.conf" >> "$base/router-state/saved/absent"
+"$fixture/run" atomic "$base/router-state/snapshot-digest" "$("$fixture/run" checksum "$base/router-state/saved")"
+"$fixture/run" restore
+[[ ! -e $fixture/etc/rad.conf && ! -f $base/router-state/pending ]]
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
 # It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"

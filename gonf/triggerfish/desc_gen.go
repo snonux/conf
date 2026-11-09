@@ -22,6 +22,10 @@ func (Base) DescUptimed() string {
 	return "Installs uprecords and enables persistent uptime collection"
 }
 
+func (NAT66) DescEgress() string {
+	return "Installs the per-minute job that points the NAT66 table at the uplink's SLAAC address"
+}
+
 func (Profiles) DescCandidates() string {
 	return "Stages inactive network, firewall and service configuration bundles"
 }
@@ -63,7 +67,7 @@ func (Rollback) DescReadiness() string {
 }
 
 func (Rollback) DescRebootCanary() string {
-	return "Reboots only a proved, unconfirmed shared-profile boot canary"
+	return "Reboots only a proved, unconfirmed boot canary of a canary-capable profile"
 }
 
 func (Rollback) DescRestore() string {

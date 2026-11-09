@@ -37,6 +37,7 @@ func Register() {
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
 	RegisterMethods(triggerfish.Profiles{}, WithPrefix("triggerfish_profiles_"), OnCluster(cluster.NameTriggerfish))
 	RegisterMethods(triggerfish.Rollback{}, WithPrefix("triggerfish_rollback_"), OnCluster(cluster.NameTriggerfish))
+	RegisterMethods(triggerfish.NAT66{}, WithPrefix("triggerfish_nat66_"), OnCluster(cluster.NameTriggerfish))
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.VPN{})
 	RegisterMethods(triggerfish.RecoveryTunnel{}, WithPrefix("triggerfish_recovery_"), OnCluster(cluster.NameTriggerfish))
 	AggregatePrefix("triggerfish", "Configure the LAN OpenBSD host")

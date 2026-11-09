@@ -1,0 +1,46 @@
+#!/bin/ksh
+# Keeps PF table <nat66_egress> equal to the uplink's usable SLAAC address.
+# Installed by triggerfish.NAT66.Egress; root cron runs it every minute.
+#
+# The o34 NAT66 profile translates Wi-Fi ULA traffic with
+# "nat-to <nat66_egress>". PF cannot use "nat-to (igc0)" there: a dynamic
+# interface pool round-robins over every non-link-local igc0 address, which
+# includes the lab ULA. This helper selects only stable, preferred, global
+# SLAAC addresses, so a CPE renumbering is followed within a minute.
+#
+# It is inert unless the loaded ruleset declares the table: router-rollback
+# restoring any other profile removes the table and thereby retires the helper.
+# An empty table makes PF drop untranslatable Wi-Fi IPv6 (fails closed).
+set -eu
+set -o pipefail
+umask 077
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+UPLINK=igc0
+TABLE=nat66_egress
+
+pfctl -s Tables 2>/dev/null | grep -qx "$TABLE" || exit 0
+
+# Global unicast (2000::/3) addresses owned by slaacd. Temporary, deprecated,
+# tentative, duplicated and detached addresses never become the NAT source.
+want=$(ifconfig "$UPLINK" | awk '
+ $1 == "inet6" && $2 ~ /^[23][0-9a-f]*:/ && index($2, ":") <= 5 {
+  managed = 0
+  for (i = 3; i <= NF; i++) {
+   if ($i == "autoconf") managed = 1
+   if ($i ~ /^(temporary|deprecated|tentative|duplicated|detached)$/) next
+  }
+  if (managed) print $2
+ }' | sort)
+have=$(pfctl -t "$TABLE" -T show | awk '{print $1}' | sort)
+[[ $want == "$have" ]] && exit 0
+
+if [[ -z $want ]]; then
+ pfctl -t "$TABLE" -T flush >/dev/null 2>&1
+else
+ next=$(mktemp /etc/gonf/nat66-egress.XXXXXXXX)
+ trap 'rm -f "$next"' EXIT
+ print -r -- "$want" > "$next"
+ pfctl -t "$TABLE" -T replace -f "$next" >/dev/null 2>&1
+fi
+logger -t nat66-egress "table $TABLE set to: ${want:-empty}"

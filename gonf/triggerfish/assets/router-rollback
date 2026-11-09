@@ -10,13 +10,21 @@ BASE=/etc/gonf
 STATE=$BASE/router-state
 SELF=$BASE/router-rollback
 LOCK=$BASE/router-lock
-FILES='/etc/hostname.igc0 /etc/hostname.igc1 /etc/hostname.igc2 /etc/hostname.igc3 /etc/mygate /etc/pf.conf /etc/dhcpd.conf /etc/ntpd.conf /var/unbound/etc/unbound.conf /etc/sysctl.conf /etc/rc.conf.local /etc/resolv.conf'
+# /etc/rad.conf is owned since o34; snapshots taken before it may omit it.
+FILES='/etc/hostname.igc0 /etc/hostname.igc1 /etc/hostname.igc2 /etc/hostname.igc3 /etc/mygate /etc/pf.conf /etc/dhcpd.conf /etc/ntpd.conf /var/unbound/etc/unbound.conf /etc/sysctl.conf /etc/rc.conf.local /etc/resolv.conf /etc/rad.conf'
 SERVICES='dhcpd unbound ntpd rad resolvd'
+# o34 NAT66 runtime dependency (triggerfish.NAT66.Egress), checked before arming.
+NAT66_EGRESS=$BASE/nat66-egress
 
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap) return 0;; *) return 1;; esac; }
+profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66) return 0;; *) return 1;; esac; }
+# o34 stages: SLAAC on the igc0 uplink; NAT66 adds Wi-Fi ULA, rad and forwarding.
+ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 ]]; }
+nat66_profile() { [[ $1 == wifi-ipv6-nat66 ]]; }
+# Profiles whose unconfirmed trial may carry the fixed 10.20.0.254 boot canary.
+canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  if [[ -d $LOCK ]]; then
@@ -67,11 +75,14 @@ validate() {
   ' "$d/hostname.wg2" || fail 'invalid bounded wg2 bootstrap candidate'
   return
  fi
+ typeset forward6=0
+ nat66_profile "$p" && forward6=1
  for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 mygate pf.conf dhcpd.conf ntpd.conf unbound.conf sysctl.conf.fragment services.conf ACTIVATION.txt; do
   [[ -s $d/$f && ! -L $d/$f ]] || fail 'incomplete candidate'
  done
- [[ $(cat "$d/sysctl.conf.fragment") == 'net.inet.ip.forwarding=1
-net.inet6.ip6.forwarding=0' ]] || fail 'unexpected sysctl fragment'
+ [[ $(cat "$d/sysctl.conf.fragment") == "net.inet.ip.forwarding=1
+net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
+ validate_ipv6 "$d" "$p"
  grep -qx 'set state-policy floating' "$d/pf.conf" || fail 'PF policy must remain floating'
  [[ $(cat "$d/mygate") == 192.168.1.1 ]] || fail 'upstream gateway changed'
  grep -qx 'inet 192.168.1.2 255.255.255.0' "$d/hostname.igc0" || fail 'missing old management address'
@@ -81,17 +92,19 @@ net.inet6.ip6.forwarding=0' ]] || fail 'unexpected sysctl fragment'
  done
  # Restrict hostname inputs to the renderer vocabulary: no !commands, DHCP,
  # shell expansion, extra routes, external files or autoconfiguration.
+ # The o34 uplink SLAAC line and Wi-Fi ULA are admitted here and placed below.
  awk '
   /^up$/ {next}
   /^inet( alias)? [0-9.]+ 255\.255\.255\.0$/ {next}
   /^inet6 alias fd02:ca0b:f1cb:20::1 64$/ {next}
   /^inet6 -autoconf -temporary$/ {next}
+  /^inet6 autoconf -temporary$/ {next}
+  /^inet6 alias fd02:ca0b:f1cb:30::1 64$/ {next}
   {exit 1}' "$d"/hostname.igc[0-3] || fail 'unsupported hostname directive'
- [[ $(awk '$1=="inet6" && $2=="alias" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
- [[ $(awk '$0=="inet6 -autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'persistent IPv6 policy missing or duplicated'
+ [[ $(awk '$0=="inet6 alias fd02:ca0b:f1cb:20::1 64" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
  for f in "$d"/hostname.igc[0-3]; do
-  if grep -q '^inet6 alias ' "$f"; then
-   grep -qx 'inet6 -autoconf -temporary' "$f" || fail 'IPv6 policy must accompany the lab address'
+  if grep -qx 'inet6 alias fd02:ca0b:f1cb:20::1 64' "$f"; then
+   grep -Eqx 'inet6 -?autoconf -temporary' "$f" || fail 'IPv6 policy must accompany the lab address'
   fi
  done
  for f in 10.20.0.1 10.30.0.1 10.40.0.1; do
@@ -99,14 +112,40 @@ net.inet6.ip6.forwarding=0' ]] || fail 'unexpected sysctl fragment'
  done
  case $p in
  shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
- wifi-first) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
+ wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
  post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
  post-ap) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
  pfctl -nf "$d/pf.conf"
  [[ $p == shared-igc0 ]] || dhcpd -n -c "$d/dhcpd.conf"
+ nat66_profile "$p" && rad -n -f "$d/rad.conf"
  unbound-checkconf "$d/unbound.conf" >/dev/null
  ntpd -n -f "$d/ntpd.conf"
+}
+
+# o34 IPv6 placement. Local-only profiles keep exactly one persistent
+# "-autoconf" policy line, no Wi-Fi ULA and no rad. The uplink stages replace it
+# with SLAAC on igc0 only (the ISP-facing port); only NAT66 adds the Wi-Fi ULA on
+# igc2, the rad configuration for igc2 alone and the PF egress table.
+validate_ipv6() {
+ typeset d=$1 p=$2 autoconf=0 policy=1 wifi=0 rad=disabled
+ if ipv6_profile "$p"; then autoconf=1; policy=0; fi
+ if nat66_profile "$p"; then wifi=1; rad=enabled; fi
+ [[ $(awk '$0=="inet6 autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$autoconf" ]] || fail 'unexpected IPv6 autoconfiguration line'
+ [[ $(awk '$0=="inet6 -autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$policy" ]] || fail 'persistent IPv6 policy missing or duplicated'
+ [[ $autoconf == 0 ]] || grep -qx 'inet6 autoconf -temporary' "$d/hostname.igc0" || fail 'IPv6 autoconfiguration only on the igc0 uplink'
+ [[ $(awk '$0=="inet6 alias fd02:ca0b:f1cb:30::1 64" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$wifi" ]] || fail 'unexpected Wi-Fi ULA'
+ [[ $wifi == 0 ]] || grep -qx 'inet6 alias fd02:ca0b:f1cb:30::1 64' "$d/hostname.igc2" || fail 'Wi-Fi ULA only on igc2'
+ grep -qx "rad=$rad" "$d/services.conf" || fail 'unexpected rad state'
+ if [[ $wifi == 0 ]]; then
+  [[ ! -e $d/rad.conf && ! -L $d/rad.conf ]] || fail 'rad configuration outside the NAT66 profile'
+  return
+ fi
+ [[ -s $d/rad.conf && ! -L $d/rad.conf ]] || fail 'incomplete candidate'
+ # Advertise on Wi-Fi only: never on the ISP LAN, the lab wire or cameras.
+ # awk runs END after "exit" in a rule, so carry the verdict in a flag.
+ awk '/^#/ || /^$/ {next} $0=="interface igc2" {n++; next} {bad=1; exit} END {exit bad || n!=1}' "$d/rad.conf" || fail 'rad must serve only igc2'
+ grep -qx 'table <nat66_egress> persist' "$d/pf.conf" || fail 'NAT66 egress table missing'
 }
 
 install_boot() {
@@ -192,6 +231,12 @@ current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bou
   END {if (private!=1 || peers!=2) exit 1}' /etc/hostname.wg2 || fail 'wg2 requires one real-form private key and two peer keys'
  ! grep -Eq 'TEMPLATE|INACTIVE|PLACEHOLDER' /etc/hostname.wg2 || fail 'wg2 template is not activatable'
  ifconfig wg2 | awk '$1=="inet" && $2=="10.99.0.1" && $4=="0xffffff00" {ok=1} END {exit !ok}' || fail 'wg2 IPv4 gateway not running'
+ # Without the helper the egress table stays empty: Wi-Fi IPv6 would fail
+ # closed, so refuse before arming instead of trialling a broken profile.
+ if nat66_profile "$(cat "$STATE/profile")"; then
+  [[ -x $NAT66_EGRESS && ! -L $NAT66_EGRESS ]] || fail 'NAT66 egress helper not installed'
+  crontab -l | awk -v helper="$NAT66_EGRESS" '$1=="*" && $2=="*" && $3=="*" && $4=="*" && $5=="*" && $6==helper && NF==6 {ok=1} END {exit !ok}' || fail 'NAT66 egress timer not installed'
+ fi
  # Must already have upstream and current-cabling recovery before post-rack
  # trials. Never synthesize a shared-wire rollback after the rack has moved.
  if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
@@ -355,14 +400,21 @@ persist_candidate() {
  cat "$d/sysctl.conf.fragment" >> /etc/sysctl.conf.gonf-next
  chmod 600 /etc/sysctl.conf.gonf-next
  mv -f /etc/sysctl.conf.gonf-next /etc/sysctl.conf
- rcctl disable rad
+ if nat66_profile "$(cat "$STATE/profile")"; then
+  install -m 600 "$d/rad.conf" /etc/rad.conf.gonf-next
+  mv -f /etc/rad.conf.gonf-next /etc/rad.conf
+  rcctl enable rad
+ else
+  rm -f /etc/rad.conf
+  rcctl disable rad
+ fi
  rcctl disable resolvd
  rcctl enable unbound ntpd
  rcctl set unbound flags "-c /var/unbound/etc/unbound.conf"
  rcctl set ntpd flags ""
  case $(cat "$STATE/profile") in
  shared-igc0|wifi-prepare) rcctl disable dhcpd;;
- wifi-first) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
+ wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
  post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
  post-ap) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
  esac
@@ -398,12 +450,24 @@ drain_addresses() {
  done
 }
 check_candidate_ipv6() {
- typeset i
+ typeset i slaac
  for i in igc0 igc1 igc2 igc3; do
   ifconfig "$i" > "$STATE/ipv6-check"
-  ! grep -q AUTOCONF6 "$STATE/ipv6-check" || fail 'physical IPv6 autoconfiguration remains enabled'
-  awk 'NR==FNR {if ($1=="inet6" && $2=="alias") allowed[$3]=1; next}
-   $1=="inet6" && $2!~/^fe80:/ && !allowed[$2] {exit 1}' \
+  ! grep -q AUTOCONF6TEMP "$STATE/ipv6-check" || fail 'physical IPv6 temporary addressing remains enabled'
+  slaac=no
+  grep -qx 'inet6 autoconf -temporary' "$STATE/candidate/hostname.$i" && slaac=yes
+  if [[ $slaac == yes ]]; then
+   grep -q 'AUTOCONF6[>,]' "$STATE/ipv6-check" || fail 'uplink IPv6 autoconfiguration is not enabled'
+  else
+   ! grep -q AUTOCONF6 "$STATE/ipv6-check" || fail 'physical IPv6 autoconfiguration remains enabled'
+  fi
+  # Static aliases from the candidate, plus stable slaacd addresses only where
+  # the candidate enables SLAAC. Temporary addresses are never expected.
+  awk -v slaac="$slaac" 'NR==FNR {if ($1=="inet6" && $2=="alias") allowed[$3]=1; next}
+   $1=="inet6" && $2!~/^fe80:/ && !allowed[$2] {
+    if (slaac=="yes" && / autoconf/ && !/ temporary/) next
+    exit 1
+   }' \
    "$STATE/candidate/hostname.$i" "$STATE/ipv6-check" || fail 'unexpected physical IPv6 address'
  done
 }
@@ -422,7 +486,11 @@ apply_addresses() {
      ifconfig "$i" inet "$alias" netmask "$address"
     fi;;
    inet6)
+    # One ifconfig call, like netstart: enabling autoconf turns temporary
+    # addressing on by default, the trailing -temporary turns it off again.
+    # The PF still loaded here drops RAs, so slaacd cannot race it.
     if [[ $alias == -autoconf ]]; then ifconfig "$i" inet6 -autoconf -temporary
+    elif [[ $alias == autoconf ]]; then ifconfig "$i" inet6 autoconf -temporary
     else ifconfig "$i" inet6 alias "$address" prefixlen "$mask"; fi;;
    esac
   done < "$STATE/candidate/hostname.$i"
@@ -459,7 +527,16 @@ activate() {
  pfctl -f "$STATE/candidate/pf.conf"
  pfctl -F states >/dev/null
  if ! pfctl -s info | grep -q '^Status: Enabled'; then pfctl -e; fi
- sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0 >/dev/null
+ # Forwarding follows the validated fragment, and only after its PF loaded.
+ typeset forward6=0 i
+ nat66_profile "$(cat "$STATE/profile")" && forward6=1
+ sysctl net.inet.ip.forwarding=1 "net.inet6.ip6.forwarding=$forward6" >/dev/null
+ # The previous PF dropped router advertisements; ask the CPE again now.
+ for i in igc0 igc1 igc2 igc3; do
+  if grep -qx 'inet6 autoconf -temporary' "$STATE/candidate/hostname.$i"; then
+   slaacctl send solicitation "$i"
+  fi
+ done
  rcctl start unbound
  # resolvd is stopped and disabled under the armed journal. Switch only after
  # local DNS starts; ntpd must resolve through it rather than removed IPv6.
@@ -467,6 +544,8 @@ activate() {
  chmod 644 /etc/resolv.conf
  rcctl start ntpd
  case $(cat "$STATE/profile") in shared-igc0|wifi-prepare) ;; *) rcctl start dhcpd;; esac
+ # rad advertises the Wi-Fi ULA only after PF and forwarding are in place.
+ if nat66_profile "$(cat "$STATE/profile")"; then rcctl start rad; fi
  check_candidate_ipv6
  atomic "$STATE/status" active-unconfirmed
  sync
@@ -490,9 +569,13 @@ restore_files() {
   if [[ -f $STATE/saved/files$f ]]; then
    cp -p "$STATE/saved/files$f" "$f.gonf-restore"
    mv -f "$f.gonf-restore" "$f"
-  else
-   grep -qxF "$f" "$STATE/saved/absent" || fail 'incomplete saved file manifest'
+  elif grep -qxF "$f" "$STATE/saved/absent"; then
    rm -f "$f"
+  elif [[ $f == /etc/rad.conf && ! -e $STATE/candidate/rad.conf ]]; then
+   # Snapshot predates rad.conf ownership; its candidate never wrote one.
+   :
+  else
+   fail 'incomplete saved file manifest'
   fi
  done
  sync
@@ -751,7 +834,9 @@ boot_restore() {
 reboot_canary() {
  typeset table role
  need_token "$1"
- pending && [[ $(cat "$STATE/status") == active-unconfirmed && $(cat "$STATE/profile") == shared-igc0 ]] || fail 'no active shared boot canary'
+ if ! pending || [[ $(cat "$STATE/status") != active-unconfirmed ]] || ! canary_profile "$(cat "$STATE/profile")"; then
+  fail 'no active boot canary'
+ fi
  [[ $(cat "$STATE/deadline") -gt $(($(date +%s) + 300)) ]] || fail 'insufficient reboot recovery window'
  check_hook
  rcctl check cron >/dev/null || fail 'rollback cron is not running'

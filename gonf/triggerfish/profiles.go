@@ -14,7 +14,8 @@ type Profiles struct{ RequiresRoot }
 
 // RouterProfiles carries verified migration dependencies from inventory.
 type RouterProfiles struct {
-	// BootCanary adds a fixed, reserved alias only to the shared profile.
+	// BootCanary adds a fixed, reserved alias only to the shared profile and
+	// the o34 NAT66 profile (see bootCanaryStage).
 	BootCanary bool
 	// RetainProvisioningAlias keeps the existing 192.168.11.2 alias in every
 	// candidate until verified retirement. This retains its address only: any
@@ -25,11 +26,6 @@ type RouterProfiles struct {
 	// JetKVMManagement admits only independently reserved shared-wire endpoints.
 	// Populate after IQ allocation and native UDP-range inspection, not discovery.
 	JetKVMManagement []JetKVMManagementEndpoint
-	// WiFiIPv6Candidate additionally renders the inactive o34 profile
-	// "wifi-ipv6-candidate" (see ipv6wifi.go) for offline/native review. The
-	// zero value renders nothing; the rollback helper and trial input do not
-	// accept that profile, so it cannot be staged or activated either way.
-	WiFiIPv6Candidate bool
 }
 
 // JetKVMManagementEndpoint permits laptop management and native ephemeral UDP.
@@ -87,9 +83,9 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	for _, stage := range routerStages() {
 		profiles[stage.name] = profileFiles(stage, data)
 	}
-	if data.WiFiIPv6Candidate {
-		stage := wifiIPv6Stage()
-		profiles[stage.name] = wifiIPv6Files(stage, data)
+	// o34 IPv6 stages (ipv6wifi.go) reuse the wifi-first wiring.
+	for _, stage := range ipv6Stages() {
+		profiles[stage.name] = ipv6Files(stage, data)
 	}
 	return profiles, nil
 }
@@ -132,7 +128,7 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 	}
 	files["hostname."+s.lab] += "inet6 alias fd02:ca0b:f1cb:20::1 64\n"
 	files["hostname."+s.lab] += "inet6 -autoconf -temporary\n"
-	if data.BootCanary && s.name == "shared-igc0" {
+	if data.BootCanary && bootCanaryStage(s.name) {
 		files["hostname.igc0"] += "inet alias 10.20.0.254 255.255.255.0\n"
 		files["ntpd.conf"] += "# gonf boot canary: 10.20.0.254\n"
 	}
@@ -140,6 +136,14 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 		files["hostname.igc1"] += "inet alias 10.98.0.1 255.255.255.0\n"
 	}
 	return files
+}
+
+// bootCanaryStage names the profiles whose unconfirmed trial may carry the
+// fixed reboot canary: the shared profile (u14) and the o34 NAT66 profile,
+// whose persistence across a real reboot is part of its acceptance. Both keep
+// the lab zone on igc0, where the canary alias lives.
+func bootCanaryStage(name string) bool {
+	return name == "shared-igc0" || name == ipv6NAT66ProfileName
 }
 
 func validateMigrationFlows(flows []MigrationFlow) error {
@@ -185,7 +189,7 @@ func localOnlyIPv6Rules() string {
 }
 
 // labIPv6Rules permits only lab ULA neighbour discovery and echo to the router.
-// Shared by the local-only policy and the o34 Wi-Fi IPv6 candidate, which
+// Shared by the local-only policy and the o34 IPv6 stages, which
 // must keep the lab ULA exactly as local as before.
 func labIPv6Rules() string {
 	return `# Native IPv6 is local-only; allow address resolution on the lab link.
