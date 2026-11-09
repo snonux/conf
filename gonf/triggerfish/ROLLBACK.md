@@ -712,3 +712,30 @@ their old ISP leases and stayed reachable lab-to-lab via the retained
 - `checks/dhcp-probe.py`: raw DHCPDISCOVER/REQUEST probe (stdlib, Linux,
   root, broadcast flag, never changes the host's addresses) for real
   DISCOVER-to-OFFER proofs from a lab host (r0) and the laptop's Wi-Fi.
+
+## h24: lab-igc1 reapply, reboot and boot fallback (2026-11-09)
+
+`lab-igc1` has no boot canary (its fixed alias lives on igc0, which
+`validate_prefixes` refuses), so h24 tested its boot fallback with an
+**identical** trial instead: stage (candidate == live == HEAD render, 10
+files), readiness, arm (window 1200), activate, GATE PASS, then the guards
+of `reboot_canary` (active-unconfirmed, more than 300 s left, cron, no
+queued or running upgrade, the three proofs, live files unchanged) and a
+plain `doas shutdown -r now` while unconfirmed. The router was back in 40 s
+with `status=restored-at-boot profile=lab-igc1` and no pending rollback:
+the early-boot hook restored the snapshot. Because snapshot and candidate
+were the same lab-igc1 files, either outcome of the restore booted
+lab-igc1. All persistent files, `/etc/rc` and `sysctl.conf` were unchanged.
+After boot igc1 lists `10.20.0.1` first (live activations list `10.98.0.1`
+first); dhcpd held both bpf devices and offered a reserved JetKVM address on
+igc1 in both orders. A second identical trial was confirmed (reapply
+persistence). There is still no gonf task that reboots a non-canary
+profile; the reboot was the operator's own command.
+
+DHCP authority: OpenBSD dhcpd is authoritative by default and NAKs an
+INIT-REBOOT request for a foreign address on igc1 (probe from r0: `DHCPNAK
+on 192.168.1.250`). The JetKVMs' ISP leases are in REBINDING (ciaddr set,
+no requested-address option), which OpenBSD dhcpd ignores whatever the
+setting, so `authoritative;` is not rendered (comment in `labDHCPNetwork`).
+Private receipts: `~/.local/state/conf/h24-20261109/`; acceptance record in
+IQ `openbsdrouter-plan/NEXT-SESSION.md` (h24 section).

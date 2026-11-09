@@ -378,6 +378,14 @@ const labDHCPSubnet = "subnet 10.20.0.0 netmask 255.255.255.0 {\n option routers
 // reason (review B1). Both igc1 prefixes therefore share one network, the
 // recovery subnet without a pool, and the server identifier is the lab
 // gateway, the only igc1 address PF admits DHCP requests to.
+//
+// No "authoritative;" here on purpose (h24): OpenBSD dhcpd is authoritative
+// by default (confpars.c root_group.authoritative = 1) and already NAKs an
+// INIT-REBOOT or SELECTING request for a foreign address on igc1. A client
+// still holding an ISP lease sends REBINDING requests (ciaddr set, no
+// requested-address option), which dhcp.c dhcprequest() ignores whatever the
+// setting, because it cannot tell them from RENEWING ones. Such a client moves
+// to its reservation when the old lease expires or when it reboots.
 func labDHCPNetwork(s routerStage) string {
 	if !s.recovery {
 		return labDHCPSubnet
