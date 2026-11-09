@@ -391,7 +391,10 @@ IPv6 uses NAT66. Two stageable profiles share the wifi-first wiring:
   `ip6.forwarding=0`, Wi-Fi unchanged.
 - `wifi-ipv6-nat66`: adds `fd02:ca0b:f1cb:30::1/64` on igc2, `/etc/rad.conf`
   for igc2 only, `rad` enabled, `ip6.forwarding=1` and
-  `match out on igc0 ... nat-to <nat66_egress>`.
+  `match out on igc0 ... nat-to <nat66_egress>`, placed before every quick
+  uplink rule (a quick rule ends evaluation, so a later match never
+  translates; live trial `o34-nat66-20261109-b` showed exactly that, and
+  Stage now refuses such an order).
 
 `nat-to (igc0)` is deliberately not used: a dynamic interface pool
 round-robins over every non-link-local igc0 address, including the lab ULA.
