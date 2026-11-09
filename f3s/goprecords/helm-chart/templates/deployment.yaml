@@ -36,7 +36,9 @@ spec:
           readOnly: true
       containers:
       - name: goprecords
-        image: registry.lan.buetow.org:30001/goprecords:0.6.2
+        # App v0.6.2 on the refreshed runtime (Go 1.27.3, Alpine 3.24.4); immutable
+        # tag, never re-pushed. Build: docker-image/Justfile (task 644).
+        image: registry.lan.buetow.org:30001/goprecords:0.6.2-runtime20261108
         imagePullPolicy: Always
         args:
           - -daemon
