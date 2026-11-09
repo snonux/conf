@@ -2,7 +2,10 @@ replicaCount: 1
 
 image:
   repository: prom/pushgateway
-  tag: v1.11.4
+  # Pinned by the multi-arch index digest (Docker Hub, task i54): the tag
+  # alone with pullPolicy Always would follow a re-pushed tag on any restart.
+  # Bump tag and digest together (skopeo inspect --raw | sha256sum).
+  tag: "v1.11.5@sha256:bf6442633f6129d3e3f9861fa14c77bc012d74b33a1dd213d7b458b89ce3cc5d"
   pullPolicy: Always
 
 service:

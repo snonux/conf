@@ -1,7 +1,8 @@
 # Pushgateway
 
-`prom/pushgateway:v1.11.4`, ClusterIP service `pushgateway:9091` in
-`monitoring` plus the Local NodePort `pushgateway-lan` (30091, see Writers),
+`prom/pushgateway:v1.11.5` (pinned by digest in `values.yaml`), ClusterIP
+service `pushgateway:9091` in `monitoring` plus the Local NodePort
+`pushgateway-lan` (30091, see Writers),
 ArgoCD app `pushgateway` (chart in `helm-chart/`). No auth, no persistence:
 metrics live until deleted or the pod restarts. Prometheus scrapes it
 through the `pushgateway` job in `additional-scrape-configs` with
