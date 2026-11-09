@@ -66,9 +66,16 @@ func (ShellyTLS) Script() {
 // only writable place and StateDir creates it in the same plan.
 // WithManageHome also points an existing account's passwd home field there
 // (usermod -d, which neither moves nor chowns anything).
+//
+// cron keeps the passwd entry it read when it loaded the user's crontab
+// and reads it again only when that crontab file changes, so a home change
+// alone still fails with the old directory (seen at the first scheduled run
+// after the n54 usermod). Restart cron whenever the account changes; on a
+// first deployment the restart is harmless.
 func (ShellyTLS) Account() {
-	User(shellyTLSUser, WithPrimaryGroup(shellyTLSUser),
+	account := User(shellyTLSUser, WithPrimaryGroup(shellyTLSUser),
 		WithHome(shellyTLSStateDir), WithManageHome, WithShell("/sbin/nologin"))
+	Sh("/etc/rc.d/cron restart", OnChange(account))
 }
 
 // OptsStateDir records the account before the directory it owns.
