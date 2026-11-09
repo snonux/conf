@@ -47,37 +47,6 @@ spec:
         - name: navidrome-data
           mountPath: /data
           readOnly: true
-      # One-time cold backup before 0.64.2 migrates the schema (task 444).
-      # Recreate has already stopped the old pod, so the DB is closed and a
-      # byte copy (plus any leftover WAL) is consistent and loses no writes.
-      # It runs on whatever sync deploys this chart, so pushing the commit
-      # cannot upgrade an unbacked DB. Skipped once the backup exists; rename
-      # or remove it before a later re-upgrade from 0.63.2. Rollback: README.
-      - name: pre-upgrade-backup
-        image: busybox:1.36.1
-        command:
-        - sh
-        - -c
-        - |
-          set -eu
-          cd /data
-          b=navidrome-before-0.64.2.db
-          if [ -e "$b" ]; then
-            echo "pre-upgrade backup $b already present; skipping"
-            exit 0
-          fi
-          rm -f "$b.part" "$b-wal"
-          cp -p navidrome.db "$b.part"
-          cmp navidrome.db "$b.part"
-          if [ -e navidrome.db-wal ]; then
-            cp -p navidrome.db-wal "$b-wal"
-            cmp navidrome.db-wal "$b-wal"
-          fi
-          mv "$b.part" "$b"
-          echo "pre-upgrade backup written and compared: /data/$b"
-        volumeMounts:
-        - name: navidrome-data
-          mountPath: /data
       # No nodeSelector: /data and /music are both on the NFS export that is
       # mounted on every r-node, so the pod can run on r0, r1 or r2. The
       # init container above refuses to start on a node without the mount

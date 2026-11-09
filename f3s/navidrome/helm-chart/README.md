@@ -94,15 +94,24 @@ With the default DSN the same copy timed out on login. Evidence:
 
 ## Upgrade and rollback
 
-0.64 migrates the schema (canonical IDs, artwork tables). The
-`pre-upgrade-backup` init container copies the closed DB to
-`/data/navidrome-before-0.64.2.db` (plus `-wal` if present) and compares the
-copy before the first 0.64.2 start, and skips that step once the file exists.
-Before the rollout, make sure `/data` has no `navidrome-before-0.64.2.db`;
-if it exists, the init container skips the fresh backup (a leftover `-wal`
-alone is deleted and does not prevent it). After
-a verified rollout, a follow-up commit removes the init container; the
-backup file stays.
+0.64 migrates the schema (canonical IDs, artwork tables). Rolled out on
+2026-11-09 (11:33 UTC, conf push `1fc3dfa`). A one-time `pre-upgrade-backup`
+init container copied the closed 0.63.2 DB to
+`/data/navidrome-before-0.64.2.db` and compared the copy before the first
+0.64.2 start. It was removed once the rollout was verified; the backup file
+stays (integrity ok, schema 20260703013908). The f0 snapshot
+`zdata/enc/nfsdata@444-navidrome-before-0642-20261109` (hold
+`444-navidrome-upgrade`) was taken just before. Release the hold once
+rollback is no longer wanted, because holds block zrepl pruning.
+
+Verified after the rollout:
+- Argo Synced/Healthy; pod Ready on digest `38dc2727`, 0 restarts.
+- `Loaded configuration file=/config/navidrome.toml`; migration to 20260922230428.
+- Startup 3.8 s, no error lines.
+- On the node, one exclusive POSIX lock on `navidrome.db` and no `-shm`.
+- `/ping` 200; a wrong login was rejected with 401 in 0.04 s.
+- Both ingress hosts answer.
+
 0.64 changes song and playlist IDs to canonical ones. Library IDs, users,
 passwords, stars, play counts and play queues are kept.
 
@@ -135,7 +144,7 @@ Historical (October 2026 trials, superseded by
 retained in `/data` as `navidrome-before-0.64.2-20261015.db` (SQLite online
 backup, quick_check passed). It was the restore point for those trials. For
 the current upgrade, the rollback source is `navidrome-before-0.64.2.db`,
-written by the init container.
+written by the (since removed) init container.
 
 The 2026-10-15 trial of 0.64.2 stalled authentication and API requests while
 its new artwork workers contended in SQLite on this deployment. Private-cache and rollback-
