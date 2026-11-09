@@ -21,12 +21,15 @@ Until 2026-09-25 `/data` was a local-path PVC on r1 with a `nodeSelector`;
 it moved back to NFS so r1 is no longer a single point of failure, with the
 cache kept node-local (the reason it had left NFS: ~19 s image-cache init).
 
-Env in `templates/deployment.yaml`: `ND_SCANSCHEDULE=1h`, `ND_LOGLEVEL=info`,
-`ND_BASEURL=""`, `ND_CACHEFOLDER=/cache`, `ND_ENABLESHARING=false` (preserves
-the pre-0.63 sharing default), `ND_CONFIGFILE=/config/navidrome.toml` and
-`ND_DEVEXTERNALSCANNER=false` (see [SQLite on NFS](#sqlite-on-nfs-unix-excl)). Add music by copying into the music dir on the NFS server;
-the hourly scan finds it. Users are managed in the web UI (first visit creates
-the admin).
+Env in `templates/deployment.yaml`: `ND_LOGLEVEL=info`, `ND_BASEURL=""`,
+`ND_CACHEFOLDER=/cache`, `ND_ENABLESHARING=false` (preserves the pre-0.63
+sharing default), `ND_CONFIGFILE=/config/navidrome.toml` and
+`ND_DEVEXTERNALSCANNER=false` (see [SQLite on NFS](#sqlite-on-nfs-unix-excl)).
+The config file (`templates/configmap.yaml`) holds `DbPath` and the scan
+schedule. Add music by copying it into the music dir on the NFS server. The
+hourly periodic scan imports it within the hour (see
+[Library scans](#library-scans)). Users are managed in the web UI (first
+visit creates the admin).
 
 ```sh
 just status | logs [lines] | port-forward [4533] | sync | argocd-status | restart
@@ -34,6 +37,46 @@ just status | logs [lines] | port-forward [4533] | sync | argocd-status | restar
 
 Clients: play:Sub, substreamer (iOS); DSub, Ultrasonic, substreamer
 (Android); Sublime Music, Sonixd.
+
+## Library scans
+
+Navidrome finds new music in three ways:
+
+- **Periodic scan**, hourly: `[Scanner] Schedule = "@every 1h"` in
+  `navidrome.toml`. The interval counts from pod start. The startup log
+  shows `Scheduling periodic scan schedule="@every 1h"`. A quick scan of
+  the whole library takes 1-3 s over NFS, so the load is small.
+- **Startup scan**: every pod start runs a quick scan
+  (`Scanner.ScanOnStartup`, default on).
+- **Watcher**: inotify on `/music`. On an NFS client, inotify only reports
+  changes made through that node's own mount. Files copied in on the NFS
+  server (f0) or from another r-node do not trigger it. They wait for the
+  next periodic scan.
+
+Until 2026-11-09 the chart set `ND_SCANSCHEDULE=1h`. 0.63 and 0.64 ignore
+that old key, so the log said "Periodic scan is DISABLED" and server-side
+additions only appeared after a restart (task o44). The schedule now lives
+in the config file because Navidrome warns about unknown keys there
+(`Option '...' is not recognized`) but ignores unknown `ND_*` variables
+silently. Accepted values (robfig/cron via `scheduler.ParseCrontab` in
+0.64.2): a cron spec (`0 * * * *`), a descriptor (`@every 1h`) or a bare Go
+duration (`1h` becomes `@every 1h`); `0` disables it.
+
+Verified on 2026-11-09 with fixtures built from the rendered chart. A copied
+DB with this config logged the `@every 1h` schedule. A fresh-DB fixture ran
+the same config with `@every 2m`. An album copied in on f0 and one copied
+in from r0 caused no watcher event; the next scheduled scan imported both.
+An album copied in on the pod's own node triggered the watcher within 5 s.
+Evidence: `~/.local/state/conf/o44-navidrome-20261109/`.
+
+To see new music sooner than the next periodic scan, start a scan by hand
+in one of these ways:
+
+- Web UI as admin: the activity panel (top right), "Quick Scan".
+- `just restart`: the startup scan picks it up.
+
+The native `navidrome scan` CLI cannot run next to the server, because the
+DB is exclusively locked.
 
 ## SQLite on NFS (unix-excl)
 

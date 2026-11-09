@@ -3,6 +3,20 @@
 # DbPath must be set here, not as ND_DBPATH: Navidrome 0.64.2 registers no
 # viper default for "dbpath", so the environment variable is silently ignored.
 #
+# Scanner.Schedule lives here too (task o44). Until 2026-11-09 the chart set
+# ND_SCANSCHEDULE=1h, an old key that 0.63 and 0.64 ignore: they logged
+# "Periodic scan is DISABLED". Navidrome warns about unknown keys in this
+# file ("Option '...' is not recognized") but not about unknown ND_*
+# variables, so a future rename shows up in the log here. The value goes
+# through robfig/cron (scheduler.ParseCrontab in 0.64.2): a cron spec, a
+# descriptor such as "@every 1h", or a bare Go duration ("1h" becomes
+# "@every 1h"); "0" disables it. The interval counts from process start.
+# The periodic scan is needed because the library watcher uses inotify,
+# which on an NFS client sees only changes made on that same node. Music
+# copied in on the NFS server or from another node shows up only after the
+# next scan. A quick scan of the whole library takes about 3 s over NFS
+# (startup scan, 2026-11-09), so an hourly scan costs little.
+#
 # Why the custom DSN: the SQLite DB lives on the NFS export (NFSv4.2 through
 # stunnel, local_lock=none). With SQLite's default "unix" VFS every
 # transaction takes and drops POSIX locks on navidrome.db and its WAL index
@@ -51,3 +65,6 @@ metadata:
 data:
   navidrome.toml: |
     DbPath = "file:/data/navidrome.db?vfs=unix-excl&_busy_timeout=15000&_journal_mode=WAL&_foreign_keys=on&synchronous=normal"
+
+    [Scanner]
+    Schedule = "@every 1h"
