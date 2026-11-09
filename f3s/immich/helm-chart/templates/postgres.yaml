@@ -1,7 +1,11 @@
-# PostgreSQL 18 with VectorChord 1.1.1 and pgvector 0.8.5.
+# PostgreSQL 18 with VectorChord 1.1.1 and pgvector 0.8.7.
 # The PG16 database was dumped and restored into 18/f3s on 2026-10-17;
 # its original files remain at the PVC root. The restore rebuilt vector
 # indexes, so the legacy pgvecto.rs preload and compatibility image are gone.
+# The pgvector 0.8.7 image (2026-11-09) changed only the vector binary; the
+# database's SQL extension was then raised with ALTER EXTENSION vector UPDATE.
+# Never return to the 0.8.5 image after that: there is no downgrade path, so
+# rollback is a restore of the pre-change dump (see ../../README.md).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -44,7 +48,7 @@ spec:
           readOnly: true
       containers:
       - name: postgres
-        image: registry.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1
+        image: registry.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1-pgvector0.8.7
         ports:
         - containerPort: 5432
         env:
