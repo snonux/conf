@@ -430,3 +430,16 @@ The fixed reboot canary is also accepted for `wifi-ipv6-nat66`, so its
 persistence can be proven across a real reboot. Fixture coverage lives in
 `checks/rollback.ksh` (stage refusals, temporary-address refusal, ordering,
 timed/boot/legacy restoration, canary).
+
+## p34 Shelly HTTPS (temporary TCP443 next to TCP80)
+
+The Shelly plugs serve native HTTPS with private-CA certificates (IQ
+`hosts/shelly-plug.md`). While the controllers move to HTTPS, only
+`wifi-ipv6-nat66` permits `port { 80, 443 }` for exactly the existing
+controller pairs: pi0/pi1 to both plugs, f0-f3 to the fans plug, and laptop
+wg2 `10.99.0.2` to both (`shellyPorts` in `profiles.go`). Every other profile
+renders byte-identical, with port 80 only. pfctl merges the fans-plug sources
+into `__automatic_*` tables, so verify the loaded rules by expanding those
+tables, not by counting lines. Trial `p34-shelly443-20261109-a` was confirmed
+on 2026-11-09. Port 80 is removed in a later p34 trial, once every caller is
+accepted on HTTPS.

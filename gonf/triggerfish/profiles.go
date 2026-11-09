@@ -254,11 +254,7 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.138 port 2323 tag gonf_t
 pass in on wg2 inet proto tcp from 10.99.0.3 to <lab> port 443 tag gonf_transit keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to 10.99.0.1 port 22 keep state
 pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag gonf_transit keep state
-# Shelly controllers only; replies use state, no Wi-Fi initiation to lab.
-pass in on $lab_if inet proto tcp from { 10.20.0.130, 10.20.0.131, 10.20.0.132, 10.20.0.133 } to 10.30.0.28 port 80 tag gonf_transit keep state
-pass in on $lab_if inet proto tcp from { 10.20.0.125, 10.20.0.126 } to { 10.30.0.28, 10.30.0.29 } port 80 tag gonf_transit keep state
-pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 80 tag gonf_transit keep state
-`
+` + shellyControllerRules(shellyPorts(s))
 	if s.recovery {
 		rules += "pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port { 22, 443 } tag gonf_transit keep state\n"
 		rules += "pass in on wg2 inet proto icmp from 10.99.0.2 to 10.98.0.0/24 tag gonf_transit keep state\n"
@@ -284,6 +280,30 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 
 		}
 	}
 	return rules
+}
+
+// shellyControllerRules permits only the existing Shelly controllers: pi0/pi1
+// to both plugs, f0-f3 to the rack-fan plug, and the laptop over wg2 to both.
+// Replies use state; Wi-Fi never initiates towards the lab.
+func shellyControllerRules(ports string) string {
+	return fmt.Sprintf(`# Shelly controllers only; replies use state, no Wi-Fi initiation to lab.
+pass in on $lab_if inet proto tcp from { 10.20.0.130, 10.20.0.131, 10.20.0.132, 10.20.0.133 } to 10.30.0.28 port %[1]s tag gonf_transit keep state
+pass in on $lab_if inet proto tcp from { 10.20.0.125, 10.20.0.126 } to { 10.30.0.28, 10.30.0.29 } port %[1]s tag gonf_transit keep state
+pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port %[1]s tag gonf_transit keep state
+`, ports)
+}
+
+// shellyPorts is the plugs' RPC port set per stage. p34 moves the controllers
+// to the plugs' native HTTPS (TCP443, private-CA certificates). While callers
+// migrate, only the live profile (wifi-ipv6-nat66) admits 443 next to 80, for
+// exactly the same source/destination pairs; every other profile keeps HTTP
+// alone and renders unchanged. Port 80 is removed in a later p34 step, once
+// every caller is accepted on HTTPS.
+func shellyPorts(s routerStage) string {
+	if s.name == ipv6NAT66ProfileName {
+		return "{ 80, 443 }"
+	}
+	return "80"
 }
 
 func profileDHCP(s routerStage) string {
