@@ -24,6 +24,8 @@ content upload and smoke-test commands; see server `CITIZENSHIP.md` for teaching
 7. Run the citizenship smoke test through a local port-forward and public TLS,
    with the existing secret supplied in the environment. Use `--write` once
    to check personal-data writes; its unique vocabulary entry is cleaned up.
+   A save failing with permission denied means a learner file or directory
+   lost its 1000:1000 owner (see README "Identity and NFS ownership").
 
 Earth default kubectl now uses the persistent wg2 SSH tunnel; use that context
 when wg2 is active. The separate wg0 context still requires an active mesh. SSH to the FreeBSD hosts
@@ -60,6 +62,10 @@ first citizenship migration formerly used0.1.2/podcast; that historical
 configuration is not the rollback target for this runtime update. Do not delete the ArgoCD app or
 PVC to roll back. Prepared assets and learner files stay on NFS.
 
+For the UID0 -> 1000:1000 change itself (task c44), set the chart back to
+`runAsUser: 0` on the app container and drop the pod-level `runAsNonRoot`;
+the 1000-owned learner files stay writable for root (`maproot=root`).
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -69,6 +75,8 @@ PVC to roll back. Prepared assets and learner files stay on NFS.
 | validate-citizenship fails | Init logs; validate local assets and re-upload |
 | ImagePullBackOff | New tag exists in registry and matches both image fields |
 | App rejects listener | Existing secret/key `BGTUTOR_TOKEN` is present |
+| CreateContainerConfigError non-root | Something set `runAsUser: 0` again; keep 1000 |
+| Vocabulary/progress save fails | Owner of `vocabulary/` or `citizenship-progress/` is still 1000:1000 |
 | Public 502/503 | Deployment readiness, service endpoints, existing frontend route |
 | Old tools appear | ArgoCD revision/image/mode, then connector tool refresh |
 

@@ -18,6 +18,18 @@ spec:
       labels:
         app: bgtutor
     spec:
+      # Every container runs as the cluster's NFS data-writer identity 1000:1000
+      # (same as forgejo/keybr). The NFS server owns only data/vocabulary and
+      # data/citizenship-progress as 1000:1000; data/, episodes/ and the
+      # prepared citizenship-test/ stay owned by others and are read-only to
+      # this UID. fsGroup is deliberately unset: kubelet does not chown hostPath
+      # PVs, so ownership is managed on the NFS server instead (task c44).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - name: nfs-check-data
         image: busybox:1.36.1
@@ -31,6 +43,11 @@ spec:
             echo "pod would otherwise bind-mount the local-XFS shadow"
             exit 1
           )
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         volumeMounts:
         - name: bgtutor-data
           mountPath: /mnt
@@ -40,6 +57,11 @@ spec:
         image: registry.lan.buetow.org:30001/bgtutor:0.30.0-runtime20261108-sdk141
         command: ["/usr/local/bin/bgtutor", "validate"]
         args: ["--mode", "citizenship", "--data-dir", "/data"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         volumeMounts:
         - name: bgtutor-data
           mountPath: /data
@@ -87,13 +109,13 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "250m"
+        # Runs as the pod-level UID/GID 1000; it writes only vocabulary/ and
+        # citizenship-progress/, which are owned by that identity on NFS.
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
-          # root so it can write vocabulary/ and citizenship-progress/ on the NFS export, same as
-          # goprecords; the binary itself needs no privileges.
-          runAsUser: 0
-          runAsGroup: 0
+          capabilities:
+            drop: ["ALL"]
         volumeMounts:
         - name: bgtutor-data
           mountPath: /data

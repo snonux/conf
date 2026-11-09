@@ -62,10 +62,25 @@ Validate with `helm lint`, `helm template` and a Kubernetes server dry run.
 Commit only the workload files and push conf master to Forgejo; ArgoCD deploys
 it automatically. See `HANDOVER.md` for verification and rollback.
 
-The image defaults to nonroot, but the current production chart explicitly
-runs UID0 for its existing NFS personal-data permissions. This runtime rebuild
-preserves that baseline; task c44 owns the separate verified permission/UID
-migration. Do not describe production as nonroot until that task is accepted.
+## Identity and NFS ownership (task c44)
+
+Every container runs as UID/GID 1000:1000, the cluster's NFS data-writer
+identity, with `runAsNonRoot`, RuntimeDefault seccomp, no privilege
+escalation, all capabilities dropped and a read-only root filesystem. On the
+NFS export only the two learner directories belong to that identity:
+
+| Path below `bgtutor/data` | Owner | Mode | Writer |
+|---|---|---|---|
+| `.`, `episodes/` (episode folders 1001:1001), `.nfs-sentinel` | 0:0 | 0755 / 0644 | none (read-only to the app) |
+| `citizenship-test/` (prepared) | 1001:1001 (upload user) | 0755 / 0644 | rsync upload only |
+| `vocabulary/`, `vocabulary/saved.json` | 1000:1000 | 0755 / 0600 | app |
+| `citizenship-progress/` | 1000:1000 | 0755 | app (creates `saved.json` 0644) |
+
+`fsGroup` is unset on purpose: kubelet does not chown hostPath volumes, so
+ownership is managed on the NFS server. The app cannot create files in
+`data/`, `episodes/` or `citizenship-test/`. Keep uploads to
+`citizenship-test/` world-readable. A restore from backup must keep the
+learner files 1000-owned (`doas chown -h 1000:1000`), or the app fails to save.
 
 ## Verify
 
