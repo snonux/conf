@@ -32,9 +32,11 @@
 # - No second process can open the DB while Navidrome runs. That is why
 #   ND_DEVEXTERNALSCANNER=false keeps the scanner in-process. The native CLI
 #   cannot run alongside the server (kubectl exec into the pod fails), and
-#   with the pod stopped only "navidrome user" works: backup, doctor and
-#   search call requireExistingDB, which cuts DbPath at "?" and stats
-#   "file:/data/navidrome.db", a path that does not exist, so they abort.
+#   with the pod stopped backup, doctor and search abort: they call
+#   requireExistingDB, which cuts DbPath at "?" and stats
+#   "file:/data/navidrome.db", a path that does not exist. The other DB
+#   commands (user, pls, missing, plugin, artwork, scan) skip that check and
+#   work with the pod stopped.
 #   Back up from ZFS snapshots of the NFS dataset, or copy the files with
 #   the pod stopped.
 # - A second pod cannot share the DB by accident: it fails with "database is

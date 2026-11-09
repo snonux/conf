@@ -74,10 +74,12 @@ Constraints that follow:
   is kept as tested; go-sqlite3 sets `synchronous = NORMAL` by default anyway.
 - No second process can open the DB while Navidrome runs. The scanner runs
   in-process (`ND_DEVEXTERNALSCANNER=false`, a developer option). No native
-  CLI command runs alongside the server. With the pod stopped only
-  `navidrome user` works. `backup`, `doctor` and `search` abort with "No
-  existing database": `requireExistingDB` cuts `DbPath` at `?` and checks
-  `file:/data/navidrome.db`, a path that does not exist. An online `sqlite3`
+  CLI command runs alongside the server. With the pod stopped, `backup`,
+  `doctor` and `search` abort with "No existing database":
+  `requireExistingDB` cuts `DbPath` at `?` and checks
+  `file:/data/navidrome.db`, a path that does not exist. The other DB
+  commands (`user`, `pls`, `missing`, `plugin`, `artwork`, `scan`) skip that
+  check and work with the pod stopped. An online `sqlite3`
   backup from another process also fails. Back up from a ZFS snapshot of
   `zdata/enc/nfsdata`, or copy the files with the pod stopped.
 - A second pod (rollout overlap, node partition) fails with `database is
@@ -96,8 +98,9 @@ With the default DSN the same copy timed out on login. Evidence:
 `pre-upgrade-backup` init container copies the closed DB to
 `/data/navidrome-before-0.64.2.db` (plus `-wal` if present) and compares the
 copy before the first 0.64.2 start, and skips that step once the file exists.
-Before the rollout, make sure `/data` has no `navidrome-before-0.64.2.db` or
-`navidrome-before-0.64.2.db-wal`; otherwise no fresh backup is taken. After
+Before the rollout, make sure `/data` has no `navidrome-before-0.64.2.db`;
+if it exists, the init container skips the fresh backup (a leftover `-wal`
+alone is deleted and does not prevent it). After
 a verified rollout, a follow-up commit removes the init container; the
 backup file stays.
 0.64 changes song and playlist IDs to canonical ones. Library IDs, users,
