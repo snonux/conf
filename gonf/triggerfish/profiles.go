@@ -254,7 +254,7 @@ block return log all
 	if cameraZoneStage(s.name) {
 		rules += cameraZoneRules()
 	}
-	rules += `# Preserve fresh old-address router management from the existing LAN.
+	rules += oldManagementComment(s) + `
 pass in on igc0 inet proto tcp from 192.168.1.0/24 to 192.168.1.2 port 22 keep state
 pass in on igc0 inet proto icmp from 192.168.1.0/24 to 192.168.1.2 keep state
 pass in on { igc0 $wifi_if } inet proto udp to { 192.168.1.2, 10.30.0.1 } port 51822 keep state
@@ -286,6 +286,9 @@ pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag
 	if s.recovery {
 		rules += "pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port { 22, 443 } tag gonf_transit keep state\n"
 		rules += "pass in on wg2 inet proto icmp from 10.99.0.2 to 10.98.0.0/24 tag gonf_transit keep state\n"
+	}
+	if s.name == labProfileName {
+		rules += labRecoveryProofRules()
 	}
 	if s.name == "shared-igc0" {
 		for _, endpoint := range data.JetKVMManagement {

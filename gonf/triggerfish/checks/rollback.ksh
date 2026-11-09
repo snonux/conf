@@ -1229,6 +1229,8 @@ grep -q ' inet 10.20.0.1 ' "$base/interfaces/igc0"
 grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc0"
 lab=$base/router-profiles/lab-igc1
 "$fixture/run" validate "$lab" lab-igc1
+grep -qx 'pass in on igc1 inet proto tcp from 10.98.0.0/24 to 10.98.0.1 port 22 keep state' "$lab/pf.conf"
+if grep -q 'from 10.98.0.0/24 to 10.98.0.1' "$cam/pf.conf"; then exit 1; fi
 cp -Rp "$lab" "$fixture/lab.saved"
 cp -Rp "$cam" "$fixture/camera.c24"
 # Every misplaced lab element refuses at stage; the confirmed journal stays.
@@ -1330,20 +1332,24 @@ cp -p "$fixture/igc1.lab" "$base/interfaces/igc1"
 # lab-igc1 is no boot canary profile.
 expect_fail reboot_canary c24lab01
 grep -q 'no active boot canary' "$fixture/failure.log"
-# The new receipt must come from a lab host: the laptop's wg2 session to
-# 10.20.0.1 never crosses igc1. old is not required after b24; recovery and
-# VPN are.
+# The new and recovery receipts must come from lab hosts: the laptop's wg2
+# sessions to 10.20.0.1 and 10.98.0.1 never cross igc1. old is not required
+# after b24; recovery and VPN are.
 print '' > "$base/router-state/preexisting-connections"
 print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47211 ESTABLISHED' > "$base/sockets"
 expect_fail proof new c24lab01 '10.99.0.2 47211 10.20.0.1 22'
-grep -q 'lab-igc1 new receipt must come from a lab host' "$fixture/failure.log"
+grep -q 'lab-igc1 new and recovery receipts must come from a lab host' "$fixture/failure.log"
 [[ ! -e $base/router-state/proof.new ]]
 print 'tcp 0 0 10.20.0.1.22 10.20.0.125.47212 ESTABLISHED' > "$base/sockets"
 "$fixture/run" proof new c24lab01 '10.20.0.125 47212 10.20.0.1 22'
 expect_fail confirm c24lab01 services-checked
 grep -q 'fresh igc1 recovery receipt missing' "$fixture/failure.log"
 print 'tcp 0 0 10.98.0.1.22 10.99.0.2.47213 ESTABLISHED' > "$base/sockets"
-"$fixture/run" proof recovery c24lab01 '10.99.0.2 47213 10.98.0.1 22'
+expect_fail proof recovery c24lab01 '10.99.0.2 47213 10.98.0.1 22'
+grep -q 'lab-igc1 new and recovery receipts must come from a lab host' "$fixture/failure.log"
+[[ ! -e $base/router-state/proof.recovery ]]
+print 'tcp 0 0 10.98.0.1.22 10.98.0.125.47214 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof recovery c24lab01 '10.98.0.125 47214 10.98.0.1 22'
 expect_fail confirm c24lab01 services-checked
 grep -q 'fresh VPN receipt missing' "$fixture/failure.log"
 [[ $(cat "$base/router-state/status") == active-unconfirmed && -f $base/router-state/pending ]]
@@ -1379,11 +1385,11 @@ review lab-igc1 isp-uplink-only
 print '' > "$base/router-state/preexisting-connections"
 cat > "$base/sockets" <<'SOCKETS'
 tcp 0 0 10.20.0.1.22 10.20.0.125.47221 ESTABLISHED
-tcp 0 0 10.98.0.1.22 10.99.0.2.47222 ESTABLISHED
+tcp 0 0 10.98.0.1.22 10.98.0.125.47222 ESTABLISHED
 tcp 0 0 10.99.0.1.22 10.99.0.2.47223 ESTABLISHED
 SOCKETS
 "$fixture/run" proof new c24lab03 '10.20.0.125 47221 10.20.0.1 22'
-"$fixture/run" proof recovery c24lab03 '10.99.0.2 47222 10.98.0.1 22'
+"$fixture/run" proof recovery c24lab03 '10.98.0.125 47222 10.98.0.1 22'
 "$fixture/run" proof vpn c24lab03 '10.99.0.2 47223 10.99.0.1 22'
 [[ ! -e $base/router-state/proof.old ]]
 "$fixture/run" confirm c24lab03 services-checked

@@ -623,7 +623,10 @@ camera-igc3, and nothing else:
   two local-only policy lines (`inet6 -autoconf`, `inet6 -temporary`) next
   to the retained `10.98.0.1`.
 - PF: `lab_if = "igc1"` (anti-spoofing follows), the igc1 DHCP pair of
-  rules, and the profile name in the header and the RA comment. Every other
+  rules, one permit `pass in on igc1 inet proto tcp from 10.98.0.0/24 to
+  10.98.0.1 port 22` for the host-sourced recovery receipt (the same hosts
+  already reach `10.20.0.1:22`), and the profile name in the header, the
+  old-management comment (now only the ISP router) and the RA comment. Every other
   rule is camera-igc3's: lab NAT to `192.168.1.2` on igc0, lab ULA
   local-only, Wi-Fi NAT66, Shelly TCP443 pairs, n44 Syncthing, wg2 (its
   `192.168.1.2:51822` endpoint included), recovery for `10.99.0.2` and the
@@ -650,9 +653,10 @@ port (the canary on igc0 would be one). Readiness records
 `oldManagementReceipt`): after b24 only the CPE shares igc0, so no host can
 log in to `192.168.1.2`. Confirmation requires the receipts of
 `confirm_roles`: `new`, `recovery` and `vpn` for lab-igc1 (no `old`); the
-`new` receipt must come from a lab host in `10.20.0.0/24` (PF admits those
-sources only on igc1, so it proves the moved path), checked by `proof` and
-by `validateLabProof` in the trial input. post-rack/post-ap keep `old new
+`new` receipt must come from a lab host in `10.20.0.0/24` and the `recovery`
+receipt from one in `10.98.0.0/24` (PF admits both only on igc1, so they
+prove the moved port; the laptop's wg2 sessions to those addresses do not),
+checked by `proof` and by `validateLabProof` in the trial input. post-rack/post-ap keep `old new
 recovery`, every other stage `old new`.
 
 Restore semantics after the cable move: a timed or boot restore returns
@@ -673,7 +677,9 @@ policy and SLAAC lines, recovery moved, DHCP binding, camera deny and
 permit, rad on igc1, pre-b24 readiness value), activation order (drain from
 igc0 before adding to igc1, recovery never deleted, policy and SLAAC calls,
 dhcpd igc1 igc2, NAT66 and rad), SLAAC on igc1 refusing acceptance, no boot
-canary, the lab-host `new` receipt, the required recovery and VPN
-receipts, and timed, boot and confirmed paths. Eight controller mutants
+canary, the lab-host `new` and `recovery` receipts (the laptop's refused),
+the required recovery and VPN receipts, and timed, boot and confirmed
+paths. The rendered `ACTIVATION.txt` allows staging at any time and forbids
+activation before the user's b24 confirmation. Eight controller mutants
 (one per new check) each fail the suite. Nothing is live: the router still
 runs camera-igc3, and the helper on the router is the i44/n44 version.

@@ -55,27 +55,56 @@ func oldManagementReceipt(profile string) string {
 	return "fresh-authenticated"
 }
 
-// validateLabProof requires lab-igc1's "new" receipt to come from a lab
-// host. PF admits 10.20.0.0/24 sources only on the lab port, so such a
-// session proves the moved lab path itself; the laptop's wg2 session to
-// 10.20.0.1 would not touch igc1. router-rollback's proof checks the same.
+// validateLabProof requires lab-igc1's "new" and "recovery" receipts to come
+// from a lab host: 10.20.0.0/24 to 10.20.0.1 and 10.98.0.0/24 to 10.98.0.1.
+// PF admits both source prefixes only on igc1, so these sessions prove the
+// moved lab port itself; the laptop's wg2 sessions to those addresses never
+// touch igc1. router-rollback's proof checks the same.
 func validateLabProof(t RouterTrial, client netip.Addr) error {
-	if t.Profile != labProfileName || t.ProofRole != "new" {
+	if t.Profile != labProfileName {
 		return nil
 	}
-	lab := netip.MustParsePrefix("10.20.0.0/24")
-	if !lab.Contains(client) || client == netip.MustParseAddr("10.20.0.1") {
-		return errors.New("lab-igc1 new receipt must come from a lab host")
+	prefix, server := map[string]string{
+		"new": "10.20.0.0/24", "recovery": "10.98.0.0/24",
+	}[t.ProofRole], map[string]string{
+		"new": "10.20.0.1", "recovery": "10.98.0.1",
+	}[t.ProofRole]
+	if prefix == "" {
+		return nil
+	}
+	if !netip.MustParsePrefix(prefix).Contains(client) || client == netip.MustParseAddr(server) {
+		return errors.New("lab-igc1 new and recovery receipts must come from a lab host")
 	}
 	return nil
+}
+
+// oldManagementComment heads the old-address management rules. After b24
+// (lab-igc1) only the ISP router shares igc0, so only it could use them; every
+// other stage keeps its byte-identical wording.
+func oldManagementComment(s routerStage) string {
+	if s.name == labProfileName {
+		return "# Old-address router management: after b24 only the ISP router shares igc0."
+	}
+	return "# Preserve fresh old-address router management from the existing LAN."
+}
+
+// labRecoveryProofRules lets a lab host's recovery address reach the router's
+// igc1 recovery address on SSH, so lab-igc1's recovery receipt crosses igc1
+// (the laptop's wg2 path to 10.98.0.1 does not). The same hosts already reach
+// 10.20.0.1:22; anti-spoofing admits 10.98.0.0/24 only on igc1.
+func labRecoveryProofRules() string {
+	return "# c24: host-sourced recovery receipt over igc1.\n" +
+		"pass in on igc1 inet proto tcp from 10.98.0.0/24 to 10.98.0.1 port 22 keep state\n"
 }
 
 func labActivation(s routerStage) string {
 	return fmt.Sprintf(`C24 CANDIDATE: %s (camera-igc3 plus the lab on its own port)
 Wiring after the human b24 cable move ONLY: ISP CPE directly on igc0, lab
 switch on %s (lab gear only), Wi-Fi AP on %s, cameras %s (uncabled).
-Do not stage it on the shared cabling: the readiness receipt records that
-cabling, and before b24 the lab would lose its gateway.
+Staging is fine at any time; do NOT ACTIVATE before the user confirms b24:
+the user set that order, the readiness receipt records the b24 cabling and
+old-management=isp-uplink-only, and before b24 dhcpd on igc1 would share
+the wire with the ISP router's DHCP.
 Moves 10.20.0.1/24, fd02:ca0b:f1cb:20::1/64 and their connected routes from
 igc0 to %s, never on both; recovery 10.98.0.1 stays on igc1. igc0 keeps
 192.168.1.2 (upstream, NAT, wg2 endpoint, k34 source), the retained
@@ -83,8 +112,10 @@ provisioning alias, SLAAC and the NAT66 egress address.
 %s with the JetKVM MAC reservations.
 Lab IPv4 to the internet via NAT on igc0; the lab ULA stays local-only.
 Wi-Fi NAT66, Shelly TCP443 pairs, n44 Syncthing, wg2 and the camera zone are
-the camera-igc3 policy. Confirmation needs fresh new (from a lab host),
-recovery and VPN receipts; no old-LAN host can reach 192.168.1.2 after b24.
+the camera-igc3 policy. Confirmation needs fresh new and recovery receipts
+from a lab host (10.20.0.x to 10.20.0.1, 10.98.0.x to 10.98.0.1, which PF
+admits only on igc1) and the VPN receipt; no old-LAN host can reach
+192.168.1.2 after b24.
 A timed or boot restore returns camera-igc3: the lab then has no gateway
 until a fixed retry or the user's separate reverse cable action; recovery
 stays on igc1 and wg2 on the router. No boot canary (it lives on igc0).
