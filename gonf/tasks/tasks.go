@@ -88,11 +88,17 @@ func Register() {
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
-	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{})
+	// One Resolver recipe, two clusters: private_interfaces names each
+	// cluster's LAN interface (re0 on the f-hosts, vtnet0 on the guest).
+	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{Interface: "re0", Owner: "freebsd_resolver_conf, task u54"})
 	RegisterMethods(endpointfiles.Recovery{Platform: "freebsd"}, WithPrefix("freebsd_endpoints_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(endpointfiles.Recovery{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.GuestHosts{}, WithPrefix("freebsd_guest_hosts_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.NetworkMigration{}, WithPrefix("freebsd_guest_network_"), OnCluster(cluster.NameFreeBSDGuestMigration))
+	// The normally stopped guest is pushed by name when it next runs (v54);
+	// freebsd_guest_resolver_conf also joins the freebsd aggregate, where its
+	// hostname guard skips the f-hosts.
+	RegisterMethods(freebsd.Resolver{Interface: "vtnet0", Owner: "freebsd_guest_resolver_conf, task v54"}, WithPrefix("freebsd_guest_resolver_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.ZfsKeys{}, WithPrefix("freebsd_zfskeys_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.ShellyFans{}, WithPrefix("freebsd_shellyfans_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))
