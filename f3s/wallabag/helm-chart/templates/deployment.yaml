@@ -52,7 +52,14 @@ spec:
           readOnly: true
       containers:
       - name: wallabag
-        image: wallabag/wallabag:2.6.15
+        # Image revision 2.6.15.1 of the wallabag/docker packaging (the
+        # Wallabag app is still 2.6.15). It moves the shipped php.ini and
+        # php-fpm.conf to /etc/php82: since 2.6.14.1 they sat in an unread
+        # /etc/php81, so PHP ran Alpine defaults (30 s execution time
+        # under nginx's 300 s fastcgi timeout, 2M/8M uploads). Pinned by
+        # the multi-arch index digest so a re-pushed tag cannot change
+        # what a restart pulls.
+        image: wallabag/wallabag:2.6.15.1@sha256:2e9d9fbbba6feee060109351d1235386fa4ac495f98c82d94a250d56feaeaeeb
         # Memory from the 14-day peak working set (172Mi), limit well above
         # it so normal spikes are never OOM-killed (audit 2026-09-25 #19).
         resources:
