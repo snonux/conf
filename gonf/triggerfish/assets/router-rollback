@@ -27,15 +27,19 @@ nat66_profile() { [[ $1 == wifi-ipv6-nat66 ]]; }
 canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
- if [[ -d $LOCK ]]; then
-  typeset owner
-  owner=$(cat "$LOCK/pid" 2>/dev/null || print 0)
-  if [[ $owner == +([0-9]) ]] && kill -0 "$owner" 2>/dev/null; then
-   fail 'journal is busy (timer can recover expired activation)'
+ # The NAT66 egress helper (nat66-egress) takes this lock for well under a
+ # second each minute, so a live owner gets a short bounded wait. A lock
+ # without a pid may be just starting; only a recorded dead owner is stale.
+ typeset owner attempt=0
+ while ! mkdir "$LOCK" 2>/dev/null; do
+  owner=$(cat "$LOCK/pid" 2>/dev/null || print '')
+  if [[ $owner == +([0-9]) ]] && ! kill -0 "$owner" 2>/dev/null; then
+   rm -rf "$LOCK"
+   continue
   fi
-  rm -rf "$LOCK"
- fi
- mkdir "$LOCK" 2>/dev/null || fail 'journal is busy'
+  (( ++attempt < 6 )) || fail 'journal is busy (timer can recover expired activation)'
+  sleep 1
+ done
  print -- $$ > "$LOCK/pid"
  trap 'rm -rf "$LOCK"' EXIT
  trap 'exit 1' HUP INT TERM
@@ -530,6 +534,7 @@ activate() {
  clear_physical yes
  apply_addresses
  pfctl -f "$STATE/candidate/pf.conf"
+ retire_nat66_table
  pfctl -F states >/dev/null
  if ! pfctl -s info | grep -q '^Status: Enabled'; then pfctl -e; fi
  # Forwarding follows the validated fragment, and only after its PF loaded.
@@ -557,6 +562,16 @@ activate() {
  print 'active and UNCONFIRMED; recovery remains armed'
 }
 
+# A persist table survives a reload that no longer declares it. Leaving the
+# NAT66 egress table behind would make the next snapshot refuse it as a
+# runtime-only table, so a candidate without NAT66 retires it. The journal
+# lock keeps the egress helper from recreating it meanwhile.
+retire_nat66_table() {
+ grep -qx 'table <nat66_egress> persist' "$STATE/candidate/pf.conf" && return 0
+ if pfctl -s Tables | grep -qx nat66_egress; then
+  pfctl -t nat66_egress -T kill >/dev/null
+ fi
+}
 restore_files() {
  typeset f
  [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'snapshot integrity failed'

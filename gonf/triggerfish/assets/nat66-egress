@@ -1,15 +1,28 @@
 #!/bin/ksh
-# Keeps PF table <nat66_egress> equal to the uplink's usable SLAAC address.
+# Keeps PF table <nat66_egress> at ONE usable SLAAC address of the uplink.
 # Installed by triggerfish.NAT66.Egress; root cron runs it every minute.
 #
 # The o34 NAT66 profile translates Wi-Fi ULA traffic with
 # "nat-to <nat66_egress>". PF cannot use "nat-to (igc0)" there: a dynamic
 # interface pool round-robins over every non-link-local igc0 address, which
-# includes the lab ULA. This helper selects only stable, preferred, global
-# SLAAC addresses, so a CPE renumbering is followed within a minute.
+# includes the lab ULA. A table pool round-robins too, so the table holds
+# exactly one address: never split flows between an old and a new prefix.
 #
-# It is inert unless the loaded ruleset declares the table: router-rollback
-# restoring any other profile removes the table and thereby retires the helper.
+# Selection: global unicast (2000::/3) addresses owned by slaacd that are not
+# temporary, deprecated, tentative, duplicated or detached; of those, the one
+# with the longest valid lifetime (then preferred lifetime, then the lowest
+# address, so the choice is deterministic). After a CPE renumbering, the new
+# prefix is refreshed by every RA while the withdrawn one only counts down,
+# so the new address wins at the first RA that announces it, even when the
+# CPE never deprecates the old prefix.
+#
+# It acts only while the LOADED ruleset uses the table (pfctl -sr). A persist
+# table can outlive a reload that no longer declares it; router-rollback kills
+# such an orphan when it activates a profile without NAT66, and its restore
+# removes the table with the candidate rules. The update runs under the
+# rollback journal lock (/etc/gonf/router-lock), so a concurrent restore
+# cannot remove the table between this check and "-T replace", which would
+# recreate it. While a rollback operation holds the lock, this run is skipped.
 # An empty table makes PF drop untranslatable Wi-Fi IPv6 (fails closed).
 set -eu
 set -o pipefail
@@ -18,29 +31,68 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 export PATH
 UPLINK=igc0
 TABLE=nat66_egress
+LOCK=/etc/gonf/router-lock
 
-pfctl -s Tables 2>/dev/null | grep -qx "$TABLE" || exit 0
+fail() { logger -p daemon.err -t nat66-egress "$*"; print -u2 -- "nat66-egress: $*"; exit 1; }
 
-# Global unicast (2000::/3) addresses owned by slaacd. Temporary, deprecated,
-# tentative, duplicated and detached addresses never become the NAT source.
-want=$(ifconfig "$UPLINK" | awk '
- $1 == "inet6" && $2 ~ /^[23][0-9a-f]*:/ && index($2, ":") <= 5 {
-  managed = 0
-  for (i = 3; i <= NF; i++) {
-   if ($i == "autoconf") managed = 1
-   if ($i ~ /^(temporary|deprecated|tentative|duplicated|detached)$/) next
+# Print the single egress address, or nothing.
+egress_address() {
+ ifconfig "$UPLINK" | awk '
+  $1 == "inet6" && $2 ~ /^[23][0-9a-f]*:/ && index($2, ":") <= 5 {
+   managed = 0; vl = -1; pl = -1
+   for (i = 3; i <= NF; i++) {
+    if ($i == "autoconf") managed = 1
+    if ($i ~ /^(temporary|deprecated|tentative|duplicated|detached)$/) next
+    if ($i == "vltime") vl = $(i + 1) + 0
+    if ($i == "pltime") pl = $(i + 1) + 0
+   }
+   if (!managed) next
+   if (best == "" || vl > bvl || (vl == bvl && (pl > bpl || (pl == bpl && $2 < best)))) {
+    best = $2; bvl = vl; bpl = pl
+   }
   }
-  if (managed) print $2
- }' | sort)
-have=$(pfctl -t "$TABLE" -T show | awk '{print $1}' | sort)
-[[ $want == "$have" ]] && exit 0
+  END { if (best != "") print best }'
+}
 
-if [[ -z $want ]]; then
- pfctl -t "$TABLE" -T flush >/dev/null 2>&1
-else
- next=$(mktemp /etc/gonf/nat66-egress.XXXXXXXX)
- trap 'rm -f "$next"' EXIT
- print -r -- "$want" > "$next"
- pfctl -t "$TABLE" -T replace -f "$next" >/dev/null 2>&1
-fi
-logger -t nat66-egress "table $TABLE set to: ${want:-empty}"
+# The loaded rules, not merely an existing table, decide whether NAT66 is on.
+referenced() { pfctl -sr | grep -q "nat-to <$TABLE>"; }
+
+# Share the rollback journal lock; skip this minute while a rollback runs.
+take_lock() {
+ typeset owner
+ if ! mkdir "$LOCK" 2>/dev/null; then
+  owner=$(cat "$LOCK/pid" 2>/dev/null || print '')
+  # Only a recorded, dead owner is stale; a lock without pid may be starting.
+  if [[ $owner != +([0-9]) ]] || kill -0 "$owner" 2>/dev/null; then
+   return 1
+  fi
+  rm -rf "$LOCK"
+  mkdir "$LOCK" 2>/dev/null || return 1
+ fi
+ print -- $$ > "$LOCK/pid"
+}
+
+sync_table() {
+ typeset want have next
+ referenced || return 0
+ want=$(egress_address) || fail "cannot read $UPLINK addresses"
+ have=$(pfctl -t "$TABLE" -T show 2>/dev/null | awk '{print $1}') || have=''
+ [[ $want == "$have" ]] && return 0
+ if [[ -z $want ]]; then
+  pfctl -t "$TABLE" -T flush >/dev/null 2>&1 || fail "cannot flush <$TABLE>"
+ else
+  next=$(mktemp /etc/gonf/nat66-egress.XXXXXXXX) || fail 'cannot create a temporary file'
+  print -r -- "$want" > "$next"
+  if ! pfctl -t "$TABLE" -T replace -f "$next" >/dev/null 2>&1; then
+   rm -f "$next"
+   fail "cannot set <$TABLE> to $want"
+  fi
+  rm -f "$next"
+ fi
+ logger -t nat66-egress "table $TABLE set to: ${want:-empty}"
+}
+
+# Dispatch: the fixture harness sources only the functions above this line.
+take_lock || exit 0
+trap 'rm -rf "$LOCK"' EXIT
+sync_table

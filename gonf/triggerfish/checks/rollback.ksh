@@ -1,9 +1,10 @@
 #!/bin/ksh
 # Destructive operations are mocked; all filesystem paths are rewritten into a
-# disposable root. Run on OpenBSD: ksh rollback.ksh CONTROLLER PROFILE_DIRECTORY.
+# disposable root. Run on OpenBSD:
+#   ksh rollback.ksh CONTROLLER PROFILE_DIRECTORY NAT66_EGRESS_HELPER
 set -eu
 set -o pipefail
-[[ $# == 2 && $(uname -s) == OpenBSD ]] || exit 2
+[[ $# == 3 && $(uname -s) == OpenBSD ]] || exit 2
 fixture=$(mktemp -d /tmp/router-rollback-fixture.XXXXXXXX)
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/etc/gonf" "$fixture/var/unbound/etc" "$fixture/var/run/rc.d"
@@ -41,7 +42,7 @@ pfctl() {
   print -- "pfctl $*" >> "$BASE/operations"
   if [[ $2 == "$STATE/candidate/pf.conf" ]]; then
    # Local-only candidates deny RA/RS; the o34 uplink stages pass the CPE's.
-   if grep -Eq '^pass in quick on [$]up6_if inet6 proto icmp6 from fe80::/10 .*icmp6-type routeradv$' "$2"; then
+   if grep -Eq '^pass in quick on [$]up6_if inet6 proto icmp6 from fe80::1 .*icmp6-type routeradv$' "$2"; then
     rm -f "$BASE/pf-blocks-ra"
    else touch "$BASE/pf-blocks-ra"; fi
    mkdir -p "$BASE/pf-tables"
@@ -762,6 +763,55 @@ print -r -- "$fixture/etc/rad.conf" >> "$base/router-state/saved/absent"
 "$fixture/run" atomic "$base/router-state/snapshot-digest" "$("$fixture/run" checksum "$base/router-state/saved")"
 "$fixture/run" restore
 [[ ! -e $fixture/etc/rad.conf && ! -f $base/router-state/pending ]]
+# A persist table survives a reload that does not declare it. Forward
+# activation from a confirmed NAT66 stage to one without NAT66 must retire
+# <nat66_egress>; otherwise the next snapshot refuses the orphan.
+"$fixture/run" stage o34fwd01 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm o34fwd01 wifi-ipv6-nat66 180
+"$fixture/run" activate o34fwd01
+confirm_fresh o34fwd01 46021 46022
+[[ -f $base/pf-tables/nat66_egress ]]
+print '2001:db8:5::7' > "$base/pf-tables/nat66_egress"
+"$fixture/run" stage o34fwd02 wifi-ipv6-uplink 180
+review wifi-ipv6-uplink
+"$fixture/run" arm o34fwd02 wifi-ipv6-uplink 180
+grep -qx '2001:db8:5::7' "$base/router-state/saved/tables/nat66_egress"
+: > "$base/operations"
+"$fixture/run" activate o34fwd02
+[[ ! -e $base/pf-tables/nat66_egress ]]
+# Restoring the NAT66 baseline brings the table back with its saved address.
+"$fixture/run" restore
+grep -qx '2001:db8:5::7' "$base/pf-tables/nat66_egress"
+"$fixture/run" stage o34fwd03 wifi-ipv6-uplink 180
+review wifi-ipv6-uplink
+"$fixture/run" arm o34fwd03 wifi-ipv6-uplink 180
+"$fixture/run" activate o34fwd03
+confirm_fresh o34fwd03 46031 46032
+[[ ! -e $base/pf-tables/nat66_egress ]]
+# Without retirement the orphan would block the next arm: show the refusal.
+print '2001:db8:5::7' > "$base/pf-tables/nat66_egress"
+"$fixture/run" stage o34fwd04 wifi-ipv6-uplink 180
+review wifi-ipv6-uplink
+expect_fail arm o34fwd04 wifi-ipv6-uplink 180
+grep -q 'runtime-only PF table' "$fixture/failure.log"
+[[ ! -f $base/router-state/pending ]]
+rm "$base/pf-tables/nat66_egress"
+# The journal lock waits briefly for a live short holder (the egress helper)
+# and still refuses a holder that does not let go.
+mkdir "$base/router-lock"
+sleep 2 &
+print -- $! > "$base/router-lock/pid"
+"$fixture/run" lock
+[[ ! -d $base/router-lock ]]
+mkdir "$base/router-lock"
+sleep 30 &
+holder=$!
+print -- "$holder" > "$base/router-lock/pid"
+expect_fail lock
+grep -q 'journal is busy' "$fixture/failure.log"
+kill "$holder"
+rm -rf "$base/router-lock"
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
 # It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
@@ -820,4 +870,117 @@ rm "$base/interfaces/wg2"
 print 'wg2: flags=<UP>\n description: external-owner' > "$base/interfaces/wg2"
 expect_fail restore
 [[ -f $base/interfaces/wg2 && -f $base/router-state/pending ]]
+# NAT66 egress helper: exactly one address, only while the loaded rules use
+# the table, only under the journal lock, failures logged. Mocked commands
+# record into files; the helper's own dispatch runs unchanged.
+egress=$fixture/egress
+mkdir -p "$egress"
+sed "s@/etc/@$fixture/etc/@g" "$3" > "$egress/helper"
+cat > "$egress/mocks" <<EOF2
+ifconfig() { [[ \$1 == igc0 ]] && cat "$egress/igc0"; }
+logger() { print -r -- "logger \$*" >> "$egress/log"; }
+pfctl() {
+ case \$* in
+ -sr) cat "$egress/rules";;
+ '-t nat66_egress -T show') [[ -f $egress/table ]] && cat "$egress/table";;
+ '-t nat66_egress -T flush') : > "$egress/table";;
+ '-t nat66_egress -T replace -f '*) [[ ! -f $egress/replace-fails ]] && cp "\$6" "$egress/table";;
+ *) return 1;;
+ esac
+}
+EOF2
+cat > "$egress/run" <<EOF2
+#!/bin/ksh
+. "$egress/mocks"
+. "$egress/helper"
+EOF2
+chmod 700 "$egress/run"
+nat_rule='match out on igc0 inet6 from fd02:ca0b:f1cb:30::/64 to ! <nonglobal6> nat-to <nat66_egress> round-robin'
+lladdr=' inet6 fe80::6662:66ff:fe25:ced9%igc0 prefixlen 64 scopeid 0x1'
+lab=' inet6 fd02:ca0b:f1cb:20::1 prefixlen 64'
+old=' inet6 2001:db8:a::10 prefixlen 64 autoconf pltime 9000 vltime 12000'
+new=' inet6 2001:db8:b::10 prefixlen 64 autoconf pltime 10800 vltime 14400'
+egress_case() {
+ rm -f "$egress/log" "$egress/replace-fails"
+ print -r -- "$1" > "$egress/rules"
+ print -r -- "$2" > "$egress/igc0"
+}
+# No NAT66 rule loaded: nothing happens, an absent table stays absent.
+rm -f "$egress/table"
+egress_case 'pass all' "$lladdr
+$lab
+$new"
+"$egress/run"
+[[ ! -e $egress/table && ! -e $egress/log ]]
+# Table exists but the loaded rules no longer use it: no refill.
+print '2001:db8:a::10' > "$egress/table"
+"$egress/run"
+grep -qx '2001:db8:a::10' "$egress/table"
+# One stable address; the lab ULA and link-local are never chosen.
+rm -f "$egress/table"
+egress_case "$nat_rule" "$lladdr
+$lab
+$old"
+"$egress/run"
+[[ $(cat "$egress/table") == 2001:db8:a::10 ]]
+grep -q 'set to: 2001:db8:a::10' "$egress/log"
+# Unchanged choice: no rewrite, no log line.
+egress_case "$nat_rule" "$lladdr
+$lab
+$old"
+"$egress/run"
+[[ ! -e $egress/log ]]
+# Flash renumbering without deprecation: both preferred, the refreshed new
+# prefix has the longer valid lifetime and is the only table entry.
+egress_case "$nat_rule" "$lladdr
+$lab
+$old
+$new"
+"$egress/run"
+[[ $(cat "$egress/table") == 2001:db8:b::10 ]]
+# Deprecated old plus new: the new one.
+egress_case "$nat_rule" "$lladdr
+ inet6 2001:db8:a::10 prefixlen 64 deprecated autoconf pltime 0 vltime 13000
+$new"
+"$egress/run"
+[[ $(cat "$egress/table") == 2001:db8:b::10 ]]
+# Equal lifetimes: the lowest address, deterministically.
+egress_case "$nat_rule" " inet6 2001:db8:c::20 prefixlen 64 autoconf pltime 10800 vltime 14400
+$new"
+"$egress/run"
+[[ $(cat "$egress/table") == 2001:db8:b::10 ]]
+# Only temporary addresses: the table is flushed (fails closed).
+egress_case "$nat_rule" "$lladdr
+ inet6 2001:db8:b::99 prefixlen 64 autoconf temporary pltime 10800 vltime 14400"
+"$egress/run"
+[[ -e $egress/table && ! -s $egress/table ]]
+grep -q 'set to: empty' "$egress/log"
+# No global address at all: empty as well.
+print '2001:db8:b::10' > "$egress/table"
+egress_case "$nat_rule" "$lladdr
+$lab"
+"$egress/run"
+[[ ! -s $egress/table ]]
+# A rollback operation holds the journal lock: skip, change nothing.
+egress_case "$nat_rule" "$new"
+mkdir "$base/router-lock"
+sleep 30 &
+holder=$!
+print -- "$holder" > "$base/router-lock/pid"
+"$egress/run"
+[[ ! -s $egress/table && -d $base/router-lock ]]
+kill "$holder"
+# A dead owner is stale: take over, update, release.
+sleep 0 &
+dead=$!
+wait "$dead"
+print -- "$dead" > "$base/router-lock/pid"
+"$egress/run"
+[[ $(cat "$egress/table") == 2001:db8:b::10 && ! -d $base/router-lock ]]
+# A failed update exits non-zero and reaches syslog.
+egress_case "$nat_rule" "$old"
+touch "$egress/replace-fails"
+if "$egress/run" 2>/dev/null; then print -u2 'egress failure not reported'; exit 1; fi
+grep -q 'logger -p daemon.err -t nat66-egress cannot set <nat66_egress> to 2001:db8:a::10' "$egress/log"
+[[ ! -d $base/router-lock ]]
 print 'rollback fixture: passed (mocked mutations; real native config parsers)'

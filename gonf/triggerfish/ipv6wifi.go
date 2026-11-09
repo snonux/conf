@@ -32,10 +32,15 @@ const (
 	// Wi-Fi ULA: subnet 30 of the lab's fd02:ca0b:f1cb::/48, matching 10.30.
 	wifiULAPrefix = "fd02:ca0b:f1cb:30::/64"
 	wifiULARouter = "fd02:ca0b:f1cb:30::1"
-	// nat66EgressTable holds the uplink's usable SLAAC address. PF cannot use
-	// nat-to (igc0) here: a dynamic interface pool rotates over every
-	// non-link-local address, including the lab ULA on the same port.
-	// triggerfish.NAT66.Egress keeps the table current.
+	// cpeRouterLL is the Vivacom CPE's link-local address seen in every RA
+	// (2026-11-04 to 2026-11-09). If the CPE ever changes it, triggerfish
+	// loses its IPv6 default and Wi-Fi IPv6 fails closed until this is updated.
+	cpeRouterLL = "fe80::1"
+	// nat66EgressTable holds exactly one usable SLAAC address of the uplink.
+	// PF cannot use nat-to (igc0) here: a dynamic interface pool rotates over
+	// every non-link-local address, including the lab ULA on the same port.
+	// triggerfish.NAT66.Egress keeps the table current (assets/nat66-egress
+	// documents the selection and why it runs under the rollback lock).
 	nat66EgressTable = "nat66_egress"
 )
 
@@ -95,16 +100,20 @@ table <nonglobal6> const { ::/8, 100::/64, 2001:db8::/32, 2002::/16, 3fff::/20, 
 // the uplink in the wifi-first wiring; the uplink rule repeats it so a later
 // rewiring keeps ND on the uplink.
 func uplinkIPv6Rules() string {
-	return `# ULA (lab included) and other non-global sources never leave towards the internet.
+	return fmt.Sprintf(`# ULA (lab included) and other non-global sources never leave towards the internet.
 block drop out log quick on $up6_if inet6 from <nonglobal6> to ! <nonglobal6>
 # The lab ULA never transits; logged so a test route shows the drop in pflog.
 block drop in log quick on $lab_if inet6 from fd02:ca0b:f1cb:20::/64 to ! <nonglobal6>
 pass quick on $up6_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
 # MLD query/report/done and MLDv2 report keep solicited-node groups working.
 pass quick on $up6_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::/16 icmp6-type { 130, 131, 132, 143 }
-pass in quick on $up6_if inet6 proto icmp6 from fe80::/10 to { ff02::1, fe80::/10 } icmp6-type routeradv
+# Router advertisements only from the CPE's link-local address (observed
+# fe80::1). On the shared igc0 wire another host can still spoof that source
+# address at L2; PF cannot tell them apart (see IQ IPV6-WIFI.md).
+pass in quick on $up6_if inet6 proto icmp6 from %s to { ff02::1, fe80::/10 } icmp6-type routeradv
+block drop in log quick on $up6_if inet6 proto icmp6 icmp6-type routeradv
 pass out quick on $up6_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::2 icmp6-type routersol
-`
+`, cpeRouterLL)
 }
 
 // nat66MatchRules translates Wi-Fi ULA traffic leaving the uplink. Placed
@@ -127,7 +136,7 @@ func wifiNAT66Rules() string {
 pass quick on $wifi_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::/16 icmp6-type { 130, 131, 132, 143 }
 pass in quick on $wifi_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::2 icmp6-type routersol
 pass out quick on $wifi_if inet6 proto icmp6 from fe80::/10 to { ff02::1, fe80::/10 } icmp6-type routeradv
-# Only the ISP router advertises to triggerfish, only triggerfish to Wi-Fi.
+# Wi-Fi hears only triggerfish's RAs; no RA in on Wi-Fi, no redirect anywhere.
 block drop log quick inet6 proto icmp6 icmp6-type { routeradv, redir }
 # Anti-spoofing in both directions for the Wi-Fi ULA.
 block drop in log quick on $wifi_if inet6 from ! $wifi6

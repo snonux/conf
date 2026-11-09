@@ -359,7 +359,7 @@ and refuses unexpected remaining IPv6 addresses before acceptance.
 The timed and actual reboot canaries passed as recorded above. Physical
 recovery remains a later gate; offline fixtures cannot establish it.
 
-`checks/rollback.ksh CONTROLLER PROFILE_DIRECTORY` runs on OpenBSD under root
+`checks/rollback.ksh CONTROLLER PROFILE_DIRECTORY NAT66_EGRESS_HELPER` runs on OpenBSD under root
 using a disposable rewritten filesystem and mocked mutation commands. It uses
 real configuration parsers and covers missing readiness/keys, changed candidate,
 template rejection, partial failure, timed restore, idempotence, drift, fresh
@@ -399,12 +399,25 @@ IPv6 uses NAT66. Two stageable profiles share the wifi-first wiring:
 `nat-to (igc0)` is deliberately not used: a dynamic interface pool
 round-robins over every non-link-local igc0 address, including the lab ULA.
 `triggerfish_nat66_egress` installs `/etc/gonf/nat66-egress` and a per-minute
-root cron job that keeps `<nat66_egress>` equal to igc0's stable SLAAC GUA. It
-does nothing while no loaded ruleset declares the table, so a rollback to any
-other profile retires it. Arm refuses the NAT66 profile without the helper.
+root cron job that keeps `<nat66_egress>` at exactly ONE address, because a
+table pool also round-robins: of igc0's stable slaacd GUAs (not temporary,
+deprecated, tentative, duplicated or detached) the one with the longest valid
+lifetime, then preferred lifetime, then the lowest address. After a CPE
+renumbering only the new prefix is refreshed, so it wins at the first RA that
+announces it, even without a deprecating announcement for the old one. The
+helper acts only while the loaded rules contain `nat-to <nat66_egress>`, and
+only while holding the journal lock `/etc/gonf/router-lock` (it skips the run
+if a rollback operation holds it; journal operations wait up to 5 s for the
+helper). A `persist` table outlives a reload that no longer declares it, so
+activation of a profile without NAT66 kills an orphan `<nat66_egress>`;
+restore removes the candidate's table as before. Without that, the next
+snapshot would refuse the runtime-only table. Arm refuses the NAT66 profile
+without the helper. Failures go to syslog (`nat66-egress`, daemon.err).
 
 The helper validates placement (SLAAC only on igc0, Wi-Fi ULA only on igc2,
 rad only for igc2, forwarding only for NAT66, the egress table present).
+Uplink RAs are accepted only from the CPE's `fe80::1`; other RAs on igc0 are a
+logged drop. A host on the shared igc0 wire can still spoof that address.
 Activation enables forwarding only after the candidate PF, solicits on igc0
 after that PF admits RAs, and starts rad last. Acceptance admits stable
 slaacd addresses only where the candidate enables SLAAC; temporary addresses
