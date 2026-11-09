@@ -51,10 +51,11 @@ func ipv6Stages() []routerStage {
 }
 
 // nat66Stage names the profiles that carry the full NAT66 stage: the o34
-// profile and the g24 camera profile rendered on top of it (camera.go).
-// router-rollback's nat66_profile must list the same names.
+// profile, the g24 camera profile rendered on top of it (camera.go) and the
+// c24 lab profile on top of that (lab.go). router-rollback's nat66_profile
+// must list the same names.
 func nat66Stage(name string) bool {
-	return name == ipv6NAT66ProfileName || name == cameraProfileName
+	return name == ipv6NAT66ProfileName || name == cameraProfileName || name == labProfileName
 }
 
 // ipv6Files derives an o34 stage from the stage's IPv4/ULA files. The uplink
@@ -62,15 +63,21 @@ func nat66Stage(name string) bool {
 // the full NAT66 stage: the Wi-Fi ULA, rad(8), IPv6 forwarding and
 // translation. For the o34 stages the IPv4 output stays byte-identical to
 // wifi-first apart from the profile name in the PF and dhcpd.conf headers;
-// the g24 camera stage also passes through here and differs only by its
-// camera wiring (camera.go).
+// the g24 camera stage and the c24 lab stage also pass through here and
+// differ only by their wiring (camera.go, lab.go).
 func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 	files := profileFiles(s, data)
 	uplink := "hostname." + ipv6Uplink
-	files[uplink] = strings.Replace(files[uplink], localOnlyIPv6Policy, uplinkIPv6Line, 1)
+	if s.lab == ipv6Uplink {
+		// The lab shares the uplink: its local-only policy lines give way.
+		files[uplink] = strings.Replace(files[uplink], localOnlyIPv6Policy, uplinkIPv6Line, 1)
+	} else {
+		// c24: the lab keeps its local-only policy on its own port.
+		files[uplink] += uplinkIPv6Line
+	}
 	files["ACTIVATION.txt"] = ipv6Activation(s)
 	if s.name == ipv6UplinkProfileName {
-		files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Head()+uplinkIPv6Rules()+ipv6Tail())
+		files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Head()+uplinkIPv6Rules(s)+ipv6Tail())
 		return files
 	}
 	// rad(8) needs a link-local source; assigning the ULA creates one.
@@ -81,16 +88,22 @@ func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 	// The translation must precede the uplink's quick non-global egress block:
 	// a quick rule ends evaluation, so a later match rule would never translate.
 	files["pf.conf"] = profilePFWithIPv6(s, data,
-		labIPv6Rules()+uplinkIPv6Head()+nat66MatchRules()+uplinkIPv6Rules()+wifiNAT66Rules()+ipv6Tail())
+		labIPv6Rules()+uplinkIPv6Head()+nat66MatchRules()+uplinkIPv6Rules(s)+wifiNAT66Rules()+ipv6Tail())
 	return files
 }
 
+// nat66RAD restricts rad(8) to Wi-Fi. The comment names what igc0 carries
+// in the stage: the ISP LAN shared with the lab until b24, the ISP CPE alone
+// afterwards (c24, lab on its own port).
 func nat66RAD(s routerStage) string {
-	return fmt.Sprintf(`# o34 NAT66: advertise ONLY on Wi-Fi, never on %s (ISP LAN and shared lab
-# wire) or the camera port. The prefix is the Wi-Fi ULA configured on %s.
+	never := ipv6Uplink + " (ISP LAN and shared lab\n# wire)"
+	if s.lab != ipv6Uplink {
+		never = ipv6Uplink + " (ISP uplink), the lab\n# port " + s.lab
+	}
+	return fmt.Sprintf(`# o34 NAT66: advertise ONLY on Wi-Fi, never on %s or the camera port. The prefix is the Wi-Fi ULA configured on %s.
 # No RDNSS: dual-stack clients keep DHCPv4 DNS 10.30.0.1, which returns AAAA.
 interface %s
-`, ipv6Uplink, s.wifi, s.wifi)
+`, never, s.wifi, s.wifi)
 }
 
 // uplinkIPv6Head declares the uplink macro and the non-global table that the
@@ -106,8 +119,13 @@ table <nonglobal6> const { ::/8, 100::/64, 2001:db8::/32, 2002::/16, 3fff::/20, 
 // the uplink, router-originated egress from global addresses only. The lab
 // rules before it already pass neighbour discovery on the lab port, which is
 // the uplink in the wifi-first wiring; the uplink rule repeats it so a later
-// rewiring keeps ND on the uplink.
-func uplinkIPv6Rules() string {
+// rewiring keeps ND on the uplink (c24's lab-igc1 relies on it). The RA
+// comment names the stage's L2 neighbours on igc0.
+func uplinkIPv6Rules(s routerStage) string {
+	spoof := "On the shared igc0 wire another host can still spoof that source\n# address at L2; PF cannot tell them apart"
+	if s.lab != ipv6Uplink {
+		spoof = "After b24 only the CPE shares igc0; PF could not tell a source\n# address spoofed at L2 apart"
+	}
 	return fmt.Sprintf(`# ULA (lab included) and other non-global sources never leave towards the internet.
 block drop out log quick on $up6_if inet6 from <nonglobal6> to ! <nonglobal6>
 # The lab ULA never transits; logged so a test route shows the drop in pflog.
@@ -116,12 +134,11 @@ pass quick on $up6_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
 # MLD query/report/done and MLDv2 report keep solicited-node groups working.
 pass quick on $up6_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::/16 icmp6-type { 130, 131, 132, 143 }
 # Router advertisements only from the CPE's link-local address (observed
-# fe80::1). On the shared igc0 wire another host can still spoof that source
-# address at L2; PF cannot tell them apart (see IQ IPV6-WIFI.md).
+# fe80::1). %s (see IQ IPV6-WIFI.md).
 pass in quick on $up6_if inet6 proto icmp6 from %s to { ff02::1, fe80::/10 } icmp6-type routeradv
 block drop in log quick on $up6_if inet6 proto icmp6 icmp6-type routeradv
 pass out quick on $up6_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::2 icmp6-type routersol
-`, cpeRouterLL)
+`, spoof, cpeRouterLL)
 }
 
 // nat66MatchRules translates Wi-Fi ULA traffic leaving the uplink. Placed

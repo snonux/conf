@@ -24,7 +24,8 @@ type Profiles struct{ RequiresRoot }
 // RouterProfiles carries verified migration dependencies from inventory.
 type RouterProfiles struct {
 	// BootCanary adds a fixed, reserved alias only to the shared profile, the
-	// o34 NAT66 profile and the g24 camera-igc3 profile (see bootCanaryStage).
+	// o34 NAT66 profile and the g24 camera-igc3 profile (see bootCanaryStage;
+	// never c24's lab-igc1).
 	BootCanary bool
 	// RetainProvisioningAlias keeps the existing 192.168.11.2 alias in every
 	// candidate until verified retirement. This retains its address only: any
@@ -100,6 +101,10 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	for _, stage := range cameraStages() {
 		profiles[stage.name] = cameraFiles(stage, data)
 	}
+	// c24 lab port (lab.go) builds on the g24 camera profile.
+	for _, stage := range labStages() {
+		profiles[stage.name] = labFiles(stage, data)
+	}
 	return profiles, nil
 }
 
@@ -154,9 +159,12 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 // bootCanaryStage names the profiles whose unconfirmed trial may carry the
 // fixed reboot canary: the shared profile (u14) and the NAT66 profiles (o34,
 // g24), whose persistence across a real reboot is part of their acceptance.
-// All keep the lab zone on igc0, where the canary alias lives.
+// All keep the lab zone on igc0, where the canary alias lives. c24's
+// lab-igc1 is a NAT66 profile too but is excluded: its lab prefix is on igc1,
+// so the igc0 canary would put 10.20.0.0/24 on two ports (router-rollback
+// refuses that, and its canary_profile excludes lab-igc1 as well).
 func bootCanaryStage(name string) bool {
-	return name == "shared-igc0" || nat66Stage(name)
+	return name == "shared-igc0" || (nat66Stage(name) && name != labProfileName)
 }
 
 func validateMigrationFlows(flows []MigrationFlow) error {
@@ -417,11 +425,21 @@ Recovery 10.98/24 stays on igc1 through post-rack/post-AP rollback; shared-link
 hosts must not route laptop replies through its uncabled gateway.
 %s
 Camera updates and recorder exceptions remain closed pending measured sources/ports.
-Same-wire Stage A is not physical isolation. IPv6 forwarding is disabled and PF
+%s IPv6 forwarding is disabled and PF
 blocks IPv6 transit; endpoint RA/DHCPv6 suppression remains a host requirement.
 Final requires explicit address/recovery retirement acceptance. Keep all retained
 host IPv4 aliases until that later gate; final files do not authorize retirement.
-`, s.name, dhcpActivation(s))
+`, s.name, dhcpActivation(s), isolationActivation(s))
+}
+
+// isolationActivation states whether the stage's lab shares the upstream
+// wire. Only the stages with the lab on igc0 are same-wire Stage A wiring;
+// post-rack, post-ap and final assume the separate b24 lab cabling.
+func isolationActivation(s routerStage) string {
+	if s.lab == "igc0" {
+		return "Same-wire Stage A is not physical isolation."
+	}
+	return "Lab on its own port " + s.lab + " (b24 cabling)."
 }
 
 // dhcpActivation states the stage's real DHCP role. Only Stage A

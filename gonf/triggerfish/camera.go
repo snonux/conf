@@ -28,6 +28,7 @@ func cameraStages() []routerStage {
 // cameraFiles renders the g24 stage on top of the NAT66 files. The address
 // move comes from the stage wiring (profileFiles), the explicit zone deny from
 // profilePFWithIPv6 (cameraZoneStage); only the activation notes differ here.
+// c24's labFiles (lab.go) starts from these files as well.
 func cameraFiles(s routerStage, data RouterProfiles) map[string]string {
 	files := ipv6Files(s, data)
 	files["ACTIVATION.txt"] = cameraActivation(s)
@@ -35,10 +36,12 @@ func cameraFiles(s routerStage, data RouterProfiles) map[string]string {
 }
 
 // cameraZoneStage names the profiles that render the explicit camera-zone
-// deny. post-ap and final also put the cameras on igc3, but they stay
-// byte-identical until their own stage revisits the camera policy.
+// deny: camera-igc3 and c24's lab-igc1 built on it. post-ap and final also
+// put the cameras on igc3, but they stay byte-identical until their own
+// stage revisits the camera policy. router-rollback's camera_zone_profile
+// lists the same names.
 func cameraZoneStage(name string) bool {
-	return name == cameraProfileName
+	return name == cameraProfileName || name == labProfileName
 }
 
 // cameraZoneRules denies the camera port in both directions, logged. The

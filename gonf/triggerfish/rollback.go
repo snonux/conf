@@ -62,6 +62,8 @@ func (Rollback) Stage() { trialCommand("stage", true) }
 func (Rollback) OptsReadiness() TaskOptions { return TaskOptions{Operational()} }
 
 // Readiness binds the measured VPN and inventory review to the frozen candidate.
+// Its old-management line is per profile (oldManagementReceipt): lab-igc1
+// runs after b24, when no host can log in to 192.168.1.2 any more.
 func (Rollback) Readiness() {
 	EachHost(func(t RouterTrial) {
 		if !t.ReadinessReviewed || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(t.CandidateSHA256) {
@@ -78,7 +80,7 @@ func (Rollback) Readiness() {
 				"provisioning-clients=captured-inventory-no-known-clients\n"+
 				"dependencies=r14-reviewed-current-stage-only\n"+
 				"wg2=provisioned-and-tested\n"+
-				"old-management=fresh-authenticated\n"+
+				"old-management="+oldManagementReceipt(t.Profile)+"\n"+
 				"current-cabling="+t.Profile+"\n"), RootPrivate)
 	})
 }
@@ -191,11 +193,12 @@ func trialCommand(action string, profile bool) {
 }
 
 // migrationProfiles lists the physical profiles a trial may stage; the list
-// must match router-rollback's profile_ok minus vpn-bootstrap. final is
-// rendered for review only and needs the separate retirement gate.
+// must match router-rollback's profile_ok minus vpn-bootstrap, and its
+// wiring table. final is rendered for review only and needs the separate
+// retirement gate.
 func migrationProfiles() []string {
 	return []string{"shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap",
-		ipv6UplinkProfileName, ipv6NAT66ProfileName, cameraProfileName}
+		ipv6UplinkProfileName, ipv6NAT66ProfileName, cameraProfileName, labProfileName}
 }
 
 // trialProfile admits the physical profiles plus the wg2 bootstrap, which

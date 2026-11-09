@@ -19,12 +19,14 @@ NAT66_EGRESS=$BASE/nat66-egress
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) return 0;; *) return 1;; esac; }
+profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3|lab-igc1) return 0;; *) return 1;; esac; }
 # o34 stages: SLAAC on the igc0 uplink; NAT66 adds Wi-Fi ULA, rad and forwarding.
-# The g24 camera-igc3 profile is the NAT66 profile with the camera zone on igc3.
-ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
-nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
+# The g24 camera-igc3 profile is the NAT66 profile with the camera zone on igc3;
+# c24's lab-igc1 is camera-igc3 with the lab moved to igc1 after the b24 cables.
+ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 ]]; }
+nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 ]]; }
 # Profiles whose unconfirmed trial may carry the fixed 10.20.0.254 boot canary.
+# The canary lives on igc0, so never lab-igc1: its lab prefix is on igc1.
 canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
 # Router ports of the lab, Wi-Fi and camera zones ("LAB WIFI CAMERA") of every
 # stageable physical profile; mirrors routerStages(), ipv6Stages() and
@@ -35,6 +37,7 @@ wiring() {
  shared-igc0) print igc0 igc0 igc0;;
  wifi-prepare|wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) print igc0 igc2 igc0;;
  camera-igc3) print igc0 igc2 igc3;;
+ lab-igc1) print igc1 igc2 igc3;;
  post-rack) print igc1 igc0 igc0;;
  post-ap) print igc1 igc2 igc3;;
  *) return 1;;
@@ -47,13 +50,27 @@ camera_port() {
  w=$(wiring "$1") || return 1
  print -- "${w##* }"
 }
-# Confirmation needs a fresh igc1 recovery receipt only once the lab has
-# moved to igc1 (post-rack, post-ap). Every earlier stage keeps the lab on
-# the shared igc0, where the old/new receipts already prove the management
-# path that the trial changes; igc1 recovery is proven before the rack moves.
-recovery_proof_profile() { [[ $1 == post-rack || $1 == post-ap ]]; }
+# Fresh management receipts that confirmation requires. Every stage with the
+# lab on the shared igc0 proves the old and new paths the trial changes; once
+# the lab is on igc1 the fresh igc1 recovery receipt joins them (post-rack,
+# post-ap). lab-igc1 (c24) runs after the b24 cable move, when only the ISP
+# CPE shares igc0 and no host can reach 192.168.1.2 any more: it proves the
+# new path from a lab host (see proof), igc1 recovery and the laptop's wg2
+# instead. igc1 recovery is proven before the rack moves.
+confirm_roles() {
+ case $1 in
+ lab-igc1) print new recovery vpn;;
+ post-rack|post-ap) print old new recovery;;
+ *) print old new;;
+ esac
+}
+# Readiness value of the old 192.168.1.2 management path (oldManagementReceipt
+# in lab.go): a fresh old-LAN login, except after b24 for lab-igc1.
+old_management() {
+ if [[ $1 == lab-igc1 ]]; then print isp-uplink-only; else print fresh-authenticated; fi
+}
 # Profiles that must carry the explicit, logged camera-zone deny.
-camera_zone_profile() { [[ $1 == camera-igc3 ]]; }
+camera_zone_profile() { [[ $1 == camera-igc3 || $1 == lab-igc1 ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  # The NAT66 egress helper (nat66-egress) takes this lock for well under a
@@ -114,11 +131,12 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
   ! grep -q '10.98.0.' "$d/hostname.$f" || fail 'recovery moved from igc1'
  done
  validate_hostnames "$d"
+ validate_prefixes "$d" "$p"
  case $p in
  shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
  wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
  post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
- post-ap) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
+ post-ap|lab-igc1) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
  pfctl -nf "$d/pf.conf"
  [[ $p == shared-igc0 ]] || dhcpd -n -c "$d/dhcpd.conf"
@@ -183,7 +201,8 @@ validate_hostnames() {
 # Each zone gateway sits on exactly the port of the profile's wiring, and the
 # PF macro of that zone names the same port: 10.20.0.1 with lab_if, 10.30.0.1
 # with wifi_if (i44) and 10.40.0.1 with cam_if (g24). The zone-prefix count
-# below still refuses an address on a second port.
+# in validate_hostnames refuses the gateway on a second port, validate_prefixes
+# any other address of the zone there.
 validate_wiring() {
  typeset d=$1 p=$2 w lab wifi camera
  w=$(wiring "$p") || fail 'profile has no reviewed port wiring'
@@ -195,8 +214,32 @@ END
  zone_on_port "$d" cam_if "$camera" 10.40.0.1 || fail 'camera zone on the wrong port'
  grep -qxF 'inet6 alias fd02:ca0b:f1cb:20::1 64' "$d/hostname.$lab" || fail 'lab ULA on the wrong port'
 }
+# No address of a zone /24 on a port other than the zone's own (c24), such as
+# the 10.20.0.254 boot canary on igc0 once the lab is on igc1: one connected
+# prefix on two ports. Runs after validate_hostnames, which already refuses
+# a duplicated or missing zone gateway.
+validate_prefixes() {
+ typeset d=$1 w lab wifi camera
+ w=$(wiring "$2") || fail 'profile has no reviewed port wiring'
+ read -r lab wifi camera <<END
+$w
+END
+ prefix_only_on "$d" 10.20.0. "$lab" || fail 'lab prefix on a second port'
+ prefix_only_on "$d" 10.30.0. "$wifi" || fail 'Wi-Fi prefix on a second port'
+ prefix_only_on "$d" 10.40.0. "$camera" || fail 'camera prefix on a second port'
+}
 zone_on_port() {
  grep -qxF "$2 = \"$3\"" "$1/pf.conf" && grep -qxF "inet alias $4 255.255.255.0" "$1/hostname.$3"
+}
+# Exit 1 when an IPv4 address starting with the zone prefix $2 (inet or inet
+# alias line) sits on a port other than $3.
+prefix_only_on() {
+ typeset f
+ for f in "$1"/hostname.igc[0-3]; do
+  [[ $f != "$1/hostname.$3" ]] || continue
+  awk -v p="$2" '$1=="inet" {a = ($2=="alias") ? $3 : $2; if (index(a, p)==1) bad=1}
+   END {exit bad}' "$f" || return 1
+ done
 }
 
 # g24 camera zone, checked for every profile: no permit or translation
@@ -264,13 +307,19 @@ camera_deny_first() {
 
 # o34 IPv6 placement. Local-only profiles keep exactly one persistent
 # "inet6 -autoconf" and one "inet6 -temporary" policy line (beside the lab
-# ULA, checked in validate), no Wi-Fi ULA and no rad. The uplink stages
-# replace both with SLAAC on igc0 only (the ISP-facing port); only NAT66 adds
-# the Wi-Fi ULA on igc2, the rad configuration for igc2 alone and the PF
-# egress table.
+# ULA, checked in validate_hostnames), no Wi-Fi ULA and no rad. The uplink
+# stages add SLAAC on igc0 only (the ISP-facing port); while the lab shares
+# igc0 that line replaces both policy lines, and once the lab has its own
+# port (c24 lab-igc1) the policy lines stay beside the lab ULA there. Only
+# NAT66 adds the Wi-Fi ULA on igc2, the rad configuration for igc2 alone and
+# the PF egress table.
 validate_ipv6() {
- typeset d=$1 p=$2 autoconf=0 policy=1 wifi=0 rad=disabled line
- if ipv6_profile "$p"; then autoconf=1; policy=0; fi
+ typeset d=$1 p=$2 autoconf=0 policy=1 wifi=0 rad=disabled line w
+ w=$(wiring "$p") || fail 'profile has no reviewed port wiring'
+ if ipv6_profile "$p"; then
+  autoconf=1
+  [[ ${w%% *} != igc0 ]] || policy=0
+ fi
  if nat66_profile "$p"; then wifi=1; rad=enabled; fi
  [[ $(awk '$0=="inet6 autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$autoconf" ]] || fail 'unexpected IPv6 autoconfiguration line'
  for line in 'inet6 -autoconf' 'inet6 -temporary'; do
@@ -367,7 +416,7 @@ ready() {
 provisioning-clients=captured-inventory-no-known-clients
 dependencies=r14-reviewed-current-stage-only
 wg2=provisioned-and-tested
-old-management=fresh-authenticated
+old-management=$(old_management "$(cat "$STATE/profile")")
 current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bound readiness receipt'
  # The candidate template is never installed. A later VPN task must provision
  # a real authenticated interface first; do not generate, read out or replace keys.
@@ -564,7 +613,7 @@ persist_candidate() {
  shared-igc0|wifi-prepare) rcctl disable dhcpd;;
  wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
  post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
- post-ap) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
+ post-ap|lab-igc1) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
  esac
 }
 
@@ -962,6 +1011,12 @@ END
  *) fail 'receipt is for the wrong management address';;
  esac
  [[ $role != vpn || $client == 10.99.0.2 ]] || fail 'VPN proof must use the authenticated laptop address'
+ # lab-igc1: PF admits 10.20.0.0/24 sources only on igc1, so a new receipt
+ # from a lab host proves the moved lab path; the laptop's wg2 session to
+ # 10.20.0.1 never touches igc1 (validateLabProof in lab.go checks the same).
+ if [[ $role == new && $(cat "$STATE/profile") == lab-igc1 ]]; then
+  [[ $client == 10.20.0.+([0-9]) && $client != 10.20.0.1 ]] || fail 'lab-igc1 new receipt must come from a lab host'
+ fi
  # Verify a currently ESTABLISHED socket matching the submitted 4-tuple.
  netstat -n -f inet | awk -v a="$server.$sport" -v b="$client.$cport" \
   '$4==a && $5==b && $6=="ESTABLISHED" {ok=1} END {exit !ok}' || fail 'fresh connection socket not found'
@@ -985,10 +1040,14 @@ confirm() {
   print 'wg2 confirmed; bootstrap rollback cancelled'
   return
  fi
- for role in old new; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/new receipts missing'; done
- if recovery_proof_profile "$(cat "$STATE/profile")"; then
-  [[ -s $STATE/proof.recovery ]] || fail 'fresh igc1 recovery receipt missing'
- fi
+ for role in $(confirm_roles "$(cat "$STATE/profile")"); do
+  [[ -s $STATE/proof.$role ]] && continue
+  case $role in
+  old|new) fail 'fresh old/new receipts missing';;
+  recovery) fail 'fresh igc1 recovery receipt missing';;
+  *) fail 'fresh VPN receipt missing';;
+  esac
+ done
  [[ ${2:-} == services-checked ]] || fail 'controller service checks must pass before confirmation'
  atomic "$STATE/status" confirmed
  rm -f "$STATE/pending"

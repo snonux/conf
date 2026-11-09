@@ -533,13 +533,15 @@ if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; 
 [[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
 # o34 IPv6 stages: uplink SLAAC first, then NAT66 on top of the confirmed
 # uplink. Start from a wifi-first runtime and persistent baseline.
+# The optional second argument is the old-management value; c24's lab-igc1
+# records isp-uplink-only (after b24 no host reaches 192.168.1.2).
 review() {
  {
   print -- "candidate-sha256=$(cat "$base/router-state/digest")"
   print 'provisioning-clients=captured-inventory-no-known-clients'
   print 'dependencies=r14-reviewed-current-stage-only'
   print 'wg2=provisioned-and-tested'
-  print 'old-management=fresh-authenticated'
+  print -- "old-management=${2:-fresh-authenticated}"
   print -- "current-cabling=$1"
  } > "$base/router-readiness/$1"
  chmod 600 "$base/router-readiness/$1"
@@ -1011,10 +1013,23 @@ grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc3"
 if grep -q '10.40.0.1' "$base/interfaces/igc0"; then exit 1; fi
 for f in hostname.igc0 hostname.igc3 pf.conf; do cmp -s "$cam/$f" "$fixture/etc/$f"; done
 # i44: port wiring is a closed table. Every stageable physical profile has
-# one; any other name has none, so no port is ever guessed (g24 N6).
-for p in shared-igc0 wifi-prepare wifi-first wifi-ipv6-uplink wifi-ipv6-nat66 camera-igc3 post-rack post-ap; do
+# one; any other name has none, so no port is ever guessed (g24 N6). c24:
+# loop over every rendered profile directory, not a hand-written list, so a
+# newly rendered profile cannot miss profile_ok or the wiring table. final is
+# rendered for review only: it has no wiring and needs the retirement gate.
+rendered=0
+for d in "$base"/router-profiles/*/; do
+ p=${d%/}
+ p=${p##*/}
+ [[ $p != final ]] || continue
+ "$fixture/run" profile_ok "$p"
  "$fixture/run" wiring "$p" > /dev/null
+ (( rendered += 1 ))
 done
+# The nine stageable physical profiles of the c24 render (lab-igc1 included).
+(( rendered >= 9 ))
+[[ -d $base/router-profiles/lab-igc1 ]]
+[[ $("$fixture/run" wiring lab-igc1) == 'igc1 igc2 igc3' && $("$fixture/run" camera_port lab-igc1) == igc3 ]]
 [[ $("$fixture/run" camera_port camera-igc3) == igc3 && $("$fixture/run" camera_port post-ap) == igc3 ]]
 [[ $("$fixture/run" camera_port wifi-first) == igc0 && $("$fixture/run" camera_port post-rack) == igc0 ]]
 for p in final vpn-bootstrap camera-igc4 ''; do
@@ -1024,8 +1039,11 @@ done
 # A non-NAT66 bundle under an unlisted name reaches the wiring check.
 expect_fail validate "$base/router-profiles/post-ap" post-ap2
 grep -q 'profile has no reviewed port wiring' "$fixture/failure.log"
-# Every rendered profile passes the tightened validator unchanged.
-for p in shared-igc0 wifi-prepare wifi-first wifi-ipv6-uplink wifi-ipv6-nat66 camera-igc3 post-rack post-ap; do
+# Every rendered stageable profile passes the tightened validator unchanged.
+for d in "$base"/router-profiles/*/; do
+ p=${d%/}
+ p=${p##*/}
+ [[ $p != final ]] || continue
  "$fixture/run" validate "$base/router-profiles/$p" "$p"
 done
 [[ ! -e $base/router-pf-expanded ]]
@@ -1199,6 +1217,179 @@ print 'tcp 0 0 10.98.0.1.22 10.98.0.250.47124 ESTABLISHED' > "$base/sockets"
 "$fixture/run" proof recovery i44rack1 '10.98.0.250 47124 10.98.0.1 22'
 "$fixture/run" confirm i44rack1 services-checked
 [[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
+# c24 lab-igc1: camera-igc3 with 10.20.0.1/24, the lab ULA and their routes
+# moved from igc0 to igc1 after the b24 cable move. Start from a confirmed
+# camera-igc3 baseline, as on the live router.
+"$fixture/run" stage c24cam01 camera-igc3 180
+review camera-igc3
+"$fixture/run" arm c24cam01 camera-igc3 180
+"$fixture/run" activate c24cam01
+confirm_fresh c24cam01 47201 47202
+grep -q ' inet 10.20.0.1 ' "$base/interfaces/igc0"
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc0"
+lab=$base/router-profiles/lab-igc1
+"$fixture/run" validate "$lab" lab-igc1
+cp -Rp "$lab" "$fixture/lab.saved"
+cp -Rp "$cam" "$fixture/camera.c24"
+# Every misplaced lab element refuses at stage; the confirmed journal stays.
+c24_refuses() {
+ expect_fail stage c24bad01 lab-igc1 180
+ grep -qF -- "$1" "$fixture/failure.log" || { print -u2 -- "wrong refusal: $1"; cat "$fixture/failure.log" >&2; exit 1; }
+ [[ $(cat "$base/router-state/token") == c24cam01 && $(cat "$base/router-state/status") == confirmed ]]
+ rm -rf "$lab"
+ cp -Rp "$fixture/lab.saved" "$lab"
+}
+# The lab gateway on both ports duplicates the connected prefix.
+print 'inet alias 10.20.0.1 255.255.255.0' >> "$lab/hostname.igc0"
+c24_refuses 'duplicate or missing zone prefix'
+# A lab, Wi-Fi or camera address beside another zone's port does as well.
+print 'inet alias 10.20.0.99 255.255.255.0' >> "$lab/hostname.igc2"
+c24_refuses 'lab prefix on a second port'
+# Address and PF macro must agree on igc1.
+edit 's/^lab_if = "igc1"$/lab_if = "igc0"/' "$lab/pf.conf"
+c24_refuses 'lab zone on the wrong port'
+edit '/^inet alias 10[.]20[.]0[.]1 /d' "$lab/hostname.igc1"
+print 'inet alias 10.20.0.1 255.255.255.0' >> "$lab/hostname.igc0"
+c24_refuses 'lab zone on the wrong port'
+# The ULA follows the lab; on the uplink it would sit beside SLAAC.
+edit '/^inet6 alias fd02:ca0b:f1cb:20::1 64$/d' "$lab/hostname.igc1"
+print 'inet6 alias fd02:ca0b:f1cb:20::1 64' >> "$lab/hostname.igc0"
+c24_refuses 'lab ULA on the wrong port'
+# The igc0 boot canary would put the lab prefix on a second port.
+print 'inet alias 10.20.0.254 255.255.255.0' >> "$lab/hostname.igc0"
+c24_refuses 'lab prefix on a second port'
+# So would any Wi-Fi or camera address away from its own port.
+print 'inet alias 10.30.0.99 255.255.255.0' >> "$lab/hostname.igc1"
+c24_refuses 'Wi-Fi prefix on a second port'
+print 'inet alias 10.40.0.99 255.255.255.0' >> "$lab/hostname.igc0"
+c24_refuses 'camera prefix on a second port'
+# The lab port keeps both local-only policy lines; SLAAC stays on igc0.
+edit '/^inet6 -/d' "$lab/hostname.igc1"
+c24_refuses 'persistent IPv6 policy missing or duplicated'
+edit '/^inet6 autoconf -temporary$/d' "$lab/hostname.igc0"
+print 'inet6 autoconf -temporary' >> "$lab/hostname.igc1"
+c24_refuses 'IPv6 autoconfiguration only on the igc0 uplink'
+# Recovery stays on igc1; DHCP serves the lab and Wi-Fi ports only.
+edit '/^inet alias 10[.]98[.]0[.]1 /d' "$lab/hostname.igc1"
+c24_refuses 'missing igc1 recovery address'
+edit 's/^dhcpd_interfaces=igc1 igc2$/dhcpd_interfaces=igc2/' "$lab/services.conf"
+c24_refuses 'wrong DHCP binding'
+# The camera zone keeps its explicit deny and no permit, as in camera-igc3.
+edit '/^block drop in log quick on [$]cam_if$/d' "$lab/pf.conf"
+c24_refuses 'camera zone default deny missing'
+print 'pass in on igc1 inet proto tcp from 10.20.0.0/24 to 10.40.0.11 port 554' >> "$lab/pf.conf"
+c24_refuses 'camera zone must stay default-deny'
+print 'interface igc1' >> "$lab/rad.conf"
+c24_refuses 'rad must serve only igc2'
+# Readiness records the post-b24 old-management state; the pre-b24 value
+# of every other profile refuses before anything is armed.
+"$fixture/run" stage c24lab01 lab-igc1 180
+review lab-igc1
+expect_fail arm c24lab01 lab-igc1 180
+grep -q 'missing exact candidate-bound readiness receipt' "$fixture/failure.log"
+[[ ! -f $base/router-state/pending ]]
+review lab-igc1 isp-uplink-only
+"$fixture/run" arm c24lab01 lab-igc1 180
+: > "$base/operations"
+"$fixture/run" activate c24lab01
+# The lab gateway and ULA leave igc0 before they reach igc1; recovery stays.
+grep -q ' inet 10.20.0.1 ' "$base/interfaces/igc1"
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc1"
+if grep -q -e '10.20.0.1 ' -e 'fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc0"; then exit 1; fi
+grep -q ' inet 10.98.0.1 ' "$base/interfaces/igc1"
+grep -q ' inet 192.168.1.2 ' "$base/interfaces/igc0"
+if grep -q 'ifconfig igc1 inet 10.98.0.1 delete' "$base/operations"; then exit 1; fi
+awk '$0=="ifconfig igc0 inet 10.20.0.1 delete" {del=NR}
+ $0=="ifconfig igc1 inet alias 10.20.0.1 netmask 255.255.255.0" {add=NR}
+ $0=="ifconfig igc0 inet6 fd02:ca0b:f1cb:20::1 delete" {del6=NR}
+ $0=="ifconfig igc1 inet6 alias fd02:ca0b:f1cb:20::1 prefixlen 64" {add6=NR}
+ END {exit !(del && add > del && del6 && add6 > del6)}' "$base/operations"
+# Local-only policy on the lab port, SLAAC on the uplink, the camera port bare.
+grep -qx 'ifconfig igc1 inet6 -autoconf' "$base/operations"
+grep -qx 'ifconfig igc1 inet6 -temporary' "$base/operations"
+grep -qx 'ifconfig igc0 inet6 autoconf -temporary' "$base/operations"
+grep -qx 'ifconfig igc3 -inet6' "$base/operations"
+grep -qx 'slaacctl send solicitation igc0' "$base/operations"
+if grep -q 'slaacctl send solicitation igc[123]' "$base/operations"; then exit 1; fi
+grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
+if grep -q AUTOCONF6 "$base/interfaces/igc1"; then exit 1; fi
+# dhcpd on the lab and Wi-Fi ports, NAT66 and rad as in camera-igc3.
+grep -qx 'rcctl set dhcpd flags igc1 igc2' "$base/operations"
+grep -qx 'rcctl start dhcpd' "$base/operations"
+grep -qx 'rcctl start rad' "$base/operations"
+grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=1' "$base/operations"
+[[ -f $base/pf-tables/nat66_egress ]]
+for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$lab/$f" "$fixture/etc/$f"; done
+"$fixture/run" check_candidate_ipv6
+# SLAAC on the lab port refuses acceptance.
+cp -p "$base/interfaces/igc1" "$fixture/igc1.lab"
+sed 's/flags=</flags=<AUTOCONF6,/' "$fixture/igc1.lab" > "$base/interfaces/igc1"
+expect_fail check_candidate_ipv6
+grep -q 'physical IPv6 autoconfiguration remains enabled' "$fixture/failure.log"
+cp -p "$fixture/igc1.lab" "$base/interfaces/igc1"
+# lab-igc1 is no boot canary profile.
+expect_fail reboot_canary c24lab01
+grep -q 'no active boot canary' "$fixture/failure.log"
+# The new receipt must come from a lab host: the laptop's wg2 session to
+# 10.20.0.1 never crosses igc1. old is not required after b24; recovery and
+# VPN are.
+print '' > "$base/router-state/preexisting-connections"
+print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47211 ESTABLISHED' > "$base/sockets"
+expect_fail proof new c24lab01 '10.99.0.2 47211 10.20.0.1 22'
+grep -q 'lab-igc1 new receipt must come from a lab host' "$fixture/failure.log"
+[[ ! -e $base/router-state/proof.new ]]
+print 'tcp 0 0 10.20.0.1.22 10.20.0.125.47212 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof new c24lab01 '10.20.0.125 47212 10.20.0.1 22'
+expect_fail confirm c24lab01 services-checked
+grep -q 'fresh igc1 recovery receipt missing' "$fixture/failure.log"
+print 'tcp 0 0 10.98.0.1.22 10.99.0.2.47213 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof recovery c24lab01 '10.99.0.2 47213 10.98.0.1 22'
+expect_fail confirm c24lab01 services-checked
+grep -q 'fresh VPN receipt missing' "$fixture/failure.log"
+[[ $(cat "$base/router-state/status") == active-unconfirmed && -f $base/router-state/pending ]]
+# Timed restore after the cable move returns camera-igc3: the lab gateway
+# goes back to igc0, recovery never leaves igc1 (current-cabling recovery).
+print 0 > "$base/router-state/deadline"
+: > "$base/operations"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+grep -q ' inet 10.20.0.1 ' "$base/interfaces/igc0"
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc0"
+if grep -q -e '10.20.0.1 ' -e 'fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc1"; then exit 1; fi
+grep -q ' inet 10.98.0.1 ' "$base/interfaces/igc1"
+if grep -E 'ifconfig igc1 inet 10[.]98[.]0[.]1 delete|ifconfig igc[023].*10[.]98[.]0[.]1' "$base/operations"; then exit 1; fi
+for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$fixture/camera.c24/$f" "$fixture/etc/$f"; done
+cp -p "$base/interfaces/igc0" "$fixture/igc0.c24"
+cp -p "$base/interfaces/igc1" "$fixture/igc1.c24"
+# Boot restoration of an unconfirmed lab-igc1 trial restores camera-igc3.
+"$fixture/run" stage c24lab02 lab-igc1 180
+review lab-igc1 isp-uplink-only
+"$fixture/run" arm c24lab02 lab-igc1 180
+"$fixture/run" activate c24lab02
+"$fixture/run" boot_restore
+[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$fixture/camera.c24/$f" "$fixture/etc/$f"; done
+cp -p "$fixture/igc0.c24" "$base/interfaces/igc0"
+cp -p "$fixture/igc1.c24" "$base/interfaces/igc1"
+# Confirmation with new (lab host), recovery and VPN receipts; no old one.
+"$fixture/run" stage c24lab03 lab-igc1 180
+review lab-igc1 isp-uplink-only
+"$fixture/run" arm c24lab03 lab-igc1 180
+"$fixture/run" activate c24lab03
+print '' > "$base/router-state/preexisting-connections"
+cat > "$base/sockets" <<'SOCKETS'
+tcp 0 0 10.20.0.1.22 10.20.0.125.47221 ESTABLISHED
+tcp 0 0 10.98.0.1.22 10.99.0.2.47222 ESTABLISHED
+tcp 0 0 10.99.0.1.22 10.99.0.2.47223 ESTABLISHED
+SOCKETS
+"$fixture/run" proof new c24lab03 '10.20.0.125 47221 10.20.0.1 22'
+"$fixture/run" proof recovery c24lab03 '10.99.0.2 47222 10.98.0.1 22'
+"$fixture/run" proof vpn c24lab03 '10.99.0.2 47223 10.99.0.1 22'
+[[ ! -e $base/router-state/proof.old ]]
+"$fixture/run" confirm c24lab03 services-checked
+[[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
+expect_fail restore
+rm -rf "$fixture/lab.saved" "$fixture/camera.c24"
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
 mkdir "$base/router-profiles/vpn-bootstrap"

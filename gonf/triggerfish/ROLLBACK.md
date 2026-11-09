@@ -528,7 +528,9 @@ reapplied and confirmed (`g24-camera-final-20261109-c`). IQ
 
 Rendered comments no longer call a profile inactive: the same bytes are the
 staged candidate and, after a confirmed trial, the live `/etc/pf.conf`,
-`/etc/dhcpd.conf` and `unbound.conf`. Their headers name the profile; the
+`/etc/dhcpd.conf` and `unbound.conf`. The pf.conf and dhcpd.conf headers
+name the profile; the unbound.conf header says only that router-rollback
+applies it, because that file is identical in every profile. The
 dhcpd.conf header and `ACTIVATION.txt` state the stage's real DHCP role from
 `dhcpInterfaces` (the source of `services.conf` too): no DHCP in shared-igc0
 and wifi-prepare, igc2 from wifi-first on, igc1 (and igc2) after the rack
@@ -607,3 +609,71 @@ there was no reboot canary. Attempt 1 stopped at the k34 preflight before any
 gonf call (router unchanged). Receipts:
 `~/.local/state/conf/n44-syncthing-direct-20261109/` (`n44-*.json`,
 `STEP-JOURNAL.md`).
+
+## c24 lab port (lab-igc1), prepared, not live
+
+`lab-igc1` (`lab.go`) is the live `camera-igc3` profile with the lab moved to
+its own port after the human b24 cable move (ISP CPE directly on igc0, lab
+switch only on igc1, AP on igc2, cameras on igc3). Differences from
+camera-igc3, and nothing else:
+
+- `hostname.igc0` loses `10.20.0.1/24` and the lab ULA; it keeps
+  `192.168.1.2`, the retained `192.168.11.2` and `inet6 autoconf -temporary`.
+- `hostname.igc1` gains `10.20.0.1/24`, `fd02:ca0b:f1cb:20::1/64` and the
+  two local-only policy lines (`inet6 -autoconf`, `inet6 -temporary`) next
+  to the retained `10.98.0.1`.
+- PF: `lab_if = "igc1"` (anti-spoofing follows), the igc1 DHCP pair of
+  rules, and the profile name in the header and the RA comment. Every other
+  rule is camera-igc3's: lab NAT to `192.168.1.2` on igc0, lab ULA
+  local-only, Wi-Fi NAT66, Shelly TCP443 pairs, n44 Syncthing, wg2 (its
+  `192.168.1.2:51822` endpoint included), recovery for `10.99.0.2` and the
+  explicit camera deny.
+- dhcpd on igc1 and igc2: the lab subnet with `deny unknown-clients` and the
+  four JetKVM MAC reservations, Wi-Fi unchanged.
+- `rad.conf` comment and `ACTIVATION.txt`.
+
+Rendering: `ipv6Files` appends the uplink SLAAC line to igc0 when the lab
+has its own port (it replaces the policy lines only while the lab shares
+igc0), and the RA/rad comments name igc0's real L2 neighbours. post-rack,
+post-ap and final changed only their `ACTIVATION.txt` isolation sentence;
+every other file of every other profile is byte-identical, and camera-igc3
+fully so (plain and canary).
+
+router-rollback: `lab-igc1` is in `profile_ok`, `wiring` (`igc1 igc2
+igc3`), `ipv6_profile`, `nat66_profile` and `camera_zone_profile`, not in
+`canary_profile` (the canary alias lives on igc0; `bootCanaryStage` and the
+trial input refuse it too). `validate_ipv6` expects the policy lines beside
+the lab ULA whenever the lab is not on the uplink, and the new
+`validate_prefixes` refuses any address of a zone /24 on another zone's
+port (the canary on igc0 would be one). Readiness records
+`old-management=isp-uplink-only` for lab-igc1 (`old_management`,
+`oldManagementReceipt`): after b24 only the CPE shares igc0, so no host can
+log in to `192.168.1.2`. Confirmation requires the receipts of
+`confirm_roles`: `new`, `recovery` and `vpn` for lab-igc1 (no `old`); the
+`new` receipt must come from a lab host in `10.20.0.0/24` (PF admits those
+sources only on igc1, so it proves the moved path), checked by `proof` and
+by `validateLabProof` in the trial input. post-rack/post-ap keep `old new
+recovery`, every other stage `old new`.
+
+Restore semantics after the cable move: a timed or boot restore returns
+camera-igc3, i.e. the lab gateway goes back to igc0, which then faces only
+the CPE. The lab keeps its L2 traffic, recovery `10.98.0.1` stays on igc1
+and wg2 terminates on the router, so management survives, but the lab has
+no gateway (internet, DNS via the router, wg0 public peers, Wi-Fi Shelly
+pairs) until a fixed retry or the user's separate reverse cable action. The
+cutover packet (IQ `openbsdrouter-plan/CUTOVER-B24-C24.md`) holds the
+sequence, the proofs and the fallback.
+
+Fixtures in `checks/rollback.ksh` loop over every rendered profile
+directory (only `final` skipped) for `profile_ok`, `wiring` and
+`validate`, instead of a hand-written list. The c24 cases cover the
+refusals (gateway on both ports, address/macro mismatch, ULA on the uplink,
+igc0 canary and other zone addresses on a second port, missing or misplaced
+policy and SLAAC lines, recovery moved, DHCP binding, camera deny and
+permit, rad on igc1, pre-b24 readiness value), activation order (drain from
+igc0 before adding to igc1, recovery never deleted, policy and SLAAC calls,
+dhcpd igc1 igc2, NAT66 and rad), SLAAC on igc1 refusing acceptance, no boot
+canary, the lab-host `new` receipt, the required recovery and VPN
+receipts, and timed, boot and confirmed paths. Eight controller mutants
+(one per new check) each fail the suite. Nothing is live: the router still
+runs camera-igc3, and the helper on the router is the i44/n44 version.
