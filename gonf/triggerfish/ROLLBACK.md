@@ -557,3 +557,16 @@ pass), and wifi-prepare and wifi-first through the journal: activation
 without DHCP, then with dhcpd on igc2, timed and boot restoration, confirmation
 on old/new receipts, and post-rack refusing confirmation without the igc1
 recovery receipt.
+
+Live 2026-11-09, under `live-rollout.lock`: trial `i44-camera-reapply-20261109-a`
+re-applied `camera-igc3` with the i44 render and helper. Stage (with Setup and
+Candidates) left every staged profile equal to the local render and the
+installed helper equal to the committed source; the frozen candidate differed
+from the live files only in the three header comments. With the trial active,
+the loaded PF rules were identical to before (optimizer table names
+normalised) and the camera, NAT66, Wi-Fi IPv4/IPv6, Shelly 80/443 and lab
+checks passed. It was confirmed with fresh old/new proofs via pi0 and VPN. No
+reboot: no boot-time input of the live profile changed (hostname files,
+sysctl, rc and the boot hook are byte-identical), and the six profiles with
+the new policy lines are not live. Receipts: IQ
+`openbsdrouter-plan/NEXT-SESSION.md`.
