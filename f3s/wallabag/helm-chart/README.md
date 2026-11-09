@@ -17,6 +17,26 @@ Manual install (normally ArgoCD deploys it):
 helm install wallabag . --namespace services --create-namespace
 ```
 
+## Image revision 2.6.15.1, 2026-11-09
+
+The image is `wallabag/wallabag:2.6.15.1`, pinned by its multi-arch
+index digest; the Wallabag app is still 2.6.15. The revision moves the
+shipped `php.ini` and `php-fpm.conf` into `/etc/php82`. From 2.6.14.1
+to 2.6.15 they sat in an unread `/etc/php81`, so PHP ran Alpine
+defaults. The pod now runs with a 300 s execution time, matching
+nginx's 300 s FastCGI timeout, 100M upload and post limits, and no
+`X-Powered-By` header. Packages, binaries, the entrypoint and the
+Wallabag tree are unchanged, including its migrations, so the rollout
+wrote nothing to the database: the SQLite file's checksum is the same
+before and after.
+
+A verified online backup (data/images archive plus a `VACUUM INTO`
+snapshot) is under `~/.local/state/conf/k54-wallabag-2.6.15.1-20261109/`.
+`doctrine:migrations:status` lists ten 2016-2019 migrations as not
+migrated. That predates this change and is expected on SQLite: each one
+has a `skipIf` guard (MySQL-only, SQLite-incompatible or already applied),
+and Doctrine does not record skipped migrations.
+
 ## Verified upgrade, 2026-11-08
 
 Wallabag 2.6.15 is deployed. The staged immutable image, public version API,
