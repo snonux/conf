@@ -19,12 +19,18 @@ NAT66_EGRESS=$BASE/nat66-egress
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66) return 0;; *) return 1;; esac; }
+profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) return 0;; *) return 1;; esac; }
 # o34 stages: SLAAC on the igc0 uplink; NAT66 adds Wi-Fi ULA, rad and forwarding.
-ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 ]]; }
-nat66_profile() { [[ $1 == wifi-ipv6-nat66 ]]; }
+# The g24 camera-igc3 profile is the NAT66 profile with the camera zone on igc3.
+ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
+nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
 # Profiles whose unconfirmed trial may carry the fixed 10.20.0.254 boot canary.
-canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 ]]; }
+canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
+# Router port of the camera zone 10.40.0.0/24: igc0 while it shares the old
+# wire, its own still uncabled igc3 from camera-igc3 (g24) and post-ap on.
+camera_port() { case $1 in camera-igc3|post-ap) print igc3;; *) print igc0;; esac; }
+# Profiles that must carry the explicit, logged camera-zone deny.
+camera_zone_profile() { [[ $1 == camera-igc3 ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  # The NAT66 egress helper (nat66-egress) takes this lock for well under a
@@ -90,6 +96,7 @@ validate() {
  done
  [[ $(cat "$d/sysctl.conf.fragment") == "net.inet.ip.forwarding=1
 net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
+ validate_camera "$d" "$p"
  validate_ipv6 "$d" "$p"
  grep -qx 'set state-policy floating' "$d/pf.conf" || fail 'PF policy must remain floating'
  [[ $(cat "$d/mygate") == 192.168.1.1 ]] || fail 'upstream gateway changed'
@@ -120,7 +127,7 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  done
  case $p in
  shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
- wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
+ wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
  post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
  post-ap) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
@@ -129,6 +136,34 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  nat66_profile "$p" && rad -n -f "$d/rad.conf"
  unbound-checkconf "$d/unbound.conf" >/dev/null
  ntpd -n -f "$d/ntpd.conf"
+}
+
+# g24 camera zone, checked for every profile: 10.40.0.1 sits on the port the
+# PF macro names, no permit or translation mentions the zone, a dedicated
+# camera port carries no IPv6, and camera-igc3 keeps its explicit deny. The
+# stage's other checks still refuse 10.40.0.1 on a second port.
+validate_camera() {
+ typeset d=$1 p=$2 port rule
+ port=$(camera_port "$p")
+ grep -qx "cam_if = \"$port\"" "$d/pf.conf" || fail 'camera zone on the wrong port'
+ grep -qx 'inet alias 10.40.0.1 255.255.255.0' "$d/hostname.$port" || fail 'camera zone on the wrong port'
+ # One awk pass each: a grep pipeline under pipefail could lose a match to
+ # SIGPIPE. Recorder and update permits are later, separately measured gates.
+ awk -v port="$port" '/^pass / && (/[$]cam_if/ || /10[.]40[.]/ || /<(outdoor|recorders|camera_updates)>/ ||
+   (port != "igc0" && $0 ~ ("[ {]" port "[ },]"))) {bad=1}
+  END {exit bad}' "$d/pf.conf" || fail 'camera zone must stay default-deny'
+ awk '/(nat|rdr|binat)-to/ && (/[$]cam_if/ || /10[.]40[.]/ || /<(outdoor|recorders|camera_updates)>/) {bad=1}
+  END {exit bad}' "$d/pf.conf" || fail 'no NAT for the camera zone'
+ if [[ $port != igc0 ]]; then
+  ! grep -q '^inet6' "$d/hostname.$port" || fail 'camera port must carry no IPv6'
+ fi
+ if camera_zone_profile "$p"; then
+  # Literal PF macro text, no shell expansion intended.
+  # shellcheck disable=SC2016
+  for rule in 'block drop in log quick on $cam_if' 'block drop out log quick on $cam_if'; do
+   grep -qxF -- "$rule" "$d/pf.conf" || fail 'camera zone default deny missing'
+  done
+ fi
 }
 
 # o34 IPv6 placement. Local-only profiles keep exactly one persistent
@@ -427,7 +462,7 @@ persist_candidate() {
  rcctl set ntpd flags ""
  case $(cat "$STATE/profile") in
  shared-igc0|wifi-prepare) rcctl disable dhcpd;;
- wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
+ wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
  post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
  post-ap) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
  esac
@@ -463,9 +498,14 @@ drain_addresses() {
  done
 }
 check_candidate_ipv6() {
- typeset i slaac
+ typeset i slaac camera
+ camera=$(camera_port "$(cat "$STATE/profile")")
  for i in igc0 igc1 igc2 igc3; do
   ifconfig "$i" > "$STATE/ipv6-check"
+  # A dedicated camera port has no IPv6 at all, not even link-local (g24).
+  if [[ $i == "$camera" && $i != igc0 ]] && grep -q 'inet6 ' "$STATE/ipv6-check"; then
+   fail 'camera port carries IPv6'
+  fi
   ! grep -q AUTOCONF6TEMP "$STATE/ipv6-check" || fail 'physical IPv6 temporary addressing remains enabled'
   slaac=no
   grep -qx 'inet6 autoconf -temporary' "$STATE/candidate/hostname.$i" && slaac=yes
@@ -537,6 +577,11 @@ activate() {
  persist_candidate
  clear_physical yes
  apply_addresses
+ # Draining keeps link-local addresses. A dedicated camera port gets no IPv6
+ # at all; restore re-enables the family only if the snapshot had it.
+ typeset camera
+ camera=$(camera_port "$(cat "$STATE/profile")")
+ [[ $camera == igc0 ]] || ifconfig "$camera" -inet6
  pfctl -f "$STATE/candidate/pf.conf"
  retire_nat66_table
  pfctl -F states >/dev/null

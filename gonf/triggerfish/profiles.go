@@ -87,6 +87,10 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	for _, stage := range ipv6Stages() {
 		profiles[stage.name] = ipv6Files(stage, data)
 	}
+	// g24 camera port (camera.go) builds on the o34 NAT66 profile.
+	for _, stage := range cameraStages() {
+		profiles[stage.name] = cameraFiles(stage, data)
+	}
 	return profiles, nil
 }
 
@@ -139,11 +143,11 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 }
 
 // bootCanaryStage names the profiles whose unconfirmed trial may carry the
-// fixed reboot canary: the shared profile (u14) and the o34 NAT66 profile,
-// whose persistence across a real reboot is part of its acceptance. Both keep
-// the lab zone on igc0, where the canary alias lives.
+// fixed reboot canary: the shared profile (u14) and the NAT66 profiles (o34,
+// g24), whose persistence across a real reboot is part of their acceptance.
+// All keep the lab zone on igc0, where the canary alias lives.
 func bootCanaryStage(name string) bool {
-	return name == "shared-igc0" || name == ipv6NAT66ProfileName
+	return name == "shared-igc0" || nat66Stage(name)
 }
 
 func validateMigrationFlows(flows []MigrationFlow) error {
@@ -228,6 +232,9 @@ block return log all
 	} {
 		rules += fmt.Sprintf("block drop in quick on ! %s inet from %s to any\n", zone.iface, zone.prefix)
 	}
+	if cameraZoneStage(s.name) {
+		rules += cameraZoneRules()
+	}
 	rules += `# Preserve fresh old-address router management from the existing LAN.
 pass in on igc0 inet proto tcp from 192.168.1.0/24 to 192.168.1.2 port 22 keep state
 pass in on igc0 inet proto icmp from 192.168.1.0/24 to 192.168.1.2 keep state
@@ -295,12 +302,12 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 
 
 // shellyPorts is the plugs' RPC port set per stage. p34 moves the controllers
 // to the plugs' native HTTPS (TCP443, private-CA certificates). While callers
-// migrate, only the live profile (wifi-ipv6-nat66) admits 443 next to 80, for
-// exactly the same source/destination pairs; every other profile keeps HTTP
-// alone and renders unchanged. Port 80 is removed in a later p34 step, once
-// every caller is accepted on HTTPS.
+// migrate, only the live NAT66 profile and the g24 camera profile built on it
+// admit 443 next to 80, for exactly the same source/destination pairs; every
+// other profile keeps HTTP alone and renders unchanged. Port 80 is removed in
+// a later p34 step, once every caller is accepted on HTTPS.
 func shellyPorts(s routerStage) string {
-	if s.name == ipv6NAT66ProfileName {
+	if nat66Stage(s.name) {
 		return "{ 80, 443 }"
 	}
 	return "80"

@@ -846,6 +846,167 @@ grep -q 'journal is busy' "$fixture/failure.log"
 touch -t 202601010000 "$base/router-lock"
 "$fixture/run" tick
 [[ $(cat "$base/router-state/status") == restored && ! -d $base/router-lock ]]
+# g24 camera-igc3: the NAT66 profile with 10.40.0.1/24 moved from igc0 to the
+# uncabled igc3. Start from a confirmed NAT66 baseline, as on the live router.
+"$fixture/run" stage g24nat01 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm g24nat01 wifi-ipv6-nat66 180
+"$fixture/run" activate g24nat01
+confirm_fresh g24nat01 47001 47002
+grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc0"
+if grep -q '10.40.0.1' "$base/interfaces/igc3" "$fixture/etc/hostname.igc3"; then exit 1; fi
+cam=$base/router-profiles/camera-igc3
+cp -Rp "$cam" "$fixture/camera.saved"
+# Every misplaced camera element refuses at stage, before any journal change.
+camera_refuses() {
+ expect_fail stage g24bad01 "$1" 180
+ grep -q "$2" "$fixture/failure.log" || { print -u2 -- "wrong refusal for $1: $2"; cat "$fixture/failure.log" >&2; exit 1; }
+ [[ $(cat "$base/router-state/token") == g24nat01 ]]
+ rm -rf "$cam" "$nat"
+ cp -Rp "$fixture/camera.saved" "$cam"
+ cp -Rp "$fixture/nat66.saved" "$nat"
+}
+# Edit one rendered file in place (sed has no portable -i on OpenBSD).
+edit() { sed "$1" "$2" > "$2.next"; mv "$2.next" "$2"; }
+edit '/10[.]40[.]0[.]1/d' "$cam/hostname.igc3"
+print 'inet alias 10.40.0.1 255.255.255.0' >> "$cam/hostname.igc0"
+camera_refuses camera-igc3 'camera zone on the wrong port'
+edit 's/^cam_if = "igc3"$/cam_if = "igc0"/' "$cam/pf.conf"
+grep -qx 'cam_if = "igc0"' "$cam/pf.conf"
+camera_refuses camera-igc3 'camera zone on the wrong port'
+# On both ports the connected prefix would be duplicated.
+print 'inet alias 10.40.0.1 255.255.255.0' >> "$cam/hostname.igc0"
+camera_refuses camera-igc3 'duplicate or missing zone prefix'
+# NAT66 cannot move the cameras behind its PF's back either.
+edit '/10[.]40[.]0[.]1/d' "$nat/hostname.igc0"
+print 'inet alias 10.40.0.1 255.255.255.0' >> "$nat/hostname.igc3"
+camera_refuses wifi-ipv6-nat66 'camera zone on the wrong port'
+# No permit reaches the zone: recorder, router service, update exception.
+# The PF macros are literal rule text here, not shell expansions.
+# shellcheck disable=SC2016
+print 'pass in on $lab_if inet proto tcp from <recorders> to <outdoor> port 554 tag gonf_transit keep state' >> "$cam/pf.conf"
+camera_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass in on igc3 inet proto udp to 10.40.0.1 port 123 keep state' >> "$cam/pf.conf"
+camera_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass in on { igc2 igc3 } inet proto udp to port 53 keep state' >> "$cam/pf.conf"
+camera_refuses camera-igc3 'camera zone must stay default-deny'
+# shellcheck disable=SC2016
+print 'pass in on $cam_if inet from <camera_updates> to ! <nonpublic> tag gonf_transit keep state' >> "$cam/pf.conf"
+camera_refuses camera-igc3 'camera zone must stay default-deny'
+# No translation for the zone, neither as a source nor via the update table.
+edit 's@^match out on igc0 inet from { 10.20.0.0/24, 10.30.0.0/24 }@match out on igc0 inet from { 10.20.0.0/24, 10.30.0.0/24, 10.40.0.0/24 }@' "$cam/pf.conf"
+grep -q '10.40.0.0/24 } to ! <nonpublic> nat-to' "$cam/pf.conf"
+camera_refuses camera-igc3 'no NAT for the camera zone'
+print 'match out on igc0 inet from <camera_updates> to ! <nonpublic> nat-to 192.168.1.2' >> "$cam/pf.conf"
+camera_refuses camera-igc3 'no NAT for the camera zone'
+# The explicit, logged deny is mandatory for camera-igc3.
+edit '/^block drop out log quick on [$]cam_if$/d' "$cam/pf.conf"
+camera_refuses camera-igc3 'camera zone default deny missing'
+# No IPv6 on the camera port: no address line, no router advertisement, no DHCP.
+print 'inet6 -autoconf -temporary' >> "$cam/hostname.igc3"
+camera_refuses camera-igc3 'camera port must carry no IPv6'
+print 'interface igc3' >> "$cam/rad.conf"
+camera_refuses camera-igc3 'rad must serve only igc2'
+edit 's/^dhcpd_interfaces=igc2$/dhcpd_interfaces=igc2 igc3/' "$cam/services.conf"
+camera_refuses camera-igc3 'wrong Wi-Fi DHCP binding'
+# post-ap also puts the cameras on igc3; it stages without the explicit deny.
+"$fixture/run" stage g24pap01 post-ap 180
+# Activation moves the prefix: drained from igc0 before it is added to igc3,
+# any stray IPv6 on the camera port removed. Nothing else changes.
+"$fixture/run" stage g24cam01 camera-igc3 180
+review camera-igc3
+"$fixture/run" arm g24cam01 camera-igc3 180
+print ' inet6 fe80::6662:66ff:fe25:cedc%igc3 prefixlen 64 scopeid 0x4' >> "$base/interfaces/igc3"
+: > "$base/operations"
+"$fixture/run" activate g24cam01
+grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc3"
+if grep -q '10.40.0.1' "$base/interfaces/igc0" "$fixture/etc/hostname.igc0"; then exit 1; fi
+if grep -q 'inet6 ' "$base/interfaces/igc3"; then exit 1; fi
+grep -qx 'ifconfig igc3 -inet6' "$base/operations"
+awk '$0=="ifconfig igc0 inet 10.40.0.1 delete" {del=NR}
+ $0=="ifconfig igc3 inet alias 10.40.0.1 netmask 255.255.255.0" {add=NR}
+ END {exit !(del && add > del)}' "$base/operations"
+cmp -s "$cam/hostname.igc3" "$fixture/etc/hostname.igc3"
+cmp -s "$cam/pf.conf" "$fixture/etc/pf.conf"
+grep -qx 'rcctl set dhcpd flags igc2' "$base/operations"
+grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=1' "$base/operations"
+grep -qx 'rcctl start rad' "$base/operations"
+cmp -s "$cam/rad.conf" "$fixture/etc/rad.conf"
+# IPv6 appearing on the camera port afterwards refuses acceptance.
+cp -p "$base/interfaces/igc3" "$fixture/igc3.camera"
+print ' inet6 fe80::6662:66ff:fe25:cedc%igc3 prefixlen 64 scopeid 0x4' >> "$base/interfaces/igc3"
+expect_fail check_candidate_ipv6
+grep -q 'camera port carries IPv6' "$fixture/failure.log"
+cp -p "$fixture/igc3.camera" "$base/interfaces/igc3"
+"$fixture/run" check_candidate_ipv6
+# Timed restore returns the zone to igc0, files included; NAT66 stays.
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc0"
+if grep -q '10.40.0.1' "$base/interfaces/igc3"; then exit 1; fi
+for f in hostname.igc0 hostname.igc3 pf.conf rad.conf; do cmp -s "$nat/$f" "$fixture/etc/$f"; done
+grep -qx 'net.inet6.ip6.forwarding=1' "$fixture/etc/sysctl.conf"
+# Boot restoration of an unconfirmed camera trial restores the NAT66 files.
+cp -p "$base/interfaces/igc0" "$fixture/igc0.nat66"
+cp -p "$base/interfaces/igc3" "$fixture/igc3.nat66"
+"$fixture/run" stage g24cam02 camera-igc3 180
+review camera-igc3
+"$fixture/run" arm g24cam02 camera-igc3 180
+"$fixture/run" activate g24cam02
+"$fixture/run" boot_restore
+[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+for f in hostname.igc0 hostname.igc3 pf.conf rad.conf; do cmp -s "$nat/$f" "$fixture/etc/$f"; done
+# A real reboot drops the runtime state; the mocks keep it, so reset it.
+cp -p "$fixture/igc0.nat66" "$base/interfaces/igc0"
+cp -p "$fixture/igc3.nat66" "$base/interfaces/igc3"
+# Confirmed camera profile, then its reboot canary: early boot restores the
+# confirmed camera files, so the zone stays on igc3 across the reboot.
+"$fixture/run" stage g24cam03 camera-igc3 180
+review camera-igc3
+"$fixture/run" arm g24cam03 camera-igc3 180
+"$fixture/run" activate g24cam03
+confirm_fresh g24cam03 47011 47012
+cp -p "$base/interfaces/igc0" "$fixture/igc0.camera"
+print 'inet alias 10.20.0.254 255.255.255.0' >> "$cam/hostname.igc0"
+print '# gonf boot canary: 10.20.0.254' >> "$cam/ntpd.conf"
+"$fixture/run" stage g24boot1 camera-igc3 1800
+review camera-igc3
+"$fixture/run" arm g24boot1 camera-igc3 1800
+"$fixture/run" activate g24boot1
+print '' > "$base/router-state/preexisting-connections"
+cat > "$base/sockets" <<'SOCKETS'
+tcp 0 0 192.168.1.2.22 192.168.1.236.47021 ESTABLISHED
+tcp 0 0 10.20.0.1.22 10.99.0.2.47022 ESTABLISHED
+tcp 0 0 10.99.0.1.22 10.99.0.2.47023 ESTABLISHED
+SOCKETS
+"$fixture/run" proof old g24boot1 '192.168.1.236 47021 192.168.1.2 22'
+"$fixture/run" proof new g24boot1 '10.99.0.2 47022 10.20.0.1 22'
+"$fixture/run" proof vpn g24boot1 '10.99.0.2 47023 10.99.0.1 22'
+"$fixture/run" reboot_canary g24boot1
+[[ -f $base/reboot-requested && -f $base/router-state/pending ]]
+"$fixture/run" boot_restore
+if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; then exit 1; fi
+for f in hostname.igc0 hostname.igc3 pf.conf rad.conf ntpd.conf; do cmp -s "$fixture/camera.saved/$f" "$fixture/etc/$f"; done
+rm -rf "$cam" && cp -Rp "$fixture/camera.saved" "$cam"
+rm "$base/reboot-requested"
+cp -p "$fixture/igc0.camera" "$base/interfaces/igc0"
+cp -p "$fixture/igc3.camera" "$base/interfaces/igc3"
+# A later NAT66 restage moves the zone back to igc0 and leaves igc0's IPv6;
+# restoring it returns the confirmed camera placement.
+"$fixture/run" stage g24fwd01 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm g24fwd01 wifi-ipv6-nat66 180
+: > "$base/operations"
+"$fixture/run" activate g24fwd01
+grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc0"
+if grep -q '10.40.0.1' "$base/interfaces/igc3" "$fixture/etc/hostname.igc3"; then exit 1; fi
+if grep -q 'ifconfig igc0 -inet6' "$base/operations"; then exit 1; fi
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc0"
+"$fixture/run" restore
+grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc3"
+if grep -q '10.40.0.1' "$base/interfaces/igc0"; then exit 1; fi
+for f in hostname.igc0 hostname.igc3 pf.conf; do cmp -s "$cam/$f" "$fixture/etc/$f"; done
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
 # It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"

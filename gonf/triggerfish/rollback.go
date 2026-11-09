@@ -3,6 +3,7 @@ package triggerfish
 import (
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/snonux/conf/gonf/paths"
 	. "github.com/snonux/gonf/api"
@@ -67,9 +68,7 @@ func (Rollback) Readiness() {
 			Refuse("File", "router-readiness", fmt.Errorf("reviewed inventory and measured frozen digest required"))
 			return
 		}
-		switch t.Profile {
-		case "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap", ipv6UplinkProfileName, ipv6NAT66ProfileName:
-		default:
+		if !slices.Contains(migrationProfiles(), t.Profile) {
 			Refuse("File", "router-readiness", fmt.Errorf("physical migration profile required"))
 			return
 		}
@@ -161,9 +160,7 @@ func trialCommand(action string, profile bool) {
 		}
 		args := List(action, t.Token)
 		if profile {
-			switch t.Profile {
-			case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap", ipv6UplinkProfileName, ipv6NAT66ProfileName:
-			default:
+			if !trialProfile(t.Profile) {
 				Refuse("Command", action, fmt.Errorf("a retained-recovery migration profile is required"))
 				return
 			}
@@ -191,4 +188,18 @@ func trialCommand(action string, profile bool) {
 		}
 		Command(rollbackCommand, args)
 	})
+}
+
+// migrationProfiles lists the physical profiles a trial may stage; the list
+// must match router-rollback's profile_ok minus vpn-bootstrap. final is
+// rendered for review only and needs the separate retirement gate.
+func migrationProfiles() []string {
+	return []string{"shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap",
+		ipv6UplinkProfileName, ipv6NAT66ProfileName, cameraProfileName}
+}
+
+// trialProfile admits the physical profiles plus the wg2 bootstrap, which
+// changes no physical port.
+func trialProfile(name string) bool {
+	return name == "vpn-bootstrap" || slices.Contains(migrationProfiles(), name)
 }

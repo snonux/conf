@@ -38,9 +38,7 @@ func validateTrialInput(t RouterTrial) error {
 	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{7,63}$`).MatchString(t.Token) {
 		return errors.New("GONF_ROUTER_TRIAL requires a valid trial token")
 	}
-	switch t.Profile {
-	case "vpn-bootstrap", "shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap", ipv6UplinkProfileName, ipv6NAT66ProfileName:
-	default:
+	if !trialProfile(t.Profile) {
 		return errors.New("GONF_ROUTER_TRIAL requires a supported profile")
 	}
 	if t.WindowSeconds < 180 || t.WindowSeconds > 1800 {
