@@ -33,8 +33,9 @@ LAN trust deliberately includes stunnel TCP 2323
 from r0–r2, Garage TCP 3900/3901/3903 from f-hosts/r-nodes and UPS TCP 3551.
 WireGuard `wg0` remains trusted, including frontend Garage access and zrepl
 TCP 8888. Encrypted WireGuard UDP **56709** remains reachable on `re0` over
-both IP families. CARP protocol 112 advertisements between f0/f1, LAN VIP
-TCP 80/443, ICMP and IPv6 errors/ND/SLAAC/MLD are allowed. Other global IPv6
+both IP families, and on the `tap` group over IPv4 from the r0–r2 lab
+addresses only (task 364, see "Guest-to-host traffic on tap" below). CARP
+protocol 112 advertisements between f0/f1, LAN VIP TCP 80/443, ICMP and IPv6 errors/ND/SLAAC/MLD are allowed. Other global IPv6
 TCP/UDP traffic is blocked. Dynamic `(re0)` address matching follows SLAAC
 changes without opening additional services.
 
@@ -45,6 +46,41 @@ as loader tunables. Host-destined IP traffic still reaches PF. Do not add
 [bridge implementation](https://cgit.freebsd.org/src/tree/sys/net/if_bridge.c)
 and [advanced networking handbook](https://docs.freebsd.org/en/books/handbook/advanced-networking/).
 Guest exposure is handled separately by tasks qm3/sm3.
+
+### Guest-to-host traffic on tap (task 364)
+
+A frame from a host's own bhyve guest to one of the host's addresses is
+delivered locally by `if_bridge`, and PF sees it on whichever member owns
+the destination MAC. FreeBSD answers a guest's ARP request with the
+receiving member's MAC, so a guest that resolved its host itself
+(`ip neigh` shows `58:9c:fc:…`, the tap MAC) sends to `tap0` and hits the
+default block; only after the host ARPed first does the guest cache `re0`'s
+MAC and pass the `re0` rules. Before task 364 a guest-initiated wg0
+handshake (`rN` → `fN`, `10.20.0.12N:56709` → `10.20.0.13N:56709`) was
+therefore dropped (`block in on tap0`, reproduced on f2 2026-11-09) and the
+pair worked only after the host initiated. The fix admits exactly UDP 56709
+on the `tap` interface group from `<wg_guests>` (r0–r2 lab addresses) to
+`(re0)`. Other guest-to-own-host services on tap (for example SSH to the
+host's own address) are still blocked; the storage VIP is unaffected
+because its CARP MAC is matched on `re0`. If a wg0 endpoint were rolled
+back to the old 192.168.1.x addresses, that pair would again need the
+host to initiate.
+
+Native lab ULA from a guest to its own host has the same cause but is not
+a PF matter: the guest's neighbour solicitation arrives on `tap0`, whose
+IPv6 is disabled (`ndp -i tap0`), and the IPv6 stack discards it before PF
+(`netstat -s -6 -I tap0` "input datagrams discarded" grows, pflog stays
+silent). IPv6 ND, unlike ARP, never answers for an address on another
+bridge member. Fixing it means moving the host addresses from `re0` to
+`vm-public`, a separate network change.
+
+Deployed to f0, f1 and f2 on 2026-11-09 with `./gonf.sh push
+-privilege=doas -- -p22 … paul@fN.lan.buetow.org freebsd_firewall_config`
+(reload only, states kept). On each, a guest-initiated handshake with no
+host-side state created its state through the tap rule, with no pflog drop.
+f3 was left on the previous ruleset while a homelabfs session used it; the
+Rocky VM there has no f3 wg0 peer, so apply the same task to f3 when it is
+free, to keep the four hosts identical.
 
 Read-only baseline on 2026-10-22:
 

@@ -14,6 +14,9 @@ import (
 // Bridge forwarding must bypass PF: re0 and tap interfaces carry the bhyve
 // guests, whose firewall is managed separately. Disabling bridge/member hooks
 // does not disable filtering of packets delivered to the host's IP stack.
+// Such host-destined frames from the local guest can arrive on tap0 rather
+// than re0 (whichever MAC the guest cached), so pf.conf admits the guest's
+// wg0 handshake on the tap group as well.
 // Never use "service pf start/restart": its start flushes states. Load the
 // candidate before enabling a previously disabled PF; reloads preserve states.
 type Firewall struct {
