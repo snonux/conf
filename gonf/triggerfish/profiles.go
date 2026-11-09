@@ -272,7 +272,7 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.138 port 2323 tag gonf_t
 pass in on wg2 inet proto tcp from 10.99.0.3 to <lab> port 443 tag gonf_transit keep state
 pass in on wg2 inet proto tcp from 10.99.0.2 to 10.99.0.1 port 22 keep state
 pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag gonf_transit keep state
-` + shellyControllerRules(shellyPorts(s))
+` + shellyControllerRules()
 	if s.recovery {
 		rules += "pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port { 22, 443 } tag gonf_transit keep state\n"
 		rules += "pass in on wg2 inet proto icmp from 10.99.0.2 to 10.98.0.0/24 tag gonf_transit keep state\n"
@@ -303,25 +303,18 @@ pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag
 // shellyControllerRules permits only the existing Shelly controllers: pi0/pi1
 // to both plugs, f0-f3 to the rack-fan plug, and the laptop over wg2 to both.
 // Replies use state; Wi-Fi never initiates towards the lab.
-func shellyControllerRules(ports string) string {
-	return fmt.Sprintf(`# Shelly controllers only; replies use state, no Wi-Fi initiation to lab.
-pass in on $lab_if inet proto tcp from { 10.20.0.130, 10.20.0.131, 10.20.0.132, 10.20.0.133 } to 10.30.0.28 port %[1]s tag gonf_transit keep state
-pass in on $lab_if inet proto tcp from { 10.20.0.125, 10.20.0.126 } to { 10.30.0.28, 10.30.0.29 } port %[1]s tag gonf_transit keep state
-pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port %[1]s tag gonf_transit keep state
-`, ports)
-}
-
-// shellyPorts is the plugs' RPC port set per stage. p34 moves the controllers
-// to the plugs' native HTTPS (TCP443, private-CA certificates). While callers
-// migrate, only the live NAT66 profile and the g24 camera profile built on it
-// admit 443 next to 80, for exactly the same source/destination pairs; every
-// other profile keeps HTTP alone and renders unchanged. Port 80 is removed in
-// a later p34 step, once every caller is accepted on HTTPS.
-func shellyPorts(s routerStage) string {
-	if nat66Stage(s.name) {
-		return "{ 80, 443 }"
-	}
-	return "80"
+//
+// p34: the plugs serve native HTTPS with private-CA certificates and every
+// controller (f3sctl on pi0/pi1 and the laptop, the f0-f3 boot-fan helper)
+// verifies them, so only TCP443 is admitted, in every stage. TCP80 (plain
+// HTTP with digest auth) was removed once all callers were accepted on HTTPS;
+// the plugs still listen on 80, which the router no longer forwards.
+func shellyControllerRules() string {
+	return `# Shelly controllers only (native HTTPS); replies use state, no Wi-Fi initiation to lab.
+pass in on $lab_if inet proto tcp from { 10.20.0.130, 10.20.0.131, 10.20.0.132, 10.20.0.133 } to 10.30.0.28 port 443 tag gonf_transit keep state
+pass in on $lab_if inet proto tcp from { 10.20.0.125, 10.20.0.126 } to { 10.30.0.28, 10.30.0.29 } port 443 tag gonf_transit keep state
+pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 443 tag gonf_transit keep state
+`
 }
 
 // dhcpInterfaces lists the ports dhcpd serves in a stage: the lab port once

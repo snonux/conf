@@ -442,19 +442,26 @@ persistence can be proven across a real reboot. Fixture coverage lives in
 `checks/rollback.ksh` (stage refusals, temporary-address refusal, ordering,
 timed/boot/legacy restoration, canary).
 
-## p34 Shelly HTTPS (temporary TCP443 next to TCP80)
+## p34 Shelly HTTPS (TCP443 only)
 
 The Shelly plugs serve native HTTPS with private-CA certificates (IQ
-`hosts/shelly-plug.md`). While the controllers move to HTTPS, only
-`wifi-ipv6-nat66` and the g24 `camera-igc3` built on it permit
-`port { 80, 443 }` for exactly the existing
-controller pairs: pi0/pi1 to both plugs, f0-f3 to the fans plug, and laptop
-wg2 `10.99.0.2` to both (`shellyPorts` in `profiles.go`). Every other profile
-renders byte-identical, with port 80 only. pfctl merges the fans-plug sources
-into `__automatic_*` tables, so verify the loaded rules by expanding those
-tables, not by counting lines. Trial `p34-shelly443-20261109-a` was confirmed
-on 2026-11-09. Port 80 is removed in a later p34 trial, once every caller is
-accepted on HTTPS.
+`hosts/shelly-plug.md`). Every controller verifies them: f3sctl on pi0/pi1 and
+the laptop, and the f0-f3 boot-fan helper. Since 2026-11-09 every profile
+permits only `port 443` for exactly the existing controller pairs
+(`shellyControllerRules` in `profiles.go`): pi0/pi1 to both plugs, f0-f3 to
+the fans plug, and laptop wg2 `10.99.0.2` to both. TCP80 is gone.
+
+pfctl merges the fans-plug sources into `__automatic_*` tables. Verify loaded
+rules by expanding those tables, and compare rulesets as multisets: difflib
+re-emits unchanged rules when neighbouring lines go.
+
+Trials:
+
+- `p34-shelly443-20261109-a` added 443 next to 80 on `wifi-ipv6-nat66`.
+- `p34-shelly-no80-20261109-b` removed 80 from the live `camera-igc3`. It was
+  confirmed after 443 worked and 80 was refused from every caller, with pi2
+  and f-host-to-AC refused, and the camera zone, NAT66 and Wi-Fi IPv4/IPv6
+  unchanged.
 
 ## g24 camera port (camera-igc3)
 

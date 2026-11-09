@@ -5,7 +5,7 @@ import "fmt"
 // g24: the outdoor camera zone gets its own router port before any camera
 // exists. Plan and acceptance live in IQ topics/infra/openbsdrouter-plan
 // (PLAN.md §8 and §13, MIGRATION.md Stage C). The profile is the live
-// wifi-ipv6-nat66 profile (Wi-Fi NAT66 and the p34 Shelly TCP80+443 permits
+// wifi-ipv6-nat66 profile (Wi-Fi NAT66 and the p34 Shelly TCP443 permits
 // included) with 10.40.0.1/24 and its connected route moved from the shared
 // igc0 to igc3, which stays uncabled until the human camera gate (m24).
 // Measured recorder access and temporary update permits are later tasks
@@ -68,7 +68,7 @@ logged default deny in both directions, no NAT, internet, router service or
 IPv6 (activation removes any IPv6 from %s). <recorders> and <camera_updates>
 stay empty; measured recorder access and temporary update permits are later
 tasks. Everything else is the wifi-ipv6-nat66 profile (Wi-Fi NAT66, Shelly
-TCP80+443). Activate only through router-rollback as a timed trial.
+TCP443). Activate only through router-rollback as a timed trial.
 Untested until cameras exist: real camera traffic and its pflog drops.
 `, s.name, s.lab, s.wifi, s.camera, s.camera, s.camera)
 }
