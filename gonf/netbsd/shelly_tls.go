@@ -73,10 +73,12 @@ func (ShellyTLS) OptsStateDir() TaskOptions {
 //
 // The records let Prometheus tell "failing for more than 2h" without
 // relying on alert state, which the nightly cluster power-off resets.
-// Records a former root run left behind are replaced by rename, which the
-// directory owner may do.
+// Dir, not EnsureDir: an existing directory (root-owned from the first
+// deployment) must converge to the new owner, and EnsureDir skips existing
+// directories. Records a former root run left behind are replaced by
+// rename, which the directory owner may do.
 func (ShellyTLS) StateDir() {
-	EnsureDir(shellyTLSStateDir, Perm(0o700, shellyTLSUser+":"+shellyTLSUser))
+	Dir(shellyTLSStateDir, Perm(0o700, shellyTLSUser+":"+shellyTLSUser))
 }
 
 // OptsCron records the script, the account and its state directory before
