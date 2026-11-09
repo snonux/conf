@@ -138,11 +138,67 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
  post-ap|lab-igc1) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
+ validate_dhcp_networks "$d"
  pfctl -nf "$d/pf.conf"
  [[ $p == shared-igc0 ]] || dhcpd -n -c "$d/dhcpd.conf"
  nat66_profile "$p" && rad -n -f "$d/rad.conf"
  unbound-checkconf "$d/unbound.conf" >/dev/null
  ntpd -n -f "$d/ntpd.conf"
+}
+
+# OpenBSD dhcpd (dispatch.c discover_interfaces) binds a flagged interface by
+# its FIRST IPv4 address only and silently drops the interface when no subnet
+# matches. That order depends on history (a live activation adds 10.20.0.1
+# after the retained 10.98.0.1 on igc1; boot follows hostname.igc1), so every
+# IPv4 /24 of a served port needs a subnet, and several of them one
+# shared-network (c24 review B1: lab-igc1 went live without igc1 DHCP).
+validate_dhcp_networks() {
+ typeset d=$1 i nets ports
+ ports=$(sed -n 's/^dhcpd_interfaces=//p' "$d/services.conf")
+ # The value is a space-separated port list; split it on purpose.
+ # shellcheck disable=SC2086
+ for i in $ports; do
+  [[ $i == disabled ]] && continue
+  nets=$(awk '$1 == "inet" {
+   if ($2 == "alias") { a = $3; m = $4 } else { a = $2; m = $3 }
+   if (m != "255.255.255.0") { bad = 1; exit }
+   split(a, o, "."); print o[1] "." o[2] "." o[3] ".0"
+  } END { exit bad }' "$d/hostname.$i") || fail "DHCP port $i has a non-/24 IPv4 address"
+  [[ -n $nets ]] || fail "DHCP port $i has no IPv4 address"
+  print -r -- "$nets" | awk -v conf="$d/dhcpd.conf" '
+   BEGIN {
+    while ((getline line < conf) > 0) {
+     sub(/#.*/, "", line)
+     n = split(line, w, /[ \t{};]+/)
+     for (k = 1; k <= n; k++) {
+      if (w[k] == "shared-network" && depth == 0) shared = w[k + 1]
+      if (w[k] == "subnet" && w[k + 2] == "netmask" && w[k + 3] == "255.255.255.0")
+       group[w[k + 1]] = (shared != "" ? "shared:" shared : "top:" w[k + 1])
+     }
+     depth += gsub(/{/, "{", line) - gsub(/}/, "}", line)
+     if (depth == 0) shared = ""
+    }
+   }
+   { if (!($1 in group)) exit 1; seen[++count] = group[$1] }
+   END {
+    if (count > 1) for (k = 1; k <= count; k++)
+     if (seen[k] != seen[1] || seen[k] !~ /^shared:/) exit 1
+   }' || fail "dhcpd.conf must declare every IPv4 prefix of $i, several in one shared-network"
+ done
+}
+
+# rcctl flags do not prove dhcpd serves a port (see validate_dhcp_networks:
+# a dropped interface is reported only on stderr before daemonizing). dhcpd
+# holds one bpf device per interface it serves; count them for the flagged
+# ports of the active candidate before confirming.
+dhcpd_listening() {
+ typeset pid bpf ports
+ ports=$(sed -n 's/^dhcpd_interfaces=//p' "$STATE/candidate/services.conf")
+ [[ -z $ports || $ports == disabled ]] && return 0
+ pid=$(pgrep -x dhcpd) || return 1
+ [[ $pid == +([0-9]) ]] || return 1
+ bpf=$(fstat -p "$pid" | awk '$NF ~ /^bpf[0-9]+$/' | wc -l)
+ (( bpf == $(print -r -- "$ports" | wc -w) ))
 }
 
 # The wg2 bootstrap candidate is exactly one bounded hostname.wg2.
@@ -1053,6 +1109,7 @@ confirm() {
   esac
  done
  [[ ${2:-} == services-checked ]] || fail 'controller service checks must pass before confirmation'
+ dhcpd_listening || fail 'dhcpd does not listen on every DHCP port of the candidate'
  atomic "$STATE/status" confirmed
  rm -f "$STATE/pending"
  sync

@@ -610,7 +610,7 @@ gonf call (router unchanged). Receipts:
 `~/.local/state/conf/n44-syncthing-direct-20261109/` (`n44-*.json`,
 `STEP-JOURNAL.md`).
 
-## c24 lab port (lab-igc1), prepared, not live
+## c24 lab port (lab-igc1), live since 2026-11-09
 
 `lab-igc1` (`lab.go`) is the live `camera-igc3` profile with the lab moved to
 its own port after the human b24 cable move (ISP CPE directly on igc0, lab
@@ -681,5 +681,34 @@ canary, the lab-host `new` and `recovery` receipts (the laptop's refused),
 the required recovery and VPN receipts, and timed, boot and confirmed
 paths. The rendered `ACTIVATION.txt` allows staging at any time and forbids
 activation before the user's b24 confirmation. Nine controller mutants
-(one per new check) each fail the suite. Nothing is live: the router still
-runs camera-igc3, and the helper on the router is the i44/n44 version.
+(one per new check) each fail the suite.
+
+Live 2026-11-09 18:41 UTC after the user's b24 cable move (IQ
+`CUTOVER-B24-C24.md`, outcome table). **Defect found in review (B1): dhcpd
+did not serve igc1.** OpenBSD dhcpd (`dispatch.c` `discover_interfaces`)
+matches a subnet only against an interface's first IPv4 address and drops
+the interface otherwise, reporting it only on stderr before daemonizing.
+After a live activation igc1 lists the retained `10.98.0.1` before
+`10.20.0.1` (a boot would follow `hostname.igc1` and list `10.20.0.1`
+first), and `dhcpd.conf` had no `10.98.0.0/24` subnet, so dhcpd held one bpf
+device (igc2) and only rcctl's flags said `igc1 igc2`. The JetKVMs kept
+their old ISP leases and stayed reachable lab-to-lab via the retained
+`192.168.1.x` aliases. Fix:
+
+- `labDHCPNetwork` (profiles.go) puts the lab subnet and a pool-less
+  recovery subnet in one `shared-network igc1-lab` with
+  `server-identifier 10.20.0.1` (PF admits DHCP on igc1 only to
+  255.255.255.255 and 10.20.0.1), for every stage with the lab and the
+  recovery address on igc1 (lab-igc1, post-rack, post-ap; `final` has no
+  recovery address and keeps the plain subnet). No other file changes.
+- router-rollback `validate_dhcp_networks` refuses a candidate whose
+  `dhcpd.conf` lacks a subnet for any IPv4 /24 of a served port, or puts
+  several of them outside one shared-network; `confirm` refuses unless
+  `dhcpd_listening` sees one bpf device per flagged port.
+- Fixtures: both broken `dhcpd.conf` shapes refuse at stage; confirm
+  refuses with a dropped port or no dhcpd. Mock `fstat` and `pgrep -x dhcpd`.
+  Four more mutants (no network validation, no listen check, no grouping
+  check, the old render) each fail the suite.
+- `checks/dhcp-probe.py`: raw DHCPDISCOVER/REQUEST probe (stdlib, Linux,
+  root, broadcast flag, never changes the host's addresses) for real
+  DISCOVER-to-OFFER proofs from a lab host (r0) and the laptop's Wi-Fi.

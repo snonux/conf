@@ -142,8 +142,18 @@ crontab() {
 }
 pgrep() {
  if [[ $* == '-x (sysupgrade|syspatch|pkg_add)' && -f $BASE/upgrade-running ]]; then print 12346; return 0; fi
+ if [[ $* == '-x dhcpd' ]]; then [[ ! -f $BASE/dhcpd-down ]] && print 4242; return; fi
  [[ $* == '-xf /sbin/resolvd' && -f $BASE/native-resolvd ]] || return 1
  print 12345
+}
+# dhcpd holds one bpf device per served port. dhcpd-dropped-port simulates
+# c24 review B1: a flagged port without a subnet for its first address.
+fstat() {
+ typeset n
+ n=$(($(sed -n 's/^dhcpd_interfaces=//p' "$STATE/candidate/services.conf" | wc -w)))
+ [[ ! -f $BASE/dhcpd-dropped-port ]] || n=$((n - 1))
+ print 'USER     CMD          PID   FD MOUNT        INUM MODE         R/W    SZ|DV'
+ while (( n > 0 )); do print "_dhcp    dhcpd       4242    $((n + 3)) clone       1 crw-------     rw     bpf$n"; n=$((n - 1)); done
 }
 shutdown() {
  [[ $* == '-r now' ]] || return 1
@@ -1276,6 +1286,25 @@ edit '/^inet alias 10[.]98[.]0[.]1 /d' "$lab/hostname.igc1"
 c24_refuses 'missing igc1 recovery address'
 edit 's/^dhcpd_interfaces=igc1 igc2$/dhcpd_interfaces=igc2/' "$lab/services.conf"
 c24_refuses 'wrong DHCP binding'
+# c24 review B1: dhcpd binds igc1 by whichever address is first, so both igc1
+# prefixes need a subnet in one shared-network; a lab-only subnet (the live
+# defect) or two top-level subnets refuse.
+grep -q '^shared-network igc1-lab {$' "$lab/dhcpd.conf"
+edit '/^shared-network igc1-lab {$/,/^}$/c\
+subnet 10.20.0.0 netmask 255.255.255.0 {\
+ option routers 10.20.0.1;\
+ deny unknown-clients;\
+}' "$lab/dhcpd.conf"
+c24_refuses 'dhcpd.conf must declare every IPv4 prefix of igc1, several in one shared-network'
+edit '/^shared-network igc1-lab {$/,/^}$/c\
+subnet 10.98.0.0 netmask 255.255.255.0 {\
+ deny unknown-clients;\
+}\
+subnet 10.20.0.0 netmask 255.255.255.0 {\
+ option routers 10.20.0.1;\
+ deny unknown-clients;\
+}' "$lab/dhcpd.conf"
+c24_refuses 'dhcpd.conf must declare every IPv4 prefix of igc1, several in one shared-network'
 # The camera zone keeps its explicit deny and no permit, as in camera-igc3.
 edit '/^block drop in log quick on [$]cam_if$/d' "$lab/pf.conf"
 c24_refuses 'camera zone default deny missing'
@@ -1392,6 +1421,15 @@ SOCKETS
 "$fixture/run" proof recovery c24lab03 '10.98.0.125 47222 10.98.0.1 22'
 "$fixture/run" proof vpn c24lab03 '10.99.0.2 47223 10.99.0.1 22'
 [[ ! -e $base/router-state/proof.old ]]
+# Flags alone never confirm: dhcpd must hold a bpf device for igc1 and igc2.
+touch "$base/dhcpd-dropped-port"
+expect_fail confirm c24lab03 services-checked
+grep -q 'dhcpd does not listen on every DHCP port of the candidate' "$fixture/failure.log"
+rm "$base/dhcpd-dropped-port"
+touch "$base/dhcpd-down"
+expect_fail confirm c24lab03 services-checked
+rm "$base/dhcpd-down"
+[[ $(cat "$base/router-state/status") == active-unconfirmed && -f $base/router-state/pending ]]
 "$fixture/run" confirm c24lab03 services-checked
 [[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
 expect_fail restore

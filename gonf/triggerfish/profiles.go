@@ -358,13 +358,39 @@ func profileDHCP(s routerStage) string {
 	config := fmt.Sprintf("# gonf router profile %s: %s. Shared igc0 must NEVER run this server.\ndefault-lease-time 3600;\nmax-lease-time 7200;\n",
 		s.name, dhcpState(s))
 	if s.lab == "igc1" {
-		config += "subnet 10.20.0.0 netmask 255.255.255.0 {\n option routers 10.20.0.1;\n option domain-name-servers 10.20.0.1;\n deny unknown-clients;\n}\n"
+		config += labDHCPNetwork(s)
 		config += jetKVMReservations()
 	}
 	if s.wifi == "igc2" {
 		config += "subnet 10.30.0.0 netmask 255.255.255.0 {\n authoritative;\n range 10.30.0.100 10.30.0.239;\n option routers 10.30.0.1;\n option domain-name-servers 10.30.0.1;\n}\n"
 	}
 	return config
+}
+
+const labDHCPSubnet = "subnet 10.20.0.0 netmask 255.255.255.0 {\n option routers 10.20.0.1;\n option domain-name-servers 10.20.0.1;\n deny unknown-clients;\n}\n"
+
+// labDHCPNetwork declares the lab DHCP network on igc1. OpenBSD dhcpd
+// (dispatch.c discover_interfaces) matches a subnet against an interface's
+// FIRST IPv4 address only and silently drops the interface when none
+// matches. With the retained recovery address, igc1's address order depends
+// on its history: a live activation adds 10.20.0.1 after 10.98.0.1, a boot
+// follows hostname.igc1. c24 went live with dhcpd not serving igc1 for that
+// reason (review B1). Both igc1 prefixes therefore share one network, the
+// recovery subnet without a pool, and the server identifier is the lab
+// gateway, the only igc1 address PF admits DHCP requests to.
+func labDHCPNetwork(s routerStage) string {
+	if !s.recovery {
+		return labDHCPSubnet
+	}
+	return "# dhcpd binds igc1 by its first IPv4 address, either prefix; one network serves both.\n" +
+		"shared-network igc1-lab {\n server-identifier 10.20.0.1;\n" +
+		indent(labDHCPSubnet) +
+		" subnet 10.98.0.0 netmask 255.255.255.0 {\n  deny unknown-clients;\n }\n}\n"
+}
+
+// indent prefixes every line of a block with one space.
+func indent(block string) string {
+	return " " + strings.ReplaceAll(strings.TrimSuffix(block, "\n"), "\n", "\n ") + "\n"
 }
 
 func jetKVMReservations() string {
