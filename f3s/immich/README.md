@@ -51,6 +51,50 @@ kubectl rollout restart deployment -l app.kubernetes.io/instance=immich -n servi
 kubectl rollout restart deployment/immich-postgres -n services
 ```
 
+## pgvector 0.8.7 (2026-11-09)
+
+The database image is now `immich-postgres:18.6-vchord1.1.1-pgvector0.8.7`
+(manifest `sha256:0bddd210…`, config `be61f9a3…`). It is the previous image
+plus the pinned PGDG package `postgresql-18-pgvector=0.8.7-1.pgdg12+1`. It
+uses the same base digest and PostgreSQL 18.6 packages, and an identical
+`vchord.so`. The SQL extension was then raised with
+`ALTER EXTENSION vector UPDATE`. Immich only updates `vchord` itself, never
+its `vector` dependency. The update scripts from 0.8.5 to 0.8.7 contain only
+comments.
+
+Compatibility: [pgvector 0.8.7](https://github.com/pgvector/pgvector/blob/v0.8.7/CHANGELOG.md)
+is the latest tag. Immich v3.3.6 accepts `vector >=0.5 <1`, and its
+[standalone Postgres docs](https://docs.immich.app/administration/postgres-standalone)
+say VectorChord works with pgvector `>= 0.7, < 0.9`. VectorChord 1.1.1
+remains the latest release. Upstream's bundle still ships 0.8.5 only
+because its Renovate rule watches GitHub releases
+([base-images#405](https://github.com/immich-app/base-images/issues/405)).
+When upstream ships 0.8.7, consider returning to its image.
+
+Before the live change, a copied-database trial ran the same sequence.
+Restore with the old image, switch to the new binary, then `ALTER`. Data,
+indexes and search did not change. Immich v3.3.6 started cleanly against the
+upgraded copy. Live, the server and ML were scaled to zero for about
+2.5 minutes. A quiesced dump was taken and proven to restore into a scratch
+PostgreSQL with identical results. Then the image was set and the `ALTER`
+applied. Checks across the change:
+
+- All 72 table counts were unchanged.
+- No index was invalid. `clip_index` and `face_index` (vchordrq) returned
+  the same top-50 results through the index and by exact search.
+- Updates to `vector` 0.8.8 and back to 0.8.5 were rejected.
+- No schema drift was reported.
+- Authenticated reads, smart search, thumbnail and original reads were
+  unchanged. Wrong and missing API keys were rejected.
+- Queue pause states and counters were unchanged.
+
+Rollback: never return to the 0.8.5 image, because there is no downgrade
+path. Stop the server and ML, then restore
+`~/.local/state/conf/a44-pgvector-20261109/backup/immich-before-pgvector0.8.7.dump`
+(311,652,221 bytes, SHA-256 `da60d9e8…`) into a fresh PGDATA on the old
+image. Account for writes made since 2026-11-09 09:14 UTC. Never roll back
+the shared NFS dataset.
+
 ## Patch verification (2026-11-08)
 
 Updated server and ML to [v3.3.6](https://github.com/immich-app/immich/releases/tag/v3.3.6)
@@ -135,13 +179,16 @@ hold; PostgreSQL was running when it was taken.
 Rollback requires returning to the old image, mount path, and PGDATA and
 accounting for writes made since the restore.
 
-The image is built from `docker-image/postgres/Dockerfile`: the latest
+The image is built from `docker-image/postgres/Dockerfile`. The latest
 upstream extension bundle still had PostgreSQL 18.4, so the Dockerfile
-pins the PostgreSQL 18.6 Debian packages. Build and push:
+pins the PostgreSQL 18.6 Debian packages (and, since 2026-11-09, pgvector
+0.8.7; see above). Build and push under a new tag; never overwrite an
+existing tag, since the Deployment's default IfNotPresent policy keeps
+using cached copies on the nodes:
 
 ```sh
-podman build -t r0.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1 docker-image/postgres
-podman push --tls-verify=false r0.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1
+podman build -t r0.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1-pgvector0.8.7 docker-image/postgres
+podman push --tls-verify=false r0.lan.buetow.org:30001/immich-postgres:18.6-vchord1.1.1-pgvector0.8.7
 ```
 
 The upstream image rejects NFS by default. `IGNORE_DATABASE_FSTYPE=true`
