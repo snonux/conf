@@ -67,8 +67,8 @@ func (ShellyFans) MigrationCandidate() {
 		Refuse("fan helper candidate", shellyFansScript, err)
 		return
 	}
-	content := strings.ReplaceAll(string(raw), "192.168.1.28", "10.30.0.28")
-	File(shellyFansScript+".triggerfish-candidate", WithContent(content), Perm(0o555, Root),
+	// The helper already defaults to 10.30.0.28; the old 192.168.1.28 rewrite is gone.
+	File(shellyFansScript+".triggerfish-candidate", WithContent(string(raw)), Perm(0o555, Root),
 		WithValidation("/bin/sh", List("-n", CandidatePath)))
 }
 

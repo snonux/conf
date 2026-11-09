@@ -466,7 +466,7 @@ Trials:
 ## g24 camera port (camera-igc3)
 
 `camera-igc3` (`camera.go`) is the live `wifi-ipv6-nat66` profile, p34
-Shelly TCP80+443 permits included, with the camera zone moved to its own
+Shelly TCP443 permits included, with the camera zone moved to its own
 port: `10.40.0.1/24` and its connected route leave igc0 for igc3, which stays
 uncabled until the human camera gate (m24). Differences from NAT66, and
 nothing else: the profile name in the PF and dhcpd.conf header comments and
