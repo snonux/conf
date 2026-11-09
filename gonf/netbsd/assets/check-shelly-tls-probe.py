@@ -274,10 +274,10 @@ def main():
         r, _ = probe('good', 'near', args=())
         path, body = ok_handler.pushes[-1] if ok_handler.pushes else ('', '')
         m = parse(body) if body else {}
-        check('13 push: PUT to the reporter group, falls back past a dead address', r.returncode == 0
+        check('13 push: PUT to the reporter group, quietly falls back past a dead address', r.returncode == 0
               and len(ok_handler.pushes) == 1 and path == '/metrics/job/shelly_tls/reporter/pi9'
               and m.get(key('shelly_tls_probe_success', plug='near', address='127.0.0.1')) == 1
-              and 'push to http://127.0.0.1:' in r.stderr, f'{path} {r.stderr}')
+              and 'push failed' not in r.stderr, f'{path} {r.stderr}')
         promtool = os.environ.get('PROMTOOL')
         if promtool and body:
             lint = subprocess.run([promtool, 'check', 'metrics'], input=body, capture_output=True, text=True)
@@ -286,8 +286,9 @@ def main():
 
         r, _ = probe('good', args=(), extra={
             'SHELLY_TLS_PUSH_URLS': f'http://127.0.0.1:{closed_port()} http://127.0.0.1:{bad_gw.server_address[1]}'})
-        check('14 push refused everywhere exits 2', r.returncode == 2
-              and 'push failed on every Pushgateway address' in r.stderr, r.stderr)
+        check('14 push refused everywhere exits 2 and names every address', r.returncode == 2
+              and 'push failed on every Pushgateway address' in r.stderr
+              and r.stderr.count('(curl exit ') == 2 and '(curl exit 22)' in r.stderr, r.stderr)
 
         for n, extra, args in [('15a', {'SHELLY_TLS_REPORTER': 'pi0/../x'}, ('-n',)),
                                ('15b', {'SHELLY_TLS_STATE_DIR': f'{d}/nope'}, ('-n',)),

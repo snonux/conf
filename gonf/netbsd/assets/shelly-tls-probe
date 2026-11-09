@@ -185,15 +185,18 @@ function render {
 }
 
 # push FILE: PUT the group to the first Pushgateway address that accepts it.
+# The NodePort is Local, so the nodes without the pod time out on every run;
+# those attempts are logged only when no address accepted the push.
 function push {
-    typeset url rc
+    typeset url rc tried=
     for url in $PUSH_URLS; do
         curl -s --fail --connect-timeout 3 --max-time 10 -X PUT \
             --data-binary "@$1" "$url/metrics/job/$JOB/reporter/$REPORTER" >/dev/null
         rc=$?
         [ "$rc" = 0 ] && return 0
-        log "push to $url failed (curl exit $rc)"
+        tried="$tried $url (curl exit $rc)"
     done
+    log "push failed:$tried"
     return 1
 }
 
