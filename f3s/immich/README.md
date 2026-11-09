@@ -93,7 +93,11 @@ path. Stop the server and ML, then restore
 `~/.local/state/conf/a44-pgvector-20261109/backup/immich-before-pgvector0.8.7.dump`
 (311,652,221 bytes, SHA-256 `da60d9e8…`) into a fresh PGDATA on the old
 image. Account for writes made since 2026-11-09 09:14 UTC. Never roll back
-the shared NFS dataset.
+the shared NFS dataset. First change `postgres.yaml` in Git (old image tag and
+the fresh PGDATA path) and push it, or hold Argo auto-sync for `immich`;
+otherwise selfHeal reverts a kubectl-only rollback to the 0.8.7 image. Immich
+itself does not check the vector version (only VectorChord's range), so it
+would not flag a wrong image.
 
 ## Patch verification (2026-11-08)
 
