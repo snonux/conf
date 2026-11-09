@@ -14,8 +14,8 @@ type Profiles struct{ RequiresRoot }
 
 // RouterProfiles carries verified migration dependencies from inventory.
 type RouterProfiles struct {
-	// BootCanary adds a fixed, reserved alias only to the shared profile and
-	// the o34 NAT66 profile (see bootCanaryStage).
+	// BootCanary adds a fixed, reserved alias only to the shared profile, the
+	// o34 NAT66 profile and the g24 camera-igc3 profile (see bootCanaryStage).
 	BootCanary bool
 	// RetainProvisioningAlias keeps the existing 192.168.11.2 alias in every
 	// candidate until verified retirement. This retains its address only: any
