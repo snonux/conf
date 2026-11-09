@@ -117,6 +117,12 @@ func (K3s) OptsCoreDNS() TaskOptions {
 // CoreDNS leaves k3s in charge of applying the AddOn and updating NodeHosts.
 // The tracked manifest preserves the bundle's resources; maxUnavailable=0
 // keeps the single old DNS replica until its replacement is ready.
+//
+// k3s's apply adopts a bundled object only when creating it returns
+// AlreadyExists. The kube-dns Service fails earlier, because its fixed
+// ClusterIP is already allocated, so a cluster that first ran the bundled
+// AddOn needs a one-time relabel of the Service's objectset hash to
+// conf-coredns's value (task m54, see the k3s README). k3s then maintains it.
 func (K3s) CoreDNS() {
 	EnsureDir(k3sManifests, RootPrivate)
 	InstallFile(k3sManifests+"/conf-coredns.yaml",

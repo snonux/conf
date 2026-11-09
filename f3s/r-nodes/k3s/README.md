@@ -44,6 +44,39 @@ ownership to the bundle later, plan that as a separate coordinated change.
 Task z34 native backups: `/root/z34-coredns-20261108/` on each node; Earth
 receipts: `~/.local/state/conf/z34-coredns-20261108/`.
 
+### Adopting kube-dns (m54)
+
+k3s's apply (wrangler) finds the objects an AddOn owns by the label
+`objectset.rio.cattle.io/hash`, a hash of the owning AddOn's name. If it does not
+find an object, it creates it, and adopts the existing one only when the create
+fails with AlreadyExists. That took over the Deployment, ConfigMap,
+ServiceAccount and RBAC. It cannot take over `svc/kube-dns`: the create fails
+first because ClusterIP 10.43.0.10 is already allocated. From z34's activation
+until m54, `conf-coredns` logged ApplyManifestFailed every 15 s and never got
+a checksum.
+
+m54 fixed this on 2026-11-09 with a one-time relabel, without deleting the
+Service (UID, ClusterIP and spec unchanged, no DNS failures):
+
+```sh
+kubectl -n kube-system label svc kube-dns --overwrite \
+  objectset.rio.cattle.io/hash=abfc2dac76a56946fd6db38ebdb52fae5fc72eed
+```
+
+The value is the hash k3s puts on every `conf-coredns` object (compare
+`kubectl -n kube-system get deploy coredns --show-labels`). Within one 15 s
+pass, k3s patched the owner annotations itself and logged AppliedManifest on
+all servers. The labels are part of the AddOn's applied state, so k3s keeps
+them, also across k3s restarts. Repeat the relabel only if a cluster ran the
+bundled AddOn before this one, for example after a restore.
+
+The skipped bundled `coredns` AddOn object stays. Deleting it would be
+harmless (tested on a scratch k3s 1.37.2): the objects have no owner
+references and k3s does not recreate it while the file is skipped. It would
+also gain nothing, because the `.skip` marker alone prevents a fallback. Without the marker, k3s applies the regenerated bundled manifest on
+restart, takes the Deployment back to 1.14.7 and then fails on the Service.
+Earth receipts: `~/.local/state/conf/m54-coredns-adopt-20261109/`.
+
 ## Metrics-server
 
 `rnodes_k3s_metrics_server_prepare` stages the nested
