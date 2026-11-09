@@ -162,6 +162,19 @@ spec:
     ports:
     - protocol: TCP
       port: 9091
+  # s44: pi0/pi1 push the Shelly certificate probe results through the Local
+  # NodePort pushgateway-lan (30091), which keeps the real source address.
+  # Only their lab addresses; no node/CNI ipBlock, which would admit
+  # ordinary pods via the NodePort. The policy keeps its name: one policy
+  # per receiver (see tests/test_policies.py).
+  - from:
+    - ipBlock:
+        cidr: 10.20.0.125/32
+    - ipBlock:
+        cidr: 10.20.0.126/32
+    ports:
+    - protocol: TCP
+      port: 9091
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

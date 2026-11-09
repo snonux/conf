@@ -253,6 +253,34 @@ class Policies(unittest.TestCase):
         for database in ['immich-postgres', 'miniflux-postgres']:
             self.assert_path({'ip': '10.99.0.2'}, 'services', {'app': database}, 5432, False)
 
+    def test_controller_pis_push_only_to_the_pushgateway(self):
+        # s44: the Local NodePort pushgateway-lan keeps the Pis' lab sources,
+        # so the receiver admits exactly 10.20.0.125/.126 on TCP 9091.
+        pushgateway = {'app': 'pushgateway'}
+        for address in ['10.20.0.125', '10.20.0.126']:
+            self.assert_path({'ip': address}, 'monitoring', pushgateway, 9091, True)
+            self.assert_path({'ip': address}, 'monitoring', pushgateway, 9091, False, 'UDP')
+            self.assert_path({'ip': address}, 'monitoring', pushgateway, 9090, False)
+            # Nothing else in monitoring: not Prometheus, its read proxy or
+            # Alertmanager.
+            self.assert_path({'ip': address}, 'monitoring', PROM, 9090, False)
+            self.assert_path({'ip': address}, 'monitoring',
+                             {NAME: 'prometheus-read-proxy'}, 8080, False)
+            self.assert_path({'ip': address}, 'monitoring',
+                             {NAME: 'alertmanager', 'alertmanager': 'prometheus-kube-prometheus-alertmanager'},
+                             9093, False)
+            self.assert_path({'ip': address}, 'services', {'app': 'miniflux-postgres'}, 5432, False)
+        # The Pis' old LAN addresses, the other Pis, the r-nodes and storage
+        # hosts, rewritten node/CNI sources, wg2 clients and ordinary pods
+        # get no write access.
+        for source in [{'ip': '192.168.1.125'}, {'ip': '192.168.1.126'}, {'ip': '10.20.0.127'},
+                       {'ip': '10.20.0.128'}, {'ip': '10.20.0.120'}, {'ip': '10.20.0.130'},
+                       {'ip': '10.42.0.0'}, {'ip': '10.42.2.1'}, {'ip': '10.99.0.2'},
+                       {'ip': '192.168.2.200'}, self.unrelated, pod('monitoring', {'app': 'other'})]:
+            self.assert_path(source, 'monitoring', pushgateway, 9091, False)
+        # The Prometheus scrape stays.
+        self.assert_path(self.prometheus, 'monitoring', pushgateway, 9091, True)
+
     def test_laptop_and_phone_reach_web_without_database_or_receiver_access(self):
         servicelb = {'svccontroller.k3s.cattle.io/svcname': 'traefik',
                      'svccontroller.k3s.cattle.io/svcnamespace': 'kube-system'}

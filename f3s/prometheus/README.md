@@ -55,6 +55,13 @@ Current values worth knowing:
   DaemonSet on r0/r1/r2. Only Gogios's frontend WireGuard sources and earth's
   WireGuard source may connect. Direct Prometheus stays on ClusterIP;
   its ingress policy allows the proxy and its own metric scrape.
+- Shelly plug HTTPS certificates (task s44): `manifests/shelly-tls-alerts.yaml`
+  alerts on what pi0/pi1's hourly `shelly-tls-probe` pushes to the
+  Pushgateway (`job=shelly_tls`): warning below 60 days, critical below 14
+  days (leaves and the private CA), probe failing for more than 2h, stale
+  for more than 36h, or absent for 3h. Gogios shows them as
+  `Prometheus: ShellyTLS*`. `tests/test_shelly_tls_alerts.py` checks every
+  threshold on both sides with promtool.
 - Alertmanager routes: `component=argocd`, `component=nfs` (30m repeat),
   `component=trivy`; Watchdog to `null`. All receivers are UI-only (no
   mail/webhook).

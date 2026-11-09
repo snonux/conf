@@ -62,6 +62,22 @@ func (ShellyEndpoints) DescPrepare() string {
 	return "Installs an inactive partial configuration without changing callers"
 }
 
+func (ShellyTLS) DescCron() string {
+	return "Runs shelly-tls-probe hourly at the host's minute, diagnostics to syslog"
+}
+
+func (ShellyTLS) DescPackages() string {
+	return "Installs curl, which pushes the results to the Pushgateway"
+}
+
+func (ShellyTLS) DescScript() string {
+	return "Installs /usr/local/sbin/shelly-tls-probe (0755 root:wheel)"
+}
+
+func (ShellyTLS) DescStateDir() string {
+	return "Creates /var/db/shelly-tls-probe for the per-plug last-success records"
+}
+
 func (Unattended) DescNewsyslog() string {
 	return "Appends unattended-upgrade log rotation to /etc/newsyslog.conf"
 }

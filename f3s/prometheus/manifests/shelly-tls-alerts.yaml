@@ -1,0 +1,132 @@
+# Shelly plug HTTPS certificates and the private f3s Shelly CA (task s44).
+#
+# Data: /usr/local/sbin/shelly-tls-probe on pi0 and pi1 (gonf
+# pis_netbsd_shelly_tls_*, source gonf/netbsd/assets/shelly-tls-probe) runs
+# hourly, does a real TLS handshake with each plug, verifies the leaf
+# against the pinned CA and PUTs the results to the Pushgateway group
+# {job="shelly_tls", reporter="pi0"|"pi1"} through the Local NodePort
+# pushgateway-lan. The existing "pushgateway" scrape job (honor_labels)
+# keeps those labels.
+#
+# Gogios surfaces every firing alert as "Prometheus: <alertname>" (critical
+# -> CRITICAL, anything else WARNING), muted by /tmp/f3s_taken_down like all
+# Prometheus-derived checks. Renewal: IQ topics/infra/f3s/hosts/shelly-plug.md,
+# "Certificate lifecycle" (leaves to 2029-02-11, CA to 2036-11-06).
+#
+# The cluster is powered off most nights, and Prometheus does not restore
+# pending "for" state across an outage longer than one hour, while the
+# Pushgateway keeps nothing across its restart. So durations that matter
+# (2h failing, 36h stale) are measured from timestamps the Pis push, not
+# from "for"; the "for" values only absorb a single evaluation.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shelly-tls-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: shelly-tls
+      rules:
+        # Warning band [14d, 60d): the renewal plan renews about 60 days
+        # ahead. min by (plug, cert) folds the two reporters into one alert
+        # and keeps the earlier date if they ever disagree. cert="ca" has no
+        # plug label.
+        - alert: ShellyTLSCertExpiringSoon
+          expr: |
+            (min by (plug, cert) (shelly_tls_cert_not_after_seconds{job="shelly_tls"}) - time())
+              < 60 * 86400 >= 14 * 86400
+          for: 10m
+          labels:
+            severity: warning
+            component: shelly
+          annotations:
+            summary: "Shelly {{ $labels.cert }} certificate{{ with $labels.plug }} of {{ . }}{{ end }} expires in {{ $value | humanizeDuration }}"
+            description: >
+              The {{ $labels.cert }} certificate{{ with $labels.plug }} of {{ . }}{{ end }}
+              has less than 60 days left; renew it now.
+            action: >
+              Follow "Certificate lifecycle" in IQ
+              topics/infra/f3s/hosts/shelly-plug.md (a new CA must reach every
+              caller's CA file before the plugs switch to leaves it signed).
+        # Below 14 days, including an already expired certificate (negative
+        # value): the controllers' verified HTTPS to the plug fails then.
+        - alert: ShellyTLSCertExpiryCritical
+          expr: |
+            (min by (plug, cert) (shelly_tls_cert_not_after_seconds{job="shelly_tls"}) - time())
+              < 14 * 86400
+          for: 10m
+          labels:
+            severity: critical
+            component: shelly
+          annotations:
+            summary: "Shelly {{ $labels.cert }} certificate{{ with $labels.plug }} of {{ . }}{{ end }} expires in {{ $value | humanizeDuration }} (negative: expired)"
+            description: >
+              The {{ $labels.cert }} certificate{{ with $labels.plug }} of {{ . }}{{ end }}
+              has less than 14 days left or has expired. f3sctl and the
+              f-host boot-fan helper refuse an expired plug certificate.
+            action: >
+              Renew now, following "Certificate lifecycle" in IQ
+              topics/infra/f3s/hosts/shelly-plug.md.
+        # The plug did not verify on this reporter and its last verified run
+        # is more than 2h ago (a never-verified plug, last success 0, fires
+        # at once). Covers unreachable plugs, a swapped or mismatched
+        # certificate and a missing or wrong CA file on the Pi.
+        - alert: ShellyTLSProbeFailing
+          expr: |
+            (shelly_tls_probe_success{job="shelly_tls"} == 0)
+              and on (plug, reporter)
+            (time() - shelly_tls_probe_last_success_timestamp_seconds{job="shelly_tls"} > 2 * 3600)
+          for: 10m
+          labels:
+            severity: warning
+            component: shelly
+          annotations:
+            summary: "Shelly {{ $labels.plug }} ({{ $labels.address }}) has failed TLS verification from {{ $labels.reporter }} for more than 2h"
+            description: >
+              The hourly probe on {{ $labels.reporter }} could not complete a
+              TLS handshake with {{ $labels.plug }} on 443, or the presented
+              certificate did not verify against the pinned Shelly CA.
+            action: >
+              On {{ $labels.reporter }}: grep shelly-tls-probe /var/log/messages
+              and run doas /usr/local/sbin/shelly-tls-probe -n.
+        # The Pushgateway still holds the reporter's group, but its last run
+        # is more than 36h old: the cron job or its push path stopped.
+        - alert: ShellyTLSProbeStale
+          expr: |
+            time() - shelly_tls_probe_last_run_timestamp_seconds{job="shelly_tls"} > 36 * 3600
+          for: 10m
+          labels:
+            severity: warning
+            component: shelly
+          annotations:
+            summary: "The Shelly TLS probe on {{ $labels.reporter }} last reported {{ $value | humanizeDuration }} ago (limit 36h)"
+            description: >
+              {{ $labels.reporter }} runs shelly-tls-probe hourly; its newest
+              result in the Pushgateway is older than 36h.
+            action: >
+              Check root's crontab and syslog (tag shelly-tls-probe) on
+              {{ $labels.reporter }} and the NodePort pushgateway-lan (30091).
+        # No group at all from a reporter. The Pushgateway starts empty after
+        # every restart (each cluster power-on), and each Pi pushes within an
+        # hour, so 3h of absence is a real gap. A 36h "for" could never
+        # complete across the nightly power-off.
+        - alert: ShellyTLSProbeAbsent
+          expr: |
+            absent(shelly_tls_probe_last_run_timestamp_seconds{job="shelly_tls",reporter="pi0"})
+              or
+            absent(shelly_tls_probe_last_run_timestamp_seconds{job="shelly_tls",reporter="pi1"})
+          for: 3h
+          labels:
+            severity: warning
+            component: shelly
+          annotations:
+            summary: "No Shelly TLS probe results from {{ $labels.reporter }} in the Pushgateway"
+            description: >
+              {{ $labels.reporter }} has pushed no shelly_tls group since the
+              Pushgateway started, for at least 3h.
+            action: >
+              Check that {{ $labels.reporter }} is up, root's crontab has
+              shelly-tls-probe, and that it reaches 10.20.0.12x:30091
+              (NetworkPolicy pushgateway-scrape, Service pushgateway-lan).

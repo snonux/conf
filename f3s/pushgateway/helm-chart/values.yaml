@@ -9,6 +9,10 @@ service:
   type: ClusterIP
   port: 9091
 
+# Local NodePort pushgateway-lan: the Shelly probe on pi0/pi1 (task s44).
+lanService:
+  nodePort: 30091
+
 resources:
   requests:
     memory: "64Mi"

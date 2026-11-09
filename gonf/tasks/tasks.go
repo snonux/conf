@@ -61,6 +61,7 @@ func Register() {
 	RegisterMethods(netbsd.ShellyEndpoints{}, WithPrefix("pis_netbsd_shelly_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.HostFile{}, WithPrefix("pis_netbsd_hosts_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Controller{}, WithPrefix("pis_netbsd_controller_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterMethods(netbsd.ShellyTLS{}, WithPrefix("pis_netbsd_shelly_tls_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(endpointfiles.Recovery{Platform: "netbsd"}, WithPrefix("pis_netbsd_endpoints_"), OnCluster(cluster.NameNetBSDPis))
 
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))

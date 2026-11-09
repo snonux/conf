@@ -27,7 +27,7 @@ ports from that inventory, without config, credentials or environment values.
 | `player-trash-test` | Traefik in kube-system → its existing player backend on 8080. This is an active test deployment, not an empty namespace. |
 | `infra` | Traefik → pkgrepo **8080** (Service port 80); registry **5000** behind NodePort 30001 through its existing node paths. |
 | `services` | Traefik → the nineteen web backends at their actual endpoint ports; Immich server → its Postgres 5432, Valkey 6379 and machine-learning 3003; Miniflux server → its Postgres 5432; ArgoCD repo-server in cicd → Forgejo 3000; Prometheus → goprecords 8080. Existing Anki, Forgejo SSH and Bridge NodePorts keep the node paths described below. |
-| `monitoring` | Prometheus → Alertmanager 9093 and reloader 8080, operator 10250, kube-state-metrics 8080, Pushgateway 9091, its own reloader 8080; Alertmanager → its own TCP/UDP mesh 9094; host API servers → operator webhook 10250. The existing 6n3 policies remain separately owned and unchanged. |
+| `monitoring` | Prometheus → Alertmanager 9093 and reloader 8080, operator 10250, kube-state-metrics 8080, Pushgateway 9091, its own reloader 8080; pi0/pi1 lab sources 10.20.0.125/.126 → Pushgateway 9091 through the Local NodePort `pushgateway-lan` 30091 (task s44, Shelly certificate probe); Alertmanager → its own TCP/UDP mesh 9094; host API servers → operator webhook 10250. The existing 6n3 policies remain separately owned and unchanged. |
 | `cert-manager` | Host API servers → webhook 10250; Prometheus may read its three exact metrics endpoints on 9402. The current self-signed CA issuers and LAN wildcard certificates have no HTTP01 solver; new ACME/solver modes need review. |
 | `cicd` | Traefik → ArgoCD server 8080; server/controller/repo-server → Redis 6379; server/controller/ApplicationSet → repo-server 8081; Prometheus → controller 8082, repo-server 8084 and server 8083. No active ApplicationSet webhook Ingress or rollouts ServiceMonitor was found. See the mandatory chart-policy transition below. |
 | `kube-system` | Pods in all namespaces → CoreDNS TCP/UDP 53; Prometheus → CoreDNS 9153 and Traefik 9100; host API servers → metrics-server 10250; frontends/LAN relays/ServiceLB → Traefik web ports, scoped below. |
@@ -63,6 +63,8 @@ returned no series. Its r2 local CNI connection is consistent with the configure
 10s readiness and 20s liveness HTTP probes. No production writer is evidenced;
 authenticated Kubernetes port-forward remains the manual push path. Repeat both
 checks before the monitoring stage and stop if any producer needs identifying.
+Since task s44 (2026-11-09) pi0/pi1 are its only writers, through the Local
+NodePort `pushgateway-lan` (see `f3s/pushgateway/README.md`).
 Do not add an API-server exception to Prometheus merely for diagnostic access:
 a service-proxy GET to its direct 9090 endpoint was denied during this inventory.
 

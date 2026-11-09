@@ -14,3 +14,32 @@ spec:
     name: http
   selector:
     app: pushgateway
+---
+# s44: write path for the Shelly certificate probe on pi0/pi1
+# (/usr/local/sbin/shelly-tls-probe, gonf pis_netbsd_shelly_tls_*). The Pis
+# PUT their group to http://10.20.0.12{0,1,2}:{{ .Values.lanService.nodePort }}.
+# Local keeps the Pi's real source address: the pod's node DNATs without
+# SNAT, so NetworkPolicy pushgateway-scrape can admit exactly 10.20.0.125
+# and 10.20.0.126 instead of node/CNI addresses (which would also let
+# ordinary pods in through the NodePort). Nodes without the pod drop the
+# connection; the probe tries all three. The Pis share 10.20.0.0/24 with
+# the r-nodes, so no router rule is involved, and the r-node f3s_guard
+# already admits that subnet. No public port-forward exists.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pushgateway-lan
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pushgateway
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.port }}
+    nodePort: {{ .Values.lanService.nodePort }}
+    protocol: TCP
+    name: http
+  selector:
+    app: pushgateway

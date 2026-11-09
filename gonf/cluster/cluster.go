@@ -177,6 +177,8 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		// 20 min jitter).
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "15"}),
 		WithData(goprecords.ClientHost{Host: "pi0"}),
+		// Hourly Shelly certificate probe; pi1 runs half an hour apart.
+		WithData(netbsd.ShellyTLSProbeTime{Minute: "23"}),
 	)
 	pi1 = Host("pi1", netbsdPi,
 		WithData(netbsd.MigrationHost{Interface: "mue0", OldIPv4: "192.168.1.126", LabIPv4: "10.20.0.126", RecoveryIPv4: "10.98.0.126", ULA: "fd02:ca0b:f1cb:20::126", SharedGateway: "192.168.1.2"}),
@@ -185,6 +187,7 @@ func registerNetBSDPiHosts() (pi0, pi1 HostRef) {
 		// After the 22:10 pkgs / 22:50 reboot window.
 		WithData(netbsd.VulnAuditTime{Minute: "40", Hour: "23"}),
 		WithData(goprecords.ClientHost{Host: "pi1"}),
+		WithData(netbsd.ShellyTLSProbeTime{Minute: "53"}),
 	)
 	return pi0, pi1
 }
