@@ -8,7 +8,8 @@ import (
 
 // Controller owns the accepted full inventory overlay, retaining compiled paths.
 // Since p34 the overlay also opts f3sctl into the plugs' native HTTPS
-// (shelly_https, with shelly_http_fallback while callers migrate) and this
+// (shelly_https; shelly_http_fallback is off since the router dropped TCP80,
+// so a TLS or dial failure is an error, never a plain-HTTP retry) and this
 // owner installs the public f3s Shelly CA certificate at f3sctl's default CA
 // path. The CA's private key never leaves the controller host.
 type Controller struct{ RequiresRoot }

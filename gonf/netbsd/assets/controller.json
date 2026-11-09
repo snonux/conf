@@ -84,5 +84,5 @@
     "10.20.0.126"
   ],
   "shelly_https": true,
-  "shelly_http_fallback": true
+  "shelly_http_fallback": false
 }
