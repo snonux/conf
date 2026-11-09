@@ -16,8 +16,6 @@ spec:
     namespace: infra
   syncPolicy:
     automated:
-      # Keep held until this source is published to the Git repository.
-      enabled: false
       prune: true
       selfHeal: true
     syncOptions:

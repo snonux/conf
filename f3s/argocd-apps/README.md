@@ -14,8 +14,18 @@ not applied.
 | `services/` | `services` | anki-sync-server, bgtutor, beets-art, filebrowser, forgejo, goprecords, immich, ipv6test, keybr, kobo-sync-server, miniflux, motioneye, navidrome, player, protonbridge, radicale, shuriken, syncthing, wallabag, webdav, xplayer, ychat; disabled: apache, opodsync (retired; storage retained), pihole (runs in Docker on pi2/pi3), tracing-demo |
 
 Sync policy everywhere: automated, `prune: true`, `selfHeal: true`,
-`CreateNamespace=false`, retry 3x with backoff. Manual cluster edits get
-reverted.
+`CreateNamespace=false`, retry 3x with backoff (immich: `prune: false`).
+Manual cluster edits get reverted. Exception: the `network-policies/`
+templates are `.yaml.disabled`; their eleven live Applications are manual
+(no automated policy) and pin an exact published commit, see
+[`../network-policies/README.md`](../network-policies/README.md).
+
+A live rollout ahead of its published source holds the app with
+`automated.enabled: false` (live and in the manifest, with a comment saying
+why). Restore `prune: true, selfHeal: true` only once Argo is Synced at a
+published revision that contains the change, i.e. Git renders exactly the
+live state; otherwise selfHeal reverts the rollout. Task e54 restored the
+twelve j34-era holds this way on 2026-11-09; none is held now.
 
 `prometheus.yaml` combines the upstream kube-prometheus-stack chart with
 `f3s/prometheus/manifests` and orders them with sync waves: 0 PV,

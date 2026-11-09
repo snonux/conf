@@ -39,11 +39,11 @@ including deletes of other groups. And because the scrape job uses
 what it pushes: pi0/pi1 could inject series that look like any other job.
 Only these two controller hosts are admitted for that reason.
 
-The NetworkPolicy rule is live by `kubectl apply` (task s44). The manual
-Argo Application `network-policies-monitoring` is still pinned to
-`a1112b9`, which predates it: a manual sync of that Application would
-remove the Pi rule and stop every push. Re-pin it to a commit that contains
-the rule before syncing it.
+The NetworkPolicy rule went live by `kubectl apply` (task s44). The manual
+Argo Application `network-policies-monitoring` pins `1fc3dfa` since task
+e54, a commit that contains the rule, and is Synced. Never pin it to an
+older commit (such as `a1112b9`): a sync would remove the Pi rule and stop
+every push.
 
 The alerts are `f3s/prometheus/manifests/shelly-tls-alerts.yaml`. Without
 persistence, every Pushgateway restart (each cluster power-on) starts empty

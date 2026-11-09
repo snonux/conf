@@ -37,8 +37,9 @@ host key and collection/media sync metadata are preserved, as are all 3,113
 media files, their byte total and sampled contents. No production sync upload
 or download was initiated for the test.
 
-Automatic sync is held in the live and local Application until this matching
-chart is published; do not reconcile from the old remote source. For rollback,
+Automatic sync was held until this matching chart was published; it was
+restored (`prune: true, selfHeal: true`) on 2026-11-09 (task e54), after Argo
+was Synced at the published commit 1fc3dfa. For rollback,
 stop writes and preserve any new user changes, then restore only the selected
 Anki data with the previous image. Never roll back the shared NFS dataset.
 Private receipts are under `~/.local/state/conf/j34-app-upgrades-20261107/`.

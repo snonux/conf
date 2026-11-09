@@ -38,8 +38,9 @@ was checked against the staged image. A quiesced configuration archive is
 stored privately under `~/.local/state/conf/j34-app-upgrades-20261107/`.
 For rollback, stop the writer and restore that configuration with the old
 image: 0.43.1 cannot use the new Argon2 credentials/session configuration.
-Automatic sync is held in the live and local Application until this matching
-chart is published; do not reconcile it from the old remote source.
+Automatic sync was held until this matching chart was published; it was
+restored (`prune: true, selfHeal: true`) on 2026-11-09 (task e54), after
+Argo was Synced at the published commit 1fc3dfa.
 
 ## Storage and operation
 

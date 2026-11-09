@@ -29,11 +29,9 @@ Miniflux 2.3.5 is running. Health, the authenticated user/feed APIs, invalid-tok
 rejection and the runtime version passed verification. Database counts remained
 2 users, 38 feeds and 195 entries. PostgreSQL remains on 18.6.
 
-Automatic sync is temporarily disabled for this Application because the matching
-chart changes are local and source pushes are prohibited. ArgoCD therefore
-reports the image difference as OutOfSync. Publish the matching source before
-re-enabling `spec.syncPolicy.automated.enabled`; an earlier manual sync would
-restore the old image.
+Automatic sync was held during the upgrade, until the matching chart was
+published. On 2026-11-09 (task e54) Argo was Synced at the published commit
+1fc3dfa, and the original `prune: true, selfHeal: true` policy was restored.
 
 The application was stopped for a consistent pre-upgrade custom-format dump at
 `~/.local/state/conf/j34-app-upgrades-20261107/miniflux-before-2.3.5.dump`.

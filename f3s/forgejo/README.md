@@ -113,8 +113,9 @@ quick_check is clean and journaling remains DELETE. The exact image config
 ID, CLI/API health/version, anonymous Git HEAD through ArgoCD's repo-server,
 and authenticated Git HEAD from the existing Rocky SSH identity all passed.
 A fresh ArgoCD Git comparison also passed. No Git push was performed.
-Automatic sync is held in the live and local Application until the matching
-17.0.1 chart is published; do not reconcile from the old remote source.
+Automatic sync was held until the matching 17.0.1 chart was published; it
+was restored (`prune: true, selfHeal: true`) on 2026-11-09 (task e54), after
+Argo was Synced at the published commit 1fc3dfa.
 
 The retired cgit git-server's data at `/data/nfs/k3svolumes/git-server` and
 its final ZFS snapshot are still on disk; delete only with explicit

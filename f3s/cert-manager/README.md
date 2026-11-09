@@ -65,11 +65,13 @@ its owned namespace.
 
 Private resource, CRD and Secret backups precede the upgrade. The original
 1.21.2 source remains available in Git for rollback; retain the current
-Secrets when restoring it. Automatic sync is explicitly disabled in the
-live Application and its local manifest because publishing is on hold.
-The expected OutOfSync state must not be reconciled from the old remote
-source. After publishing these matching manifests, sync the Application
-and restore its original `prune: true, selfHeal: true` policy.
+Secrets when restoring it. Automatic sync was held during the upgrade
+until these manifests were published. On 2026-11-09 (task e54) the only
+remaining difference was Argo's `tracking-id` annotation, which the
+upgrade's `kubectl apply -k` had stripped from all 47 objects; one sync at
+the published commit 1fc3dfa restored it, and the original
+`prune: true, selfHeal: true` policy is back in the live Application and
+its manifest.
 
 ## One certificate per namespace
 

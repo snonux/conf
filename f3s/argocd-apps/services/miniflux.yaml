@@ -16,9 +16,6 @@ spec:
     namespace: services
   syncPolicy:
     automated:
-      # j34: local rollout awaits source publication (NO GIT PUSH).
-      # Re-enable only after the matching chart is available to ArgoCD.
-      enabled: false
       prune: true
       selfHeal: true
     syncOptions:

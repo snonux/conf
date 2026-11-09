@@ -65,8 +65,8 @@ authenticated Kubernetes port-forward remains the manual push path. Repeat both
 checks before the monitoring stage and stop if any producer needs identifying.
 Since task s44 (2026-11-09) pi0/pi1 are its only writers, through the Local
 NodePort `pushgateway-lan` (see `f3s/pushgateway/README.md`). Their rule in
-`pushgateway-scrape` was applied with kubectl; `network-policies-monitoring`
-is still pinned to `a1112b9`, so syncing it unchanged would drop the rule.
+`pushgateway-scrape` was applied with kubectl and has been in Git since;
+`network-policies-monitoring` now pins `1fc3dfa`, which contains it (task e54).
 With the scrape job's `honor_labels: true` the Pis can set any `job` or
 `instance` label on what they push.
 Do not add an API-server exception to Prometheus merely for diagnostic access:
@@ -302,7 +302,9 @@ References: [Kubernetes NetworkPolicy semantics and node exceptions](https://kub
 
 ## Live acceptance on 2026-10-24
 
-All eleven manual Applications are pinned to published policy commit `a1112b9`.
+All eleven manual Applications were pinned to published policy commit `a1112b9`
+(services later to `6485bb0`, task a04; all moved to `1fc3dfa` by task e54, see
+the end of this file).
 The live union contains exactly 55 matching task policies and the two existing
 6n3 Prometheus policies, whose UIDs and specs were preserved. Application
 synchronization/health and the namespace policy specs were checked after each
@@ -401,3 +403,20 @@ all old sources. Native f0 source A/B isolated the missing allow: the same NEW
 backend refused the NEW relay source while the retained OLD source completed
 verified TLS/HTTP. No direct wg2 backend trust, other namespace allowance,
 selector/port change, default-deny replacement or Argo activation is included.
+
+## Pins moved to the published policy set (task e54, 2026-11-09)
+
+Later rollouts (824, 924, n44, s44) applied their policy changes with
+kubectl, so the pinned Applications drifted: five of them (cert-manager,
+infra, kube-system, monitoring, services) reported OutOfSync, and a manual
+sync at the old pin would have **removed** the live 10.20.0.x and
+10.99.0.2 rules. Before moving the pins, every live policy in all eleven
+namespaces was compared with `namespaces/<ns>/policies.yaml` at the
+published commit `1fc3dfa` (spec, sync-wave/options annotations, labels):
+all were equal, none was missing, and no policy carried an Application's
+tracking-id without being in its source. Each Application's
+`targetRevision` was then set to the full `1fc3dfa` SHA and hard-refreshed;
+all eleven are Synced/Healthy without a sync. They remain manual (no
+automated policy) and pinned to an exact commit, as described above. When
+a later change is applied with kubectl, commit and publish it, then
+re-pin the affected Application to that commit after the same comparison.

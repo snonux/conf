@@ -16,8 +16,6 @@ spec:
     namespace: services
   syncPolicy:
     automated:
-      # Keep manual until the matching 17.0.1 chart is published.
-      enabled: false
       prune: true
       selfHeal: true
     syncOptions:
