@@ -1,5 +1,5 @@
 #!/bin/sh
-# Control and query a Shelly Plug M Gen 3 via its HTTP RPC API.
+# Control and query a Shelly Plug M Gen 3 via its HTTPS RPC API.
 #
 # Usage:
 #   shelly-plug.sh [host] <command>
@@ -11,18 +11,25 @@
 #   toggle   Toggle the plug
 #   info     Show device info (model, firmware, mac)
 #
-# The host defaults to 192.168.1.28 and can be overridden by the first
+# The host defaults to 10.30.0.28 (shelly1, rack fans) and can be overridden by the first
 # argument or the SHELLY_HOST environment variable.
 #
 # If the device has authentication enabled, the password is read from the
 # SHELLY_PASS environment variable, or from ~/.shelly_plug if that is unset
 # (the username is always "admin" on Shelly Gen3). Digest auth is used
-# automatically when a password is available.
+# automatically when a password is available; it reaches curl through a config
+# on stdin, not the command line.
+#
+# Since p34 the plugs are reached over their native HTTPS and their certificate
+# is verified against the private f3s Shelly CA (SHELLY_CA_FILE, default
+# ~/.config/f3sctl/shelly-ca.pem, the same file f3sctl pins). Verification is
+# never skipped.
 
 set -eu
 
-DEFAULT_HOST="192.168.1.28"
+DEFAULT_HOST="10.30.0.28"
 PASS_FILE="${HOME}/.shelly_plug"
+CA_FILE="${SHELLY_CA_FILE:-${HOME}/.config/f3sctl/shelly-ca.pem}"
 
 # Argument forms:
 #   (none)            -> host=default, command=status
@@ -39,7 +46,7 @@ else
 	CMD="status"
 fi
 
-BASE="http://${HOST}"
+BASE="https://${HOST}"
 
 # Resolve the password: SHELLY_PASS wins, otherwise read it from PASS_FILE.
 PASS="${SHELLY_PASS:-}"
@@ -47,15 +54,14 @@ if [ -z "$PASS" ] && [ -r "$PASS_FILE" ]; then
 	PASS="$(head -n 1 "$PASS_FILE" | tr -d '\r\n')"
 fi
 
-# Build optional digest-auth args when a password is available.
-AUTH=""
-if [ -n "$PASS" ]; then
-	AUTH="--digest -u admin:${PASS}"
-fi
-
+# rpc PATH: one verified HTTPS call; digest credentials, when available, go to
+# curl as a config on stdin (quoting characters escaped).
 rpc() {
-	# shellcheck disable=SC2086
-	curl -s --max-time 5 $AUTH "${BASE}/rpc/$1"
+	{
+		if [ -n "$PASS" ]; then
+			printf 'user = "admin:%s"\ndigest\n' "$(printf '%s' "$PASS" | sed 's/[\\"]/\\&/g')"
+		fi
+	} | curl -s --max-time 5 --cacert "$CA_FILE" -K - "${BASE}/rpc/$1"
 }
 
 case "$CMD" in
@@ -76,7 +82,7 @@ case "$CMD" in
 		echo
 		;;
 	info)
-		curl -s --max-time 5 "${BASE}/shelly"
+		curl -s --max-time 5 --cacert "$CA_FILE" "${BASE}/shelly"
 		echo
 		;;
 	*)
