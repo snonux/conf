@@ -7,10 +7,20 @@
 #
 # Since p34 the plug is reached over its native HTTPS (TCP443) and its
 # certificate is verified against the private f3s Shelly CA in
-# $SHELLY_CA_FILE (--cacert; verification is never skipped). A missing CA
-# file fails closed: curl then refuses the plug's certificate, and the fans
-# are left to f3sctl (logged, non-fatal), rather than falling back to plain
-# HTTP.
+# $SHELLY_CA_FILE (--cacert, full verification). A missing CA file fails
+# closed; there is no plain-HTTP fallback.
+#
+# Clock-independent fallback (p34 review B1): shellyfans runs early in rc,
+# long before ntpd. After an RTC/CMOS reset the clock can be before the
+# plug certificate's notBefore, and full verification then fails (curl exit
+# 60) on every try -- yet this helper is the safety net that starts the fans
+# for a self-waking host. Only when curl exits 60 AND the clock is before the
+# leaf's notBefore does it retry with -k --pinnedpubkey: curl still refuses
+# any server whose public key differs from the pinned SPKI hash, so the plug
+# stays authenticated, only the time check is skipped. A bare -k is never
+# used: without a well-formed pin the fallback is not attempted. The pin and
+# notBefore come from $SHELLY_PIN_FILE, which gonf derives from the public
+# shelly1 leaf certificate in git (gonf/freebsd/shellyfans.go).
 #
 # The password lives on the UFS USB key stick mounted read-only at /keys,
 # alongside the ZFS encryption keys. If the stick is missing the file will be
@@ -19,11 +29,14 @@
 # does not show up in ps(1).
 #
 # Networking may not be fully ready the instant this runs at boot, and the
-# plug itself may briefly be unreachable, so the call is retried a few times.
+# plug itself may briefly be unreachable, so the call is retried a few times;
+# every failed attempt is logged with curl's exit code (7 unreachable, 22 HTTP
+# error such as a wrong password, 60 certificate, 90 pin mismatch, ...).
 #
-# "shelly-fans-on status" makes the same authenticated, verified call with
-# the read-only Switch.GetStatus once (no retries) and prints the reply; it is
-# how a deploy verifies the caller without touching the relay.
+# "shelly-fans-on status" makes the same call with the read-only
+# Switch.GetStatus once (no retries), prints the reply, and writes its notes
+# to stderr instead of syslog; it is how a deploy verifies the caller without
+# touching the relay.
 
 # rc.d runs with a minimal PATH; curl lives in /usr/local/bin.
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
@@ -32,36 +45,78 @@ export PATH
 SHELLY_IP="${SHELLY_IP:-10.30.0.28}"
 SHELLY_PASS_FILE="${SHELLY_PASS_FILE:-/keys/shelly_plug.secret}"
 SHELLY_CA_FILE="${SHELLY_CA_FILE:-/usr/local/etc/shellyfans/shelly-ca.pem}"
+SHELLY_PIN_FILE="${SHELLY_PIN_FILE:-/usr/local/etc/shellyfans/shelly1.pin}"
+MODE="${1:-on}"
 
 PASS=""
 if [ -r "$SHELLY_PASS_FILE" ]; then
     PASS=$(head -n 1 "$SHELLY_PASS_FILE" | tr -d '\r\n')
 fi
 
+# The pin file holds two KEY=value lines; it is parsed, never sourced.
+PIN=""
+NOT_BEFORE=""
+if [ -r "$SHELLY_PIN_FILE" ]; then
+    PIN=$(sed -n 's/^SHELLY_PIN=//p' "$SHELLY_PIN_FILE" | head -n 1)
+    NOT_BEFORE=$(sed -n 's/^SHELLY_PIN_NOT_BEFORE=//p' "$SHELLY_PIN_FILE" | head -n 1)
+fi
+
+log() {
+    if [ "$MODE" = status ]; then
+        echo "shellyfans: $*" >&2
+    else
+        logger -t shellyfans "$*"
+    fi
+}
+
+# credentials: the digest config for curl on stdin (quoting characters in the
+# password escaped); empty without a password.
+credentials() {
+    if [ -n "$PASS" ]; then
+        printf 'user = "admin:%s"\ndigest\n' "$(printf '%s' "$PASS" | sed 's/[\\"]/\\&/g')"
+    fi
+}
+
+# clock_implausible: true when the clock is before the leaf's notBefore, the
+# only case in which full verification can fail for a genuine plug.
+clock_implausible() {
+    case "$NOT_BEFORE" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$(date +%s)" -lt "$NOT_BEFORE" ]
+}
+
 # shelly_rpc PATH: one authenticated HTTPS call; --fail turns a 401 (wrong
-# password) or any other HTTP error into a failure instead of a silent success.
+# password) or any other HTTP error into a failure. Returns curl's exit code.
 shelly_rpc() {
-    {
-        if [ -n "$PASS" ]; then
-            # Escape the curl config's quoting characters in the password.
-            printf 'user = "admin:%s"\ndigest\n' "$(printf '%s' "$PASS" | sed 's/[\\"]/\\&/g')"
-        fi
-    } | curl -s --fail --max-time 5 --cacert "$SHELLY_CA_FILE" -K - \
+    credentials | curl -s --fail --max-time 5 --cacert "$SHELLY_CA_FILE" -K - \
+        "https://${SHELLY_IP}/rpc/$1"
+    rc=$?
+    [ "$rc" = 60 ] && clock_implausible || return "$rc"
+    case "$PIN" in
+        sha256//?*) ;;
+        *) log "certificate rejected and clock implausible, but no valid pin in $SHELLY_PIN_FILE"; return "$rc" ;;
+    esac
+    log "clock implausible ($(date -u +%Y-%m-%dT%H:%M:%SZ) before plug certificate notBefore $NOT_BEFORE), using pinned key"
+    credentials | curl -s --fail --max-time 5 -k --pinnedpubkey "$PIN" -K - \
         "https://${SHELLY_IP}/rpc/$1"
 }
 
-if [ "${1:-}" = status ]; then
+if [ "$MODE" = status ]; then
     shelly_rpc "Switch.GetStatus?id=0"
-    exit
+    rc=$?
+    [ "$rc" = 0 ] || log "status failed: curl exit $rc"
+    exit "$rc"
 fi
 
 i=0
 while [ "$i" -lt 12 ]; do
-    if shelly_rpc "Switch.Set?id=0&on=true" >/dev/null 2>&1; then
+    shelly_rpc "Switch.Set?id=0&on=true" >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" = 0 ]; then
         logger -t shellyfans "Rack fans switched on via Shelly plug $SHELLY_IP"
         exit 0
     fi
     i=$((i + 1))
+    log "attempt $i: Shelly plug $SHELLY_IP failed, curl exit $rc"
     sleep 5
 done
 

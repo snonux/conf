@@ -10,7 +10,18 @@ The plug has authentication enabled (HTTP digest, user `admin`). Since p34
 verifies its certificate against the private f3s Shelly CA (`--cacert`,
 never `-k`). A missing or wrong CA fails closed; the helper never falls back
 to plain HTTP. The password goes to curl through a config on stdin, not the
-command line, and `--fail` turns a 401 into a failure.
+command line, and `--fail` turns a 401 into a failure. Every failed attempt is
+logged with curl's exit code (7 unreachable, 22 HTTP error/wrong password,
+60 certificate, 90 pin mismatch).
+
+**Clock-independent fallback (p34 review B1).** The helper runs early in rc,
+before ntpd. After an RTC/CMOS reset the clock can be before the plug
+certificate's notBefore, and full verification then fails (60) on every try.
+Only when curl exits 60 **and** the clock is before that notBefore does the
+helper retry with `-k --pinnedpubkey sha256//<SPKI hash of the shelly1 leaf>`.
+curl still refuses any server with another public key, so the plug stays
+authenticated; only the time check is skipped. It logs "clock implausible ...,
+using pinned key". Without a well-formed pin there is no `-k` attempt at all.
 
 ## Installed Files
 
@@ -21,6 +32,16 @@ command line, and `--fail` turns a 401 into a failure.
 - `/usr/local/etc/shellyfans/shelly-ca.pem` is the public f3s Shelly CA that the
   helper pins (`shelly-ca.pem` here; the same certificate as
   `gonf/netbsd/assets/shelly-ca.pem`).
+- `/usr/local/etc/shellyfans/shelly1.pin` holds `SHELLY_PIN=sha256//...` and
+  `SHELLY_PIN_NOT_BEFORE=<epoch>`. gonf generates it at install time from the
+  public leaf `shelly1-leaf.pem` here, and refuses a leaf that does not chain to
+  the CA or is not for `10.30.0.28`.
+
+**Renewing the shelly1 leaf:** commit the new public leaf as `shelly1-leaf.pem`
+and redeploy `freebsd_shellyfans_scripts` (one host at a time). That updates the
+pin and notBefore; the plug can switch to the new leaf afterwards. Consider
+backdating the new leaf's notBefore by a few days at issuance, so a slightly
+wrong clock still passes full verification.
 - `/usr/local/etc/rc.d/shellyfans` runs the helper at boot, after networking
   and after `f3skeys` (so the `/keys` USB stick is already mounted).
 - `/keys/shelly_plug.secret` holds the plug password (first line). It lives on
@@ -60,6 +81,11 @@ Read-only, over the same verified HTTPS path (does not touch the relay):
 doas /usr/local/sbin/shelly-fans-on status          # expect "output":true
 doas env SHELLY_CA_FILE=/tmp/other-ca.pem /usr/local/sbin/shelly-fans-on status  # wrong CA: curl exit 60
 ```
+
+Offline fixture for the helper (local TLS test servers, never the plugs):
+`python3 -I check-helper.py` covers the normal path, the pinned fallback, a
+wrong pinned key, no fallback for a plausible clock, and no `-k` without a
+pin.
 
 `doas service shellyfans start` switches the plug on (logged as
 "Rack fans switched on"); only run it when the fans should be on.
