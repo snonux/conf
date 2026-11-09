@@ -40,7 +40,8 @@ rejected. Its account, event, calendar and owned user directory were removed;
 the original authentication file bytes were restored. Existing credentials
 and calendars were not reset.
 
-Automatic sync is held in the live and local Application until this matching
-chart is published. Do not reconcile from the old remote source. Restore the
+Automatic sync was held during the 2026-11-08 upgrade until this chart was
+published; e54 restored prune+selfHeal on 2026-11-09 after verifying Git equals
+live. Restore the
 previous image and selected backup directories with the writer stopped if
 rollback is needed; never roll back the shared NFS dataset for one app.

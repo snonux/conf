@@ -51,9 +51,9 @@ A quiesced config/index archive was downloaded and SHA-256 verified before
 startup, under `~/.local/state/conf/j34-app-upgrades-20261107/`. Stop the writer
 before restoring it with the previous image; preserve current synced data.
 The automatic-sync hold for this upgrade ended once Argo was Synced/Healthy at a
-published revision containing the chart (60f88c2). n44 sets `enabled: true` in
-Git; the live Application keeps its hold until that commit is on Forgejo and
-`finish-after-push.py` (n44 receipts) applies the manifest.
+published revision containing the chart (60f88c2). n44 set `enabled: true` in
+Git; after the push its `finish-after-push.py` applied the manifest on
+2026-11-09, so automated sync is live again.
 
 ## Direct path for the laptop (n44, 2026-11-09)
 

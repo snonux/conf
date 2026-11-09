@@ -28,6 +28,6 @@ available, so an authenticated entry operation was not tested.
 A quiesced archive of data and images was downloaded and SHA-256 checked
 before startup, under `~/.local/state/conf/j34-app-upgrades-20261107/`.
 Restore those directories with the writer stopped and the old 2.6.14 image
-if rollback is needed. Automatic sync is held in the live and local
-Application until the matching chart is published; do not sync the old
-remote source over this deployment.
+if rollback is needed. Automatic sync was held during the 2026-11-08
+upgrade until this chart was published; e54 restored prune+selfHeal on
+2026-11-09 after verifying Git equals live.

@@ -62,7 +62,8 @@ loaded, and the running immutable image config ID matched the staged image.
 The test Job and its disposable copy were removed. No test art sweep modified
 production music. Completion of the current scheduled sweep remains separate.
 
-Automatic sync is held in the live and local Application until this matching
-chart is published; do not reconcile from the old remote source. Rollback of
+Automatic sync was held during the 2026-11-08 upgrade until this chart was
+published; e54 restored prune+selfHeal on 2026-11-09 after verifying Git equals
+live. Rollback of
 the template is the previous `2.14.1-ls356` image; no production DB migration
 was performed by this image test.
