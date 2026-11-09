@@ -25,7 +25,8 @@ a temporary compatibility permission until all physical IPv6 moves are accepted;
 it grants no new global-prefix trust. Native ICMPv6 errors and NDP are allowed;
 RA/DHCPv6 receive no service exception. Host RA suppression remains n14's job.
 
-Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443,
+Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
+plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
 phone 10.99.0.3 TCP443, to lab addresses only. Recovery aliases
 10.98.0.120–122 accept only laptop TCP22. Recovery filtering precedes lab and
 old-source trust; it is not a general service subnet. Existing established

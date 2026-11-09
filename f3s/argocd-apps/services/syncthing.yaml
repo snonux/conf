@@ -16,8 +16,9 @@ spec:
     namespace: services
   syncPolicy:
     automated:
-      # Keep manual until the matching v2.1.7-ls236 chart is published.
-      enabled: false
+      # The v2.1.7-ls236 hold ended once Argo was Synced/Healthy at a
+      # published revision with that chart (60f88c2, checked for n44).
+      enabled: true
       prune: true
       selfHeal: true
     syncOptions:

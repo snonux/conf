@@ -48,6 +48,13 @@ few minutes, not more often. Right after a cluster start one run took 14 s
 for 12 folders (later runs about 1.5 s), so keep `-timeout` below the
 caller's own limit (Gogios `CheckTimeoutS` is 10 s on the frontends).
 
+Right after a cluster start both checks can report UNKNOWN with `decode
+/rest/config/folders: invalid character '<'` (or `/rest/config/devices`).
+While relayd's `<f3s>` table is still down, the frontends fall back to their
+local httpd, which rewrites every path (`/rest/...` too) to the f3s fallback
+`index.html` and answers 200. The next run after Traefik is reachable again
+clears it (seen 2026-11-09 10:35-10:40, OK from the following run).
+
 ## Ignore file
 
 One rule per line, `#` comments:

@@ -577,3 +577,33 @@ reboot: no boot-time input of the live profile changed (hostname files,
 sysctl, rc and the boot hook are byte-identical), and the six profiles with
 the new policy lines are not live. Receipts: IQ
 `openbsdrouter-plan/NEXT-SESSION.md`.
+
+## n44 Syncthing NodePort for the laptop (TCP32200)
+
+Every profile adds one wg2 permit, next to the laptop's other lab permits:
+
+```
+pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.20.0.120, 10.20.0.121, 10.20.0.122 } port 32200 tag gonf_transit keep state
+```
+
+It is the router layer of the laptop's direct Syncthing path
+(`f3s/syncthing/README.md`). The r-node `f3s_guard` and NetworkPolicy
+`syncthing-web` admit the same identity. TCP only, the three k3s nodes only,
+no phone, no public NAT. pfctl expands the list into three rules (no
+`__automatic` table).
+
+Live 2026-11-09, under `live-rollout.lock`: trial
+`n44-syncthing-32200-20261109-a` re-applied `camera-igc3`. Every staged
+profile equalled the local render (gonf built from 73cd18b), and the frozen
+candidate differed from the live files only in the two pf.conf lines. The
+rollback fixture suite passed on the router against this render. With the
+trial active, the loaded rules were the earlier rules plus exactly the three
+expanded permits (multiset, nothing removed). The camera zone, NAT66, Wi-Fi
+IPv4/IPv6, Shelly 443-only, DNS, wg2 and lab ULA checks all passed. The pod's
+node answered TLS on 32200 (`CN=syncthing`), the other nodes dropped the dial
+(Local NodePort), and 32201/6443 stayed refused. The trial was confirmed
+with fresh old/new proofs via pi0 and VPN. No boot-time input changed, so
+there was no reboot canary. Attempt 1 stopped at the k34 preflight before any
+gonf call (router unchanged). Receipts:
+`~/.local/state/conf/n44-syncthing-direct-20261109/` (`n44-*.json`,
+`STEP-JOURNAL.md`).
