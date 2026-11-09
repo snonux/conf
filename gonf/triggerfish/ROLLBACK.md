@@ -439,7 +439,8 @@ timed/boot/legacy restoration, canary).
 
 The Shelly plugs serve native HTTPS with private-CA certificates (IQ
 `hosts/shelly-plug.md`). While the controllers move to HTTPS, only
-`wifi-ipv6-nat66` permits `port { 80, 443 }` for exactly the existing
+`wifi-ipv6-nat66` and the g24 `camera-igc3` built on it permit
+`port { 80, 443 }` for exactly the existing
 controller pairs: pi0/pi1 to both plugs, f0-f3 to the fans plug, and laptop
 wg2 `10.99.0.2` to both (`shellyPorts` in `profiles.go`). Every other profile
 renders byte-identical, with port 80 only. pfctl merges the fans-plug sources
@@ -447,3 +448,59 @@ into `__automatic_*` tables, so verify the loaded rules by expanding those
 tables, not by counting lines. Trial `p34-shelly443-20261109-a` was confirmed
 on 2026-11-09. Port 80 is removed in a later p34 trial, once every caller is
 accepted on HTTPS.
+
+## g24 camera port (camera-igc3)
+
+`camera-igc3` (`camera.go`) is the live `wifi-ipv6-nat66` profile, p34
+Shelly TCP80+443 permits included, with the camera zone moved to its own
+port: `10.40.0.1/24` and its connected route leave igc0 for igc3, which stays
+uncabled until the human camera gate (m24). Differences from NAT66, and
+nothing else: `hostname.igc0` loses the camera alias, `hostname.igc3` gains
+it, PF names `cam_if = "igc3"` (anti-spoofing follows) and adds
+
+```
+block drop in log quick on $cam_if
+block drop out log quick on $cam_if
+```
+
+The catch-all `block return log all` already denies the zone; the quick
+rules also beat non-quick permits without an interface (`pass out inet
+tagged gonf_transit`) and give pflog a distinct rule. A later recorder or
+update permit (l24/n24) must be a quick rule before them. `<outdoor>`
+(10.40.0.11-14) is the static allocation, with no DHCP; PF loads an
+unreferenced const table only once a rule uses it. `<recorders>` and
+`<camera_updates>` stay empty and unreferenced: no NAT, internet, router
+service, lab or Wi-Fi path, and no IPv6 (rad serves only igc2).
+
+router-rollback checks the camera zone for every profile (`validate_camera`):
+`10.40.0.1` on the port the PF macro names (`camera_port`: igc3 for
+camera-igc3 and post-ap, igc0 otherwise), no `pass` rule and no translation
+mentioning `$cam_if`, `10.40.`, `<outdoor>`, `<recorders>`,
+`<camera_updates>` or the dedicated port, no `inet6` line on a dedicated
+camera port, and the two deny lines for camera-igc3. The existing zone check
+still refuses the prefix on two ports. Activation runs `ifconfig igc3 -inet6`
+for a dedicated camera port (draining keeps link-local addresses), and
+acceptance refuses any IPv6 on it, link-local included. Timed, boot and
+forward restoration move the prefix back the same way it came: drained from
+one port before it is added to the other. All other profiles render
+byte-identical. Fixtures in `checks/rollback.ksh` cover the refusals (wrong
+port, macro mismatch, both ports, NAT66 moving the cameras, permits by macro,
+literal port or update table, NAT by source or table, missing deny, IPv6 line,
+rad and DHCP on igc3), activation order, stray link-local removal, the
+runtime IPv6 refusal, timed, boot and canary restoration and a forward NAT66
+restage.
+
+While igc3 has no carrier, the connected route `10.40.0/24` sits on igc3
+with flags `Cn` (no `U`), and `route get 10.40.0.11` still resolves to igc3,
+not the default route. A router-originated ping to 10.40.0.11 hit the
+explicit deny (`block out on igc3`) in pflog; lab (pi0/pi1) and Wi-Fi SYNs
+towards the zone were refused in on igc0/igc2 by the catch-all. Camera
+traffic itself is untested until cameras exist.
+
+Live 2026-11-09, under `live-rollout.lock`: trial `g24-camera-20261109-a`
+(every staged profile equal to the local render, frozen PF diff exactly the
+11 camera lines) was checked and confirmed with fresh old/new proofs via pi0
+and VPN. A real reboot canary (`g24-camera-boot-20261109-b`) restored at boot
+and brought the zone up on igc3 through netstart, then the plain profile was
+reapplied and confirmed (`g24-camera-final-20261109-c`). IQ
+`openbsdrouter-plan/NEXT-SESSION.md` holds the receipts.
