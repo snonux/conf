@@ -1,6 +1,8 @@
 #!/bin/sh
 # Run as an ordinary FreeBSD user, using only an exclusive /tmp workspace.
 # Arguments: checked bundle, packaging script, already assembled package.
+# freebsd-repo.sh (the shared catalog indexer) must sit next to the
+# packaging script, as dtail-freebsd-publish copies it.
 set -eu
 umask 077
 test "$#" -eq 3

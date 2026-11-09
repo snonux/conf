@@ -9,6 +9,10 @@
 # Repository metadata:
 #   make netbsd-summary                                      # regenerate pkg_summary.gz
 #                                                            # across the whole NetBSD repo
+#   make freebsd-reindex                                     # regenerate the FreeBSD catalog
+#                                                            # across the whole FreeBSD repo
+#                                                            # (native test, run on f0:
+#                                                            # tests/test_freebsd_repo.sh)
 #
 # Multi-binary / CGo packages (built natively on OpenBSD build VM):
 #   make dtail-openbsd                                       # DTail for OpenBSD
@@ -115,7 +119,7 @@ DTAIL_NETBSD_VERSION = $(shell echo $(DTAIL_VERSION) | tr -d '-')
 CONF_FRONTENDS := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../frontends)
 DTAIL_RPM_FILES := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))files/dtail-rocky)
 
-.PHONY: pkg pkg-freebsd pkg-openbsd pkg-netbsd netbsd-summary dtail-openbsd dtail-freebsd dtail-netbsd dtail-netbsd11 dtail-rocky check-vars check-dtail-version clean
+.PHONY: pkg pkg-freebsd pkg-openbsd pkg-netbsd netbsd-summary freebsd-reindex dtail-openbsd dtail-freebsd dtail-netbsd dtail-netbsd11 dtail-rocky check-vars check-dtail-version clean
 .PHONY: buildvm-start buildvm-stop buildvm-ensure
 
 # --- Build VM management ---
@@ -156,15 +160,34 @@ endif
 	@echo "Cross-compiling $(NAME) for OpenBSD/amd64..."
 	cd $(SRC) && GOOS=openbsd GOARCH=amd64 go build -o $@ $(ENTRY)
 
-# Build, package, and upload the FreeBSD package
+# Build, package, and publish the FreeBSD package.
+#
+# Everything travels in a private mktemp job directory on f0: the binary,
+# pkg-freebsd.sh and freebsd-repo.sh, which places the package in All/ and
+# regenerates the catalog over the WHOLE repository (see freebsd-reindex).
 pkg-freebsd: /tmp/$(NAME)-freebsd
 	@echo "Packaging $(NAME) $(VERSION) for FreeBSD..."
-	$(FREEBSD_SCP) /tmp/$(NAME)-freebsd $(FREEBSD_HOST):/tmp/$(NAME)
-	$(FREEBSD_SCP) $(SCRIPTS)/pkg-freebsd.sh $(FREEBSD_HOST):/tmp/pkg-freebsd.sh
-	$(FREEBSD_SSH) $(FREEBSD_HOST) "/bin/sh /tmp/pkg-freebsd.sh \
+	job=$$($(FREEBSD_SSH) $(FREEBSD_HOST) "umask 077; mktemp -d /tmp/pkg-freebsd.XXXXXXXXXX")
+	$(FREEBSD_SCP) /tmp/$(NAME)-freebsd "$(FREEBSD_HOST):$$job/$(NAME)"
+	$(FREEBSD_SCP) $(SCRIPTS)/pkg-freebsd.sh $(SCRIPTS)/freebsd-repo.sh "$(FREEBSD_HOST):$$job/"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "/bin/sh $$job/pkg-freebsd.sh \
 		'$(NAME)' '$(VERSION)' '$(COMMENT)' '$(DESC)' '$(MAINTAINER)' '$(WWW)' \
 		'$(PV_BASE)/$(FREEBSD_REPO)'"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "rm -rf $$job"
 	rm -f /tmp/$(NAME)-freebsd
+
+# Regenerate the FreeBSD repo catalog (data.pkg, packagesite.pkg, meta.conf,
+# meta) from EVERY package in All/, the step pkg-freebsd and
+# dtail-freebsd-publish end with. Use it after removing a package by hand or
+# to repair a catalog. The catalog is staged next to the repository, checked
+# to list each All/*.pkg and only then renamed into place, so a failure keeps
+# the previous catalog.
+freebsd-reindex:
+	@echo "Regenerating the FreeBSD repo catalog..."
+	job=$$($(FREEBSD_SSH) $(FREEBSD_HOST) "umask 077; mktemp -d /tmp/freebsd-repo.XXXXXXXXXX")
+	$(FREEBSD_SCP) $(SCRIPTS)/freebsd-repo.sh "$(FREEBSD_HOST):$$job/freebsd-repo.sh"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "doas /bin/sh $$job/freebsd-repo.sh index '$(PV_BASE)/$(FREEBSD_REPO)'"
+	$(FREEBSD_SSH) $(FREEBSD_HOST) "rm -rf $$job"
 
 # Build, package, sign, and upload the OpenBSD package
 pkg-openbsd: /tmp/$(NAME)-openbsd
@@ -319,7 +342,7 @@ dtail-freebsd-publish:
 	python3 $(SCRIPTS)/verify-dtail-freebsd.py "$(DTAIL_FREEBSD_BUNDLE)" "$${artifacts[0]}"
 	job=$$($(FREEBSD_SSH) -oBatchMode=yes -oStrictHostKeyChecking=yes $(FREEBSD_HOST) "umask 077; mktemp -d /tmp/dtail-freebsd-publish.XXXXXXXXXX")
 	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes "$${artifacts[0]}" "$(FREEBSD_HOST):$$job/artifact.pkg"
-	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes $(SCRIPTS)/pkg-dtail-freebsd.sh "$(FREEBSD_HOST):$$job/pkg-dtail-freebsd.sh"
+	$(FREEBSD_SCP) -oBatchMode=yes -oStrictHostKeyChecking=yes $(SCRIPTS)/pkg-dtail-freebsd.sh $(SCRIPTS)/freebsd-repo.sh "$(FREEBSD_HOST):$$job/"
 	$(FREEBSD_SSH) -oBatchMode=yes -oStrictHostKeyChecking=yes $(FREEBSD_HOST) "doas sh '$$job/pkg-dtail-freebsd.sh' publish '$$job/artifact.pkg' '$(PV_BASE)/$(FREEBSD_REPO)'"
 
 # Build and assemble for review; publication is always a separate command.

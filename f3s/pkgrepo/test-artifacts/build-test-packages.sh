@@ -45,15 +45,17 @@ MANIFEST
     mkdir -p "$OUTDIR/All"
     pkg create -M "$WORKDIR/+MANIFEST" -p "$WORKDIR/plist" -r "$STAGEDIR" -o "$OUTDIR/All"
 
-    # Generate the unsigned repo metadata
-    pkg repo "$OUTDIR"
-
     rm -rf "$WORKDIR"
 
+    # No local `pkg repo`: the repository catalog must be generated over every
+    # package in the repo, so publish the package with freebsd-repo.sh (it
+    # places it in All/ and re-indexes the whole repo). Copying a catalog
+    # built here over the PV would hide every other package (task h54).
     echo ""
-    echo "FreeBSD package built in: $OUTDIR"
-    echo "Copy contents to the PV:"
-    echo "  scp -r $OUTDIR/* <nfs-host>:/data/nfs/k3svolumes/pkgrepo/freebsd/FreeBSD:15:amd64/latest/"
+    echo "FreeBSD package built in: $OUTDIR/All"
+    echo "Publish it from ~/git/conf (the catalog is re-indexed on f0):"
+    echo "  scp -P 22 $OUTDIR/All/hello-test-1.0.pkg packages/scripts/freebsd-repo.sh f0.lan.buetow.org:/tmp/"
+    echo "  ssh -p 22 f0.lan.buetow.org \"doas /bin/sh /tmp/freebsd-repo.sh add /tmp/hello-test-1.0.pkg '/data/nfs/k3svolumes/pkgrepo/freebsd/FreeBSD:15:amd64/latest'\""
 }
 
 build_openbsd() {
