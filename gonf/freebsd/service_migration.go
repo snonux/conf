@@ -56,7 +56,8 @@ func (Apcupsd) MigrationCompatibleServer() {
 func (ShellyFans) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
 
 // MigrationCandidate stages the boot fan address override without running it.
-// Promotion needs device recovery acceptance and the exact TCP80 router path.
+// Promotion needs device recovery acceptance and the exact router path (TCP443
+// since p34; the helper itself now carries the 10.30.0.28 default).
 func (ShellyFans) MigrationCandidate() {
 	EnsureDir("/usr/local/etc/rc.conf.d", RootOwned)
 	File("/usr/local/etc/rc.conf.d/shellyfans.triggerfish-candidate",
