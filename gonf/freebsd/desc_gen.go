@@ -108,6 +108,10 @@ func (Relayd) DescMigrationCandidate() string {
 	return "Stages VIP listeners and LAN backends without reloading"
 }
 
+func (Resolver) DescConf() string {
+	return "Writes /etc/resolvconf.conf with the lab resolver and regenerates /etc/resolv.conf"
+}
+
 func (RootMail) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
 }

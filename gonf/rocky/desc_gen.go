@@ -58,6 +58,10 @@ func (NetworkMigration) DescStatus() string {
 	return "Reports pending state without exposing NetworkManager credentials"
 }
 
+func (Resolver) DescConf() string {
+	return "Installs the NetworkManager global DNS drop-in for the lab resolver and reloads NetworkManager's configuration"
+}
+
 func (Unattended) DescGonfLink() string {
 	return "Symlinks /usr/bin/gonf → /usr/local/bin/gonf (sudo secure_path)"
 }

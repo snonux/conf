@@ -91,6 +91,10 @@ nmcli con up "<conn>"
 Firefox: DNS over HTTPS off (or Default Protection), else it bypasses
 Pi-hole. Router DHCP: hand out 192.168.1.127 and 192.168.1.128.
 
+The lab hosts themselves (f0-f3, r0-r2, rocky, pi0-pi3, including pi2/pi3)
+do not use Pi-hole: gonf `*_resolver_conf` (task u54) points them at the
+router's unbound `10.20.0.1`, see `gonf/labdns/labdns.go` for why.
+
 ## k3s chart (dormant)
 
 `helm-chart/` and `argocd-apps/services/pihole.yaml.disabled` are kept

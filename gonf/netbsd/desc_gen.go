@@ -54,6 +54,8 @@ func (Periodic) DescLogs() string {
 	return "Creates /var/log/daily.log and weekly.log (0640) and rotates them with newsyslog"
 }
 
+func (Resolver) DescConf() string { return "Writes /etc/resolv.conf with the lab resolver" }
+
 func (ShellyEndpoints) DescActivate() string {
 	return "Adopts verified plug endpoints while preserving all other defaults"
 }

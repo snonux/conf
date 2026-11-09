@@ -60,12 +60,14 @@ func Register() {
 	RegisterMethods(netbsd.NetworkMigration{}, WithPrefix("pis_netbsd_network_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.ShellyEndpoints{}, WithPrefix("pis_netbsd_shelly_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.HostFile{}, WithPrefix("pis_netbsd_hosts_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterMethods(netbsd.Resolver{}, WithPrefix("pis_netbsd_resolver_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Controller{}, WithPrefix("pis_netbsd_controller_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.ShellyTLS{}, WithPrefix("pis_netbsd_shelly_tls_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(endpointfiles.Recovery{Platform: "netbsd"}, WithPrefix("pis_netbsd_endpoints_"), OnCluster(cluster.NameNetBSDPis))
 
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.HostFile{}, WithPrefix("rocky_hosts_"), OnCluster(cluster.NameRockyAll))
+	RegisterMethods(rocky.Resolver{}, WithPrefix("rocky_resolver_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(endpointfiles.Recovery{Platform: "linux"}, WithPrefix("rocky_endpoints_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;
@@ -86,6 +88,7 @@ func Register() {
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
+	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{})
 	RegisterMethods(endpointfiles.Recovery{Platform: "freebsd"}, WithPrefix("freebsd_endpoints_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(endpointfiles.Recovery{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.GuestHosts{}, WithPrefix("freebsd_guest_hosts_"), OnCluster(cluster.NameFreeBSDGuestMigration))

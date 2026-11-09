@@ -13,8 +13,10 @@ import (
 // only the file layout is cleaned up.
 //
 // Deliberately NOT managed here:
-//   - static IP (nmcli, enp0s5 manual, gw/dns 192.168.1.1) and hostnamectl:
-//     bootstrap, a wrong value cuts the node off.
+//   - static IP (nmcli, enp0s5 manual, gateway) and hostnamectl: bootstrap,
+//     a wrong value cuts the node off. The profile's ipv4.dns still says
+//     192.168.1.1, but rocky.Resolver's NetworkManager global DNS drop-in
+//     (10.20.0.1, task u54) overrides it.
 //   - the timezone: rocky_timezone.
 //   - wg0 configs, keys, peers: ~/git/wireguardmeshgenerator; perms,
 //     wireguard-tools and wg-quick@wg0 enablement: WireGuard (wireguard.go).
