@@ -56,11 +56,19 @@ func (ShellyTLS) Script() {
 	InstallFile(shellyTLSProbe, paths.GonfAsset("netbsd", "shelly-tls-probe"), RootExec)
 }
 
-// Account creates the unprivileged _shellytls account (no login, no home)
-// that runs the probe.
+// Account creates the unprivileged _shellytls account (no login) that runs
+// the probe, with its state directory as home.
+//
+// The home must exist: NetBSD cron chdirs to $HOME before running a job
+// and skips the job when that fails (task n54). The first version used
+// /var/empty, which NetBSD (unlike OpenBSD and FreeBSD) does not have, so
+// every scheduled run was skipped. The state directory is the account's
+// only writable place and StateDir creates it in the same plan.
+// WithManageHome also points an existing account's passwd home field there
+// (usermod -d, which neither moves nor chowns anything).
 func (ShellyTLS) Account() {
 	User(shellyTLSUser, WithPrimaryGroup(shellyTLSUser),
-		WithHome("/var/empty"), WithShell("/sbin/nologin"))
+		WithHome(shellyTLSStateDir), WithManageHome, WithShell("/sbin/nologin"))
 }
 
 // OptsStateDir records the account before the directory it owns.
@@ -68,8 +76,8 @@ func (ShellyTLS) OptsStateDir() TaskOptions {
 	return TaskOptions{Needs(ShellyTLS.Account)}
 }
 
-// StateDir creates /var/db/shelly-tls-probe (0700 _shellytls) for the
-// per-plug last-success records.
+// StateDir creates /var/db/shelly-tls-probe (0700 _shellytls), the
+// account's home, for the per-plug last-success records.
 //
 // The records let Prometheus tell "failing for more than 2h" without
 // relying on alert state, which the nightly cluster power-off resets.
@@ -94,6 +102,10 @@ func (ShellyTLS) OptsCron() TaskOptions {
 // shelly-tls-probe); stdout is dropped, so cron mails nothing to an unread
 // local mailbox (task 2k2). The first deployment ran the job in root's
 // crontab; that entry is removed once the unprivileged one exists.
+//
+// cron chdirs to the account's home before the job (see Account); a manual
+// "doas -u _shellytls" run does not, so it cannot show that a scheduled run
+// would start. Check /var/log/cron after the host's minute instead.
 func (ShellyTLS) Cron() {
 	EachHost(func(at ShellyTLSProbeTime) {
 		job := Cron("shelly-tls-probe",

@@ -63,7 +63,7 @@ func (ShellyEndpoints) DescPrepare() string {
 }
 
 func (ShellyTLS) DescAccount() string {
-	return "Creates the unprivileged _shellytls account (no login, no home) that runs the probe"
+	return "Creates the unprivileged _shellytls account (no login) that runs the probe, with its state directory as home"
 }
 
 func (ShellyTLS) DescCron() string {
@@ -79,7 +79,7 @@ func (ShellyTLS) DescScript() string {
 }
 
 func (ShellyTLS) DescStateDir() string {
-	return "Creates /var/db/shelly-tls-probe (0700 _shellytls) for the per-plug last-success records"
+	return "Creates /var/db/shelly-tls-probe (0700 _shellytls), the account's home, for the per-plug last-success records"
 }
 
 func (Unattended) DescNewsyslog() string {
