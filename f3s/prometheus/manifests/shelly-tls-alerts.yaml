@@ -69,6 +69,49 @@ spec:
             action: >
               Renew now, following "Certificate lifecycle" in IQ
               topics/infra/f3s/hosts/shelly-plug.md.
+        # s44 review B1: the expiry alerts above need the notAfter series.
+        # A verified plug without its leaf date, or a reporter without the
+        # CA date, would silently disable them. The probe reports an
+        # unreadable leaf date as a failed plug and exits 1 on an unreadable
+        # CA date; these two rules also cover an older or broken probe.
+        - alert: ShellyTLSLeafExpiryUnknown
+          expr: |
+            (shelly_tls_probe_success{job="shelly_tls"} == 1)
+              unless on (plug, reporter)
+            shelly_tls_cert_not_after_seconds{job="shelly_tls",cert="leaf"}
+          for: 10m
+          labels:
+            severity: warning
+            component: shelly
+          annotations:
+            summary: "Shelly {{ $labels.plug }} verified from {{ $labels.reporter }}, but its certificate expiry is unknown"
+            description: >
+              The probe on {{ $labels.reporter }} pushed probe_success 1 for
+              {{ $labels.plug }} without shelly_tls_cert_not_after_seconds, so
+              the expiry alerts cannot fire for it.
+            action: >
+              On {{ $labels.reporter }}: run /usr/local/sbin/shelly-tls-probe -n
+              as _shellytls and check that openssl x509 -enddate and date -d
+              still parse the certificate date.
+        - alert: ShellyTLSCAExpiryUnknown
+          expr: |
+            shelly_tls_probe_last_run_timestamp_seconds{job="shelly_tls"}
+              unless on (reporter)
+            shelly_tls_cert_not_after_seconds{job="shelly_tls",cert="ca"}
+          for: 10m
+          labels:
+            severity: warning
+            component: shelly
+          annotations:
+            summary: "The Shelly CA expiry is unknown on {{ $labels.reporter }}"
+            description: >
+              The probe on {{ $labels.reporter }} reported a run without the
+              pinned CA's notAfter: the CA file is missing, holds no
+              certificate, or its date could not be parsed.
+            action: >
+              On {{ $labels.reporter }}: check /usr/local/etc/f3sctl/shelly-ca.pem
+              (owner pis_netbsd_controller_config) and grep shelly-tls-probe
+              /var/log/messages.
         # The plug did not verify on this reporter and its last verified run
         # is more than 2h ago (a never-verified plug, last success 0, fires
         # at once). Covers unreachable plugs, a swapped or mismatched
@@ -90,7 +133,7 @@ spec:
               certificate did not verify against the pinned Shelly CA.
             action: >
               On {{ $labels.reporter }}: grep shelly-tls-probe /var/log/messages
-              and run doas /usr/local/sbin/shelly-tls-probe -n.
+              and run /usr/local/sbin/shelly-tls-probe -n as _shellytls.
         # The Pushgateway still holds the reporter's group, but its last run
         # is more than 36h old: the cron job or its push path stopped.
         - alert: ShellyTLSProbeStale

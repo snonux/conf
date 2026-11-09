@@ -25,12 +25,19 @@
 # reporter=<short hostname>; a PUT replaces the whole group each run):
 #
 #   shelly_tls_probe_success{plug,address}        1 verified, 0 otherwise
+#       (s44 review B1: also 0 when the verified leaf's notAfter cannot be
+#       read, so a parsing failure after an OpenSSL/date change never
+#       passes as OK while hiding the expiry alerts)
 #   shelly_tls_cert_not_after_seconds{plug,cert="leaf"}
 #       the plug leaf's notAfter, only when the leaf chains to the pinned CA
 #       (also when it is merely expired or not yet valid, so an expired
 #       certificate reads as expired instead of vanishing); an unknown
 #       certificate gets no value, its probe_success 0 is the signal
-#   shelly_tls_cert_not_after_seconds{cert="ca"}  the pinned CA's notAfter
+#   shelly_tls_cert_not_after_seconds{cert="ca"}
+#       the earliest notAfter of all certificates in the pinned CA file, so
+#       a rollover file holding an old and a new CA cannot hide either; when
+#       any of them is unreadable the series is left out and the run exits
+#       1 (the rule ShellyTLSCertExpiryUnknown alerts on the missing series)
 #   shelly_tls_probe_last_success_timestamp_seconds{plug}
 #       last fully verified run on this host (0: never), kept in STATE_DIR so
 #       "failing for more than 2h" survives Prometheus and Pushgateway
@@ -38,7 +45,7 @@
 #   shelly_tls_probe_last_run_timestamp_seconds   this run (staleness)
 #
 # Exit codes: 0 all plugs verified and pushed, 1 at least one plug failed
-# (results still pushed), 2 the push failed on every Pushgateway address,
+# or the CA's notAfter was unreadable (results still pushed), 2 the push failed on every Pushgateway address,
 # 64 usage or configuration error. Diagnostics go to stderr; the cron job
 # hands them to syslog. "-n" prints the metrics instead of pushing (deploy
 # checks and the fixture check-shelly-tls-probe.py).
@@ -55,8 +62,14 @@
 #   SHELLY_TLS_REPORTER    reporter label (default: hostname -s)
 #   SHELLY_TLS_STATE_DIR   last-success records (default /var/db/shelly-tls-probe)
 #   SHELLY_TLS_TIMEOUT     seconds per TLS handshake (default 15)
+#   SHELLY_TLS_PATH        command search path (the fixture puts failing
+#                          date/openssl stand-ins first)
+#
+# The cron job runs as the unprivileged account _shellytls (it parses
+# certificates from the network on hosts that serve a public site); it needs
+# only read access to the CA file and write access to STATE_DIR.
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/pkg/sbin:/usr/pkg/bin
+PATH=${SHELLY_TLS_PATH:-/sbin:/bin:/usr/sbin:/usr/bin:/usr/pkg/sbin:/usr/pkg/bin}
 export PATH
 
 CA_FILE=${SHELLY_TLS_CA_FILE:-/usr/local/etc/f3sctl/shelly-ca.pem}
@@ -84,6 +97,24 @@ function cert_not_after {
     epoch=$(date -u -d "${raw#notAfter=}" +%s 2>/dev/null) || return 1
     case "$epoch" in ''|*[!0-9]*) return 1 ;; esac
     printf '%s\n' "$epoch"
+}
+
+# ca_not_after: the earliest notAfter of every certificate in CA_FILE. Fails
+# when the file holds no certificate or any notAfter is unreadable.
+function ca_not_after {
+    typeset part epoch min=
+    awk -v dir="$WORK" '
+        /-----BEGIN CERTIFICATE-----/ { n++; out = dir "/ca." n ".pem" }
+        out != "" { print > out }
+        /-----END CERTIFICATE-----/ { close(out); out = "" }' "$CA_FILE" || return 1
+    for part in "$WORK"/ca.*.pem; do
+        [ -e "$part" ] || return 1
+        epoch=$(cert_not_after "$part") || return 1
+        if [ -z "$min" ] || [ "$epoch" -lt "$min" ]; then
+            min=$epoch
+        fi
+    done
+    printf '%s\n' "$min"
 }
 
 # fetch_leaf HOST PORT OUT: complete a TLS handshake and save the leaf the
@@ -142,12 +173,15 @@ function probe_plug {
             log "$name ($host) certificate does not verify against $CA_FILE"
         fi
         # notAfter only for a certificate the pinned CA issued for this IP.
+        # A verified leaf whose date cannot be read counts as a failure:
+        # success 1 without a notAfter would silence the expiry alerts.
         if [ "$success" = 1 ] || verify_leaf "$leaf" "$host" -no_check_time; then
             if not_after=$(cert_not_after "$leaf"); then
                 printf 'shelly_tls_cert_not_after_seconds{plug="%s",cert="leaf"} %s\n' \
                     "$name" "$not_after" >>"$WORK/not_after"
             else
-                log "$name ($host) leaf notAfter unreadable"
+                log "$name ($host) leaf notAfter unreadable (openssl x509 -enddate or date -d failed); reporting the plug as failed"
+                success=0
             fi
         fi
     fi
@@ -231,11 +265,15 @@ function main {
         probe_plug "$name" "$host" "$port" "$now" || failed=1
     done
 
-    if ca_not_after=$(cert_not_after "$CA_FILE"); then
+    if [ ! -r "$CA_FILE" ]; then
+        log "pinned CA $CA_FILE missing or unreadable"
+        failed=1
+    elif ca_not_after=$(ca_not_after); then
         printf 'shelly_tls_cert_not_after_seconds{cert="ca"} %s\n' \
             "$ca_not_after" >>"$WORK/not_after"
     else
-        log "pinned CA $CA_FILE missing or unreadable"
+        log "pinned CA $CA_FILE: no certificate, or a notAfter unreadable (openssl x509 -enddate or date -d failed)"
+        failed=1
     fi
 
     render "$now" >"$WORK/metrics"
@@ -245,7 +283,7 @@ function main {
         log "push failed on every Pushgateway address"
         return 2
     fi
-    [ "$failed" = 0 ] || log "at least one plug did not verify"
+    [ "$failed" = 0 ] || log "at least one plug did not verify, or the CA notAfter is unknown"
     return "$failed"
 }
 

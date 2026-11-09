@@ -34,7 +34,16 @@ scrape. No node/CNI address is admitted, so ordinary pods cannot reach it
 through the NodePort. The Pis share `10.20.0.0/24` with the r-nodes (no
 router rule), and the r-node `f3s_guard` already trusts that subnet. The
 Pushgateway has no auth: anything those two sources send is accepted,
-including deletes of other groups.
+including deletes of other groups. And because the scrape job uses
+`honor_labels: true`, a writer controls the `job` and `instance` labels of
+what it pushes: pi0/pi1 could inject series that look like any other job.
+Only these two controller hosts are admitted for that reason.
+
+The NetworkPolicy rule is live by `kubectl apply` (task s44). The manual
+Argo Application `network-policies-monitoring` is still pinned to
+`a1112b9`, which predates it: a manual sync of that Application would
+remove the Pi rule and stop every push. Re-pin it to a commit that contains
+the rule before syncing it.
 
 The alerts are `f3s/prometheus/manifests/shelly-tls-alerts.yaml`. Without
 persistence, every Pushgateway restart (each cluster power-on) starts empty

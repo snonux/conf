@@ -73,7 +73,8 @@ class AlertTests(unittest.TestCase):
         rules = {r["alert"]: r for g in spec["groups"] for r in g["rules"]}
         self.assertEqual(set(rules), {"ShellyTLSCertExpiringSoon", "ShellyTLSCertExpiryCritical",
                                       "ShellyTLSProbeFailing", "ShellyTLSProbeStale",
-                                      "ShellyTLSProbeAbsent"})
+                                      "ShellyTLSProbeAbsent", "ShellyTLSLeafExpiryUnknown",
+                                      "ShellyTLSCAExpiryUnknown"})
 
         def render(alert, labels, value=None):
             out = {}
@@ -107,6 +108,7 @@ class AlertTests(unittest.TestCase):
                          for p in ("shelly1", "shelly2")]
         healthy_certs += [not_after(r, t1 + 3600 * DAY, cert="ca") for r in ("pi0", "pi1")]
         both = reporter("pi0") + reporter("pi1")
+        pi0_certs = [s for s in healthy_certs if 'reporter="pi0"' in s["series"]]
 
         def certs_with(when, plug="shelly1", cert="leaf"):
             """Healthy certificates, but one (on both reporters) changed."""
@@ -162,13 +164,30 @@ class AlertTests(unittest.TestCase):
             ("stale-35h-no-alert", reporter("pi0", last_run=const(0)) + reporter("pi1") + healthy_certs,
              {}, "35h"),
             # Absent: pi1 never pushed.
-            ("absent-3h30m", reporter("pi0") + healthy_certs[:2],
+            ("absent-3h30m", reporter("pi0") + pi0_certs,
              {"ShellyTLSProbeAbsent": [expected("ShellyTLSProbeAbsent", job="shelly_tls", reporter="pi1")]},
              "210m"),
-            ("absent-2h-pending-only", reporter("pi0") + healthy_certs[:2], {}, "2h"),
+            ("absent-2h-pending-only", reporter("pi0") + pi0_certs, {}, "2h"),
             ("absent-both", [], {"ShellyTLSProbeAbsent": [
                 expected("ShellyTLSProbeAbsent", job="shelly_tls", reporter=r) for r in ("pi0", "pi1")]},
              "210m"),
+            # Review B1: a verified plug or a reporter without its date.
+            ("leaf-date-missing", both + [s for s in healthy_certs if not (
+                'reporter="pi0"' in s["series"] and 'plug="shelly2"' in s["series"])],
+             {"ShellyTLSLeafExpiryUnknown": [expected(
+                 "ShellyTLSLeafExpiryUnknown", job="shelly_tls", reporter="pi0", plug="shelly2",
+                 address="10.30.0.29")]}, "1h"),
+            ("ca-date-missing", both + [s for s in healthy_certs if not (
+                'reporter="pi1"' in s["series"] and 'cert="ca"' in s["series"])],
+             {"ShellyTLSCAExpiryUnknown": [expected(
+                 "ShellyTLSCAExpiryUnknown", job="shelly_tls", reporter="pi1")]}, "1h"),
+            ("dates-missing-5m-pending-only", both, {}, "5m"),
+            # A failed plug without a leaf date is ShellyTLSProbeFailing's
+            # case, not an unknown expiry.
+            ("failed-plug-without-leaf-no-unknown",
+             reporter("pi0", success=0, last_success=FRESH) + reporter("pi1")
+             + [s for s in healthy_certs if 'reporter="pi0"' not in s["series"] or 'cert="ca"' in s["series"]],
+             {}, "1h"),
             # Another job's identically named series never counts.
             ("other-job-ignored", [dict(s, series=s["series"].replace('job="shelly_tls"', 'job="other"'))
                                    for s in both + certs_with(t1 + DAY)] + both + healthy_certs, {}, "1h"),

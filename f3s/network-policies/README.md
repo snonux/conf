@@ -64,7 +64,11 @@ returned no series. Its r2 local CNI connection is consistent with the configure
 authenticated Kubernetes port-forward remains the manual push path. Repeat both
 checks before the monitoring stage and stop if any producer needs identifying.
 Since task s44 (2026-11-09) pi0/pi1 are its only writers, through the Local
-NodePort `pushgateway-lan` (see `f3s/pushgateway/README.md`).
+NodePort `pushgateway-lan` (see `f3s/pushgateway/README.md`). Their rule in
+`pushgateway-scrape` was applied with kubectl; `network-policies-monitoring`
+is still pinned to `a1112b9`, so syncing it unchanged would drop the rule.
+With the scrape job's `honor_labels: true` the Pis can set any `job` or
+`instance` label on what they push.
 Do not add an API-server exception to Prometheus merely for diagnostic access:
 a service-proxy GET to its direct 9090 endpoint was denied during this inventory.
 

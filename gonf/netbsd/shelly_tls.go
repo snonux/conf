@@ -20,11 +20,17 @@ import (
 // Controller.Config, which applies only through the controller endpoint
 // lease, so it is deliberately not a Needs prerequisite here: a missing CA
 // makes the probe report failure instead of blocking this deployment.
+//
+// The job runs as the unprivileged account _shellytls (s44 review N1): it
+// parses certificates received from the network on hosts that also serve a
+// public site. It needs only read access to the world-readable CA file and
+// its own state directory.
 type ShellyTLS struct{ RequiresRoot }
 
 const (
 	shellyTLSProbe    = "/usr/local/sbin/shelly-tls-probe"
 	shellyTLSStateDir = "/var/db/shelly-tls-probe"
+	shellyTLSUser     = "_shellytls"
 )
 
 // ShellyTLSProbeTime is a Pi's hourly probe minute (host data, see
@@ -50,30 +56,47 @@ func (ShellyTLS) Script() {
 	InstallFile(shellyTLSProbe, paths.GonfAsset("netbsd", "shelly-tls-probe"), RootExec)
 }
 
-// StateDir creates /var/db/shelly-tls-probe for the per-plug last-success
-// records.
+// Account creates the unprivileged _shellytls account (no login, no home)
+// that runs the probe.
+func (ShellyTLS) Account() {
+	User(shellyTLSUser, WithPrimaryGroup(shellyTLSUser),
+		WithHome("/var/empty"), WithShell("/sbin/nologin"))
+}
+
+// OptsStateDir records the account before the directory it owns.
+func (ShellyTLS) OptsStateDir() TaskOptions {
+	return TaskOptions{Needs(ShellyTLS.Account)}
+}
+
+// StateDir creates /var/db/shelly-tls-probe (0700 _shellytls) for the
+// per-plug last-success records.
 //
 // The records let Prometheus tell "failing for more than 2h" without
 // relying on alert state, which the nightly cluster power-off resets.
+// Records a former root run left behind are replaced by rename, which the
+// directory owner may do.
 func (ShellyTLS) StateDir() {
-	EnsureDir(shellyTLSStateDir, RootPrivate)
+	EnsureDir(shellyTLSStateDir, Perm(0o700, shellyTLSUser+":"+shellyTLSUser))
 }
 
-// OptsCron records the script and its state directory before the job.
+// OptsCron records the script, the account and its state directory before
+// the job.
 func (ShellyTLS) OptsCron() TaskOptions {
-	return TaskOptions{Needs(ShellyTLS.Script, ShellyTLS.StateDir)}
+	return TaskOptions{Needs(ShellyTLS.Script, ShellyTLS.Account, ShellyTLS.StateDir)}
 }
 
-// Cron runs shelly-tls-probe hourly at the host's minute, diagnostics to
-// syslog.
+// Cron runs shelly-tls-probe hourly as _shellytls at the host's minute,
+// diagnostics to syslog.
 //
 // The probe writes its diagnostics to stderr, which goes to syslog (tag
-// shelly-tls-probe); stdout is dropped, so cron mails nothing to root's
-// unread local mailbox (task 2k2).
+// shelly-tls-probe); stdout is dropped, so cron mails nothing to an unread
+// local mailbox (task 2k2). The first deployment ran the job in root's
+// crontab; that entry is removed once the unprivileged one exists.
 func (ShellyTLS) Cron() {
 	EachHost(func(at ShellyTLSProbeTime) {
-		Cron("shelly-tls-probe",
+		job := Cron("shelly-tls-probe",
 			WithCommand(shellyTLSProbe+" 2>&1 >/dev/null | logger -t shelly-tls-probe"),
-			WithMinute(at.Minute))
+			WithMinute(at.Minute), WithCronUser(shellyTLSUser))
+		NoCron("shelly-tls-probe", DependsOn(job))
 	})
 }

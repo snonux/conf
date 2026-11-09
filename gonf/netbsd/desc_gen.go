@@ -62,8 +62,12 @@ func (ShellyEndpoints) DescPrepare() string {
 	return "Installs an inactive partial configuration without changing callers"
 }
 
+func (ShellyTLS) DescAccount() string {
+	return "Creates the unprivileged _shellytls account (no login, no home) that runs the probe"
+}
+
 func (ShellyTLS) DescCron() string {
-	return "Runs shelly-tls-probe hourly at the host's minute, diagnostics to syslog"
+	return "Runs shelly-tls-probe hourly as _shellytls at the host's minute, diagnostics to syslog"
 }
 
 func (ShellyTLS) DescPackages() string {
@@ -75,7 +79,7 @@ func (ShellyTLS) DescScript() string {
 }
 
 func (ShellyTLS) DescStateDir() string {
-	return "Creates /var/db/shelly-tls-probe for the per-plug last-success records"
+	return "Creates /var/db/shelly-tls-probe (0700 _shellytls) for the per-plug last-success records"
 }
 
 func (Unattended) DescNewsyslog() string {

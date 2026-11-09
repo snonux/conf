@@ -9,9 +9,10 @@ set (a promtool binary or wrapper), the pushed document is also checked by
 `promtool check metrics`. Run from anywhere: python3 -I check-shelly-tls-probe.py
 
 Positive: a valid leaf verifies, a near-expiry leaf still verifies and
-reports its real notAfter, the push lands as a PUT on the reporter's group
+reports its real notAfter, a two-CA rollover file reports the earlier CA, the push lands as a PUT on the reporter's group
 and falls back to the next address. Negative: expired and not-yet-valid
-leaves (genuine, so notAfter is still reported), wrong CA, wrong IP SAN,
+leaves (genuine, so notAfter is still reported), an unreadable leaf or CA
+notAfter (date or openssl stand-ins; review B1), wrong CA, wrong IP SAN,
 clientAuth-only leaf, an untrusted CA offered via SSL_CERT_FILE/SSL_CERT_DIR
 (never consulted), unreachable plug, a plug that never finishes the
 handshake (bounded by the timeout), missing CA file, push failure on every
@@ -20,6 +21,7 @@ address, and usage errors.
 import http.server
 import os
 import re
+import shutil
 import socket
 import ssl
 import subprocess
@@ -38,10 +40,10 @@ def sh(*args):
     return subprocess.run(args, check=True, capture_output=True, text=True)
 
 
-def make_ca(d, name):
+def make_ca(d, name, days=30):
     sh('openssl', 'ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', f'{d}/{name}.key')
     sh('openssl', 'req', '-x509', '-new', '-key', f'{d}/{name}.key', '-subj', f'/CN={name}',
-       '-days', '30', '-addext', 'basicConstraints=critical,CA:TRUE', '-out', f'{d}/{name}.crt')
+       '-days', str(days), '-addext', 'basicConstraints=critical,CA:TRUE', '-out', f'{d}/{name}.crt')
 
 
 def make_leaf(d, name, ca, ip='127.0.0.1', eku='serverAuth', days=100, not_before=None, not_after=None):
@@ -92,6 +94,27 @@ def silent_plug():
     held = []
     threading.Thread(target=lambda: held.extend(sock.accept() for _ in range(4)), daemon=True).start()
     return sock
+
+
+def stand_ins(d):
+    """A bin dir whose date rejects -d, and one whose openssl cannot print
+    the notAfter of the probe's split CA parts (ca.N.pem); otherwise both
+    pass through to the real tools (s44 review B1)."""
+    real_date, real_openssl = shutil.which('date'), shutil.which('openssl')
+    no_date, no_ca = Path(d, 'bin-no-date'), Path(d, 'bin-no-ca-enddate')
+    no_date.mkdir()
+    no_ca.mkdir()
+    (no_date / 'date').write_text(f'''#!/bin/sh
+for a in "$@"; do [ "$a" = -d ] && {{ echo "date: illegal option -- d" >&2; exit 1; }}; done
+exec {real_date} "$@"
+''')
+    (no_ca / 'openssl').write_text(f'''#!/bin/sh
+case " $* " in *" -enddate "*) case "$*" in */ca.[0-9]*.pem*) exit 1 ;; esac ;; esac
+exec {real_openssl} "$@"
+''')
+    for f in (no_date / 'date', no_ca / 'openssl'):
+        f.chmod(0o755)
+    return str(no_date), str(no_ca)
 
 
 def closed_port():
@@ -160,6 +183,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='shelly-tls-probe-check-') as d:
         make_ca(d, 'ca')
         make_ca(d, 'other')
+        make_ca(d, 'nextca', days=5)
+        Path(d, 'rollover.crt').write_text(Path(d, 'ca.crt').read_text() + Path(d, 'nextca.crt').read_text())
+        no_date, no_ca = stand_ins(d)
         certs = {
             'good': make_leaf(d, 'good', 'ca'),
             'near': make_leaf(d, 'near', 'ca', days=10),
@@ -267,6 +293,7 @@ def main():
         r, _ = probe('good', extra={'SHELLY_TLS_CA_FILE': f'{d}/missing.pem'})
         m = parse(r.stdout)
         check('12 missing CA file: fails closed, no CA notAfter', r.returncode == 1
+              and 'a notAfter unreadable' not in r.stderr
               and m[key('shelly_tls_probe_success', plug='good', address='127.0.0.1')] == 0
               and key('shelly_tls_cert_not_after_seconds', cert='ca') not in m
               and 'missing or unreadable' in r.stderr, r.stdout + r.stderr)
@@ -297,6 +324,36 @@ def main():
             r, _ = probe('good', extra=extra, args=args)
             check(f'{n} usage/config error exits 64 without output', r.returncode == 64 and not r.stdout,
                   f'rc={r.returncode} {r.stderr}')
+
+        near_success = parse(probe('near')[0].stdout)[
+            key('shelly_tls_probe_last_success_timestamp_seconds', plug='near')]
+        time.sleep(1.1)
+        r, _ = probe('near', extra={'SHELLY_TLS_PATH': f"{no_date}:{os.environ['PATH']}"})
+        m = parse(r.stdout)
+        check('17 date rejects -d: plug failed, no leaf/CA notAfter, last success kept (B1)',
+              r.returncode == 1
+              and m[key('shelly_tls_probe_success', plug='near', address='127.0.0.1')] == 0
+              and key('shelly_tls_cert_not_after_seconds', plug='near', cert='leaf') not in m
+              and key('shelly_tls_cert_not_after_seconds', cert='ca') not in m
+              and m[key('shelly_tls_probe_last_success_timestamp_seconds', plug='near')] == near_success
+              and 'leaf notAfter unreadable' in r.stderr and 'a notAfter unreadable' in r.stderr
+              and 'missing or unreadable' not in r.stderr, r.stdout + r.stderr)
+
+        r, _ = probe('good', extra={'SHELLY_TLS_PATH': f"{no_ca}:{os.environ['PATH']}"})
+        m = parse(r.stdout)
+        check('18 CA notAfter unreadable: plugs still verified, no CA series, exit 1 (B1)',
+              r.returncode == 1
+              and m[key('shelly_tls_probe_success', plug='good', address='127.0.0.1')] == 1
+              and key('shelly_tls_cert_not_after_seconds', plug='good', cert='leaf') in m
+              and key('shelly_tls_cert_not_after_seconds', cert='ca') not in m
+              and 'a notAfter unreadable' in r.stderr, r.stdout + r.stderr)
+
+        r, _ = probe('good', extra={'SHELLY_TLS_CA_FILE': f'{d}/rollover.crt'})
+        m = parse(r.stdout)
+        check('19 two-CA rollover file: the earliest CA notAfter is exported (N2)', r.returncode == 0
+              and m[key('shelly_tls_probe_success', plug='good', address='127.0.0.1')] == 1
+              and m[key('shelly_tls_cert_not_after_seconds', cert='ca')] == not_after(f'{d}/nextca.crt')
+              < not_after(f'{d}/ca.crt'), r.stdout + r.stderr)
 
         leftovers = [p for p in Path(d).glob('shelly-tls-probe.*')]
         check('16 scratch directories are removed', not leftovers, str(leftovers))
