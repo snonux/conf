@@ -73,6 +73,7 @@ func validateTrialConnection(t RouterTrial) error {
 	if err != nil || port == 0 || (t.ProofRole == "vpn" && fields[0] != "10.99.0.2") {
 		return errors.New("GONF_ROUTER_TRIAL SSH tuple has an invalid client")
 	}
-	// lab-igc1's new receipt must cross the moved lab port (lab.go).
+	// lab-igc1's new (10.20.0.x) and recovery (10.98.0.x) receipts must come from
+	// lab hosts, so both cross the moved lab port (lab.go).
 	return validateLabProof(t, client)
 }

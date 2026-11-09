@@ -680,6 +680,6 @@ dhcpd igc1 igc2, NAT66 and rad), SLAAC on igc1 refusing acceptance, no boot
 canary, the lab-host `new` and `recovery` receipts (the laptop's refused),
 the required recovery and VPN receipts, and timed, boot and confirmed
 paths. The rendered `ACTIVATION.txt` allows staging at any time and forbids
-activation before the user's b24 confirmation. Eight controller mutants
+activation before the user's b24 confirmation. Nine controller mutants
 (one per new check) each fail the suite. Nothing is live: the router still
 runs camera-igc3, and the helper on the router is the i44/n44 version.
