@@ -64,14 +64,22 @@ Constraints that follow:
 - `DbPath` must come from the config file. 0.64.2 has no viper default for
   `dbpath`, so `ND_DBPATH` is silently ignored. The private-cache retry in
   October never took effect for that reason.
-- The `file:` prefix is required: go-sqlite3 passes `vfs=` to SQLite only
-  for `file:` URIs. Upstream's default `cache=shared` has no effect without
-  `file:`, so it was never in force here and is left out.
+- `file:` is not required for `vfs=`: go-sqlite3 v1.14.52 reads `vfs` from
+  the query with or without the prefix. Only `cache=shared` needs `file:`.
+  Upstream's default has no `file:`, so its `cache=shared` was never in force
+  (connections were always private), and it is left out here. `file:` stays
+  because this exact string passed the fixtures (one exclusive lock, no
+  `-shm`). Dropping it needs that check repeated on a fixture.
+- `synchronous=normal` has no effect (go-sqlite3's key is `_synchronous`). It
+  is kept as tested; go-sqlite3 sets `synchronous = NORMAL` by default anyway.
 - No second process can open the DB while Navidrome runs. The scanner runs
-  in-process (`ND_DEVEXTERNALSCANNER=false`, a developer option). The native
-  CLI (`navidrome user|backup|doctor`) works only with the pod stopped.
-  An online `sqlite3` backup from another process fails. Back up from a ZFS
-  snapshot of `zdata/enc/nfsdata` or with the pod stopped.
+  in-process (`ND_DEVEXTERNALSCANNER=false`, a developer option). No native
+  CLI command runs alongside the server. With the pod stopped only
+  `navidrome user` works. `backup`, `doctor` and `search` abort with "No
+  existing database": `requireExistingDB` cuts `DbPath` at `?` and checks
+  `file:/data/navidrome.db`, a path that does not exist. An online `sqlite3`
+  backup from another process also fails. Back up from a ZFS snapshot of
+  `zdata/enc/nfsdata`, or copy the files with the pod stopped.
 - A second pod (rollout overlap, node partition) fails with `database is
   locked` and restarts until the lock is free; `Recreate` avoids overlap.
 
@@ -88,6 +96,10 @@ With the default DSN the same copy timed out on login. Evidence:
 `pre-upgrade-backup` init container copies the closed DB to
 `/data/navidrome-before-0.64.2.db` (plus `-wal` if present) and compares the
 copy before the first 0.64.2 start, and skips that step once the file exists.
+Before the rollout, make sure `/data` has no `navidrome-before-0.64.2.db` or
+`navidrome-before-0.64.2.db-wal`; otherwise no fresh backup is taken. After
+a verified rollout, a follow-up commit removes the init container; the
+backup file stays.
 0.64 changes song and playlist IDs to canonical ones. Library IDs, users,
 passwords, stars, play counts and play queues are kept.
 
@@ -115,10 +127,12 @@ OpenSubsonic lyrics API consume these local sources. Navidrome does not fetch
 missing lyrics automatically. The shared Beets job currently fetches artwork
 only (`fetchart embedart`).
 
-A pre-upgrade SQLite backup is retained in `/data` as
-`navidrome-before-0.64.2-20261015.db` (SQLite online backup, quick_check passed).
-A rollback across schema migrations requires restoring that backup, not only
-switching the image tag.
+Historical (October 2026 trials, superseded by
+[Upgrade and rollback](#upgrade-and-rollback)): a pre-upgrade SQLite backup is
+retained in `/data` as `navidrome-before-0.64.2-20261015.db` (SQLite online
+backup, quick_check passed). It was the restore point for those trials. For
+the current upgrade, the rollback source is `navidrome-before-0.64.2.db`,
+written by the init container.
 
 The 2026-10-15 trial of 0.64.2 stalled authentication and API requests while
 its new artwork workers contended in SQLite on this deployment. Private-cache and rollback-

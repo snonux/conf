@@ -6,9 +6,12 @@ metadata:
 spec:
   replicas: 1
   # SQLite DB on an RWO NFS PVC, opened with vfs=unix-excl (configmap.yaml):
-  # the running process holds an exclusive lock on navidrome.db. Use Recreate
-  # so the old pod releases that lock before the new pod starts; otherwise the
-  # new pod fails with "database is locked" and restarts until it is free.
+  # the running process holds an exclusive lock on navidrome.db. Recreate
+  # stops the old pod before a rollout starts the new one. It does not cover
+  # every case: after an eviction, a drain or a node partition a replacement
+  # pod can start while the old process still holds the lock (until it exits
+  # or its NFSv4 lease expires). That pod fails with "database is locked" and
+  # restarts until the lock is free; it cannot open the DB in parallel.
   strategy:
     type: Recreate
   selector:

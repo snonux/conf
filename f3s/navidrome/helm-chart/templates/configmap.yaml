@@ -19,14 +19,24 @@
 # copy: ~12,700 writes/s and ~48,000 point reads/s.
 #
 # Consequences, all intended:
-# - The "file:" prefix is required: go-sqlite3 passes the URI parameters
-#   (vfs=...) to SQLite only for file: URIs. cache=shared is left out on
-#   purpose; upstream's default DSN has no file: prefix, so its cache=shared
-#   never took effect and connections were already private.
+# - The "file:" prefix is not needed for vfs=: go-sqlite3 v1.14.52 reads
+#   vfs (and the _-prefixed keys) from the query string with or without it.
+#   Only cache=shared needs file:. Upstream's default DSN has no file:, so
+#   its cache=shared never took effect and connections were always private.
+#   cache=shared stays out on purpose. file: is kept only because this exact
+#   string is what passed the task 444 fixtures (/proc/locks: one exclusive
+#   lock, no -shm). Dropping it needs that fixture check repeated.
+# - synchronous=normal has no effect (go-sqlite3's key is _synchronous). It
+#   is kept as tested and is harmless: go-sqlite3 always runs
+#   PRAGMA synchronous = NORMAL by default, the value upstream intends.
 # - No second process can open the DB while Navidrome runs. That is why
-#   ND_DEVEXTERNALSCANNER=false keeps the scanner in-process, and why the
-#   native CLI (user, backup, doctor) only works with the pod stopped.
-#   Back up via ZFS snapshots of the NFS dataset or with the pod stopped.
+#   ND_DEVEXTERNALSCANNER=false keeps the scanner in-process. The native CLI
+#   cannot run alongside the server (kubectl exec into the pod fails), and
+#   with the pod stopped only "navidrome user" works: backup, doctor and
+#   search call requireExistingDB, which cuts DbPath at "?" and stats
+#   "file:/data/navidrome.db", a path that does not exist, so they abort.
+#   Back up from ZFS snapshots of the NFS dataset, or copy the files with
+#   the pod stopped.
 # - A second pod cannot share the DB by accident: it fails with "database is
 #   locked" and restarts until the old process has released the lock.
 apiVersion: v1
