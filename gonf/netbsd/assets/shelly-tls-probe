@@ -37,7 +37,7 @@
 #       the earliest notAfter of all certificates in the pinned CA file, so
 #       a rollover file holding an old and a new CA cannot hide either; when
 #       any of them is unreadable the series is left out and the run exits
-#       1 (the rule ShellyTLSCertExpiryUnknown alerts on the missing series)
+#       1 (the rule ShellyTLSCAExpiryUnknown alerts on the missing series)
 #   shelly_tls_probe_last_success_timestamp_seconds{plug}
 #       last fully verified run on this host (0: never), kept in STATE_DIR so
 #       "failing for more than 2h" survives Prometheus and Pushgateway
@@ -45,8 +45,8 @@
 #   shelly_tls_probe_last_run_timestamp_seconds   this run (staleness)
 #
 # Exit codes: 0 all plugs verified and pushed, 1 at least one plug failed
-# or the CA's notAfter was unreadable (results still pushed), 2 the push failed on every Pushgateway address,
-# 64 usage or configuration error. Diagnostics go to stderr; the cron job
+# or the CA's notAfter was unreadable (results still pushed), 2 the push
+# failed on every Pushgateway address, 64 usage or configuration error. Diagnostics go to stderr; the cron job
 # hands them to syslog. "-n" prints the metrics instead of pushing (deploy
 # checks and the fixture check-shelly-tls-probe.py).
 #

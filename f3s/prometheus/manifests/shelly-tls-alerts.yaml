@@ -149,7 +149,7 @@ spec:
               {{ $labels.reporter }} runs shelly-tls-probe hourly; its newest
               result in the Pushgateway is older than 36h.
             action: >
-              Check root's crontab and syslog (tag shelly-tls-probe) on
+              Check the _shellytls crontab and syslog (tag shelly-tls-probe) on
               {{ $labels.reporter }} and the NodePort pushgateway-lan (30091).
         # No group at all from a reporter. The Pushgateway starts empty after
         # every restart (each cluster power-on), and each Pi pushes within an
@@ -170,6 +170,6 @@ spec:
               {{ $labels.reporter }} has pushed no shelly_tls group since the
               Pushgateway started, for at least 3h.
             action: >
-              Check that {{ $labels.reporter }} is up, root's crontab has
+              Check that {{ $labels.reporter }} is up, the _shellytls crontab has
               shelly-tls-probe, and that it reaches 10.20.0.12x:30091
               (NetworkPolicy pushgateway-scrape, Service pushgateway-lan).
