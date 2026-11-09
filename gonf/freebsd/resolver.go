@@ -22,11 +22,13 @@ import (
 // is static) and rtsold is off (-accept_rtadv), so name_servers is the only
 // source and "resolvconf -u" regenerates the file at once. private_interfaces
 // keeps any RA RDNSS (or DHCP) servers learned on Interface out of the global
-// list, as before; on the guest this is the SLAAC fix it already carried
-// (IQ topics/infra/f3s/vms/rocky-linux-vms.md, "Slow SSH login").
+// list, as before; on the guest this is presumably the SLAAC fix it already
+// carried (IQ topics/infra/f3s/vms/rocky-linux-vms.md, "Slow SSH login"); the
+// guest was never inventoried, so check its file on the next start.
 //
 // Rollback on one host: name_servers="192.168.1.1" in /etc/resolvconf.conf,
-// then resolvconf -u. A later run of the owning task re-applies this file.
+// then resolvconf -u. Only before b24: after the cable move the lab can no
+// longer reach the ISP CPE, so that rollback would cut the host's DNS. A later run of the owning task re-applies this file.
 type Resolver struct {
 	RequiresRoot
 	// Interface is the LAN interface named in private_interfaces.
