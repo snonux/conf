@@ -30,6 +30,13 @@ Wallabag tree are unchanged, including its migrations, so the rollout
 wrote nothing to the database: the SQLite file's checksum is the same
 before and after.
 
+The newly active `php.ini` also turns on `zlib.output_compression` (PHP
+gzips responses itself, so nginx does not compress again), blocks the
+`pcntl_*` functions, sets `mail.add_x_header`, and moves the php-fpm error
+log to `/var/log/php-fpm.log` inside the container (not in `kubectl logs`).
+With five php-fpm workers, slow article fetches can now hold a worker for
+up to 300 s instead of 30 s.
+
 A verified online backup (data/images archive plus a `VACUUM INTO`
 snapshot) is under `~/.local/state/conf/k54-wallabag-2.6.15.1-20261109/`.
 `doctrine:migrations:status` lists ten 2016-2019 migrations as not
