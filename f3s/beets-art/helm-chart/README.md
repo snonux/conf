@@ -2,8 +2,10 @@
 
 Daily CronJob running `beets` over the Navidrome library: fetches
 `cover.jpg` per album and embeds art in every audio file. Navidrome's hourly
-scan (`ND_SCANSCHEDULE: "1h"`) picks it up. Namespace `services`, ArgoCD app
-`beets-art`, pod pinned to r1.
+scan (`Scanner.Schedule` in the navidrome ConfigMap's `navidrome.toml`, task
+o44) picks it up; a quick scan's folder hash includes each file's size and
+mtime, so it sees the changes even when beets-art runs on another node.
+Namespace `services`, ArgoCD app `beets-art`; the pod is not pinned to a node.
 
 Schedule 12:00 Europe/Sofia, `activeDeadlineSeconds` 6h per pod, and one
 pod retry (`backoffLimit: 1`) so a run killed by an f3s power-off is

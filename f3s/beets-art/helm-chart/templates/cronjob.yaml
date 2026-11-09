@@ -1,6 +1,7 @@
 # beets-art: nightly sweep that fetches and embeds cover art for every
 # album in the Navidrome music library, then lets Navidrome's own hourly
-# scan (ND_SCANSCHEDULE=1h) pick the changes up.
+# scan (Scanner.Schedule "@every 1h" in the navidrome ConfigMap) pick the
+# changes up.
 #
 # Why this works alongside Navidrome:
 #   - The music volume is an NFS hostPath PV. Kubernetes does not enforce

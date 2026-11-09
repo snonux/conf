@@ -45,9 +45,10 @@ Navidrome finds new music in three ways:
 - **Periodic scan**, hourly: `[Scanner] Schedule = "@every 1h"` in
   `navidrome.toml`. The interval counts from pod start. The startup log
   shows `Scheduling periodic scan schedule="@every 1h"`. A quick scan of
-  the whole library takes 1-3 s over NFS, so the load is small.
+  the whole library takes 1-4 s over NFS, so the load is small.
 - **Startup scan**: every pod start runs a quick scan
-  (`Scanner.ScanOnStartup`, default on).
+  (`Scanner.ScanOnStartup`, default on); it becomes a full scan after a
+  DB migration, a changed PID config or an interrupted full scan.
 - **Watcher**: inotify on `/music`. On an NFS client, inotify only reports
   changes made through that node's own mount. Files copied in on the NFS
   server (f0) or from another r-node do not trigger it. They wait for the
