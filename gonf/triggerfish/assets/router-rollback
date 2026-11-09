@@ -146,6 +146,11 @@ validate_ipv6() {
  # awk runs END after "exit" in a rule, so carry the verdict in a flag.
  awk '/^#/ || /^$/ {next} $0=="interface igc2" {n++; next} {bad=1; exit} END {exit bad || n!=1}' "$d/rad.conf" || fail 'rad must serve only igc2'
  grep -qx 'table <nat66_egress> persist' "$d/pf.conf" || fail 'NAT66 egress table missing'
+ # A quick rule ends evaluation: translation must come before every quick
+ # uplink rule, or the non-global egress block drops untranslated Wi-Fi ULA.
+ awk '$0=="match out on $up6_if inet6 from $wifi6 to ! <nonglobal6> nat-to <nat66_egress>" {if (!nat) nat=NR; n++}
+  / quick / && /[$]up6_if/ && !quick {quick=NR}
+  END {exit !(n==1 && quick && nat < quick)}' "$d/pf.conf" || fail 'NAT66 translation must precede the quick uplink rules'
 }
 
 install_boot() {

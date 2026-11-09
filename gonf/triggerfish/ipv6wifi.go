@@ -57,7 +57,7 @@ func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 	files[uplink] = strings.Replace(files[uplink], localOnlyIPv6Line, uplinkIPv6Line, 1)
 	files["ACTIVATION.txt"] = ipv6Activation(s)
 	if s.name == ipv6UplinkProfileName {
-		files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Rules()+ipv6Tail())
+		files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Head()+uplinkIPv6Rules()+ipv6Tail())
 		return files
 	}
 	// rad(8) needs a link-local source; assigning the ULA creates one.
@@ -65,7 +65,10 @@ func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 	files["sysctl.conf.fragment"] = "net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=1\n"
 	files["rad.conf"] = nat66RAD(s)
 	files["services.conf"] = strings.Replace(profileServices(s), "rad=disabled\n", "rad=enabled\n", 1)
-	files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Rules()+wifiNAT66Rules()+ipv6Tail())
+	// The translation must precede the uplink's quick non-global egress block:
+	// a quick rule ends evaluation, so a later match rule would never translate.
+	files["pf.conf"] = profilePFWithIPv6(s, data,
+		labIPv6Rules()+uplinkIPv6Head()+nat66MatchRules()+uplinkIPv6Rules()+wifiNAT66Rules()+ipv6Tail())
 	return files
 }
 
@@ -77,16 +80,22 @@ interface %s
 `, ipv6Uplink, s.wifi, s.wifi)
 }
 
+// uplinkIPv6Head declares the uplink macro and the non-global table that the
+// NAT66 match and the uplink rules share; it holds no rule.
+func uplinkIPv6Head() string {
+	return fmt.Sprintf(`# o34: router IPv6 via the CPE LAN /64 (SLAAC). Stateful, no inbound permit.
+up6_if = "%s"
+table <nonglobal6> const { ::/8, 100::/64, 2001:db8::/32, 2002::/16, 3fff::/20, fc00::/7, fe80::/10, fec0::/10, ff00::/8 }
+`, ipv6Uplink)
+}
+
 // uplinkIPv6Rules lets triggerfish itself use IPv6 through the CPE: SLAAC on
 // the uplink, router-originated egress from global addresses only. The lab
 // rules before it already pass neighbour discovery on the lab port, which is
 // the uplink in the wifi-first wiring; the uplink rule repeats it so a later
 // rewiring keeps ND on the uplink.
 func uplinkIPv6Rules() string {
-	return fmt.Sprintf(`# o34: router IPv6 via the CPE LAN /64 (SLAAC). Stateful, no inbound permit.
-up6_if = "%s"
-table <nonglobal6> const { ::/8, 100::/64, 2001:db8::/32, 2002::/16, 3fff::/20, fc00::/7, fe80::/10, fec0::/10, ff00::/8 }
-# ULA (lab included) and other non-global sources never leave towards the internet.
+	return `# ULA (lab included) and other non-global sources never leave towards the internet.
 block drop out log quick on $up6_if inet6 from <nonglobal6> to ! <nonglobal6>
 # The lab ULA never transits; logged so a test route shows the drop in pflog.
 block drop in log quick on $lab_if inet6 from fd02:ca0b:f1cb:20::/64 to ! <nonglobal6>
@@ -95,19 +104,26 @@ pass quick on $up6_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
 pass quick on $up6_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::/16 icmp6-type { 130, 131, 132, 143 }
 pass in quick on $up6_if inet6 proto icmp6 from fe80::/10 to { ff02::1, fe80::/10 } icmp6-type routeradv
 pass out quick on $up6_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::2 icmp6-type routersol
-`, ipv6Uplink)
+`
 }
 
-// wifiNAT66Rules gives Wi-Fi outbound IPv6 only. The match rule translates
-// before the filter rules below see the packet, so the non-global egress block
-// never catches translated Wi-Fi traffic, and an empty egress table fails
-// closed (PF drops what it cannot translate).
-func wifiNAT66Rules() string {
+// nat66MatchRules translates Wi-Fi ULA traffic leaving the uplink. Placed
+// before every quick uplink rule, so the rules after it, including the
+// non-global egress block, see the translated global source. An empty egress
+// table fails closed: PF drops what it cannot translate.
+func nat66MatchRules() string {
 	return fmt.Sprintf(`# o34 NAT66: Wi-Fi ULA to the uplink's SLAAC address, outbound only.
 wifi6 = "%s"
 table <%s> persist
 match out on $up6_if inet6 from $wifi6 to ! <nonglobal6> nat-to <%s>
-pass quick on $wifi_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
+`, wifiULAPrefix, nat66EgressTable, nat66EgressTable)
+}
+
+// wifiNAT66Rules gives Wi-Fi outbound IPv6 only: link-local control, anti
+// spoofing, no access to the router or non-global destinations, and the only
+// transit permit, tagged on ingress and required on egress.
+func wifiNAT66Rules() string {
+	return fmt.Sprintf(`pass quick on $wifi_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
 pass quick on $wifi_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::/16 icmp6-type { 130, 131, 132, 143 }
 pass in quick on $wifi_if inet6 proto icmp6 from { fe80::/10, :: } to ff02::2 icmp6-type routersol
 pass out quick on $wifi_if inet6 proto icmp6 from fe80::/10 to { ff02::1, fe80::/10 } icmp6-type routeradv
@@ -123,7 +139,7 @@ pass in quick on $wifi_if inet6 proto icmp6 from $wifi6 to %s icmp6-type echoreq
 block drop in log quick on $wifi_if inet6 to { (self), ($up6_if:network), <nonglobal6> }
 pass in quick on $wifi_if inet6 from $wifi6 to ! <nonglobal6> tag gonf_transit6 keep state
 pass out quick on $up6_if inet6 to ! <nonglobal6> tagged gonf_transit6 keep state
-`, wifiULAPrefix, nat66EgressTable, nat66EgressTable, wifiULARouter)
+`, wifiULARouter)
 }
 
 // ipv6Tail closes every o34 IPv6 block. Replies and ICMPv6 errors (Packet Too

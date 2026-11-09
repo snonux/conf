@@ -577,6 +577,10 @@ print 'interface igc0' >> "$nat/rad.conf"
 o34_refuses wifi-ipv6-nat66 'rad must serve only igc2'
 sed '/^table <nat66_egress> persist$/d' "$nat/pf.conf" > "$nat/pf.next"; mv "$nat/pf.next" "$nat/pf.conf"
 o34_refuses wifi-ipv6-nat66 'NAT66 egress table missing'
+# A NAT match after the quick non-global egress block never translates.
+awk '/nat-to <nat66_egress>$/ {held=$0; next} {print} /^pass in quick on \$wifi_if inet6 from \$wifi6/ {print held}' "$nat/pf.conf" > "$nat/pf.next"; mv "$nat/pf.next" "$nat/pf.conf"
+grep -q 'nat-to <nat66_egress>$' "$nat/pf.conf"
+o34_refuses wifi-ipv6-nat66 'NAT66 translation must precede the quick uplink rules'
 sed '/f1cb:30::1/d' "$nat/hostname.igc2" > "$nat/igc2.next"; mv "$nat/igc2.next" "$nat/hostname.igc2"
 print 'inet6 alias fd02:ca0b:f1cb:30::1 64' >> "$nat/hostname.igc0"
 o34_refuses wifi-ipv6-nat66 'Wi-Fi ULA only on igc2'
