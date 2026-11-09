@@ -17,6 +17,8 @@ cat > "$fixture/mocks" <<'MOCKS'
 pfctl() {
  case $* in
  '-nf '*) /sbin/pfctl "$@";;
+ # Candidate validation reads the real expansion (optimizer off).
+ '-o none -nvf '*) /sbin/pfctl "$@";;
  '-nvf '*) print 'set skip on { lo }'; awk '/^table / {print}' "$2"; print 'pass all';;
  '-s Anchors') :;;
  '-s Tables')
@@ -596,7 +598,7 @@ cp -p "$nat/rad.conf" "$up/rad.conf"
 o34_refuses wifi-ipv6-uplink 'rad configuration outside the NAT66 profile'
 print 'inet6 alias fd02:ca0b:f1cb:30::1 64' >> "$up/hostname.igc2"
 o34_refuses wifi-ipv6-uplink 'unexpected Wi-Fi ULA'
-sed 's/^inet6 -autoconf -temporary$/inet6 autoconf -temporary/' "$fixture/wifi-first-igc0.saved" > "$base/router-profiles/wifi-first/hostname.igc0"
+sed -e 's/^inet6 -autoconf$/inet6 autoconf -temporary/' -e '/^inet6 -temporary$/d' "$fixture/wifi-first-igc0.saved" > "$base/router-profiles/wifi-first/hostname.igc0"
 o34_refuses wifi-first 'unexpected IPv6 autoconfiguration line'
 cp -p "$fixture/wifi-first-igc0.saved" "$base/router-profiles/wifi-first/hostname.igc0"
 # A temporary SLAAC address after activation refuses acceptance; the timer
@@ -613,7 +615,8 @@ print 0 > "$base/router-state/deadline"
 [[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
 if grep -q -e AUTOCONF6 -e 2001:db8:5 "$base/interfaces/igc0"; then exit 1; fi
 grep -q 'inet6 fd02:ca0b:f1cb:20::1 prefixlen 64' "$base/interfaces/igc0"
-grep -qx 'inet6 -autoconf -temporary' "$fixture/etc/hostname.igc0"
+grep -qx 'inet6 -autoconf' "$fixture/etc/hostname.igc0"
+grep -qx 'inet6 -temporary' "$fixture/etc/hostname.igc0"
 # Uplink stage: stable SLAAC address and solicitation only after its PF.
 print ' inet6 2001:db8:5::7 prefixlen 64 autoconf pltime 100 vltime 200' > "$base/slaac-addresses"
 "$fixture/run" stage o34upl02 wifi-ipv6-uplink 180
@@ -903,7 +906,7 @@ camera_refuses camera-igc3 'no NAT for the camera zone'
 edit '/^block drop out log quick on [$]cam_if$/d' "$cam/pf.conf"
 camera_refuses camera-igc3 'camera zone default deny missing'
 # No IPv6 on the camera port: no address line, no router advertisement, no DHCP.
-print 'inet6 -autoconf -temporary' >> "$cam/hostname.igc3"
+print 'inet6 -autoconf' >> "$cam/hostname.igc3"
 camera_refuses camera-igc3 'camera port must carry no IPv6'
 print 'interface igc3' >> "$cam/rad.conf"
 camera_refuses camera-igc3 'rad must serve only igc2'
@@ -1007,8 +1010,196 @@ grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc0"
 grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc3"
 if grep -q '10.40.0.1' "$base/interfaces/igc0"; then exit 1; fi
 for f in hostname.igc0 hostname.igc3 pf.conf; do cmp -s "$cam/$f" "$fixture/etc/$f"; done
+# i44: port wiring is a closed table. Every stageable physical profile has
+# one; any other name has none, so no port is ever guessed (g24 N6).
+for p in shared-igc0 wifi-prepare wifi-first wifi-ipv6-uplink wifi-ipv6-nat66 camera-igc3 post-rack post-ap; do
+ "$fixture/run" wiring "$p" > /dev/null
+done
+[[ $("$fixture/run" camera_port camera-igc3) == igc3 && $("$fixture/run" camera_port post-ap) == igc3 ]]
+[[ $("$fixture/run" camera_port wifi-first) == igc0 && $("$fixture/run" camera_port post-rack) == igc0 ]]
+for p in final vpn-bootstrap camera-igc4 ''; do
+ expect_fail camera_port "$p"
+ [[ ! -s $fixture/failure.log ]]
+done
+# A non-NAT66 bundle under an unlisted name reaches the wiring check.
+expect_fail validate "$base/router-profiles/post-ap" post-ap2
+grep -q 'profile has no reviewed port wiring' "$fixture/failure.log"
+# Every rendered profile passes the tightened validator unchanged.
+for p in shared-igc0 wifi-prepare wifi-first wifi-ipv6-uplink wifi-ipv6-nat66 camera-igc3 post-rack post-ap; do
+ "$fixture/run" validate "$base/router-profiles/$p" "$p"
+done
+[[ ! -e $base/router-pf-expanded ]]
+# Each refusal leaves the journal (restored g24fwd01) and all profiles as they were.
+cp -Rp "$base/router-profiles" "$fixture/profiles.saved"
+i44_refuses() {
+ expect_fail stage i44bad01 "$1" 180
+ grep -qF -- "$2" "$fixture/failure.log" || { print -u2 -- "wrong refusal for $1: $2"; cat "$fixture/failure.log" >&2; exit 1; }
+ [[ $(cat "$base/router-state/token") == g24fwd01 ]]
+ rm -rf "$base/router-profiles"
+ cp -Rp "$fixture/profiles.saved" "$base/router-profiles"
+}
+wf=$base/router-profiles/wifi-first
+wp=$base/router-profiles/wifi-prepare
+# 10.30.0.1 is bound to igc2 by address and by the PF macro, not merely once.
+edit '/^inet alias 10[.]30[.]0[.]1 /d' "$wf/hostname.igc2"
+print 'inet alias 10.30.0.1 255.255.255.0' >> "$wf/hostname.igc0"
+i44_refuses wifi-first 'Wi-Fi zone on the wrong port'
+edit 's/^wifi_if = "igc2"$/wifi_if = "igc0"/' "$wf/pf.conf"
+i44_refuses wifi-first 'Wi-Fi zone on the wrong port'
+edit '/^inet alias 10[.]30[.]0[.]1 /d' "$wp/hostname.igc2"
+print 'inet alias 10.30.0.1 255.255.255.0' >> "$wp/hostname.igc3"
+i44_refuses wifi-prepare 'Wi-Fi zone on the wrong port'
+edit '/^inet alias 10[.]30[.]0[.]1 /d' "$cam/hostname.igc2"
+print 'inet alias 10.30.0.1 255.255.255.0' >> "$cam/hostname.igc0"
+i44_refuses camera-igc3 'Wi-Fi zone on the wrong port'
+edit '/^inet alias 10[.]20[.]0[.]1 /d' "$wf/hostname.igc0"
+print 'inet alias 10.20.0.1 255.255.255.0' >> "$wf/hostname.igc2"
+i44_refuses wifi-first 'lab zone on the wrong port'
+edit '/^inet6 /d' "$wf/hostname.igc0"
+print 'inet6 alias fd02:ca0b:f1cb:20::1 64\ninet6 -autoconf\ninet6 -temporary' >> "$wf/hostname.igc2"
+i44_refuses wifi-first 'lab ULA on the wrong port'
+# DHCP follows the stage: none in wifi-prepare, igc2 only in wifi-first.
+edit 's/^dhcpd_interfaces=disabled$/dhcpd_interfaces=igc2/' "$wp/services.conf"
+i44_refuses wifi-prepare 'DHCP forbidden on shared wire'
+edit 's/^dhcpd_interfaces=igc2$/dhcpd_interfaces=disabled/' "$wf/services.conf"
+i44_refuses wifi-first 'wrong Wi-Fi DHCP binding'
+# netstart turns a third word into a prefix length: the joined policy line refuses.
+edit '/^inet6 -temporary$/d' "$wf/hostname.igc0"
+edit 's/^inet6 -autoconf$/inet6 -autoconf -temporary/' "$wf/hostname.igc0"
+i44_refuses wifi-first 'netstart misparses'
+edit '/^inet6 -temporary$/d' "$wf/hostname.igc0"
+i44_refuses wifi-first 'persistent IPv6 policy missing or duplicated'
+print 'inet6 -autoconf' >> "$wf/hostname.igc2"
+i44_refuses wifi-first 'persistent IPv6 policy missing or duplicated'
+edit '/^inet6 -/d' "$wf/hostname.igc0"
+print 'inet6 -autoconf\ninet6 -temporary' >> "$wf/hostname.igc2"
+i44_refuses wifi-first 'IPv6 policy must accompany the lab address'
+print 'inet6 -temporary' >> "$up/hostname.igc0"
+i44_refuses wifi-ipv6-uplink 'persistent IPv6 policy missing or duplicated'
+# g24 N1: the camera checks read pfctl's expansion, so every spelling of the
+# port or zone refuses, and the deny must come before any permit that can
+# match the port. Literal PF text below, not shell expansions.
+cam_before_deny() { edit "/^# g24 camera zone on/i\\
+$1
+" "$cam/pf.conf"; }
+print 'pass in quick on igc3' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass in on {igc2,igc3} inet proto udp to port 53' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass in on igc2 inet from (igc3:network) to any' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass out on igc0 inet from (igc3) to any' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+# shellcheck disable=SC2016
+print 'cams = "igc3"\npass in on $cams inet proto tcp to port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'match out on igc0 inet from (igc3:network) to ! <nonpublic> nat-to 192.168.1.2' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'no NAT for the camera zone'
+cam_before_deny 'pass in quick inet proto tcp to port 8080'
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+cam_before_deny 'pass in quick on ! igc0 inet proto tcp to port 8080'
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+cam_before_deny 'pass in quick on igc inet proto tcp to port 8080'
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+cam_before_deny 'pass in quick on egress inet proto tcp to port 8080'
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+# A deny after the interface-less transit permit no longer shields the port.
+edit '/^block drop [a-z]* log quick on [$]cam_if$/d' "$cam/pf.conf"
+# shellcheck disable=SC2016
+print 'block drop in log quick on $cam_if\nblock drop out log quick on $cam_if' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+# Controls: a concrete other port before the deny, and a public 110.40.0.0/16
+# address after it, are not camera rules.
+cam_before_deny 'pass in quick on igc2 inet proto tcp from 10.30.0.0/24 to 10.30.0.1 port 8080'
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 110.40.0.1 port 22' >> "$cam/pf.conf"
+"$fixture/run" validate "$cam" camera-igc3
+rm -rf "$base/router-profiles"
+cp -Rp "$fixture/profiles.saved" "$base/router-profiles"
+# i44: wifi-prepare and wifi-first through the journal, from the confirmed
+# camera-igc3 placement the g24 section left behind.
+"$fixture/run" stage i44wfp01 wifi-prepare 180
+review wifi-prepare
+"$fixture/run" arm i44wfp01 wifi-prepare 180
+: > "$base/operations"
+"$fixture/run" activate i44wfp01
+# DHCP stays off, the Wi-Fi gateway moves to igc2, cameras return to igc0.
+grep -qx 'rcctl disable dhcpd' "$base/operations"
+if grep -q 'rcctl start dhcpd' "$base/operations"; then exit 1; fi
+grep -qx 'rcctl disable rad' "$base/operations"
+grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0' "$base/operations"
+grep -q ' inet 10.30.0.1 ' "$base/interfaces/igc2"
+grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc0"
+if grep -q '10.40.0.1' "$base/interfaces/igc3"; then exit 1; fi
+# The split policy reaches ifconfig as netstart would issue it at boot.
+grep -qx 'ifconfig igc0 inet6 -autoconf' "$base/operations"
+grep -qx 'ifconfig igc0 inet6 -temporary' "$base/operations"
+if grep -q prefixlen.-temporary "$base/operations"; then exit 1; fi
+for f in hostname.igc0 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf; do cmp -s "$wp/$f" "$fixture/etc/$f"; done
+[[ ! -e $fixture/etc/rad.conf ]]
+"$fixture/run" check_candidate_ipv6
+# An unlisted profile name in the journal fails closed instead of using igc0.
+print camera-igc4 > "$base/router-state/profile"
+expect_fail check_candidate_ipv6
+grep -q 'profile has no reviewed camera port' "$fixture/failure.log"
+print wifi-prepare > "$base/router-state/profile"
+# The lab stays on the shared igc0: old/new receipts confirm, no igc1 receipt.
+confirm_fresh i44wfp01 47101 47102
+[[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
+cp -p "$base/interfaces/igc0" "$fixture/igc0.prepare"
+cp -p "$base/interfaces/igc2" "$fixture/igc2.prepare"
+# wifi-first starts dhcpd on igc2 only; timed expiry returns wifi-prepare.
+"$fixture/run" stage i44wfa01 wifi-first 180
+review wifi-first
+"$fixture/run" arm i44wfa01 wifi-first 180
+: > "$base/operations"
+"$fixture/run" activate i44wfa01
+grep -qx 'rcctl enable dhcpd' "$base/operations"
+grep -qx 'rcctl set dhcpd flags igc2' "$base/operations"
+grep -qx 'rcctl start dhcpd' "$base/operations"
+for f in hostname.igc0 hostname.igc2 pf.conf dhcpd.conf; do cmp -s "$wf/$f" "$fixture/etc/$f"; done
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+for f in hostname.igc0 hostname.igc2 pf.conf dhcpd.conf; do cmp -s "$wp/$f" "$fixture/etc/$f"; done
+grep -q ' inet 10.30.0.1 ' "$base/interfaces/igc2"
+# Boot restoration of an unconfirmed wifi-first trial restores wifi-prepare.
+"$fixture/run" stage i44wfa02 wifi-first 180
+review wifi-first
+"$fixture/run" arm i44wfa02 wifi-first 180
+"$fixture/run" activate i44wfa02
+"$fixture/run" boot_restore
+[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+for f in hostname.igc0 hostname.igc2 pf.conf dhcpd.conf; do cmp -s "$wp/$f" "$fixture/etc/$f"; done
+cp -p "$fixture/igc0.prepare" "$base/interfaces/igc0"
+cp -p "$fixture/igc2.prepare" "$base/interfaces/igc2"
+# wifi-first confirms on old/new receipts as well.
+"$fixture/run" stage i44wfa03 wifi-first 180
+review wifi-first
+"$fixture/run" arm i44wfa03 wifi-first 180
+"$fixture/run" activate i44wfa03
+confirm_fresh i44wfa03 47111 47112
+[[ $(cat "$base/router-state/status") == confirmed ]]
+# Once the lab moves to igc1 (post-rack), confirmation needs the fresh igc1
+# recovery receipt; a recovery tuple for the wrong address is refused.
+"$fixture/run" stage i44rack1 post-rack 180
+review post-rack
+"$fixture/run" arm i44rack1 post-rack 180
+"$fixture/run" activate i44rack1
+print '' > "$base/router-state/preexisting-connections"
+print 'tcp 0 0 192.168.1.2.22 192.168.1.236.47121 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof old i44rack1 '192.168.1.236 47121 192.168.1.2 22'
+print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47122 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof new i44rack1 '10.99.0.2 47122 10.20.0.1 22'
+expect_fail confirm i44rack1 services-checked
+grep -q 'fresh igc1 recovery receipt missing' "$fixture/failure.log"
+print 'tcp 0 0 10.20.0.1.22 10.98.0.250.47123 ESTABLISHED' > "$base/sockets"
+expect_fail proof recovery i44rack1 '10.98.0.250 47123 10.20.0.1 22'
+grep -q 'wrong management address' "$fixture/failure.log"
+print 'tcp 0 0 10.98.0.1.22 10.98.0.250.47124 ESTABLISHED' > "$base/sockets"
+"$fixture/run" proof recovery i44rack1 '10.98.0.250 47124 10.98.0.1 22'
+"$fixture/run" confirm i44rack1 services-checked
+[[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
-# It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
 mkdir "$base/router-profiles/vpn-bootstrap"
 {

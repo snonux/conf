@@ -26,9 +26,32 @@ ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == cam
 nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
 # Profiles whose unconfirmed trial may carry the fixed 10.20.0.254 boot canary.
 canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
+# Router ports of the lab, Wi-Fi and camera zones ("LAB WIFI CAMERA") of every
+# stageable physical profile; mirrors routerStages(), ipv6Stages() and
+# cameraStages() in triggerfish/*.go. An unlisted profile has no wiring and
+# prints nothing: callers fail closed instead of guessing a port (i44).
+wiring() {
+ case $1 in
+ shared-igc0) print igc0 igc0 igc0;;
+ wifi-prepare|wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) print igc0 igc2 igc0;;
+ camera-igc3) print igc0 igc2 igc3;;
+ post-rack) print igc1 igc0 igc0;;
+ post-ap) print igc1 igc2 igc3;;
+ *) return 1;;
+ esac
+}
 # Router port of the camera zone 10.40.0.0/24: igc0 while it shares the old
 # wire, its own still uncabled igc3 from camera-igc3 (g24) and post-ap on.
-camera_port() { case $1 in camera-igc3|post-ap) print igc3;; *) print igc0;; esac; }
+camera_port() {
+ typeset w
+ w=$(wiring "$1") || return 1
+ print -- "${w##* }"
+}
+# Confirmation needs a fresh igc1 recovery receipt only once the lab has
+# moved to igc1 (post-rack, post-ap). Every earlier stage keeps the lab on
+# the shared igc0, where the old/new receipts already prove the management
+# path that the trial changes; igc1 recovery is proven before the rack moves.
+recovery_proof_profile() { [[ $1 == post-rack || $1 == post-ap ]]; }
 # Profiles that must carry the explicit, logged camera-zone deny.
 camera_zone_profile() { [[ $1 == camera-igc3 ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
@@ -68,27 +91,7 @@ checksum() {
 # Stage validation never invokes hostname files, netstart, reload or ifconfig writes.
 validate() {
  typeset d=$1 p=$2 f
- if [[ $p == vpn-bootstrap ]]; then
-  [[ $(find "$d" -mindepth 1 | wc -l | tr -d ' ') == 1 ]] || fail 'bootstrap candidate must contain only hostname.wg2'
-  check_private "$d/hostname.wg2"
-  awk '
-   function key(k) {return length(k)==44 && k ~ /^[A-Za-z0-9+\/]+=+$/}
-   $0=="inet 10.99.0.1 255.255.255.0" {address++; next}
-   $0=="wgport 51822" {port++; next}
-   $1=="wgkey" && NF==2 && key($2) {private++; next}
-   $1=="wgpeer" && NF==4 && key($2) && $3=="wgaip" {
-    if ($4=="10.99.0.2/32") laptop++;
-    else if ($4=="10.99.0.3/32") phone++;
-    else exit 1;
-    if (seen[$2]++) exit 1;
-    next
-   }
-   $0=="up" {up++; next}
-   {exit 1}
-   END {if (address!=1 || port!=1 || private!=1 || laptop!=1 || phone!=1 || up!=1) exit 1}
-  ' "$d/hostname.wg2" || fail 'invalid bounded wg2 bootstrap candidate'
-  return
- fi
+ if [[ $p == vpn-bootstrap ]]; then validate_bootstrap "$d"; return; fi
  typeset forward6=0
  nat66_profile "$p" && forward6=1
  for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 mygate pf.conf dhcpd.conf ntpd.conf unbound.conf sysctl.conf.fragment services.conf ACTIVATION.txt; do
@@ -96,6 +99,11 @@ validate() {
  done
  [[ $(cat "$d/sysctl.conf.fragment") == "net.inet.ip.forwarding=1
 net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
+ # netstart(8) makes the third word of an "inet6" line a prefix length:
+ # "inet6 -autoconf -temporary" ran "inet6 -autoconf prefixlen -temporary"
+ # at boot. Profiles carry the two policies on separate lines (i44).
+ ! grep -qx 'inet6 -autoconf -temporary' "$d"/hostname.igc[0-3] || fail 'netstart misparses "inet6 -autoconf -temporary"; use one line per policy'
+ validate_wiring "$d" "$p"
  validate_camera "$d" "$p"
  validate_ipv6 "$d" "$p"
  grep -qx 'set state-policy floating' "$d/pf.conf" || fail 'PF policy must remain floating'
@@ -105,26 +113,7 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  for f in igc0 igc2 igc3; do
   ! grep -q '10.98.0.' "$d/hostname.$f" || fail 'recovery moved from igc1'
  done
- # Restrict hostname inputs to the renderer vocabulary: no !commands, DHCP,
- # shell expansion, extra routes, external files or autoconfiguration.
- # The o34 uplink SLAAC line and Wi-Fi ULA are admitted here and placed below.
- awk '
-  /^up$/ {next}
-  /^inet( alias)? [0-9.]+ 255\.255\.255\.0$/ {next}
-  /^inet6 alias fd02:ca0b:f1cb:20::1 64$/ {next}
-  /^inet6 -autoconf -temporary$/ {next}
-  /^inet6 autoconf -temporary$/ {next}
-  /^inet6 alias fd02:ca0b:f1cb:30::1 64$/ {next}
-  {exit 1}' "$d"/hostname.igc[0-3] || fail 'unsupported hostname directive'
- [[ $(awk '$0=="inet6 alias fd02:ca0b:f1cb:20::1 64" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
- for f in "$d"/hostname.igc[0-3]; do
-  if grep -qx 'inet6 alias fd02:ca0b:f1cb:20::1 64' "$f"; then
-   grep -Eqx 'inet6 -?autoconf -temporary' "$f" || fail 'IPv6 policy must accompany the lab address'
-  fi
- done
- for f in 10.20.0.1 10.30.0.1 10.40.0.1; do
-  [[ $(awk -v a="$f" '$1=="inet" && $3==a {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing zone prefix'
- done
+ validate_hostnames "$d"
  case $p in
  shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
  wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
@@ -138,22 +127,97 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  ntpd -n -f "$d/ntpd.conf"
 }
 
-# g24 camera zone, checked for every profile: 10.40.0.1 sits on the port the
-# PF macro names, no permit or translation mentions the zone, a dedicated
-# camera port carries no IPv6, and camera-igc3 keeps its explicit deny. The
-# stage's other checks still refuse 10.40.0.1 on a second port.
+# The wg2 bootstrap candidate is exactly one bounded hostname.wg2.
+validate_bootstrap() {
+ typeset d=$1
+ [[ $(find "$d" -mindepth 1 | wc -l | tr -d ' ') == 1 ]] || fail 'bootstrap candidate must contain only hostname.wg2'
+ check_private "$d/hostname.wg2"
+ awk '
+  function key(k) {return length(k)==44 && k ~ /^[A-Za-z0-9+\/]+=+$/}
+  $0=="inet 10.99.0.1 255.255.255.0" {address++; next}
+  $0=="wgport 51822" {port++; next}
+  $1=="wgkey" && NF==2 && key($2) {private++; next}
+  $1=="wgpeer" && NF==4 && key($2) && $3=="wgaip" {
+   if ($4=="10.99.0.2/32") laptop++;
+   else if ($4=="10.99.0.3/32") phone++;
+   else exit 1;
+   if (seen[$2]++) exit 1;
+   next
+  }
+  $0=="up" {up++; next}
+  {exit 1}
+  END {if (address!=1 || port!=1 || private!=1 || laptop!=1 || phone!=1 || up!=1) exit 1}
+ ' "$d/hostname.wg2" || fail 'invalid bounded wg2 bootstrap candidate'
+}
+
+# hostname.if(5) inputs: the renderer vocabulary only, one lab ULA with its
+# IPv6 policy beside it, and each zone gateway exactly once across the ports.
+validate_hostnames() {
+ typeset d=$1 f
+ # Restrict hostname inputs to the renderer vocabulary: no !commands, DHCP,
+ # shell expansion, extra routes, external files or autoconfiguration.
+ # The o34 uplink SLAAC line and Wi-Fi ULA are admitted here and placed below.
+ awk '
+  /^up$/ {next}
+  /^inet( alias)? [0-9.]+ 255\.255\.255\.0$/ {next}
+  /^inet6 alias fd02:ca0b:f1cb:20::1 64$/ {next}
+  /^inet6 -autoconf$/ {next}
+  /^inet6 -temporary$/ {next}
+  /^inet6 autoconf -temporary$/ {next}
+  /^inet6 alias fd02:ca0b:f1cb:30::1 64$/ {next}
+  {exit 1}' "$d"/hostname.igc[0-3] || fail 'unsupported hostname directive'
+ [[ $(awk '$0=="inet6 alias fd02:ca0b:f1cb:20::1 64" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing ULA'
+ for f in "$d"/hostname.igc[0-3]; do
+  if grep -qx 'inet6 alias fd02:ca0b:f1cb:20::1 64' "$f"; then
+   # Either the o34 uplink SLAAC line or both local-only policy lines.
+   grep -qx 'inet6 autoconf -temporary' "$f" ||
+    { grep -qx 'inet6 -autoconf' "$f" && grep -qx 'inet6 -temporary' "$f"; } ||
+    fail 'IPv6 policy must accompany the lab address'
+  fi
+ done
+ for f in 10.20.0.1 10.30.0.1 10.40.0.1; do
+  [[ $(awk -v a="$f" '$1=="inet" && $3==a {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == 1 ]] || fail 'duplicate or missing zone prefix'
+ done
+}
+
+# Each zone gateway sits on exactly the port of the profile's wiring, and the
+# PF macro of that zone names the same port: 10.20.0.1 with lab_if, 10.30.0.1
+# with wifi_if (i44) and 10.40.0.1 with cam_if (g24). The zone-prefix count
+# below still refuses an address on a second port.
+validate_wiring() {
+ typeset d=$1 p=$2 w lab wifi camera
+ w=$(wiring "$p") || fail 'profile has no reviewed port wiring'
+ read -r lab wifi camera <<END
+$w
+END
+ zone_on_port "$d" lab_if "$lab" 10.20.0.1 || fail 'lab zone on the wrong port'
+ zone_on_port "$d" wifi_if "$wifi" 10.30.0.1 || fail 'Wi-Fi zone on the wrong port'
+ zone_on_port "$d" cam_if "$camera" 10.40.0.1 || fail 'camera zone on the wrong port'
+ grep -qxF 'inet6 alias fd02:ca0b:f1cb:20::1 64' "$d/hostname.$lab" || fail 'lab ULA on the wrong port'
+}
+zone_on_port() {
+ grep -qxF "$2 = \"$3\"" "$1/pf.conf" && grep -qxF "inet alias $4 255.255.255.0" "$1/hostname.$3"
+}
+
+# g24 camera zone, checked for every profile: no permit or translation
+# reaches the zone, a dedicated camera port carries no IPv6, and camera-igc3
+# keeps its explicit deny ahead of every permit that could match the port.
+# Rules are read from pfctl's own expansion with the optimizer off (-o none):
+# macros and lists ({igc2,igc3}, $cam_if) become one rule per interface and
+# address, nothing hides in an __automatic table, and the file order stays.
+# The text is still checked for the $cam_if macro, which expansion removes.
 validate_camera() {
- typeset d=$1 p=$2 port rule
- port=$(camera_port "$p")
- grep -qx "cam_if = \"$port\"" "$d/pf.conf" || fail 'camera zone on the wrong port'
- grep -qx 'inet alias 10.40.0.1 255.255.255.0' "$d/hostname.$port" || fail 'camera zone on the wrong port'
+ typeset d=$1 p=$2 port rule x=$BASE/router-pf-expanded
+ port=$(camera_port "$p") || fail 'profile has no reviewed camera port'
+ pfctl -o none -nvf "$d/pf.conf" > "$x" || fail 'PF candidate does not parse'
  # One awk pass each: a grep pipeline under pipefail could lose a match to
  # SIGPIPE. Recorder and update permits are later, separately measured gates.
- awk -v port="$port" '/^pass / && (/[$]cam_if/ || /10[.]40[.]/ || /<(outdoor|recorders|camera_updates)>/ ||
-   (port != "igc0" && $0 ~ ("[ {]" port "[ },]"))) {bad=1}
-  END {exit bad}' "$d/pf.conf" || fail 'camera zone must stay default-deny'
- awk '/(nat|rdr|binat)-to/ && (/[$]cam_if/ || /10[.]40[.]/ || /<(outdoor|recorders|camera_updates)>/) {bad=1}
-  END {exit bad}' "$d/pf.conf" || fail 'no NAT for the camera zone'
+ awk '/^pass / && /[$]cam_if/ {bad=1} END {exit bad}' "$d/pf.conf" || fail 'camera zone must stay default-deny'
+ # An awk pattern, not shell text.
+ # shellcheck disable=SC2016
+ camera_rules "$port" '$1=="pass"' "$x" || fail 'camera zone must stay default-deny'
+ awk '/(nat|rdr|binat|af)-to/ && /[$]cam_if/ {bad=1} END {exit bad}' "$d/pf.conf" || fail 'no NAT for the camera zone'
+ camera_rules "$port" '/(nat|rdr|binat|af)-to/' "$x" || fail 'no NAT for the camera zone'
  if [[ $port != igc0 ]]; then
   ! grep -q '^inet6' "$d/hostname.$port" || fail 'camera port must carry no IPv6'
  fi
@@ -163,19 +227,55 @@ validate_camera() {
   for rule in 'block drop in log quick on $cam_if' 'block drop out log quick on $cam_if'; do
    grep -qxF -- "$rule" "$d/pf.conf" || fail 'camera zone default deny missing'
   done
+  camera_deny_first "$port" "$x" || fail 'camera zone deny must precede every permit that can match the camera port'
  fi
+ rm -f "$x"
+}
+# Exit 1 when an expanded rule selected by the awk pattern $2 names the zone:
+# its addresses or tables, or (dedicated port only) the port as a whole word,
+# wherever it appears: "on igc3", "(igc3:network)", "(igc3)".
+camera_rules() {
+ awk -v port="$1" '
+  function zone(r,  t, n, i, f) {
+   if (r ~ /(^|[^0-9])10[.]40[.]/ || r ~ /<(outdoor|recorders|camera_updates)>/) return 1
+   if (port == "igc0") return 0
+   t = r; gsub(/[(){},:!"]/, " ", t); n = split(t, f, " ")
+   for (i = 1; i <= n; i++) if (f[i] == port) return 1
+   return 0
+  }
+  '"$2"' && zone($0) {bad=1}
+  END {exit bad}' "$3"
+}
+# A quick deny ends evaluation, so a permit can reach the camera port only
+# if it comes before both denies and can match the port: no interface, a
+# negated one ("on ! igc0"), an interface group ("on igc", "on egress") or
+# the port itself. Earlier permits must name one other concrete port.
+camera_deny_first() {
+ awk -v port="$1" '
+  $0 == "block drop in log quick on " port " all" && !in_ {in_ = NR}
+  $0 == "block drop out log quick on " port " all" && !out {out = NR}
+  $1 == "pass" && !(in_ && out) {
+   iface = ""
+   for (i = 2; i < NF; i++) if ($i == "on") {iface = $(i + 1); break}
+   if (iface !~ /^(igc|wg)[0-9]+$/ || iface == port) bad = 1
+  }
+  END {exit bad || !in_ || !out}' "$2"
 }
 
 # o34 IPv6 placement. Local-only profiles keep exactly one persistent
-# "-autoconf" policy line, no Wi-Fi ULA and no rad. The uplink stages replace it
-# with SLAAC on igc0 only (the ISP-facing port); only NAT66 adds the Wi-Fi ULA on
-# igc2, the rad configuration for igc2 alone and the PF egress table.
+# "inet6 -autoconf" and one "inet6 -temporary" policy line (beside the lab
+# ULA, checked in validate), no Wi-Fi ULA and no rad. The uplink stages
+# replace both with SLAAC on igc0 only (the ISP-facing port); only NAT66 adds
+# the Wi-Fi ULA on igc2, the rad configuration for igc2 alone and the PF
+# egress table.
 validate_ipv6() {
- typeset d=$1 p=$2 autoconf=0 policy=1 wifi=0 rad=disabled
+ typeset d=$1 p=$2 autoconf=0 policy=1 wifi=0 rad=disabled line
  if ipv6_profile "$p"; then autoconf=1; policy=0; fi
  if nat66_profile "$p"; then wifi=1; rad=enabled; fi
  [[ $(awk '$0=="inet6 autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$autoconf" ]] || fail 'unexpected IPv6 autoconfiguration line'
- [[ $(awk '$0=="inet6 -autoconf -temporary" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$policy" ]] || fail 'persistent IPv6 policy missing or duplicated'
+ for line in 'inet6 -autoconf' 'inet6 -temporary'; do
+  [[ $(awk -v l="$line" '$0==l {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$policy" ]] || fail 'persistent IPv6 policy missing or duplicated'
+ done
  [[ $autoconf == 0 ]] || grep -qx 'inet6 autoconf -temporary' "$d/hostname.igc0" || fail 'IPv6 autoconfiguration only on the igc0 uplink'
  [[ $(awk '$0=="inet6 alias fd02:ca0b:f1cb:30::1 64" {n++} END {print n+0}' "$d"/hostname.igc[0-3]) == "$wifi" ]] || fail 'unexpected Wi-Fi ULA'
  [[ $wifi == 0 ]] || grep -qx 'inet6 alias fd02:ca0b:f1cb:30::1 64' "$d/hostname.igc2" || fail 'Wi-Fi ULA only on igc2'
@@ -499,7 +599,7 @@ drain_addresses() {
 }
 check_candidate_ipv6() {
  typeset i slaac camera
- camera=$(camera_port "$(cat "$STATE/profile")")
+ camera=$(camera_port "$(cat "$STATE/profile")") || fail 'profile has no reviewed camera port'
  for i in igc0 igc1 igc2 igc3; do
   ifconfig "$i" > "$STATE/ipv6-check"
   # A dedicated camera port has no IPv6 at all, not even link-local (g24).
@@ -539,12 +639,17 @@ apply_addresses() {
      ifconfig "$i" inet "$alias" netmask "$address"
     fi;;
    inet6)
-    # One ifconfig call, like netstart: enabling autoconf turns temporary
-    # addressing on by default, the trailing -temporary turns it off again.
-    # The PF still loaded here drops RAs, so slaacd cannot race it.
-    if [[ $alias == -autoconf ]]; then ifconfig "$i" inet6 -autoconf -temporary
-    elif [[ $alias == autoconf ]]; then ifconfig "$i" inet6 autoconf -temporary
-    else ifconfig "$i" inet6 alias "$address" prefixlen "$mask"; fi;;
+    # The same ifconfig calls netstart makes at boot. The uplink line stays
+    # one call: enabling autoconf turns temporary addressing on by default,
+    # the trailing -temporary turns it off again. The PF still loaded here
+    # drops RAs, so slaacd cannot race it. The local-only policy is two
+    # lines ("inet6 -autoconf", "inet6 -temporary"), one call each.
+    case $alias in
+    -autoconf) ifconfig "$i" inet6 -autoconf;;
+    -temporary) ifconfig "$i" inet6 -temporary;;
+    autoconf) ifconfig "$i" inet6 autoconf -temporary;;
+    *) ifconfig "$i" inet6 alias "$address" prefixlen "$mask";;
+    esac;;
    esac
   done < "$STATE/candidate/hostname.$i"
  done
@@ -580,7 +685,7 @@ activate() {
  # Draining keeps link-local addresses. A dedicated camera port gets no IPv6
  # at all; restore re-enables the family only if the snapshot had it.
  typeset camera
- camera=$(camera_port "$(cat "$STATE/profile")")
+ camera=$(camera_port "$(cat "$STATE/profile")") || fail 'profile has no reviewed camera port'
  [[ $camera == igc0 ]] || ifconfig "$camera" -inet6
  pfctl -f "$STATE/candidate/pf.conf"
  retire_nat66_table
@@ -881,7 +986,7 @@ confirm() {
   return
  fi
  for role in old new; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/new receipts missing'; done
- if [[ $(cat "$STATE/profile") == post-rack || $(cat "$STATE/profile") == post-ap ]]; then
+ if recovery_proof_profile "$(cat "$STATE/profile")"; then
   [[ -s $STATE/proof.recovery ]] || fail 'fresh igc1 recovery receipt missing'
  fi
  [[ ${2:-} == services-checked ]] || fail 'controller service checks must pass before confirmation'

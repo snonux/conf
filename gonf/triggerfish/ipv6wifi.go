@@ -21,14 +21,12 @@ const (
 	ipv6NAT66ProfileName  = "wifi-ipv6-nat66"
 	// ipv6Uplink is the ISP-facing port in every wiring stage.
 	ipv6Uplink = "igc0"
-	// The local-only policy line is replaced on the uplink: slaacd must learn
-	// the ISP default route there. netstart(8) passes "inet6 autoconf ..."
-	// verbatim; it mangles "inet6 -autoconf -temporary" into a prefixlen
-	// argument, so the uplink stages also stop carrying that defect (i44
-	// tracks it for the other profiles). -temporary keeps one stable RFC 7217
-	// address, which is the NAT66 egress address.
-	localOnlyIPv6Line = "inet6 -autoconf -temporary\n"
-	uplinkIPv6Line    = "inet6 autoconf -temporary\n"
+	// The local-only policy lines (localOnlyIPv6Policy, profiles.go) are
+	// replaced on the uplink: slaacd must learn the ISP default route there.
+	// netstart(8) passes "inet6 autoconf ..." verbatim to ifconfig.
+	// -temporary keeps one stable RFC 7217 address, which is the NAT66 egress
+	// address.
+	uplinkIPv6Line = "inet6 autoconf -temporary\n"
 	// Wi-Fi ULA: subnet 30 of the lab's fd02:ca0b:f1cb::/48, matching 10.30.
 	wifiULAPrefix = "fd02:ca0b:f1cb:30::/64"
 	wifiULARouter = "fd02:ca0b:f1cb:30::1"
@@ -63,12 +61,13 @@ func nat66Stage(name string) bool {
 // stage changes only igc0 SLAAC and the IPv6 PF block. Every other stage gets
 // the full NAT66 stage: the Wi-Fi ULA, rad(8), IPv6 forwarding and
 // translation. For the o34 stages the IPv4 output stays byte-identical to
-// wifi-first apart from the profile name in PF; the g24 camera stage also
-// passes through here and differs only by its camera wiring (camera.go).
+// wifi-first apart from the profile name in the PF and dhcpd.conf headers;
+// the g24 camera stage also passes through here and differs only by its
+// camera wiring (camera.go).
 func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 	files := profileFiles(s, data)
 	uplink := "hostname." + ipv6Uplink
-	files[uplink] = strings.Replace(files[uplink], localOnlyIPv6Line, uplinkIPv6Line, 1)
+	files[uplink] = strings.Replace(files[uplink], localOnlyIPv6Policy, uplinkIPv6Line, 1)
 	files["ACTIVATION.txt"] = ipv6Activation(s)
 	if s.name == ipv6UplinkProfileName {
 		files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Head()+uplinkIPv6Rules()+ipv6Tail())

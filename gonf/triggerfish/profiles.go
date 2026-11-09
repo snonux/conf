@@ -9,6 +9,15 @@ import (
 	. "github.com/snonux/gonf/api"
 )
 
+// localOnlyIPv6Policy keeps router autoconfiguration and temporary addressing
+// off on the lab port of every local-only profile. It is two lines on
+// purpose: netstart(8) turns a third word of an "inet6" line into a prefix
+// length, so the former single line "inet6 -autoconf -temporary" ran
+// "ifconfig igc0 inet6 -autoconf prefixlen -temporary" at boot (i44). Each
+// line here reaches ifconfig verbatim. The o34 uplink stages replace both
+// lines with uplinkIPv6Line (ipv6wifi.go), which netstart also passes verbatim.
+const localOnlyIPv6Policy = "inet6 -autoconf\ninet6 -temporary\n"
+
 // Profiles stages router candidates without installing or activating them.
 type Profiles struct{ RequiresRoot }
 
@@ -131,7 +140,7 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 		files["hostname."+zone.iface] += "inet alias " + zone.address + " 255.255.255.0\n"
 	}
 	files["hostname."+s.lab] += "inet6 alias fd02:ca0b:f1cb:20::1 64\n"
-	files["hostname."+s.lab] += "inet6 -autoconf -temporary\n"
+	files["hostname."+s.lab] += localOnlyIPv6Policy
 	if data.BootCanary && bootCanaryStage(s.name) {
 		files["hostname.igc0"] += "inet alias 10.20.0.254 255.255.255.0\n"
 		files["ntpd.conf"] += "# gonf boot canary: 10.20.0.254\n"
@@ -204,9 +213,11 @@ pass in quick on $lab_if inet6 proto icmp6 from fd02:ca0b:f1cb:20::/64 to fd02:c
 
 // profilePFWithIPv6 renders the shared IPv4 policy around one IPv6 rule block.
 // The IPv6 block must end in a quick inet6 default deny: every IPv6 rule after
-// it is unreachable, so all IPv6 permits live inside the block.
+// it is unreachable, so all IPv6 permits live inside the block. The header
+// names the profile without claiming it is inactive: the same bytes are the
+// staged candidate and, once a trial is confirmed, the live /etc/pf.conf.
 func profilePFWithIPv6(s routerStage, data RouterProfiles, ipv6 string) string {
-	rules := fmt.Sprintf(`# Inactive candidate: %s. No blanket pass; wg0/wg1 are not configured here.
+	rules := fmt.Sprintf(`# gonf router profile %s, applied only by router-rollback. No blanket pass; wg0/wg1 are not configured here.
 lab_if = "%s"
 wifi_if = "%s"
 cam_if = "%s"
@@ -313,8 +324,33 @@ func shellyPorts(s routerStage) string {
 	return "80"
 }
 
+// dhcpInterfaces lists the ports dhcpd serves in a stage: the lab port once
+// the lab has its own port (igc1), and Wi-Fi on igc2 from wifi-first on.
+// wifi-prepare already declares the Wi-Fi subnet but leaves dhcpd off, so the
+// AP keeps serving until the separate cut-over. The shared igc0 never appears.
+// services.conf, the dhcpd.conf header and ACTIVATION.txt all derive from it.
+func dhcpInterfaces(s routerStage) []string {
+	interfaces := []string{}
+	if s.lab == "igc1" {
+		interfaces = append(interfaces, "igc1")
+	}
+	if s.wifi == "igc2" && s.name != "wifi-prepare" {
+		interfaces = append(interfaces, "igc2")
+	}
+	return interfaces
+}
+
+// dhcpState describes dhcpd for a stage in rendered comments.
+func dhcpState(s routerStage) string {
+	if interfaces := dhcpInterfaces(s); len(interfaces) > 0 {
+		return "dhcpd serves only " + strings.Join(interfaces, " ")
+	}
+	return "dhcpd stays disabled"
+}
+
 func profileDHCP(s routerStage) string {
-	config := "# Inactive candidate. Shared igc0 must NEVER run this server.\ndefault-lease-time 3600;\nmax-lease-time 7200;\n"
+	config := fmt.Sprintf("# gonf router profile %s: %s. Shared igc0 must NEVER run this server.\ndefault-lease-time 3600;\nmax-lease-time 7200;\n",
+		s.name, dhcpState(s))
 	if s.lab == "igc1" {
 		config += "subnet 10.20.0.0 netmask 255.255.255.0 {\n option routers 10.20.0.1;\n option domain-name-servers 10.20.0.1;\n deny unknown-clients;\n}\n"
 		config += jetKVMReservations()
@@ -335,7 +371,7 @@ host jetkvm-cee6ab4df2f88754 { hardware ethernet 30:52:53:04:a4:4b; fixed-addres
 }
 
 func profileDNS() string {
-	return `# Inactive candidate. System trust anchor and chroot retain OpenBSD defaults.
+	return `# gonf router profile, applied only by router-rollback. System trust anchor and chroot retain OpenBSD defaults.
 server:
  interface: 127.0.0.1
  interface: 10.20.0.1
@@ -355,13 +391,7 @@ forward-zone:
 }
 
 func profileServices(s routerStage) string {
-	interfaces := []string{}
-	if s.lab == "igc1" {
-		interfaces = append(interfaces, "igc1")
-	}
-	if s.wifi == "igc2" && s.name != "wifi-prepare" {
-		interfaces = append(interfaces, "igc2")
-	}
+	interfaces := dhcpInterfaces(s)
 	dhcp := "disabled"
 	if len(interfaces) > 0 {
 		dhcp = strings.Join(interfaces, " ")
@@ -369,6 +399,9 @@ func profileServices(s routerStage) string {
 	return "# Declarative activation input; never source as rc.conf.local.\ndhcpd_interfaces=" + dhcp + "\nunbound=enabled\nntpd=enabled\nrad=disabled\nwg2=blocked-until-vpn-task\n"
 }
 
+// profileActivation is the review note of the six migration stages. The
+// bundle stays a candidate until router-rollback activates it, so the header
+// keeps saying so; per-stage facts such as DHCP come from the stage itself.
 func profileActivation(s routerStage) string {
 	return fmt.Sprintf(`INACTIVE CANDIDATE: %s
 This bundle is configuration input for the separately gated rollback/activation task l14.
@@ -387,11 +420,21 @@ unlisted active provisioning clients make this candidate unready for activation.
 Inventory every such client and its required explicit PF permission first.
 Recovery 10.98/24 stays on igc1 through post-rack/post-AP rollback; shared-link
 hosts must not route laptop replies through its uncabled gateway.
-Stage A preserves the existing AP .101, SSID, DHCP and cabling; it serves NO DHCP.
+%s
 Camera updates and recorder exceptions remain closed pending measured sources/ports.
 Same-wire Stage A is not physical isolation. IPv6 forwarding is disabled and PF
 blocks IPv6 transit; endpoint RA/DHCPv6 suppression remains a host requirement.
 Final requires explicit address/recovery retirement acceptance. Keep all retained
 host IPv4 aliases until that later gate; final files do not authorize retirement.
-`, s.name)
+`, s.name, dhcpActivation(s))
+}
+
+// dhcpActivation states the stage's real DHCP role. Only Stage A
+// (shared-igc0) leaves the AP's DHCP and cabling untouched; every other line
+// follows dhcpInterfaces, the source of services.conf.
+func dhcpActivation(s routerStage) string {
+	if s.name == "shared-igc0" {
+		return "Stage A preserves the existing AP .101, SSID, DHCP and cabling; it serves NO DHCP."
+	}
+	return "DHCP: " + dhcpState(s) + ", never on the shared igc0."
 }

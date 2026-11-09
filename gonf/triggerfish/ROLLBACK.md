@@ -120,6 +120,10 @@ test, outside all planned host/JetKVM addresses and DHCP bindings. Explicit
 to the inactive candidate. Other profiles and default input never add them.
 Every rendered lab hostname file also explicitly disables IPv6 autoconfiguration
 and temporary addressing, preserving the accepted runtime policy across boot.
+Since i44 these are two lines, `inet6 -autoconf` and `inet6 -temporary`:
+netstart(8) reads a third word of an `inet6` line as a prefix length, so the
+former single line ran `ifconfig igc0 inet6 -autoconf prefixlen -temporary`
+at boot. Stage refuses the joined line.
 
 `RebootCanary` is Operational and refuses default/other-profile input. The
 single recovery helper additionally requires an active unconfirmed canary,
@@ -328,7 +332,10 @@ After automated fresh authenticated connections, supply `ProofRole` (`old`,
 `new`, or `recovery`) and that remote session's `SSHConnection` four-tuple in
 `RouterTrial`, then invoke `Proof`. The helper checks the actual established
 socket and rejects tuples present before activation. Old/new proof addresses
-are 192.168.1.2 and 10.20.0.1; post-rack/post-AP also need 10.98.0.1. After the
+are 192.168.1.2 and 10.20.0.1; post-rack/post-AP also need 10.98.0.1
+(`recovery_proof_profile`). wifi-prepare, wifi-first and the o34/g24 profiles
+keep the lab on the shared igc0, so old/new receipts prove the path they change;
+the igc1 recovery path is proven before the rack moves. After the
 existing controller's service checks pass, set `ServicesVerified=true` and invoke
 `Confirm` with the same token. No extra human approval is introduced. Confirmation
 cancels the pending restore; it does not retire old/recovery addresses.
@@ -455,8 +462,10 @@ accepted on HTTPS.
 Shelly TCP80+443 permits included, with the camera zone moved to its own
 port: `10.40.0.1/24` and its connected route leave igc0 for igc3, which stays
 uncabled until the human camera gate (m24). Differences from NAT66, and
-nothing else: `hostname.igc0` loses the camera alias, `hostname.igc3` gains
-it, PF names `cam_if = "igc3"` (anti-spoofing follows) and adds
+nothing else: the profile name in the PF and dhcpd.conf header comments and
+its own `ACTIVATION.txt` review note; `hostname.igc0` loses the camera alias,
+`hostname.igc3` gains it, PF names `cam_if = "igc3"` (anti-spoofing follows)
+and adds
 
 ```
 block drop in log quick on $cam_if
@@ -474,11 +483,14 @@ service, lab or Wi-Fi path, and no IPv6 (rad serves only igc2).
 
 router-rollback checks the camera zone for every profile (`validate_camera`):
 `10.40.0.1` on the port the PF macro names (`camera_port`: igc3 for
-camera-igc3 and post-ap, igc0 otherwise), no `pass` rule and no translation
+camera-igc3 and post-ap, igc0 for the other listed profiles; since i44 an
+unlisted profile has no port and refuses), no `pass` rule and no translation
 mentioning `$cam_if`, `10.40.`, `<outdoor>`, `<recorders>`,
 `<camera_updates>` or the dedicated port, no `inet6` line on a dedicated
-camera port, and the two deny lines for camera-igc3. The existing zone check
-still refuses the prefix on two ports. Activation runs `ifconfig igc3 -inet6`
+camera port, and the two deny lines for camera-igc3. Since i44 the rules are
+read from `pfctl -o none -nvf` (see the i44 section), so every spelling of
+the port counts, and the deny must precede every permit that can match it.
+The existing zone check still refuses the prefix on two ports. Activation runs `ifconfig igc3 -inet6`
 for a dedicated camera port (draining keeps link-local addresses), and
 acceptance refuses any IPv6 on it, link-local included. Timed, boot and
 forward restoration move the prefix back the same way it came: drained from
@@ -504,3 +516,44 @@ and VPN. A real reboot canary (`g24-camera-boot-20261109-b`) restored at boot
 and brought the zone up on igc3 through netstart, then the plain profile was
 reapplied and confirmed (`g24-camera-final-20261109-c`). IQ
 `openbsdrouter-plan/NEXT-SESSION.md` holds the receipts.
+
+## i44 hygiene: real-state comments, netstart policy lines, wiring checks
+
+Rendered comments no longer call a profile inactive: the same bytes are the
+staged candidate and, after a confirmed trial, the live `/etc/pf.conf`,
+`/etc/dhcpd.conf` and `unbound.conf`. Their headers name the profile; the
+dhcpd.conf header and `ACTIVATION.txt` state the stage's real DHCP role from
+`dhcpInterfaces` (the source of `services.conf` too): no DHCP in shared-igc0
+and wifi-prepare, igc2 from wifi-first on, igc1 (and igc2) after the rack
+move. For `camera-igc3` only these three header comments changed.
+
+The six migration stages render the local-only IPv6 policy as two lines
+(see the boot canary section); the o34/g24 profiles keep the single uplink line
+`inet6 autoconf -temporary`, which netstart passes verbatim. Activation issues
+the same `ifconfig` calls netstart makes at boot.
+
+Port wiring is a closed table in router-rollback (`wiring`, mirroring
+`routerStages`, `ipv6Stages` and `cameraStages`). Stage checks that each zone
+gateway sits on its wiring port and that the zone's PF macro names the same
+port: `10.20.0.1`/`lab_if` (with the lab ULA), `10.30.0.1`/`wifi_if` (igc2 from
+wifi-prepare on) and `10.40.0.1`/`cam_if`. A profile missing from the table
+refuses at stage and activation; `camera_port` no longer falls back to igc0.
+
+The camera-zone checks read `pfctl -o none -nvf` instead of the file text.
+With the optimizer off, pfctl expands macros and lists into one rule per
+interface and address and keeps the file order; no address hides in an
+`__automatic` table. A rule names the dedicated port when the port is a whole
+word anywhere in it (`on igc3`, `{igc2,igc3}`, `(igc3:network)`, `(igc3)`).
+For camera-igc3 both quick denies must come before every `pass` that could
+match the port: a permit without an interface, with a negated one (`on !
+igc0`) or an interface group (`on igc`, `on egress`) refuses when it precedes
+them. The `$cam_if` macro text is still checked as well.
+
+Fixtures in `checks/rollback.ksh` cover the wiring table (listed and unlisted
+names), every rendered profile passing validation, Wi-Fi/lab/ULA placement
+refusals, DHCP per stage, the joined, missing, duplicated and misplaced policy
+lines, the camera spellings and orderings above (plus controls that must
+pass), and wifi-prepare and wifi-first through the journal: activation
+without DHCP, then with dhcpd on igc2, timed and boot restoration, confirmation
+on old/new receipts, and post-rack refusing confirmation without the igc1
+recovery receipt.
