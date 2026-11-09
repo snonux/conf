@@ -407,8 +407,12 @@ renumbering only the new prefix is refreshed, so it wins at the first RA that
 announces it, even without a deprecating announcement for the old one. The
 helper acts only while the loaded rules contain `nat-to <nat66_egress>`, and
 only while holding the journal lock `/etc/gonf/router-lock` (it skips the run
-if a rollback operation holds it; journal operations wait up to 5 s for the
-helper). A `persist` table outlives a reload that no longer declares it, so
+if a rollback operation holds it). Every journal operation, including the
+cron `tick`, waits up to 5 s for a live holder; `tick` terminates only an
+overrun `router-rollback activate` and otherwise waits, so an expired trial
+is restored even when the helper runs in the same minute. A lock whose pid
+is not written yet counts as busy and is removed only when over a minute old
+(owner died between mkdir and the write). A `persist` table outlives a reload that no longer declares it, so
 activation of a profile without NAT66 kills an orphan `<nat66_egress>`;
 restore removes the candidate's table as before. Without that, the next
 snapshot would refuse the runtime-only table. Arm refuses the NAT66 profile

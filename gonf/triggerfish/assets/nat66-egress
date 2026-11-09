@@ -62,8 +62,11 @@ take_lock() {
  typeset owner
  if ! mkdir "$LOCK" 2>/dev/null; then
   owner=$(cat "$LOCK/pid" 2>/dev/null || print '')
-  # Only a recorded, dead owner is stale; a lock without pid may be starting.
-  if [[ $owner != +([0-9]) ]] || kill -0 "$owner" 2>/dev/null; then
+  # Same staleness rule as router-rollback's lock(): a recorded dead owner,
+  # or a pidless lock older than a minute. A young pidless lock is starting.
+  if [[ $owner == +([0-9]) ]]; then
+   kill -0 "$owner" 2>/dev/null && return 1
+  elif [[ -z $(find "$LOCK" -prune -mmin +1 2>/dev/null) ]]; then
    return 1
   fi
   rm -rf "$LOCK"

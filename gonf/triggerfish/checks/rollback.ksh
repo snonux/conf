@@ -812,6 +812,40 @@ expect_fail lock
 grep -q 'journal is busy' "$fixture/failure.log"
 kill "$holder"
 rm -rf "$base/router-lock"
+# The cron tick must restore an expired trial even while another process
+# (the per-minute egress helper) briefly holds the lock: it waits, it never
+# skips. Only a live "$SELF activate" holder is terminated.
+expired_trial() {
+ "$fixture/run" stage "$1" wifi-ipv6-uplink 180
+ review wifi-ipv6-uplink
+ "$fixture/run" arm "$1" wifi-ipv6-uplink 180
+ "$fixture/run" activate "$1"
+ print 0 > "$base/router-state/deadline"
+}
+expired_trial o34tick1
+mkdir "$base/router-lock"
+sleep 2 &
+print -- $! > "$base/router-lock/pid"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending && ! -d $base/router-lock ]]
+# A pidless lock (a holder between mkdir and its pid write, or a pid file
+# gone mid-read) neither aborts tick nor gets deleted; here it is released.
+expired_trial o34tick2
+mkdir "$base/router-lock"
+( sleep 2; rm -rf "$base/router-lock" ) &
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+# A young pidless lock that stays is busy, not stale: tick fails (cron
+# retries next minute) and the lock survives untouched.
+expired_trial o34tick3
+mkdir "$base/router-lock"
+expect_fail tick
+grep -q 'journal is busy' "$fixture/failure.log"
+[[ -d $base/router-lock && -f $base/router-state/pending ]]
+# Over a minute old: its owner died before writing the pid; take over.
+touch -t 202601010000 "$base/router-lock"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -d $base/router-lock ]]
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
 # It must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
@@ -983,4 +1017,13 @@ touch "$egress/replace-fails"
 if "$egress/run" 2>/dev/null; then print -u2 'egress failure not reported'; exit 1; fi
 grep -q 'logger -p daemon.err -t nat66-egress cannot set <nat66_egress> to 2001:db8:a::10' "$egress/log"
 [[ ! -d $base/router-lock ]]
+# A young pidless lock is a starting holder: skip without deleting it. Over
+# a minute old, its owner died before writing the pid: take over.
+egress_case "$nat_rule" "$old"
+mkdir "$base/router-lock"
+"$egress/run"
+[[ -d $base/router-lock && $(cat "$egress/table") == 2001:db8:b::10 ]]
+touch -t 202601010000 "$base/router-lock"
+"$egress/run"
+[[ ! -d $base/router-lock && $(cat "$egress/table") == 2001:db8:a::10 ]]
 print 'rollback fixture: passed (mocked mutations; real native config parsers)'

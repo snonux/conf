@@ -29,11 +29,15 @@ need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE
 lock() {
  # The NAT66 egress helper (nat66-egress) takes this lock for well under a
  # second each minute, so a live owner gets a short bounded wait. A lock
- # without a pid may be just starting; only a recorded dead owner is stale.
+ # whose pid is not written yet is busy (its owner is just starting), unless
+ # it is over a minute old: then its owner died between mkdir and the write.
+ # Only a recorded dead owner or such an old pidless lock is stale.
  typeset owner attempt=0
  while ! mkdir "$LOCK" 2>/dev/null; do
   owner=$(cat "$LOCK/pid" 2>/dev/null || print '')
-  if [[ $owner == +([0-9]) ]] && ! kill -0 "$owner" 2>/dev/null; then
+  if [[ $owner == +([0-9]) ]]; then
+   if ! kill -0 "$owner" 2>/dev/null; then rm -rf "$LOCK"; continue; fi
+  elif [[ -n $(find "$LOCK" -prune -mmin +1 2>/dev/null) ]]; then
    rm -rf "$LOCK"
    continue
   fi
@@ -882,20 +886,20 @@ reboot_canary() {
  shutdown -r now
 }
 tick() {
+ typeset pid
  pending || return 0
  [[ $(date +%s) -ge $(cat "$STATE/deadline") ]] || return 0
- if [[ -f $LOCK/pid ]]; then
-  typeset pid state
-  pid=$(cat "$LOCK/pid")
-  state=$(cat "$STATE/status")
-  if kill -0 "$pid" 2>/dev/null; then
-   [[ $state == activating ]] || return 0
-   ps -p "$pid" -o args= | grep -F "$SELF activate " >/dev/null || fail 'activation lock process identity changed'
-   # An overrun activation must not exclude the independent timer indefinitely.
-   kill -TERM "$pid" 2>/dev/null || :
-   sleep 2
-   kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || :
-  fi
+ # Only an overrun activation is terminated: it must not exclude the
+ # independent timer indefinitely. Every other holder (the per-minute NAT66
+ # egress helper, a proof or confirm) is waited for by lock(); returning
+ # early here could skip an expired restore every minute. The pid file may
+ # vanish or not be written yet, so read it tolerantly and never delete it.
+ pid=$(cat "$LOCK/pid" 2>/dev/null || print '')
+ if [[ $pid == +([0-9]) && $(cat "$STATE/status") == activating ]] && kill -0 "$pid" 2>/dev/null &&
+  ps -p "$pid" -o args= 2>/dev/null | grep -F "$SELF activate " >/dev/null; then
+  kill -TERM "$pid" 2>/dev/null || :
+  sleep 2
+  if kill -0 "$pid" 2>/dev/null; then kill -KILL "$pid" 2>/dev/null || :; fi
   rm -rf "$LOCK"
  fi
  lock
