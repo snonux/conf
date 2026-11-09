@@ -1,6 +1,25 @@
 # Player image acceptance
 
-## v0.19.0 — 2026-11-09 (task j54)
+## v0.20.0 — 2026-11-09
+
+Player and xplayer run registry.lan.buetow.org:30001/player:021e6fe, built from
+source release v0.20.0:021e6fee04be918286d06f24a28de606bdaabc9a.
+OCI config ID: sha256:162900a3e107618f88424283797c66e9ab771900acb2b4732985c6485c6852d9.
+Registry manifest: sha256:93966ca5afcad5ade87552c408e9f295184ce04fc1820d545eb2eaef29130511.
+
+Same Dockerfile, build limits and labels as v0.19.0; the tag answered 404
+before the push and latest was not touched. The release changed only web JS
+(podcast episode delete) and the version, with no schema change, so both
+charts (player 0.1.23, xplayer 0.1.21) were pushed together without an Argo
+hold or snapshot. Each live `media.db` was copied beforehand to
+`media.db.pre-0.20.0-20261109` on its data volume, with a matching SHA.
+
+Before: Go tests and 119 web JS tests passed. After: both apps
+Synced/Healthy, pods on the manifest above logging version=0.20.0, healthz
+and readyz 200, UID 65534. The isolated trash-test instance was moved to the
+same digest and its Chrome+Firefox suite passed 6/6.
+
+## v0.19.0 — 2026-11-09 (task j54, superseded)
 
 Player and xplayer run registry.lan.buetow.org:30001/player:4cf7f5d, built from
 source release v0.19.0:4cf7f5d1f8927c9947dc6b55a4c72c6807265869.
