@@ -12,7 +12,9 @@
 #   info     Show device info (model, firmware, mac)
 #
 # The host defaults to 10.30.0.28 (shelly1, rack fans) and can be overridden by the first
-# argument or the SHELLY_HOST environment variable.
+# argument or the SHELLY_HOST environment variable; "shelly1" and "shelly2"
+# map to 10.30.0.28 and 10.30.0.29. --fail makes a 401 or other HTTP error
+# a non-zero exit.
 #
 # If the device has authentication enabled, the password is read from the
 # SHELLY_PASS environment variable, or from ~/.shelly_plug if that is unset
@@ -46,6 +48,13 @@ else
 	CMD="status"
 fi
 
+# The plug certificates name each plug by IP (and shelly1.lan/shelly2.lan),
+# so the short names map to their certificate IPs.
+case "$HOST" in
+	shelly1) HOST=10.30.0.28 ;;
+	shelly2) HOST=10.30.0.29 ;;
+esac
+
 BASE="https://${HOST}"
 
 # Resolve the password: SHELLY_PASS wins, otherwise read it from PASS_FILE.
@@ -61,7 +70,7 @@ rpc() {
 		if [ -n "$PASS" ]; then
 			printf 'user = "admin:%s"\ndigest\n' "$(printf '%s' "$PASS" | sed 's/[\\"]/\\&/g')"
 		fi
-	} | curl -s --max-time 5 --cacert "$CA_FILE" -K - "${BASE}/rpc/$1"
+	} | curl -s --fail --max-time 5 --cacert "$CA_FILE" -K - "${BASE}/rpc/$1"
 }
 
 case "$CMD" in
