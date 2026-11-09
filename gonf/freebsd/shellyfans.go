@@ -21,6 +21,10 @@ import (
 // f3 is not cooled by shelly1, but it runs the service too (live state
 // adopted), so every f-host gets it and no per-host data is needed.
 //
+// Since p34 the helper talks HTTPS to the plug and pins the private f3s
+// Shelly CA, installed here as public material next to the helper's config
+// (the same certificate gonf/netbsd ships to pi0/pi1 for f3sctl).
+//
 // Register with OnCluster(cluster.NameFreeBSD).
 type ShellyFans struct {
 	RequiresRoot
@@ -29,11 +33,17 @@ type ShellyFans struct {
 const (
 	shellyFansScript   = "/usr/local/sbin/shelly-fans-on"
 	shellyFansRcScript = "/usr/local/etc/rc.d/shellyfans"
+	shellyFansCADir    = "/usr/local/etc/shellyfans"
+	shellyFansCA       = shellyFansCADir + "/shelly-ca.pem"
 )
 
-// Scripts installs the fan helper, rc service and managed address override without running them.
+// Scripts installs the fan helper, its pinned CA, rc service and managed address override without running them.
 func (ShellyFans) Scripts() {
-	InstallFile(shellyFansScript, paths.FHostAsset("shelly-fans/shelly-fans-on"), Perm(0o555, Root))
+	EnsureDir(shellyFansCADir, RootOwned)
+	ca := InstallFile(shellyFansCA, paths.FHostAsset("shelly-fans/shelly-ca.pem"), RootOwned)
+	// The CA is in place before a helper that requires it.
+	InstallFile(shellyFansScript, paths.FHostAsset("shelly-fans/shelly-fans-on"), Perm(0o555, Root),
+		WithValidation("/bin/sh", List("-n", CandidatePath)), DependsOn(ca))
 	InstallFile(shellyFansRcScript, paths.FHostAsset("shelly-fans/shellyfans.rc"), Perm(0o555, Root))
 	EnsureDir("/usr/local/etc/rc.conf.d", RootOwned)
 	File("/usr/local/etc/rc.conf.d/shellyfans", RootOwned,

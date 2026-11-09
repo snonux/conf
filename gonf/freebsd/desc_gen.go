@@ -117,7 +117,7 @@ func (ShellyFans) DescMigrationCandidate() string {
 }
 
 func (ShellyFans) DescScripts() string {
-	return "Installs the fan helper, rc service and managed address override without running them"
+	return "Installs the fan helper, its pinned CA, rc service and managed address override without running them"
 }
 
 func (StorageMigration) DescArm() string {

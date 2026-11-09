@@ -5,12 +5,25 @@
 # an f-host (f0/f1/f2/f3) comes up. The Shelly plug uses HTTP digest auth
 # (user "admin"); the password is read from $SHELLY_PASS_FILE if present.
 #
+# Since p34 the plug is reached over its native HTTPS (TCP443) and its
+# certificate is verified against the private f3s Shelly CA in
+# $SHELLY_CA_FILE (--cacert; verification is never skipped). A missing CA
+# file fails closed: curl then refuses the plug's certificate, and the fans
+# are left to f3sctl (logged, non-fatal), rather than falling back to plain
+# HTTP.
+#
 # The password lives on the UFS USB key stick mounted read-only at /keys,
 # alongside the ZFS encryption keys. If the stick is missing the file will be
 # unreadable and the fans simply will not be switched on (logged, non-fatal).
+# It reaches curl through a config on stdin, never the command line, so it
+# does not show up in ps(1).
 #
 # Networking may not be fully ready the instant this runs at boot, and the
 # plug itself may briefly be unreachable, so the call is retried a few times.
+#
+# "shelly-fans-on status" makes the same authenticated, verified call with
+# the read-only Switch.GetStatus once (no retries) and prints the reply; it is
+# how a deploy verifies the caller without touching the relay.
 
 # rc.d runs with a minimal PATH; curl lives in /usr/local/bin.
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
@@ -18,21 +31,33 @@ export PATH
 
 SHELLY_IP="${SHELLY_IP:-10.30.0.28}"
 SHELLY_PASS_FILE="${SHELLY_PASS_FILE:-/keys/shelly_plug.secret}"
+SHELLY_CA_FILE="${SHELLY_CA_FILE:-/usr/local/etc/shellyfans/shelly-ca.pem}"
 
 PASS=""
 if [ -r "$SHELLY_PASS_FILE" ]; then
     PASS=$(head -n 1 "$SHELLY_PASS_FILE" | tr -d '\r\n')
 fi
 
-AUTH=""
-if [ -n "$PASS" ]; then
-    AUTH="--digest -u admin:$PASS"
+# shelly_rpc PATH: one authenticated HTTPS call; --fail turns a 401 (wrong
+# password) or any other HTTP error into a failure instead of a silent success.
+shelly_rpc() {
+    {
+        if [ -n "$PASS" ]; then
+            # Escape the curl config's quoting characters in the password.
+            printf 'user = "admin:%s"\ndigest\n' "$(printf '%s' "$PASS" | sed 's/[\\"]/\\&/g')"
+        fi
+    } | curl -s --fail --max-time 5 --cacert "$SHELLY_CA_FILE" -K - \
+        "https://${SHELLY_IP}/rpc/$1"
+}
+
+if [ "${1:-}" = status ]; then
+    shelly_rpc "Switch.GetStatus?id=0"
+    exit
 fi
 
 i=0
 while [ "$i" -lt 12 ]; do
-    if curl -s --max-time 5 $AUTH \
-        "http://${SHELLY_IP}/rpc/Switch.Set?id=0&on=true" >/dev/null 2>&1; then
+    if shelly_rpc "Switch.Set?id=0&on=true" >/dev/null 2>&1; then
         logger -t shellyfans "Rack fans switched on via Shelly plug $SHELLY_IP"
         exit 0
     fi
