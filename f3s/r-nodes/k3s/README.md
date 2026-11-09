@@ -73,8 +73,21 @@ bundled AddOn before this one, for example after a restore.
 The skipped bundled `coredns` AddOn object stays. Deleting it would be
 harmless (tested on a scratch k3s 1.37.2): the objects have no owner
 references and k3s does not recreate it while the file is skipped. It would
-also gain nothing, because the `.skip` marker alone prevents a fallback. Without the marker, k3s applies the regenerated bundled manifest on
+also gain nothing, because the `.skip` marker alone prevents a fallback.
+Without the marker, k3s applies the regenerated bundled manifest on
 restart, takes the Deployment back to 1.14.7 and then fails on the Service.
+
+Two pitfalls follow from the hash being derived from the AddOn name (the
+manifest filename up to its first dot), not from the file content:
+
+- Editing `conf-coredns.yaml` is safe. Renaming or splitting it creates a new
+  AddOn name and hash, re-orphans every CoreDNS object and brings back the
+  ClusterIP failure on the Service; relabel again if that is ever needed.
+- The fallback guard relies on k3s keeping the `<file>.skip` behaviour and
+  the bundled `coredns.yaml` filename. After every k3s upgrade, check that the
+  journal has no `Applying manifest` line for `coredns.yaml` and that
+  `conf-coredns` logs AppliedManifest, not ApplyManifestFailed. A failing AddOn
+  also makes k3s re-apply every manifest on all servers every 15 s.
 Earth receipts: `~/.local/state/conf/m54-coredns-adopt-20261109/`.
 
 ## Metrics-server
