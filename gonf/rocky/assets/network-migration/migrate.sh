@@ -8,6 +8,8 @@ readonly helper=/usr/local/sbin/gonf-network-migration
 readonly endpoint=/usr/local/sbin/gonf-endpoint-rollback
 readonly resolver_dir=/home/paul/pihole
 readonly resolver_candidate=/var/lib/f3s-pihole-migration/docker-compose.yml
+# NetworkManager global DNS (rocky_resolver_conf); retire requires it.
+readonly dns_dropin=/etc/NetworkManager/conf.d/90-gonf-dns.conf
 [[ $EUID == 0 ]] || exit 1
 # Root-owned recipe output; no operator-supplied shell expressions.
 # shellcheck disable=SC1091
@@ -27,6 +29,13 @@ exec 9>"$state/lock"
 flock -x 9
 
 _fail() { printf '%s\n' "$*" >&2; exit 1; }
+# Match on captured output, never "cmd | grep -q": with pipefail, grep -q can
+# exit at the first match and SIGPIPE the producer, failing a true check.
+_v4_has() {
+    local rows
+    rows=$(ip -4 -o address show dev "$iface")
+    [[ $rows == *" $1/24 "* ]]
+}
 _gate() {
     local file=$state/$1
     [[ -f $file && ! -L $file ]] || _fail "Missing explicit gate: $1"
@@ -129,7 +138,7 @@ _snapshot() {
     done < <(find /etc/NetworkManager/system-connections -maxdepth 1 -type f -print0)
     (( ${#profiles[@]} == 1 )) || _fail 'Requires one persistent NM keyfile'
     profile=${profiles[0]}
-    ip -4 -o address show dev "$iface" | grep -Fq " $old/24 " ||
+    _v4_has "$old" ||
         _fail 'Old IPv4 /24 is absent'
     [[ ! -d $pending ]] || _fail 'Transaction already pending'
     mkdir "$state/snapshot"
@@ -195,12 +204,12 @@ _activate() {
         _gate serial-k3s-approved
         [[ $(<"$state/serial-k3s-approved") == "$(hostname -s)" ]] ||
             _fail 'Serial gate names another node'
-        ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
+        _v4_has "$lab" ||
             _fail 'Stage and independently accept the lab address first'
         if ! _k3s_maintenance; then systemctl is-active --quiet k3s; fi
     fi
     if [[ $action == promote ]]; then
-        ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
+        _v4_has "$lab" ||
             _fail 'Stage and independently accept the lab address first'
     fi
     _snapshot
@@ -266,14 +275,45 @@ _activate() {
     rm -f "$state/$action-approved" "$state/serial-k3s-approved"
 }
 
+# The runtime gateway/route checks are not enough: the profile is what the
+# next activation or boot applies, and without the old address a saved route
+# through the old /24 has no connected next hop. Require the promoted saved
+# gateway and laptop return route, and refuse any saved route that uses the
+# old /24 as destination or next hop.
+_retire_saved_routes() {
+    local uuid=$1 route destination hop found='' prefix=${old%.*}.
+    [[ $(nmcli -g ipv4.gateway connection show uuid "$uuid") == 10.20.0.1 ]] ||
+        _fail 'Retire requires the saved 10.20.0.1 gateway'
+    local -a routes=()
+    IFS=',' read -r -a routes <<< \
+        "$(nmcli --escape no -g ipv4.routes connection show uuid "$uuid")"
+    for route in "${routes[@]}"; do
+        destination='' hop=''
+        read -r destination hop _ <<< "$route" || :
+        [[ -n $destination ]] || continue
+        if [[ $destination == "$prefix"* || $hop == "$prefix"* ]]; then
+            _fail "Saved route $destination uses the old /24"
+        fi
+        if [[ $destination == 10.99.0.2/32 && $hop == 10.98.0.1 ]]; then found=yes; fi
+    done
+    [[ -n $found ]] || _fail 'Retire requires the saved 10.99.0.2/32 route via 10.98.0.1'
+}
+
 # Retire (i24) removes only the retained old IPv4 after the isolated promote
 # was accepted: lab primary, gateway 10.20.0.1 and the 10.98.0.1 laptop return
 # route must already be in place, so the old address carries nothing the
 # transaction still needs. It uses the same private journal, PID1 watchdog and
 # boot restore as stage/promote; rollback brings the old address back. The
-# old /24 also leaves the profile's per-connection DNS list (NetworkManager's
-# global DNS drop-in owns resolv.conf). No NM reactivation: the runtime
+# old /24 also leaves the profile's per-connection DNS list, which is safe
+# only while NetworkManager's global DNS drop-in (rocky_resolver_conf) owns
+# resolv.conf, so retire refuses without it. No NM reactivation: the runtime
 # address is deleted directly, so lab/recovery/wg0 traffic never bounces.
+#
+# No igc1-approved gate, unlike stage/promote isolated: that gate authorizes
+# moving to the isolated cabling. Retire does not change the topology; it
+# requires the isolated topology to be in place already (recovery address,
+# runtime and saved 10.98.0.1 return route), and its own retire-approved gate
+# is the operator's authorization for this transaction.
 _retire() {
     local uuid current kept='' dns='' entry found='' prefix=${old%.*}.
     _gate activation-approved
@@ -287,18 +327,21 @@ _retire() {
         [[ $(<"$state/serial-k3s-approved") == "$(hostname -s)" ]] ||
             _fail 'Serial gate names another node'
     fi
-    ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
+    _v4_has "$lab" ||
         _fail 'Retire requires the accepted lab address'
-    ip -4 -o address show dev "$iface" | grep -Fq " $recovery/24 " ||
+    _v4_has "$recovery" ||
         _fail 'Retire requires the accepted recovery address'
     [[ $(nmcli -g IP4.GATEWAY device show "$iface") == 10.20.0.1 ]] ||
         _fail 'Retire requires the promoted 10.20.0.1 gateway'
-    ip -4 route show 10.99.0.2/32 dev "$iface" | grep -Fq 'via 10.98.0.1' ||
+    [[ $(ip -4 route show 10.99.0.2/32 dev "$iface") == *'via 10.98.0.1'* ]] ||
         _fail 'Retire requires the isolated 10.98.0.1 return route'
+    [[ -f $dns_dropin ]] ||
+        _fail 'Retire requires the global DNS drop-in (rocky_resolver_conf)'
     # Compute and validate the persistent candidate before arming, so a
     # refused retire leaves no journal behind. _snapshot re-reads the same
     # device UUID and fails on any other mismatch (old address absent etc.).
     uuid=$(nmcli -g GENERAL.CON-UUID device show "$iface")
+    _retire_saved_routes "$uuid"
     current=$(nmcli --escape no -g ipv4.addresses connection show uuid "$uuid")
     local -a addresses=() servers=()
     IFS=',' read -r -a addresses <<< "$current"

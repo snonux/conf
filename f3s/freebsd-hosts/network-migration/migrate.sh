@@ -355,6 +355,26 @@ promote() {
 # and the boot hook bring alias200 back when it is not confirmed in time.
 # A CARP VIP in the old /24 is refused: it belongs to the carp/relayd/stunnel
 # owners and is retired with them first, never implicitly here.
+# The runtime checks above are not enough: netif and routing read rc.conf at
+# the next boot. Without alias200 a saved default or static route through the
+# old /24 would come up without its connected subnet and strand the host, so
+# the saved default and laptop return route must already be the promoted ones
+# and no saved route may use the old /24 (destination or gateway). sysrc
+# without -f reads the merged configuration that boot actually uses.
+retire_saved_routes() {
+    [ "$(sysrc -n defaultrouter 2>/dev/null || :)" = 10.20.0.1 ] ||
+        fail 'retire requires the saved defaultrouter 10.20.0.1'
+    [ "$(sysrc -n route_gonfmigration 2>/dev/null || :)" = '-host 10.99.0.2 10.98.0.1' ] ||
+        fail 'retire requires the saved isolated 10.98.0.1 return route'
+    routes=$(sysrc -n static_routes 2>/dev/null || :)
+    case " $routes " in *' gonfmigration '*) :;; *) fail 'static_routes lacks gonfmigration';; esac
+    for name in $routes; do
+        for word in $(sysrc -n "route_$name" 2>/dev/null || :); do
+            case "$word" in "$old_net"*) fail "saved route_$name uses the old /24";; esac
+        done
+    done
+}
+
 retire_preflight() {
     [ -f "$state/retire-approved" ] || fail 'retire gate missing; see README'
     [ "$(physical_primary)" = "$lab" ] || fail 'retire requires the accepted lab primary'
@@ -372,6 +392,7 @@ retire_preflight() {
     [ "$(route -n get -inet 10.99.0.2 | awk '/gateway:/ {print $2}')" = 10.98.0.1 ] ||
         fail 'retire requires the isolated 10.98.0.1 return route'
     old_net=${old%.*}.
+    retire_saved_routes
     if ifconfig "$iface" inet | awk -v p="$old_net" '$1 == "inet" && index($2, p) == 1 && / vhid /' | grep -q .; then
         fail 'a CARP VIP in the old /24 is still configured; retire it with its owners first'
     fi
@@ -631,8 +652,10 @@ guard_release() (
     sync
 )
 
+# A confirmed-boot guard owns an immutable OLD snapshot; no transaction,
+# including retire, may arm or change the network beside it.
 case "${1:-}" in
-    stage|promote|confirm|rollback)
+    stage|promote|retire|confirm|rollback)
         [ ! -e "$guard" ] && [ ! -L "$guard" ] || fail 'confirmed-boot guard is active'
         ;;
 esac

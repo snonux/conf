@@ -11,10 +11,13 @@ import (
 // the CPE), which the lab cannot reach after the b24 cable move.
 //
 // A global DNS drop-in replaces every per-connection DNS server and search
-// domain in /etc/resolv.conf, so the profiles stay untouched: they are
-// bootstrap state (rnodes.Base) and the network-migration rollback snapshots
-// them. Their stale ipv4.dns is ignored while this drop-in exists, and
-// "nmcli general reload" applies it without touching any interface.
+// domain in /etc/resolv.conf, so this recipe leaves the profiles untouched:
+// they are bootstrap state (rnodes.Base) and the network-migration rollback
+// snapshots them. Their stale ipv4.dns is ignored while this drop-in exists,
+// and "nmcli general reload" applies it without touching any interface. The
+// one profile edit is the migration helper's guarded retire (task i24): it
+// drops old-/24 servers from ipv4.dns and refuses unless this drop-in exists,
+// so removing the drop-in later would expose only the remaining lab entries.
 //
 // The search domain keeps the profiles' lan.buetow.org (the guest had none).
 // kubelet copies resolv.conf into pods only when it creates them, so CoreDNS

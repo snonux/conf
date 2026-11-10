@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory(prefix='rocky-migration-fixture-') as directory
     script.write_text(script.read_text()
                       .replace('/home/paul/pihole', str(root / 'resolver'))
                       .replace('/var/lib/f3s-pihole-migration', str(root / 'resolver-candidate'))
+                      .replace('/etc/NetworkManager/conf.d/90-gonf-dns.conf', str(root / 'dns-dropin'))
                       .replace('install -o paul -g paul -m 644', 'install -m 644'))
     # All network/service commands are replaced, with no host network access.
     fake = '''#!/usr/bin/env bash
@@ -626,6 +627,10 @@ if args[:2] == ['-g', 'GENERAL.CON-UUID']:
     print('00000000-0000-0000-0000-000000000000')
 elif args[:2] == ['-g', 'IP4.GATEWAY']:
     print(nm['gateway'])
+elif args[:2] == ['-g', 'ipv4.gateway']:
+    print(nm['saved_gateway'])
+elif args[:4] == ['--escape', 'no', '-g', 'ipv4.routes']:
+    print(','.join(nm['routes']))
 elif args[:4] == ['--escape', 'no', '-g', 'ipv4.addresses']:
     print(', '.join(nm['addresses']))
 elif args[:4] == ['--escape', 'no', '-g', 'ipv4.dns']:
@@ -657,12 +662,18 @@ elif args[:3] == ['-4', 'address', 'restore']:
     (root / 'ip.json').write_text(json.dumps(live))
 ''')
     promoted = ['198.51.100.120/24', '192.0.2.120/24', '203.0.113.120/24']
+    saved_routes = ['10.99.0.2/32 10.98.0.1 100']
     def retire_world(gateway='10.20.0.1', ret='10.99.0.2 via 10.98.0.1 proto static metric 100',
-                     addresses=promoted, profile_addresses=promoted):
+                     addresses=promoted, profile_addresses=promoted,
+                     saved_gateway='10.20.0.1', routes=saved_routes, dropin=True):
         for leftover in ('retire-approved', 'serial-k3s-approved', 'confirm-approved'):
             (state / leftover).unlink(missing_ok=True)
         nm.write_text(json.dumps({'gateway': gateway, 'addresses': list(profile_addresses),
+                                  'saved_gateway': saved_gateway, 'routes': list(routes),
                                   'dns': ['192.0.2.127', '192.0.2.128', '10.20.0.1']}))
+        (root / 'dns-dropin').unlink(missing_ok=True)
+        if dropin:
+            (root / 'dns-dropin').write_text('[global-dns]\n')
         (root / 'ip.json').write_text(json.dumps({'addresses': list(addresses),
                                                   'saved': list(addresses), 'return': ret}))
         profile.write_text('uuid=00000000-0000-0000-0000-000000000000\nretained old\n')
@@ -692,6 +703,21 @@ elif args[:3] == ['-4', 'address', 'restore']:
     refused(addresses=['198.51.100.120/24', '192.0.2.120/24'])
     refused(profile_addresses=['198.51.100.120/24', '203.0.113.120/24'])
     refused(addresses=['198.51.100.120/24', '203.0.113.120/24'])  # old already gone
+    # The saved profile is what the next activation or boot applies.
+    refused(saved_gateway='192.0.2.1')
+    refused(saved_gateway='')
+    refused(routes=[])  # no saved laptop return route
+    refused(routes=['10.99.0.2/32 192.0.2.2 100'])  # shared-wire return route
+    refused(routes=saved_routes + ['172.16.0.0/12 192.0.2.1'])  # old next hop
+    refused(routes=saved_routes + ['192.0.2.64/26'])  # old destination
+    # Without the global DNS drop-in the edited ipv4.dns would become live.
+    refused(dropin=False)
+    # Unrelated saved routes through the lab gateway are kept and allowed.
+    retire_world(routes=saved_routes + ['172.16.0.0/12 10.20.0.1 50'])
+    request('retire')
+    assert pending.exists()
+    assert json.loads(nm.read_text())['routes'] == saved_routes + ['172.16.0.0/12 10.20.0.1 50']
+    request('rollback')
     retire_world()
     request('retire')
     assert pending.exists()

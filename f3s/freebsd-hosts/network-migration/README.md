@@ -105,7 +105,11 @@ removes only the retained old IPv4 after the isolated promote is accepted.
 It needs `activation-approved`, `igc1-approved` and a single-use
 `retire-approved`, and refuses before arming unless the lab address is the
 physical primary, recovery alias202 and old alias200 are present in rc.conf
-and on re0, the default is 10.20.0.1 and the `10.99.0.2` route uses 10.98.0.1.
+and on re0, the default is 10.20.0.1 and the `10.99.0.2` route uses 10.98.0.1,
+both at runtime and saved for the next boot (`defaultrouter=10.20.0.1`,
+`route_gonfmigration="-host 10.99.0.2 10.98.0.1"` listed in `static_routes`),
+and no saved `route_*` names an old-/24 destination or gateway. An armed
+confirmed-boot guard refuses retire like every other transaction.
 It also refuses while a CARP VIP in the old /24 is configured: that VIP and its
 relayd/stunnel/PF users have their own owners and are retired first. The
 ordinary journal is armed, then alias200 leaves rc.conf and re0 and wg0's

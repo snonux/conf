@@ -123,10 +123,21 @@ reload or actual endpoint change is performed by this helper.
 `request retire` (task `*_network_retire`) removes only the retained old IPv4
 once the isolated promote is accepted. It requires `activation-approved` and a
 single-use `retire-approved` gate; k3s nodes also need `serial-k3s-approved`
-naming exactly this node, one etcd member at a time. Before arming it refuses
-unless the lab and recovery addresses are present, the gateway is 10.20.0.1,
-the laptop `10.99.0.2/32` route uses 10.98.0.1, and the persistent profile
-still lists the old /24 beside lab and recovery. It then arms the ordinary
+naming exactly this node, one etcd member at a time. It needs no
+`igc1-approved`: retire does not change the topology, it requires the isolated
+one to be in place. Before arming it refuses unless the lab and recovery
+addresses are present, the runtime gateway is 10.20.0.1, the laptop
+`10.99.0.2/32` route uses 10.98.0.1, the global-DNS drop-in
+`/etc/NetworkManager/conf.d/90-gonf-dns.conf` (`rocky_resolver_conf`) exists,
+and the persistent profile still lists the old /24 beside lab and recovery,
+saves `ipv4.gateway` 10.20.0.1 and the `10.99.0.2/32 10.98.0.1` route, and has
+no saved route with an old-/24 destination or next hop (the next boot applies
+the profile, not the runtime state).
+
+Like stage/promote, `request retire` only queues the PID1 worker
+(`systemd-run --no-block`) and returns before anything changed; a zero exit
+is not success. Check `status` (pending deadline) and the journal of the
+`gonf-network-change-*` unit before the acceptance checks. It then arms the ordinary
 journal, drops the old /24 from `ipv4.addresses` and old-/24 entries from the
 per-connection `ipv4.dns` (the global-DNS drop-in owns resolv.conf), deletes
 the runtime address without reactivating the connection, and refreshes the

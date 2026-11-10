@@ -237,13 +237,32 @@ def check_retire(state, db, rcconf, run, boot_with_cached_rc, accepted):
     refused(reset(v4=['10.20.0.130', '192.168.1.130']))  # recovery missing
     refused(reset(v4=['192.168.1.130', '10.20.0.130', '10.98.0.130']))  # old primary
     refused(reset(v4=['10.20.0.130', '10.98.0.130']))  # already retired
+    # Saved configuration is what the next boot uses: runtime alone is not
+    # enough. Each seed keeps the accepted runtime and breaks one saved key.
+    def saved(**keys):
+        changed = dict(accepted['keys'])
+        for key, value in keys.items():
+            if value is None:
+                changed.pop(key, None)
+            else:
+                changed[key] = value
+        return reset(keys=changed)
+    assert accepted['keys']['defaultrouter'] == '10.20.0.1'
+    refused(saved(defaultrouter='192.168.1.1'))
+    refused(saved(defaultrouter=None))
+    refused(saved(route_gonfmigration='-host 10.99.0.2 192.168.1.2'))
+    refused(saved(static_routes='other'))  # return route no longer started
+    refused(saved(route_other='-net 172.16.0.0/12 192.168.1.1'))  # old next hop
+    refused(saved(route_other='-net 192.168.1.64/26 10.20.0.1'))  # old destination
     carp = json.loads(json.dumps(accepted))
     carp['v4'] = carp['v4'] + ['192.168.1.138']
     carp['carp'] = {'vip': '192.168.1.138', 'vhid': 1, 'state': 'MASTER'}
     refused(reset(v4=carp['v4'], carp=carp['carp']))
     # A lab-subnet CARP VIP is not the old /24 and does not block retirement.
     lab_carp = {'vip': '10.20.0.138', 'vhid': 1, 'state': 'MASTER'}
-    reset(v4=accepted['v4'] + ['10.20.0.138'], carp=lab_carp)
+    # An unrelated saved route through the lab gateway does not block retire.
+    keys = dict(accepted['keys'], route_other='-net 172.16.0.0/12 10.20.0.1')
+    reset(v4=accepted['v4'] + ['10.20.0.138'], carp=lab_carp, keys=keys)
     (state / 'retire-approved').touch()
     current = run('retire')
     assert current['v4'] == ['10.20.0.130', '10.98.0.130', '10.20.0.138'], current['v4']
@@ -546,6 +565,11 @@ def main():
         original_deadline = (guard / 'deadline').read_bytes()
         for command in ('stage','promote','confirm','rollback'):
             run(command, ok=False); same_network(new_primary)
+        # Retire is refused by the guard itself, not by a later precondition.
+        (state / 'retire-approved').touch()
+        result = subprocess.run([str(helper), 'retire'], env=env, capture_output=True, text=True)
+        assert result.returncode != 0 and 'confirmed-boot guard is active' in result.stderr, result
+        same_network(new_primary); (state / 'retire-approved').unlink()
         run('arm-confirmed-boot', name, digest, '900', ok=False)
         assert (guard / 'deadline').read_bytes() == original_deadline
         run('release-confirmed-boot', ok=False)
