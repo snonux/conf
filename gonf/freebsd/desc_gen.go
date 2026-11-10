@@ -88,6 +88,10 @@ func (NetworkMigration) DescPromote() string {
 	return "Selects the lab primary and gateway while retaining old management"
 }
 
+func (NetworkMigration) DescRetire() string {
+	return "Removes the retained old IPv4 (alias200) under a 900-second journal"
+}
+
 func (NetworkMigration) DescRollback() string {
 	return "Restores the pending transaction without restarting netif or guests"
 }

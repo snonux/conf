@@ -29,6 +29,7 @@ func (NetworkMigration) OptsConfirm() TaskOptions     { return TaskOptions{Opera
 func (NetworkMigration) OptsRollback() TaskOptions    { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsStatus() TaskOptions      { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsDiagnostics() TaskOptions { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRetire() TaskOptions      { return TaskOptions{Operational()} }
 
 // Diagnostics installs tcpdump for migration packet diagnostics.
 func (NetworkMigration) Diagnostics() { Packages("tcpdump") }
@@ -101,6 +102,12 @@ func (NetworkMigration) Stage() { Sh(migrationHelper + " request stage shared") 
 
 // Promote selects the lab primary, refreshing k3s only for k3s hosts.
 func (NetworkMigration) Promote() { Sh(migrationHelper + " request promote shared") }
+
+// Retire requests the guarded PID1-owned removal of the retained old IPv4.
+// It needs the accepted isolated promote (lab primary, 10.20.0.1 gateway,
+// 10.98.0.1 return route) and the retire-approved gate; Confirm or the timed
+// watchdog/boot hook then accepts or restores it (task i24).
+func (NetworkMigration) Retire() { Sh(migrationHelper + " request retire") }
 
 // Confirm accepts independently verified fresh management and service checks.
 func (NetworkMigration) Confirm() { Sh(migrationHelper + " confirm") }

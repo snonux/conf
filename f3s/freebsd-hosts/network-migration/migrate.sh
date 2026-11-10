@@ -254,7 +254,7 @@ arm() {
         /usr/local/sbin/gonf-endpoint-rollback snapshot "$state/preparing/endpoints"
         touch "$state/preparing/endpoints-required"
     fi
-    if [ "$action" = promote ] && [ "$iface" = re0 ] && ifconfig wg0 >/dev/null 2>&1; then
+    if { [ "$action" = promote ] || [ "$action" = retire ]; } && [ "$iface" = re0 ] && ifconfig wg0 >/dev/null 2>&1; then
         wg showconf wg0 > "$state/preparing/wg0.runtime.conf"
         chmod 600 "$state/preparing/wg0.runtime.conf"
     fi
@@ -346,6 +346,48 @@ promote() {
     sysrc -f /etc/rc.conf defaultrouter=10.20.0.1 >/dev/null
     set_default4 10.20.0.1
     refresh_wg_runtime
+}
+
+# Retire (i24) removes only the retained old IPv4 (alias200) after the
+# isolated promote was accepted: lab primary, recovery alias202, default
+# 10.20.0.1 and the 10.98.0.1 laptop return route must already be in place.
+# The caller has armed the ordinary journal, so restore_keys/restore_runtime
+# and the boot hook bring alias200 back when it is not confirmed in time.
+# A CARP VIP in the old /24 is refused: it belongs to the carp/relayd/stunnel
+# owners and is retired with them first, never implicitly here.
+retire_preflight() {
+    [ -f "$state/retire-approved" ] || fail 'retire gate missing; see README'
+    [ "$(physical_primary)" = "$lab" ] || fail 'retire requires the accepted lab primary'
+    for address in "$old" "$recovery"; do
+        v4_rows | awk '{print $1}' | grep -qxF "$address" || fail "retire requires $address present"
+    done
+    [ "$(sysrc -f /etc/rc.conf -n "ifconfig_$iface" 2>/dev/null || :)" = "inet $lab/24" ] ||
+        fail 'persistent primary is not the lab address'
+    [ "$(sysrc -f /etc/rc.conf -n "ifconfig_${iface}_alias200" 2>/dev/null || :)" = "inet $old/24" ] ||
+        fail 'alias200 is not the retained old address'
+    [ "$(sysrc -f /etc/rc.conf -n "ifconfig_${iface}_alias202" 2>/dev/null || :)" = "inet $recovery/24" ] ||
+        fail 'alias202 is not the recovery address'
+    [ "$(route -n get -inet default | awk '/gateway:/ {print $2}')" = 10.20.0.1 ] ||
+        fail 'retire requires the promoted 10.20.0.1 default'
+    [ "$(route -n get -inet 10.99.0.2 | awk '/gateway:/ {print $2}')" = 10.98.0.1 ] ||
+        fail 'retire requires the isolated 10.98.0.1 return route'
+    old_net=${old%.*}.
+    if ifconfig "$iface" inet | awk -v p="$old_net" '$1 == "inet" && index($2, p) == 1 && / vhid /' | grep -q .; then
+        fail 'a CARP VIP in the old /24 is still configured; retire it with its owners first'
+    fi
+}
+
+retire() {
+    if sysrc -f /etc/rc.conf -n "ifconfig_${iface}_alias200" >/dev/null 2>&1; then
+        sysrc -f /etc/rc.conf -x "ifconfig_${iface}_alias200" >/dev/null
+    fi
+    if v4_rows | awk '{print $1}' | grep -qxF "$old"; then
+        ifconfig "$iface" inet "$old" delete
+    fi
+    # A peer may still cache the deleted address as its UDP source.
+    refresh_wg_runtime
+    # Single-use approval, as the README requires for every transaction.
+    rm -f "$state/retire-approved"
 }
 
 restore_runtime() {
@@ -603,6 +645,14 @@ case "${1:-}" in
         if [ "$action" = stage ]; then stage; else promote; fi
         echo 'Pending: fresh old/new connections and service checks required before confirm.'
         ;;
+    retire)
+        # Always the isolated topology: arm() then also requires igc1-approved.
+        action=retire; profile=isolated; seconds=${2:-900}
+        retire_preflight
+        arm
+        retire
+        echo 'Pending: fresh new/recovery connections and service checks required before confirm.'
+        ;;
     confirm)
         [ -d "$pending" ] || fail 'no pending transaction'
         [ "$(date +%s)" -lt "$(cat "$pending/deadline")" ] || fail 'deadline expired; rollback required'
@@ -640,7 +690,7 @@ case "${1:-}" in
             echo "pending profile=$(cat "$pending/profile") deadline=$(cat "$pending/deadline")"
         else echo 'no pending transaction'; fi
         ;;
-    *) fail 'usage: stage|promote [shared|isolated] [seconds], confirm, rollback, watchdog, boot, status;
+    *) fail 'usage: stage|promote [shared|isolated] [seconds], retire [seconds], confirm, rollback, watchdog, boot, status;
 confirmed-boot-hash ARCHIVE; arm-confirmed-boot ARCHIVE SHA256 [seconds];
 restore-confirmed-boot; release-confirmed-boot';;
 esac

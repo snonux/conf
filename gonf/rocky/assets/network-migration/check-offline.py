@@ -609,5 +609,130 @@ elif args == ['restart', 'k3s']:
     assert (pending / 'k3s-restarted').exists()
     run('rollback')
     assert not pending.exists() and log.read_text().count('systemctl restart k3s') == 2
+    # i24 retire: remove only the retained old IPv4 after accepted isolated
+    # promotion. Stateful fixtures model the profile and runtime addresses.
+    conf.write_text("iface=enp0s5\nold=192.0.2.120\nlab=198.51.100.120\n"
+                    "recovery=203.0.113.120\nula=fd00::120\nshared_gateway=192.0.2.2\n")
+    nm = root / 'nm.json'
+    (fixtures / 'nmcli').write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+args = sys.argv[1:]
+with Path(os.environ['FIXTURE_LOG']).open('a') as log:
+    log.write('nmcli ' + ' '.join(args) + '\\n')
+nm = json.loads((root / 'nm.json').read_text())
+if args[:2] == ['-g', 'GENERAL.CON-UUID']:
+    print('00000000-0000-0000-0000-000000000000')
+elif args[:2] == ['-g', 'IP4.GATEWAY']:
+    print(nm['gateway'])
+elif args[:4] == ['--escape', 'no', '-g', 'ipv4.addresses']:
+    print(', '.join(nm['addresses']))
+elif args[:4] == ['--escape', 'no', '-g', 'ipv4.dns']:
+    print(','.join(nm['dns']))
+elif args[:2] == ['connection', 'modify']:
+    nm['addresses'] = args[args.index('ipv4.addresses') + 1].split(',')
+    value = args[args.index('ipv4.dns') + 1]
+    nm['dns'] = value.split(',') if value else []
+    (root / 'nm.json').write_text(json.dumps(nm))
+''')
+    (fixtures / 'ip').write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+args = sys.argv[1:]
+with Path(os.environ['FIXTURE_LOG']).open('a') as log:
+    log.write('ip ' + ' '.join(args) + '\\n')
+live = json.loads((root / 'ip.json').read_text())
+if args == ['-4', '-o', 'address', 'show', 'dev', 'enp0s5']:
+    for address in live['addresses']:
+        print(f'2: enp0s5 inet {address} scope global')
+elif args == ['-4', 'route', 'show', '10.99.0.2/32', 'dev', 'enp0s5']:
+    print(live['return'])
+elif args[:3] == ['-4', 'address', 'del']:
+    live['addresses'].remove(args[3])
+    (root / 'ip.json').write_text(json.dumps(live))
+elif args[:3] == ['-4', 'address', 'restore']:
+    live['addresses'] = live['saved']
+    (root / 'ip.json').write_text(json.dumps(live))
+''')
+    promoted = ['198.51.100.120/24', '192.0.2.120/24', '203.0.113.120/24']
+    def retire_world(gateway='10.20.0.1', ret='10.99.0.2 via 10.98.0.1 proto static metric 100',
+                     addresses=promoted, profile_addresses=promoted):
+        for leftover in ('retire-approved', 'serial-k3s-approved', 'confirm-approved'):
+            (state / leftover).unlink(missing_ok=True)
+        nm.write_text(json.dumps({'gateway': gateway, 'addresses': list(profile_addresses),
+                                  'dns': ['192.0.2.127', '192.0.2.128', '10.20.0.1']}))
+        (root / 'ip.json').write_text(json.dumps({'addresses': list(addresses),
+                                                  'saved': list(addresses), 'return': ret}))
+        profile.write_text('uuid=00000000-0000-0000-0000-000000000000\nretained old\n')
+        (state / 'retire-approved').touch()
+        (state / 'serial-k3s-approved').write_text(node)
+        log.write_text('')
+
+    def refused(**world):
+        retire_world(**world)
+        run('retire', success=False)
+        assert not pending.exists(), ('Refused retire left a journal', world)
+        assert 'connection modify' not in log.read_text() and ' del ' not in log.read_text()
+
+    assert not pending.exists()
+    retire_world()
+    (state / 'retire-approved').unlink()
+    run('retire', success=False)
+    assert not pending.exists(), 'Ungated retire armed a journal'
+    assert all(line.split()[0] == 'stat' for line in log.read_text().splitlines()), \
+        'Ungated retire ran more than its gate checks'
+    retire_world()
+    (state / 'serial-k3s-approved').write_text('another.example')
+    run('retire', success=False)
+    assert not pending.exists(), 'k3s retire accepted a foreign serial gate'
+    refused(gateway='192.0.2.1')
+    refused(ret='10.99.0.2 via 192.0.2.2 proto static metric 100')
+    refused(addresses=['198.51.100.120/24', '192.0.2.120/24'])
+    refused(profile_addresses=['198.51.100.120/24', '203.0.113.120/24'])
+    refused(addresses=['198.51.100.120/24', '203.0.113.120/24'])  # old already gone
+    retire_world()
+    request('retire')
+    assert pending.exists()
+    world = json.loads(nm.read_text())
+    assert world['addresses'] == ['198.51.100.120/24', '203.0.113.120/24'], world
+    assert world['dns'] == ['10.20.0.1'], world
+    live = json.loads((root / 'ip.json').read_text())
+    assert live['addresses'] == ['198.51.100.120/24', '203.0.113.120/24'], live
+    assert 'connection up' not in log.read_text(), 'Retire bounced the connection'
+    assert not (state / 'retire-approved').exists() and not (state / 'serial-k3s-approved').exists()
+    request('rollback')
+    assert not pending.exists()
+    assert profile.read_text().endswith('retained old\n'), 'Rollback lost the old-address profile'
+    assert json.loads((root / 'ip.json').read_text())['addresses'] == promoted
+    # Expiry, unconfirmed boot and confirmation reuse the shared journal.
+    retire_world()
+    run('retire')
+    (pending / 'deadline').write_text('1')
+    run('watchdog')
+    assert not pending.exists() and json.loads((root / 'ip.json').read_text())['addresses'] == promoted
+    retire_world()
+    run('retire')
+    run('restore-boot')
+    assert profile.read_text().endswith('retained old\n')
+    run('restore-after-boot')
+    assert not pending.exists()
+    retire_world()
+    run('retire')
+    (state / 'confirm-approved').touch()
+    run('confirm')
+    assert not pending.exists() and 'retained old' not in json.dumps(json.loads(nm.read_text()))
+    # Non-k3s roles need no serial gate but keep every other precondition.
+    conf.write_text(conf.read_text().replace('ula=fd00::120', 'ula=') +
+                    'role=standalone\nipv6_policy=disabled\n')
+    retire_world()
+    (state / 'serial-k3s-approved').unlink()
+    run('retire')
+    assert pending.exists() and (pending / 'standalone').exists()
+    run('rollback')
+    assert not pending.exists()
+    print('PASS: retire is gated, refuses without lab/recovery/gateway/return/old, '
+          'arms before mutation, drops only the old /24, and rolls back on request/expiry/boot')
     print('PASS: real maintenance dispatch/rollback/expiry/boot preserve stopped k3s; '
           'missing/foreign/symlink/running gates refuse; normal restart retained')

@@ -62,8 +62,8 @@ alias200. It rotates only owned aliases, keeping the desired address present;
 it never uses an implicit address replacement that could overwrite a CARP VIP.
 A foreign ordinary IPv4 alias refuses promotion before arming. CARP rows may
 precede the physical primary in ifconfig output after rotation. The helper never
-restarts netif or destroys a bridge. No retirement
-command exists. Runtime rollback replaces only that primary and this helper's
+restarts netif or destroys a bridge. Retirement is its
+own transaction (`retire`, below). Runtime rollback replaces only that primary and this helper's
 addresses; it does not clear the interface. Scoped rc.conf keys are restored
 with sysrc, preserving CARP and unrelated managed settings. The entire
 rc.conf/interface/route snapshots are private evidence, not files to copy
@@ -97,6 +97,21 @@ that these external checks passed; a command exit status is not that proof.
 The helper rejects confirmation after expiry. Failure leaves pending state
 armed and independently retried. Root can explicitly request rollback at any
 time. Journal archives are root-only and retained for inspection.
+
+## Old-address retirement (i24)
+
+`retire [seconds]` (task `freebsd_network_migration_retire`, default 900 s)
+removes only the retained old IPv4 after the isolated promote is accepted.
+It needs `activation-approved`, `igc1-approved` and a single-use
+`retire-approved`, and refuses before arming unless the lab address is the
+physical primary, recovery alias202 and old alias200 are present in rc.conf
+and on re0, the default is 10.20.0.1 and the `10.99.0.2` route uses 10.98.0.1.
+It also refuses while a CARP VIP in the old /24 is configured: that VIP and its
+relayd/stunnel/PF users have their own owners and are retired first. The
+ordinary journal is armed, then alias200 leaves rc.conf and re0 and wg0's
+runtime configuration is reapplied unchanged (as after promote) so no peer
+keeps the deleted address as its UDP source. Confirm, the minute cron
+watchdog and the early boot hook restore alias200 exactly as for promote.
 
 ## Endpoint rollback integration (p24)
 

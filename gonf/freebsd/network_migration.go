@@ -29,6 +29,7 @@ func (NetworkMigration) OptsPromote() TaskOptions  { return TaskOptions{Operatio
 func (NetworkMigration) OptsConfirm() TaskOptions  { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsRollback() TaskOptions { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsStatus() TaskOptions   { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRetire() TaskOptions   { return TaskOptions{Operational()} }
 
 // Prepare installs dormant rollback tooling without changing network state.
 func (NetworkMigration) Prepare() {
@@ -69,6 +70,11 @@ func (NetworkMigration) Stage() { Sh(migrationHelper + " stage shared 900") }
 
 // Promote selects the lab primary and gateway while retaining old management.
 func (NetworkMigration) Promote() { Sh(migrationHelper + " promote shared 900") }
+
+// Retire removes the retained old IPv4 (alias200) under a 900-second journal.
+// It needs the accepted isolated promote, the activation, igc1 and single-use
+// retire gates, and no CARP VIP left in the old /24 (task i24).
+func (NetworkMigration) Retire() { Sh(migrationHelper + " retire 900") }
 
 // Confirm accepts a transaction after separate fresh management/service checks.
 func (NetworkMigration) Confirm() { Sh(migrationHelper + " confirm") }

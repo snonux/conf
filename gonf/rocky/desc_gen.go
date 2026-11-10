@@ -46,6 +46,10 @@ func (NetworkMigration) DescPromote() string {
 	return "Selects the lab primary, refreshing k3s only for k3s hosts"
 }
 
+func (NetworkMigration) DescRetire() string {
+	return "Requests the guarded PID1-owned removal of the retained old IPv4"
+}
+
 func (NetworkMigration) DescRollback() string {
 	return "Requests restoration through PID1 independently of the SSH session"
 }

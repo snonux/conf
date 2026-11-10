@@ -79,7 +79,8 @@ Both shared actions persist a laptop `10.99.0.2/32` return route through reachab
 dedicated test-device recovery proof and coordinated host/cable transition.
 That profile retains 10.98.0.N and returns laptop traffic via 10.98.0.1. Take
 only current-cabling snapshots after recovery has been tested: never arm an
-old shared-wire rollback after moving the rack. No retirement command exists.
+old shared-wire rollback after moving the rack. Retirement is its own
+transaction (`retire`, below).
 Each transition replaces all entries for the owned laptop /32 with exactly one
 current-topology route, preserving unrelated NM routes and their attributes.
 
@@ -116,6 +117,23 @@ address restoration. Hook failure retains the journal, preventing confirmation.
 Coordinate authoritative controller source restoration in p24; this local tool
 cannot guarantee an unreachable controller's source rollback. No whole-tunnel
 reload or actual endpoint change is performed by this helper.
+
+## Old-address retirement (i24)
+
+`request retire` (task `*_network_retire`) removes only the retained old IPv4
+once the isolated promote is accepted. It requires `activation-approved` and a
+single-use `retire-approved` gate; k3s nodes also need `serial-k3s-approved`
+naming exactly this node, one etcd member at a time. Before arming it refuses
+unless the lab and recovery addresses are present, the gateway is 10.20.0.1,
+the laptop `10.99.0.2/32` route uses 10.98.0.1, and the persistent profile
+still lists the old /24 beside lab and recovery. It then arms the ordinary
+journal, drops the old /24 from `ipv4.addresses` and old-/24 entries from the
+per-connection `ipv4.dns` (the global-DNS drop-in owns resolv.conf), deletes
+the runtime address without reactivating the connection, and refreshes the
+WireGuard source cache. Confirm, the 900 s watchdog and the boot hooks treat
+it like stage/promote: an unconfirmed retire restores the old address.
+Firewalls, hosts files and service listeners keep their own owners; retire
+them separately once real traffic shows no old-address use.
 
 Run `python3 check-offline.py` here for disposable command-fixture validation.
 Bash/shellcheck and Go checks supplement it; offline checks do not replace

@@ -266,6 +266,69 @@ _activate() {
     rm -f "$state/$action-approved" "$state/serial-k3s-approved"
 }
 
+# Retire (i24) removes only the retained old IPv4 after the isolated promote
+# was accepted: lab primary, gateway 10.20.0.1 and the 10.98.0.1 laptop return
+# route must already be in place, so the old address carries nothing the
+# transaction still needs. It uses the same private journal, PID1 watchdog and
+# boot restore as stage/promote; rollback brings the old address back. The
+# old /24 also leaves the profile's per-connection DNS list (NetworkManager's
+# global DNS drop-in owns resolv.conf). No NM reactivation: the runtime
+# address is deleted directly, so lab/recovery/wg0 traffic never bounces.
+_retire() {
+    local uuid current kept='' dns='' entry found='' prefix=${old%.*}.
+    _gate activation-approved
+    _gate retire-approved
+    systemctl is-enabled --quiet gonf-network-rollback-boot.service
+    systemctl is-enabled --quiet gonf-network-rollback-runtime.service
+    systemctl is-active --quiet gonf-network-rollback.timer
+    if [[ $role == k3s ]]; then
+        # One etcd member at a time, as for promote.
+        _gate serial-k3s-approved
+        [[ $(<"$state/serial-k3s-approved") == "$(hostname -s)" ]] ||
+            _fail 'Serial gate names another node'
+    fi
+    ip -4 -o address show dev "$iface" | grep -Fq " $lab/24 " ||
+        _fail 'Retire requires the accepted lab address'
+    ip -4 -o address show dev "$iface" | grep -Fq " $recovery/24 " ||
+        _fail 'Retire requires the accepted recovery address'
+    [[ $(nmcli -g IP4.GATEWAY device show "$iface") == 10.20.0.1 ]] ||
+        _fail 'Retire requires the promoted 10.20.0.1 gateway'
+    ip -4 route show 10.99.0.2/32 dev "$iface" | grep -Fq 'via 10.98.0.1' ||
+        _fail 'Retire requires the isolated 10.98.0.1 return route'
+    # Compute and validate the persistent candidate before arming, so a
+    # refused retire leaves no journal behind. _snapshot re-reads the same
+    # device UUID and fails on any other mismatch (old address absent etc.).
+    uuid=$(nmcli -g GENERAL.CON-UUID device show "$iface")
+    current=$(nmcli --escape no -g ipv4.addresses connection show uuid "$uuid")
+    local -a addresses=() servers=()
+    IFS=',' read -r -a addresses <<< "$current"
+    for entry in "${addresses[@]}"; do
+        entry="${entry//[[:space:]]/}"
+        if [[ $entry == "$old/24" ]]; then
+            found=yes
+        elif [[ -n $entry ]]; then
+            kept+="$entry,"
+        fi
+    done
+    kept=${kept%,}
+    [[ -n $found ]] || _fail 'Persistent profile lacks the old address'
+    [[ ,$kept, == *",$lab/24,"* && ,$kept, == *",$recovery/24,"* ]] ||
+        _fail 'Persistent profile lacks lab or recovery address'
+    IFS=',' read -r -a servers <<< \
+        "$(nmcli --escape no -g ipv4.dns connection show uuid "$uuid" | tr ';' ',')"
+    for entry in "${servers[@]}"; do
+        entry="${entry//[[:space:]]/}"
+        if [[ -n $entry && $entry != "$prefix"* ]]; then dns+="$entry,"; fi
+    done
+    _snapshot
+    [[ $(<"$pending/uuid") == "$uuid" ]] || _fail 'Connection changed while arming'
+    nmcli connection modify uuid "$uuid" ipv4.addresses "$kept" ipv4.dns "${dns%,}"
+    ip -4 address del "$old/24" dev "$iface"
+    _refresh_wg_source_cache
+    # Single-use approval, as for stage/promote.
+    rm -f "$state/retire-approved" "$state/serial-k3s-approved"
+}
+
 case ${1:-} in
     init)
         [[ ! -d $pending ]] || _fail 'Pending transaction'
@@ -276,8 +339,9 @@ case ${1:-} in
         ;;
     request)
         shift
-        [[ ${1:-} == stage || ${1:-} == promote || ${1:-} == rollback ]] ||
-            _fail 'request stage|promote shared|isolated, or request rollback'
+        [[ ${1:-} == stage || ${1:-} == promote || ${1:-} == retire ||
+            ${1:-} == rollback ]] ||
+            _fail 'request stage|promote shared|isolated, request retire, or request rollback'
         # PID1 starts the worker after this process releases its flock. A lost
         # SSH session cannot interrupt activation or its independent watchdog.
         systemd-run --no-block --unit="gonf-network-change-$(date +%s)-$$" \
@@ -285,6 +349,7 @@ case ${1:-} in
             "$helper" "${@}"
         ;;
     stage|promote) _activate "$1" "${2:-}" ;;
+    retire) _retire ;;
     rollback) _rollback ;;
     watchdog)
         if [[ -d $pending ]] && (( $(date +%s) >= $(<"$pending/deadline") )); then
@@ -319,5 +384,5 @@ case ${1:-} in
             printf 'No pending transaction\n'
         fi
         ;;
-    *) _fail 'Use init|request|watchdog|restore-boot|restore-after-boot|confirm|status' ;;
+    *) _fail 'Use init|request|retire|watchdog|restore-boot|restore-after-boot|confirm|status' ;;
 esac

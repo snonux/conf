@@ -201,6 +201,89 @@ def check_guest(bindir, initial, conf, db, rcconf, state, run):
     print("PASS: standalone guest stage/promotion/boot and unchanged wg0 ownership", flush=True)
 
 
+def check_retire(state, db, rcconf, run, boot_with_cached_rc, accepted):
+    """i24: retire removes only alias200 after accepted isolated promotion."""
+    fields = ('keys', 'v4', 'v6', 'default4', 'return')
+
+    def reset(**changes):
+        seed = json.loads(json.dumps(accepted))
+        seed.update(changes)
+        db.write_text(json.dumps(seed))
+        rcconf.write_text(''.join(f'{k}={shlex.quote(v)}\n' for k, v in seed['keys'].items()))
+        return seed
+
+    def same(current, expected):
+        # Restoration re-adds alias200 after the others; only the physical
+        # primary's position matters to FreeBSD, so compare it plus the set.
+        for field in fields:
+            have, want = current[field], expected[field]
+            if field == 'v4':
+                have, want = (have[:1], sorted(have)), (want[:1], sorted(want))
+            assert have == want, (field, current[field], expected[field])
+
+    def refused(seed):
+        (state / 'retire-approved').touch()
+        current = run('retire', ok=False)
+        assert not (state / 'pending').exists(), 'refused retire armed a journal'
+        same(current, seed)
+        (state / 'retire-approved').unlink()
+
+    seed = reset()
+    current = run('retire', ok=False)  # Single-use gate is closed by default.
+    assert not (state / 'pending').exists()
+    same(current, seed)
+    refused(reset(**{'return': '192.168.1.2'}))
+    refused(reset(default4='192.168.1.1'))
+    refused(reset(v4=['10.20.0.130', '192.168.1.130']))  # recovery missing
+    refused(reset(v4=['192.168.1.130', '10.20.0.130', '10.98.0.130']))  # old primary
+    refused(reset(v4=['10.20.0.130', '10.98.0.130']))  # already retired
+    carp = json.loads(json.dumps(accepted))
+    carp['v4'] = carp['v4'] + ['192.168.1.138']
+    carp['carp'] = {'vip': '192.168.1.138', 'vhid': 1, 'state': 'MASTER'}
+    refused(reset(v4=carp['v4'], carp=carp['carp']))
+    # A lab-subnet CARP VIP is not the old /24 and does not block retirement.
+    lab_carp = {'vip': '10.20.0.138', 'vhid': 1, 'state': 'MASTER'}
+    reset(v4=accepted['v4'] + ['10.20.0.138'], carp=lab_carp)
+    (state / 'retire-approved').touch()
+    current = run('retire')
+    assert current['v4'] == ['10.20.0.130', '10.98.0.130', '10.20.0.138'], current['v4']
+    run('rollback')
+    seed = reset()
+    (state / 'retire-approved').touch()
+    retired = run('retire')
+    assert not (state / 'retire-approved').exists(), 'retire gate not consumed'
+    assert retired['v4'] == ['10.20.0.130', '10.98.0.130'], retired['v4']
+    assert 'ifconfig_re0_alias200' not in retired['keys']
+    assert 'ifconfig_re0_alias200' not in rcconf.read_text()
+    assert retired['keys']['ifconfig_re0_alias202'] == 'inet 10.98.0.130/24'
+    assert retired['default4'] == '10.20.0.1' and retired['return'] == '10.98.0.1'
+    assert retired['v6'] == seed['v6']
+    same(run('rollback'), seed)
+    # Expiry through the independent watchdog.
+    reset()
+    (state / 'retire-approved').touch()
+    expired = run('retire')
+    expired['now'] += 901
+    db.write_text(json.dumps(expired))
+    run('confirm', ok=False)
+    same(run('watchdog'), seed)
+    # Unconfirmed boot restores alias200 before netif reads rc.conf.
+    reset()
+    (state / 'retire-approved').touch()
+    run('retire')
+    boot_with_cached_rc(seed)
+    assert not (state / 'pending').exists()
+    # Confirmation keeps the retired state; a second retire refuses.
+    reset()
+    (state / 'retire-approved').touch()
+    run('retire')
+    confirmed = run('confirm')
+    assert '192.168.1.130' not in confirmed['v4']
+    refused(confirmed)
+    print('PASS: retire gate/preconditions/old-CARP refusal, alias200-only removal, '
+          'rollback, watchdog expiry, boot restore and confirm', flush=True)
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="freebsd-migration-") as raw:
         tmp = Path(raw)
@@ -363,6 +446,7 @@ def main():
         run('promote', 'isolated'); confirmed_recovery = run('confirm')
         assert confirmed_recovery['keys']['ifconfig_re0_alias202'] == 'inet 10.98.0.130/24'
         assert confirmed_recovery['return'] == '10.98.0.1'
+        check_retire(state, db, rcconf, run, boot_with_cached_rc, confirmed_recovery)
         (state / 'igc1-approved').unlink()
         if sys.argv[1:] == ['--recovery-only']:
             print('PASS: direct shared-NEW recovery, missing-gate refusal, persistence, expiry and boot rollback', flush=True)
