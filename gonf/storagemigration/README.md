@@ -32,6 +32,12 @@ dual stunnel/relayd listeners, NEW relay backends and all four NEW client
 endpoints. Named owned reapply and an actual confirmed-NEW f0/r0 boot passed.
 OLD endpoints and host management aliases remain until the separate924 gates.
 
+**Task i24 (2026-11-10) retired the OLD compatibility VIP 192.168.1.138:**
+alias1 left rc.conf and the runtime vhid on both members, and the stunnel and
+relayd assets are NEW-only. The f0/f1 server and relay candidates therefore
+refuse (their renderers need the OLD-only source); the procedure is in IQ
+`topics/infra/openbsdrouter-plan/RETIREMENT-I24.md`.
+
 ## Approved 824 execution contract (2026-11-07)
 
 Full k3s downtime and gradual original-member recovery are authorized. Hold

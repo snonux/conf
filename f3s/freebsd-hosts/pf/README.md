@@ -35,7 +35,12 @@ WireGuard `wg0` remains trusted, including frontend Garage access and zrepl
 TCP 8888. Encrypted WireGuard UDP **56709** remains reachable on `re0` over
 both IP families, and on the `tap` group over IPv4 from the r0–r2 lab
 addresses only (task 364, see "Guest-to-host traffic on tap" below). CARP
-protocol 112 advertisements between f0/f1, LAN VIP TCP 80/443, ICMP and IPv6 errors/ND/SLAAC/MLD are allowed. Other global IPv6
+protocol 112 advertisements between f0/f1 (lab addresses only), ICMP and
+IPv6 errors/ND/SLAAC/MLD are allowed. LAN access to the storage VIP
+10.20.0.138 (relayd TCP 80/443, stunnel 2323) needs no rule of its own: the
+VIP is an address of `re0`, so the trusted-LAN rule's `($lan_if)` covers it.
+The old compatibility VIP 192.168.1.138, its `storage_vip` rule and the old
+`carp_pair` entries were retired in task i24. Other global IPv6
 TCP/UDP traffic is blocked. Dynamic `(re0)` address matching follows SLAAC
 changes without opening additional services.
 
@@ -267,10 +272,10 @@ while the guard is armed because those files would be restored in full.
      "timeout 5 rm $scratch"
    ```
 
-3. From LAN, `nc -z -w3 192.168.1.138 80` and port 443 succeed. Check an
+3. From LAN, `nc -z -w3 10.20.0.138 80` and port 443 succeed. Check an
    actual application through Traefik with its usual Host/SNI; Garage S3
    still works from r-nodes/frontends and cluster health remains healthy.
-   `nc -z -w3 192.168.1.130 3901` from f1 checks an RPC transport, while
+   `nc -z -w3 10.20.0.130 3901` from f1 checks an RPC transport, while
    `ssh rex@blowfish.buetow.org 'nc -z -w3 192.168.2.130 3900'` checks the
    frontend mesh path. Do not print Garage tokens.
 4. `doas zrepl status --mode raw` shows successful recent f0→f1 and f3→f2

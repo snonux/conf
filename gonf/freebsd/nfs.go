@@ -153,7 +153,7 @@ func (NFS) StunnelPackage() {
 
 // DescStunnelConf returns the description for stunnel.conf.
 func (NFS) DescStunnelConf() string {
-	return "stunnel.conf on f0/f1 (VIP 192.168.1.138:2323 -> 127.0.0.1:2049, client certs required); no restart"
+	return "stunnel.conf on f0/f1 (VIP 10.20.0.138:2323 -> 127.0.0.1:2049, client certs required); no restart"
 }
 
 // OptsStunnelConf records the package (and its config dir) first.

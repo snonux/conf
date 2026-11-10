@@ -10,7 +10,7 @@ import (
 )
 
 // Carp manages the CARP layer of the storage pair f0/f1 (the f3s-storage-ha
-// VIP 192.168.1.138, see the f3s-storage skill, references/carp.md):
+// VIP 10.20.0.138, see the f3s-storage skill, references/carp.md):
 //   - /usr/local/bin/carp, the state/management CLI, on both;
 //   - on f0 only, the minutely carp-auto-failback.sh that reclaims MASTER
 //     after f0 comes back, with its cron job and log rotation;
@@ -107,6 +107,9 @@ rm -f "$t"
 exit 1`
 
 // carpVIP and carpVhid identify the storage VIP in the rc.conf alias line.
+// carpCompatVIP is the old 192.168.1.138, kept under the same vhid as
+// ifconfig_re0_alias1 after the 824 storage migration and retired in task
+// i24; RcConf now only removes that line.
 const (
 	carpVIP       = "10.20.0.138/32"
 	carpCompatVIP = "192.168.1.138/32"
@@ -251,7 +254,7 @@ func (Carp) LoaderConf() {
 
 // DescRcConf returns the description for the CARP alias line.
 func (Carp) DescRcConf() string {
-	return "rc.conf ifconfig_re0_alias0 (CARP vhid 1, VIP 10.20.0.138 plus OLD compatibility under same vhid, per-host advskew, password from the vault) on f0/f1; next boot, no netif restart"
+	return "rc.conf ifconfig_re0_alias0 (CARP vhid 1, VIP 10.20.0.138, per-host advskew, password from the vault) on f0/f1, without the retired 192.168.1.138 alias1; next boot, no netif restart"
 }
 
 // RcConf owns the rc.conf line that creates the CARP VIP at boot. The
@@ -261,19 +264,26 @@ func (Carp) DescRcConf() string {
 // and it sits unquoted inside the rc.conf value.
 // gonf keeps the op carrying it off stdout. The line is never applied live:
 // see the Carp comment.
+//
+// The retired compatibility line (old VIP 192.168.1.138 under the same vhid,
+// task i24) is removed by its exact rendered content: both members must drop
+// it together with the runtime address, because CARP authenticates the
+// vhid's whole address set and members with different sets both go MASTER.
+// The runtime removal is an operator procedure with the BACKUP fenced
+// first (IQ topics/infra/openbsdrouter-plan/RETIREMENT-I24.md), not this task.
 func (Carp) RcConf() {
 	pass := MustSecret(CarpPassSecret())
 	EachHostWith(func(n CarpNode) {
 		compat := strings.Replace(carpAliasLine(n, pass), "alias0=", "alias1=", 1)
 		compat = strings.ReplaceAll(compat, carpVIP, carpCompatVIP)
 		File(rcConf, WithKeyedLine(`ifconfig_re0_alias0=`, carpAliasLine(n, pass)),
-			WithKeyedLine(`ifconfig_re0_alias1=`, compat),
+			WithoutLine(compat),
 			RootOwned, WithName("rc-conf-carp"))
 	})
 }
 
 // carpAliasLine renders ifconfig_re0_alias0 in the live spelling:
-// "inet vhid 1 [advskew N ]pass P alias 192.168.1.138/32".
+// "inet vhid 1 [advskew N ]pass P alias 10.20.0.138/32".
 func carpAliasLine(n CarpNode, pass string) string {
 	skew := ""
 	if n.AdvSkew != 0 {

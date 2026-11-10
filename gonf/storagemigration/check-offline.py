@@ -30,6 +30,14 @@ func main() {
   primary, _, _ := strings.Cut(string(relay), "\n\n# Retained until old clients migrate.\n")
   trailing := len(relay)-len(strings.TrimRight(string(relay), "\n"))
   relay = []byte(strings.ReplaceAll(primary,"10.20.0.","192.168.1.")+strings.Repeat("\n",trailing))
+ } else if strings.Contains(string(relay), "listen on "+sm.LabVIP+" ") {
+  // i24 retired the compatibility listeners: the asset is NEW-only. The
+  // renderers still describe the 824 transition, so test them against the
+  // OLD-only original that NEW-only asset was rendered from.
+  relay = []byte(strings.ReplaceAll(string(relay),"10.20.0.","192.168.1."))
+ }
+ if strings.Contains(string(server), "accept = "+sm.LabVIP+":2323") && !strings.Contains(string(server), sm.OldVIP) {
+  server = []byte(strings.ReplaceAll(string(server), sm.LabVIP, sm.OldVIP))
  }
  got, err := sm.Server(string(server)); must(err == nil, "server render")
  must(strings.ReplaceAll(got, sm.LabVIP, sm.OldVIP) == string(server), "server changed unrelated policy")
@@ -95,7 +103,13 @@ func main() {
  api.Aggregate("offline_storage_aggregate", "", "(offline_storage_probe|freebsd_(carp|nfs|relayd)_migration_candidate|rnodes_nfs_client_migration_candidate|system_nfs_client_migration_candidate)$")
  excluded, err := api.RecordPlan("excluded", "", "offline_storage_aggregate"); if err != nil { panic(err) }
  for _, op := range excluded { must(op.Op == plan.KindPlan || op.Op == plan.KindWhenBegin || op.Op == plan.KindWhenEnd || op.Op == plan.KindNoop, "operational candidate joined aggregate") }
- for _, task := range []string{"freebsd_carp_migration_candidate", "freebsd_nfs_migration_candidate", "freebsd_relayd_migration_candidate", "rnodes_nfs_client_migration_candidate", "system_nfs_client_migration_candidate"} {
+ // i24 retired the OLD compatibility listeners, so the f0/f1 server and relay
+ // assets are NEW-only and their 824 candidates (rendered from an OLD-only
+ // source) must refuse instead of re-creating the retired OLD endpoint.
+ for _, task := range []string{"freebsd_nfs_migration_candidate", "freebsd_relayd_migration_candidate"} {
+  _, err := api.RecordPlan("offline-storage", "", task); must(err != nil, "retired candidate rendered from NEW-only asset")
+ }
+ for _, task := range []string{"freebsd_carp_migration_candidate", "rnodes_nfs_client_migration_candidate", "system_nfs_client_migration_candidate"} {
   ops, err := api.RecordPlan("offline-storage", "", task); if err != nil { panic(err) }
   files := 0
   for _, op := range ops {
@@ -110,7 +124,7 @@ func main() {
   }
   must(files > 0, "candidate recorded no files")
  }
- fmt.Println("PASS: render properties, drift/duplicate/mixed-subnet rejection, five inactive file-only plans; no credentials supplied")
+ fmt.Println("PASS: render properties, drift/duplicate/mixed-subnet rejection, three inactive file-only plans, two retired candidates refuse; no credentials supplied")
 }
 '''
 env = os.environ.copy()

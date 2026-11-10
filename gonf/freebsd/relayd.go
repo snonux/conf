@@ -8,7 +8,7 @@ import (
 
 // Relayd manages the LAN ingress of the k3s cluster on the CARP pair f0/f1
 // (f3s-k3s skill, references/ingress.md; blog part 7): relayd listens on the
-// CARP VIP 192.168.1.138 ports 80 and 443 and forwards plain TCP to Traefik
+// CARP VIP 10.20.0.138 ports 80 and 443 and forwards plain TCP to Traefik
 // on r0-r2. It is pure TCP passthrough, Traefik terminates TLS for
 // *.f3s.lan.buetow.org, so relayd holds no certificate. PF is managed by
 // Firewall on all f-hosts; relayd depends on its validated ruleset.

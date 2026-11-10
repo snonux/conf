@@ -37,6 +37,8 @@ func (NFS) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational
 func (NFS) WhenMigrationCandidate() TaskOption { return WhenHostnameIn(carpMembers...) }
 
 // MigrationCandidate stages the new server listener using existing TLS paths.
+// Since task i24 retired the OLD compatibility listener, the asset is
+// NEW-only and this 824 candidate refuses rather than re-adding OLD.
 func (NFS) MigrationCandidate() {
 	storageCandidate(stunnelConf, paths.FHostAsset("nfs/stunnel.conf"), storagemigration.CompatibleServer)
 }
@@ -48,6 +50,7 @@ func (Relayd) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operatio
 func (Relayd) WhenMigrationCandidate() TaskOption { return WhenHostnameIn(carpMembers...) }
 
 // MigrationCandidate stages VIP listeners and LAN backends without reloading.
+// Like NFS's candidate it refuses on the NEW-only asset left by task i24.
 func (Relayd) MigrationCandidate() {
 	storageCandidate(relaydConf, paths.FHostAsset("relayd/relayd.conf"), storagemigration.CompatibleRelayd)
 }
