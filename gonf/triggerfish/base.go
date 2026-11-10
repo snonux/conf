@@ -30,7 +30,7 @@ func (Base) Hostname() {
 }
 
 // Hosts merges the fleet while retaining the router's upstream canonical address.
-func (Base) Hosts() { fleetfiles.MergeHosts(etchosts.EarthHostsBlock()) }
+func (Base) Hosts() { fleetfiles.MergeHosts(etchosts.RouterHostsBlock()) }
 
 // Uptimed installs uprecords and enables persistent uptime collection.
 func (Base) Uptimed() {

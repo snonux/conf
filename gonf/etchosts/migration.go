@@ -42,18 +42,22 @@ type MigrationCandidate struct {
 // These previously unrepresented devices have one identity record here. The
 // JetKVM old addresses are authenticated 2026-11-04 leases, not target suffixes.
 // Device-ID names deliberately live outside the service wildcard namespace.
+// h24 (2026-11-10): each JetKVM was rebooted, took its reserved lease from
+// triggerfish on igc1 and answered with its device ID on the target, so the
+// canonical names are no longer held at the ISP lease (old aliases remain).
 var migrationDevices = []lanHost{
 	{name: "openwrt", ip: "192.168.1.101", migration: migrationHost{zone: apZone, target: "10.30.0.2"}},
-	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", migration: migrationHost{zone: labZone, target: "10.20.0.151", hold: true}},
-	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", migration: migrationHost{zone: labZone, target: "10.20.0.158", hold: true}},
-	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", migration: migrationHost{zone: labZone, target: "10.20.0.191", hold: true}},
-	{name: "jetkvm-cee6ab4df2f88754", ip: "192.168.1.245", migration: migrationHost{zone: labZone, target: "10.20.0.198", hold: true}},
+	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", migration: migrationHost{zone: labZone, target: "10.20.0.151"}},
+	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", migration: migrationHost{zone: labZone, target: "10.20.0.158"}},
+	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", migration: migrationHost{zone: labZone, target: "10.20.0.191"}},
+	{name: "jetkvm-cee6ab4df2f88754", ip: "192.168.1.245", migration: migrationHost{zone: labZone, target: "10.20.0.198"}},
 }
 
 // RenderMigration prepares a mapping view. staging keeps canonical old
 // addresses; target promotes lab/Wi-Fi endpoints but holds AP management old;
 // ap-target additionally promotes the AP, for use only after d24 acceptance.
-// accepted promotes verified endpoints while holding AP and DHCP-only devices.
+// accepted promotes verified endpoints while holding AP management and any
+// device still marked hold (none since the h24 JetKVM leases).
 // routerView is upstream, lab, wifi or vpn; it controls only the canonical router
 // name. Nothing here installs a file, registers a task or claims acceptance.
 func RenderMigration(profile, routerView string) (MigrationCandidate, error) {

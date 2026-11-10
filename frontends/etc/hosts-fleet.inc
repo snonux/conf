@@ -82,16 +82,16 @@ fd02:ca0b:f1cb:20::128 pi3.lan6 pi3.lan6.buetow.org
 192.168.1.101 openwrt openwrt.lan openwrt.lan.buetow.org
 192.168.1.101 openwrt.old.lan openwrt.old.lan.buetow.org
 10.30.0.2 openwrt.new.lan openwrt.new.lan.buetow.org
-192.168.1.248 jetkvm-46793b0d4c8d45d jetkvm-46793b0d4c8d45d.lan jetkvm-46793b0d4c8d45d.lan.buetow.org
+10.20.0.151 jetkvm-46793b0d4c8d45d jetkvm-46793b0d4c8d45d.lan jetkvm-46793b0d4c8d45d.lan.buetow.org
 192.168.1.248 jetkvm-46793b0d4c8d45d.old.lan jetkvm-46793b0d4c8d45d.old.lan.buetow.org
 10.20.0.151 jetkvm-46793b0d4c8d45d.new.lan jetkvm-46793b0d4c8d45d.new.lan.buetow.org
-192.168.1.241 jetkvm-e10a0883debf7d4a jetkvm-e10a0883debf7d4a.lan jetkvm-e10a0883debf7d4a.lan.buetow.org
+10.20.0.158 jetkvm-e10a0883debf7d4a jetkvm-e10a0883debf7d4a.lan jetkvm-e10a0883debf7d4a.lan.buetow.org
 192.168.1.241 jetkvm-e10a0883debf7d4a.old.lan jetkvm-e10a0883debf7d4a.old.lan.buetow.org
 10.20.0.158 jetkvm-e10a0883debf7d4a.new.lan jetkvm-e10a0883debf7d4a.new.lan.buetow.org
-192.168.1.244 jetkvm-f72978d7f87aa969 jetkvm-f72978d7f87aa969.lan jetkvm-f72978d7f87aa969.lan.buetow.org
+10.20.0.191 jetkvm-f72978d7f87aa969 jetkvm-f72978d7f87aa969.lan jetkvm-f72978d7f87aa969.lan.buetow.org
 192.168.1.244 jetkvm-f72978d7f87aa969.old.lan jetkvm-f72978d7f87aa969.old.lan.buetow.org
 10.20.0.191 jetkvm-f72978d7f87aa969.new.lan jetkvm-f72978d7f87aa969.new.lan.buetow.org
-192.168.1.245 jetkvm-cee6ab4df2f88754 jetkvm-cee6ab4df2f88754.lan jetkvm-cee6ab4df2f88754.lan.buetow.org
+10.20.0.198 jetkvm-cee6ab4df2f88754 jetkvm-cee6ab4df2f88754.lan jetkvm-cee6ab4df2f88754.lan.buetow.org
 192.168.1.245 jetkvm-cee6ab4df2f88754.old.lan jetkvm-cee6ab4df2f88754.old.lan.buetow.org
 10.20.0.198 jetkvm-cee6ab4df2f88754.new.lan jetkvm-cee6ab4df2f88754.new.lan.buetow.org
 192.168.2.110 blowfish.wg0.wan.buetow.org blowfish.wg0

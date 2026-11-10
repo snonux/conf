@@ -3,8 +3,10 @@
 ## 924 source and deployment status
 
 The normal hosts owners now use the `accepted` renderer: verified lab/Shelly
-addresses are canonical, while AP management and DHCP-only JetKVM canonical
-names retain their current addresses. Old aliases remain; recovery aliases
+addresses are canonical, while AP management retains its current address.
+The four JetKVM canonical names moved to their reserved 10.20.0.x leases on
+2026-11-10 (h24: each rebooted, leased from triggerfish on igc1 and verified
+by device ID); their old ISP-lease addresses remain as `.old` aliases. Old aliases remain; recovery aliases
 reserve the later physical recovery network and do not prove it is connected.
 Native Pi ULA addresses are explicit `lan6` aliases only. WG rows are unchanged.
 
