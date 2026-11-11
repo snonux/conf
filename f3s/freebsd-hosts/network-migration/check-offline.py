@@ -301,6 +301,114 @@ def check_retire(state, db, rcconf, run, boot_with_cached_rc, accepted):
     refused(confirmed)
     print('PASS: retire gate/preconditions/old-CARP refusal, alias200-only removal, '
           'rollback, watchdog expiry, boot restore and confirm', flush=True)
+    return confirmed
+
+
+def check_retire_recovery(state, db, rcconf, run, boot_with_cached_rc, accepted):
+    """j24: retire-recovery removes alias202 and the 10.98.0.1 return route
+    after i24, so wg2 replies use the 10.20.0.1 default."""
+    fields = ('keys', 'v4', 'v6', 'default4', 'return')
+    gate = state / 'retire-recovery-approved'
+
+    def reset(**changes):
+        seed = json.loads(json.dumps(accepted))
+        seed.update(changes)
+        db.write_text(json.dumps(seed))
+        rcconf.write_text(''.join(f'{k}={shlex.quote(v)}\n' for k, v in seed['keys'].items()))
+        return seed
+
+    def same(current, expected):
+        for field in fields:
+            have, want = current[field], expected[field]
+            if field == 'v4':
+                have, want = (have[:1], sorted(have)), (want[:1], sorted(want))
+            if field == 'keys':  # restore_keys may rewrite whitespace-free values only
+                have = {k: v.strip() for k, v in have.items()}
+                want = {k: v.strip() for k, v in want.items()}
+            assert have == want, (field, current[field], expected[field])
+
+    def saved(**keys):
+        changed = dict(accepted['keys'])
+        for key, value in keys.items():
+            if value is None:
+                changed.pop(key, None)
+            else:
+                changed[key] = value
+        return reset(keys=changed)
+
+    def refused(seed):
+        gate.touch()
+        current = run('retire-recovery', ok=False)
+        assert not (state / 'pending').exists(), 'refused retire-recovery armed a journal'
+        same(current, seed)
+        gate.unlink()
+
+    assert accepted['v4'] == ['10.20.0.130', '10.98.0.130'], accepted['v4']
+    seed = reset()
+    current = run('retire-recovery', ok=False)  # gate closed by default
+    assert not (state / 'pending').exists()
+    same(current, seed)
+    refused(reset(v4=['10.20.0.130', '10.98.0.130', '192.168.1.130']))  # old not retired
+    refused(saved(ifconfig_re0_alias200='inet 192.168.1.130/24'))  # old still saved
+    refused(reset(v4=['10.20.0.130']))  # recovery already gone
+    refused(saved(ifconfig_re0_alias202=None))
+    refused(reset(default4='10.98.0.1'))
+    refused(saved(defaultrouter='10.98.0.1'))
+    refused(reset(**{'return': '10.20.0.1'}))
+    refused(saved(route_gonfmigration='-host 10.99.0.2 10.20.0.1'))
+    refused(saved(static_routes='other'))
+    refused(saved(route_other='-net 172.16.0.0/12 10.98.0.9'))  # recovery next hop
+    refused(saved(route_other='-net 10.98.0.0/24 10.20.0.1'))  # recovery destination
+    # An unrelated saved route stays, and static_routes keeps only it.
+    routes = accepted['keys']['static_routes'].split()
+    assert 'gonfmigration' in routes, routes
+    if 'other' not in routes:
+        routes.append('other')
+    keys = dict(accepted['keys'], route_other='-net 172.16.0.0/12 10.20.0.1',
+                static_routes=' '.join(routes))
+    reset(keys=keys)
+    gate.touch()
+    current = run('retire-recovery')
+    want = ' '.join(r for r in routes if r != 'gonfmigration')
+    assert current['keys']['static_routes'] == want, (current['keys'], want)
+    assert current['keys']['route_other'] == '-net 172.16.0.0/12 10.20.0.1'
+    run('rollback')
+    seed = reset()
+    gate.touch()
+    done = run('retire-recovery')
+    assert not gate.exists(), 'retire-recovery gate not consumed'
+    assert done['v4'] == ['10.20.0.130'], done['v4']
+    for key in ('ifconfig_re0_alias202', 'route_gonfmigration'):
+        assert key not in done['keys'], key
+        assert key + '=' not in rcconf.read_text(), key
+    left = [r for r in accepted['keys']['static_routes'].split() if r != 'gonfmigration']
+    assert done['keys'].get('static_routes', '').split() == left, done['keys']
+    assert done['default4'] == '10.20.0.1' and done['return'] is None, done
+    assert done['v6'] == seed['v6']
+    same(run('rollback'), seed)
+    # Expiry through the independent watchdog.
+    reset()
+    gate.touch()
+    expired = run('retire-recovery')
+    expired['now'] += 901
+    db.write_text(json.dumps(expired))
+    run('confirm', ok=False)
+    same(run('watchdog'), seed)
+    # Unconfirmed boot restores alias202 and the route before netif.
+    reset()
+    gate.touch()
+    run('retire-recovery')
+    boot_with_cached_rc(seed)
+    assert not (state / 'pending').exists()
+    # Confirmation keeps the final state; a second run refuses.
+    reset()
+    gate.touch()
+    run('retire-recovery')
+    confirmed = run('confirm')
+    assert confirmed['v4'] == ['10.20.0.130'] and confirmed['return'] is None
+    refused(confirmed)
+    print('PASS: retire-recovery gate/preconditions, alias202 and return-route-only removal, '
+          'rollback, watchdog expiry, boot restore and confirm', flush=True)
 
 
 def main():
@@ -465,7 +573,8 @@ def main():
         run('promote', 'isolated'); confirmed_recovery = run('confirm')
         assert confirmed_recovery['keys']['ifconfig_re0_alias202'] == 'inet 10.98.0.130/24'
         assert confirmed_recovery['return'] == '10.98.0.1'
-        check_retire(state, db, rcconf, run, boot_with_cached_rc, confirmed_recovery)
+        retired = check_retire(state, db, rcconf, run, boot_with_cached_rc, confirmed_recovery)
+        check_retire_recovery(state, db, rcconf, run, boot_with_cached_rc, retired)
         (state / 'igc1-approved').unlink()
         if sys.argv[1:] == ['--recovery-only']:
             print('PASS: direct shared-NEW recovery, missing-gate refusal, persistence, expiry and boot rollback', flush=True)

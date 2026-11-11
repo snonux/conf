@@ -128,8 +128,11 @@ _rollback() {
     fi
     _archive rolled-back
 }
+# _snapshot REQUIRED: REQUIRED is the address the transaction depends on
+# (the retained old IPv4 for stage/promote/retire, the recovery address for
+# retire-recovery, which runs after the old address is gone).
 _snapshot() {
-    local uuid profile
+    local required=$1 uuid profile
     uuid=$(nmcli -g GENERAL.CON-UUID device show "$iface")
     [[ $uuid =~ ^[a-fA-F0-9-]{36}$ ]] || _fail 'No physical NM connection'
     local -a profiles=()
@@ -138,8 +141,8 @@ _snapshot() {
     done < <(find /etc/NetworkManager/system-connections -maxdepth 1 -type f -print0)
     (( ${#profiles[@]} == 1 )) || _fail 'Requires one persistent NM keyfile'
     profile=${profiles[0]}
-    _v4_has "$old" ||
-        _fail 'Old IPv4 /24 is absent'
+    _v4_has "$required" ||
+        _fail "Required IPv4 /24 $required is absent"
     [[ ! -d $pending ]] || _fail 'Transaction already pending'
     mkdir "$state/snapshot"
     # A partial snapshot is never treated as a complete recovery journal.
@@ -212,7 +215,7 @@ _activate() {
         _v4_has "$lab" ||
             _fail 'Stage and independently accept the lab address first'
     fi
-    _snapshot
+    _snapshot "$old"
     uuid=$(<"$pending/uuid")
     addresses="$old/24,$lab/24"
     gateway=$(nmcli -g IP4.GATEWAY device show "$iface")
@@ -363,13 +366,91 @@ _retire() {
         entry="${entry//[[:space:]]/}"
         if [[ -n $entry && $entry != "$prefix"* ]]; then dns+="$entry,"; fi
     done
-    _snapshot
+    _snapshot "$old"
     [[ $(<"$pending/uuid") == "$uuid" ]] || _fail 'Connection changed while arming'
     nmcli connection modify uuid "$uuid" ipv4.addresses "$kept" ipv4.dns "${dns%,}"
     ip -4 address del "$old/24" dev "$iface"
     _refresh_wg_source_cache
     # Single-use approval, as for stage/promote.
     rm -f "$state/retire-approved" "$state/serial-k3s-approved"
+}
+
+# Retire-recovery (j24) removes the dedicated igc1 recovery path after i24:
+# the recovery address and the laptop's 10.99.0.2/32 return route via
+# 10.98.0.1. Replies to the laptop then follow the 10.20.0.1 default, the
+# router's normal wg2 path, so the router can drop 10.98.0.1 afterwards.
+# Same journal, PID1 watchdog and boot restore as retire; rollback brings
+# the address and route back. Refuses unless the old address is already
+# retired (runtime and profile), the lab address, the 10.20.0.1 gateway
+# (runtime and saved) and exactly the expected recovery route are in place,
+# and no other saved route uses the recovery /24. No NM reactivation: the
+# runtime route and address are deleted directly, so lab/wg0 never bounce.
+_retire_recovery() {
+    local uuid route destination hop kept_routes='' kept='' entry found=''
+    _gate activation-approved
+    _gate retire-recovery-approved
+    systemctl is-enabled --quiet gonf-network-rollback-boot.service
+    systemctl is-enabled --quiet gonf-network-rollback-runtime.service
+    systemctl is-active --quiet gonf-network-rollback.timer
+    if [[ $role == k3s ]]; then
+        # One etcd member at a time, as for promote and retire.
+        _gate serial-k3s-approved
+        [[ $(<"$state/serial-k3s-approved") == "$(hostname -s)" ]] ||
+            _fail 'Serial gate names another node'
+    fi
+    ! _v4_has "$old" || _fail 'Retire the old address (i24) first'
+    _v4_has "$lab" || _fail 'Retire-recovery requires the accepted lab address'
+    _v4_has "$recovery" || _fail 'Recovery address already absent'
+    [[ $(nmcli -g IP4.GATEWAY device show "$iface") == 10.20.0.1 ]] ||
+        _fail 'Retire-recovery requires the 10.20.0.1 gateway'
+    [[ $(ip -4 route show 10.99.0.2/32 dev "$iface") == *'via 10.98.0.1'* ]] ||
+        _fail 'Retire-recovery requires the 10.98.0.1 return route'
+    [[ -f $dns_dropin ]] ||
+        _fail 'Retire-recovery requires the global DNS drop-in (rocky_resolver_conf)'
+    uuid=$(nmcli -g GENERAL.CON-UUID device show "$iface")
+    [[ $(nmcli -g ipv4.gateway connection show uuid "$uuid") == 10.20.0.1 ]] ||
+        _fail 'Retire-recovery requires the saved 10.20.0.1 gateway'
+    local -a routes=() addresses=()
+    IFS=',' read -r -a routes <<< \
+        "$(nmcli --escape no -g ipv4.routes connection show uuid "$uuid")"
+    for route in "${routes[@]}"; do
+        route="${route#"${route%%[![:space:]]*}"}"
+        destination='' hop=''
+        read -r destination hop _ <<< "$route" || :
+        [[ -n $destination ]] || continue
+        if [[ $destination == 10.99.0.2/32 && $hop == 10.98.0.1 ]]; then
+            found=yes
+            continue
+        fi
+        if [[ $destination == 10.98.* || $hop == 10.98.* ]]; then
+            _fail "Saved route $destination uses the recovery /24"
+        fi
+        kept_routes+="$route,"
+    done
+    [[ -n $found ]] || _fail 'Profile lacks the saved 10.99.0.2/32 route via 10.98.0.1'
+    found=''
+    IFS=',' read -r -a addresses <<< \
+        "$(nmcli --escape no -g ipv4.addresses connection show uuid "$uuid")"
+    for entry in "${addresses[@]}"; do
+        entry="${entry//[[:space:]]/}"
+        [[ $entry != "$old/24" ]] || _fail 'Persistent profile still has the old address'
+        if [[ $entry == "$recovery/24" ]]; then
+            found=yes
+        elif [[ -n $entry ]]; then
+            kept+="$entry,"
+        fi
+    done
+    [[ -n $found ]] || _fail 'Persistent profile lacks the recovery address'
+    [[ ,$kept, == *",$lab/24,"* ]] || _fail 'Persistent profile lacks the lab address'
+    _snapshot "$recovery"
+    [[ $(<"$pending/uuid") == "$uuid" ]] || _fail 'Connection changed while arming'
+    nmcli connection modify uuid "$uuid" ipv4.addresses "${kept%,}" \
+        ipv4.routes "${kept_routes%,}"
+    ip -4 route del 10.99.0.2/32 dev "$iface"
+    ip -4 address del "$recovery/24" dev "$iface"
+    _refresh_wg_source_cache
+    # Single-use approval, as for every transaction.
+    rm -f "$state/retire-recovery-approved" "$state/serial-k3s-approved"
 }
 
 case ${1:-} in
@@ -383,8 +464,8 @@ case ${1:-} in
     request)
         shift
         [[ ${1:-} == stage || ${1:-} == promote || ${1:-} == retire ||
-            ${1:-} == rollback ]] ||
-            _fail 'request stage|promote shared|isolated, request retire, or request rollback'
+            ${1:-} == retire-recovery || ${1:-} == rollback ]] ||
+            _fail 'request stage|promote shared|isolated, request retire|retire-recovery, or request rollback'
         # PID1 starts the worker after this process releases its flock. A lost
         # SSH session cannot interrupt activation or its independent watchdog.
         systemd-run --no-block --unit="gonf-network-change-$(date +%s)-$$" \
@@ -393,6 +474,7 @@ case ${1:-} in
         ;;
     stage|promote) _activate "$1" "${2:-}" ;;
     retire) _retire ;;
+    retire-recovery) _retire_recovery ;;
     rollback) _rollback ;;
     watchdog)
         if [[ -d $pending ]] && (( $(date +%s) >= $(<"$pending/deadline") )); then
@@ -427,5 +509,5 @@ case ${1:-} in
             printf 'No pending transaction\n'
         fi
         ;;
-    *) _fail 'Use init|request|retire|watchdog|restore-boot|restore-after-boot|confirm|status' ;;
+    *) _fail 'Use init|request|retire|retire-recovery|watchdog|restore-boot|restore-after-boot|confirm|status' ;;
 esac

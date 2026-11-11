@@ -50,6 +50,10 @@ func (NetworkMigration) DescRetire() string {
 	return "Requests the guarded PID1-owned removal of the retained old IPv4"
 }
 
+func (NetworkMigration) DescRetireRecovery() string {
+	return "Requests the guarded PID1-owned removal of the igc1 recovery address and the laptop's 10.99.0.2/32 return route via 10.98.0.1, so wg2 replies follow the 10.20.0.1 default (task j24)"
+}
+
 func (NetworkMigration) DescRollback() string {
 	return "Requests restoration through PID1 independently of the SSH session"
 }

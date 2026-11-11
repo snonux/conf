@@ -30,6 +30,9 @@ func (NetworkMigration) OptsConfirm() TaskOptions  { return TaskOptions{Operatio
 func (NetworkMigration) OptsRollback() TaskOptions { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsStatus() TaskOptions   { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsRetire() TaskOptions   { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRetireRecovery() TaskOptions {
+	return TaskOptions{Operational()}
+}
 
 // Prepare installs dormant rollback tooling without changing network state.
 func (NetworkMigration) Prepare() {
@@ -75,6 +78,12 @@ func (NetworkMigration) Promote() { Sh(migrationHelper + " promote shared 900") 
 // It needs the accepted isolated promote, the activation, igc1 and single-use
 // retire gates, and no CARP VIP left in the old /24 (task i24).
 func (NetworkMigration) Retire() { Sh(migrationHelper + " retire 900") }
+
+// RetireRecovery removes the igc1 recovery alias202 and the 10.99.0.2 return
+// route via 10.98.0.1 under a 900-second journal, so wg2 replies follow the
+// 10.20.0.1 default (task j24). It needs the retired old IPv4 (i24) and the
+// activation, igc1 and single-use retire-recovery gates.
+func (NetworkMigration) RetireRecovery() { Sh(migrationHelper + " retire-recovery 900") }
 
 // Confirm accepts a transaction after separate fresh management/service checks.
 func (NetworkMigration) Confirm() { Sh(migrationHelper + " confirm") }

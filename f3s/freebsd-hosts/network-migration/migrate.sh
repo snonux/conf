@@ -224,7 +224,11 @@ arm() {
     v6_rows > "$state/preparing/v6"
     date +%s > "$state/preparing/v6-captured-at"
     save_v6_metadata > "$state/preparing/v6-metadata" || fail 'unsupported native IPv6 metadata; no address changed'
-    awk '{print $1}' "$state/preparing/v4" | grep -qxF "$old" || fail 'retained old host IPv4 is missing'
+    # retire-recovery (j24) runs after i24 retired the old address; every
+    # other action still needs it.
+    if [ "$action" != retire-recovery ]; then
+        awk '{print $1}' "$state/preparing/v4" | grep -qxF "$old" || fail 'retained old host IPv4 is missing'
+    fi
     physical_primary > "$state/preparing/primary"
     primary=$(cat "$state/preparing/primary")
     [ "$primary" = "$old" ] || [ "$primary" = "$lab" ] || fail 'unexpected primary; refusing CARP replacement'
@@ -254,7 +258,8 @@ arm() {
         /usr/local/sbin/gonf-endpoint-rollback snapshot "$state/preparing/endpoints"
         touch "$state/preparing/endpoints-required"
     fi
-    if { [ "$action" = promote ] || [ "$action" = retire ]; } && [ "$iface" = re0 ] && ifconfig wg0 >/dev/null 2>&1; then
+    if { [ "$action" = promote ] || [ "$action" = retire ] || [ "$action" = retire-recovery ]; } &&
+        [ "$iface" = re0 ] && ifconfig wg0 >/dev/null 2>&1; then
         wg showconf wg0 > "$state/preparing/wg0.runtime.conf"
         chmod 600 "$state/preparing/wg0.runtime.conf"
     fi
@@ -409,6 +414,72 @@ retire() {
     refresh_wg_runtime
     # Single-use approval, as the README requires for every transaction.
     rm -f "$state/retire-approved"
+}
+
+# Retire-recovery (j24) removes the dedicated igc1 recovery path after i24:
+# alias202 (the recovery address) and the laptop's 10.99.0.2 return route via
+# 10.98.0.1 (route_gonfmigration in static_routes). Replies to the laptop then
+# follow the 10.20.0.1 default, the router's normal wg2 path, so the router
+# can drop 10.98.0.1 afterwards. The caller has armed the ordinary journal:
+# restore_keys/restore_runtime and the boot hook bring both back when it is
+# not confirmed in time. Every precondition is checked before arming, saved
+# (merged rc.conf, what boot uses) as well as runtime: the old address must
+# already be gone, the lab primary and 10.20.0.1 default in place, and no
+# other saved route may use the recovery /24.
+retire_recovery_preflight() {
+    [ -f "$state/retire-recovery-approved" ] || fail 'retire-recovery gate missing; see README'
+    [ "$(physical_primary)" = "$lab" ] || fail 'retire-recovery requires the accepted lab primary'
+    ! v4_rows | awk '{print $1}' | grep -qxF "$old" || fail 'retire the old address (i24) first'
+    v4_rows | awk '{print $1}' | grep -qxF "$recovery" || fail 'recovery address already absent'
+    [ "$(sysrc -f /etc/rc.conf -n "ifconfig_$iface" 2>/dev/null || :)" = "inet $lab/24" ] ||
+        fail 'persistent primary is not the lab address'
+    ! sysrc -f /etc/rc.conf -n "ifconfig_${iface}_alias200" >/dev/null 2>&1 ||
+        fail 'alias200 (old address) is still saved'
+    [ "$(sysrc -f /etc/rc.conf -n "ifconfig_${iface}_alias202" 2>/dev/null || :)" = "inet $recovery/24" ] ||
+        fail 'alias202 is not the recovery address'
+    [ "$(route -n get -inet default | awk '/gateway:/ {print $2}')" = 10.20.0.1 ] ||
+        fail 'retire-recovery requires the 10.20.0.1 default'
+    [ "$(sysrc -n defaultrouter 2>/dev/null || :)" = 10.20.0.1 ] ||
+        fail 'retire-recovery requires the saved defaultrouter 10.20.0.1'
+    [ "$(route -n get -inet 10.99.0.2 | awk '/gateway:/ {print $2}')" = 10.98.0.1 ] ||
+        fail 'retire-recovery requires the 10.98.0.1 return route'
+    [ "$(sysrc -n route_gonfmigration 2>/dev/null || :)" = '-host 10.99.0.2 10.98.0.1' ] ||
+        fail 'retire-recovery requires the saved 10.98.0.1 return route'
+    routes=$(sysrc -n static_routes 2>/dev/null || :)
+    case " $routes " in *' gonfmigration '*) :;; *) fail 'static_routes lacks gonfmigration';; esac
+    for name in $routes; do
+        [ "$name" != gonfmigration ] || continue
+        for word in $(sysrc -n "route_$name" 2>/dev/null || :); do
+            case "$word" in 10.98.*) fail "saved route_$name uses the recovery /24";; esac
+        done
+    done
+}
+
+retire_recovery() {
+    routes=
+    for name in $(sysrc -f /etc/rc.conf -n static_routes 2>/dev/null || :); do
+        [ "$name" = gonfmigration ] || routes="$routes $name"
+    done
+    if [ -n "$routes" ]; then
+        sysrc -f /etc/rc.conf "static_routes=${routes# }" >/dev/null
+    elif sysrc -f /etc/rc.conf -n static_routes >/dev/null 2>&1; then
+        sysrc -f /etc/rc.conf -x static_routes >/dev/null
+    fi
+    for key in route_gonfmigration "ifconfig_${iface}_alias202"; do
+        if sysrc -f /etc/rc.conf -n "$key" >/dev/null 2>&1; then
+            sysrc -f /etc/rc.conf -x "$key" >/dev/null
+        fi
+    done
+    if route -n get -inet 10.99.0.2 | grep -Eq 'destination: 10\.99\.0\.2$'; then
+        route delete -host 10.99.0.2
+    fi
+    if v4_rows | awk '{print $1}' | grep -qxF "$recovery"; then
+        ifconfig "$iface" inet "$recovery" delete
+    fi
+    # A peer may still cache the deleted address as its UDP source.
+    refresh_wg_runtime
+    # Single-use approval, as the README requires for every transaction.
+    rm -f "$state/retire-recovery-approved"
 }
 
 restore_runtime() {
@@ -655,7 +726,7 @@ guard_release() (
 # A confirmed-boot guard owns an immutable OLD snapshot; no transaction,
 # including retire, may arm or change the network beside it.
 case "${1:-}" in
-    stage|promote|retire|confirm|rollback)
+    stage|promote|retire|retire-recovery|confirm|rollback)
         [ ! -e "$guard" ] && [ ! -L "$guard" ] || fail 'confirmed-boot guard is active'
         ;;
 esac
@@ -675,6 +746,14 @@ case "${1:-}" in
         arm
         retire
         echo 'Pending: fresh new/recovery connections and service checks required before confirm.'
+        ;;
+    retire-recovery)
+        # Always the isolated topology: arm() then also requires igc1-approved.
+        action=retire-recovery; profile=isolated; seconds=${2:-900}
+        retire_recovery_preflight
+        arm
+        retire_recovery
+        echo 'Pending: fresh lab-address connections and service checks required before confirm.'
         ;;
     confirm)
         [ -d "$pending" ] || fail 'no pending transaction'
@@ -713,7 +792,7 @@ case "${1:-}" in
             echo "pending profile=$(cat "$pending/profile") deadline=$(cat "$pending/deadline")"
         else echo 'no pending transaction'; fi
         ;;
-    *) fail 'usage: stage|promote [shared|isolated] [seconds], retire [seconds], confirm, rollback, watchdog, boot, status;
+    *) fail 'usage: stage|promote [shared|isolated] [seconds], retire [seconds], retire-recovery [seconds], confirm, rollback, watchdog, boot, status;
 confirmed-boot-hash ARCHIVE; arm-confirmed-boot ARCHIVE SHA256 [seconds];
 restore-confirmed-boot; release-confirmed-boot';;
 esac

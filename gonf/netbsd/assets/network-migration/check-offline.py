@@ -361,6 +361,84 @@ else:raise AssertionError(name)
     print('PASS: retire gates/preconditions/rc.conf shape, OLD-free runtime and rc.conf, '
           'rollback/expiry/unconfirmed boot/foreign rc.conf edit, confirmed boots stay retired')
 
+    # j24 retire-recovery: the accepted retire isolated profile becomes
+    # retire lab: no recovery address, no laptop host route (the 10.20.0.1
+    # default carries replies), the recovery-free NPF candidate; rc.conf stays.
+    npf_before = npf.read_text()
+    candidate.write_text('reviewed final NPF policy')
+
+    def recovery_unchanged():
+        assert not pending.exists() and model() == retired and rcfile.read_text() == rc_new
+        assert npf.read_text() == npf_before
+        assert (state / 'accepted').read_text().strip() == 'retire isolated'
+
+    request('retire-recovery', success=False)  # gate closed by default
+    recovery_unchanged()
+    gate('retire-recovery-approved')
+    candidate.write_text('still admits 203.0.113.125')  # Prepare not pushed yet
+    request('retire-recovery', success=False)
+    recovery_unchanged()
+    candidate.write_text('reviewed final NPF policy')
+    for bad in (rc_old, rc_new + 'static_routes="x"\nroute_x="-net 203.0.113.0/24 10.20.0.1"\n',
+                rc_new.replace('10.20.0.1', '192.0.2.1')):
+        rcfile.write_text(bad)
+        request('retire-recovery', success=False)
+        assert not pending.exists() and model() == retired and rcfile.read_text() == bad, bad
+    rcfile.write_text(rc_new)
+    for field, value in (('gateway', '192.0.2.1'), ('return', '10.20.0.1'),
+                         ('v4', ['198.51.100.125/24']),
+                         ('v4', ['198.51.100.125/24', '203.0.113.125/24', '192.0.2.125/24'])):
+        edit(**{field: value})
+        request('retire-recovery', success=False)
+        assert not pending.exists() and rcfile.read_text() == rc_new, field
+        edit(**{field: retired[field]})
+    recovery_unchanged()
+
+    def final_model(m):
+        assert m['v4'] == ['198.51.100.125/24'], m
+        assert m['gateway'] == '10.20.0.1' and m['return'] == 'absent' and m['ula'], m
+
+    def recovery_restored(m):
+        assert m['v4'] == retired['v4'] and m['return'] == '10.98.0.1', m
+        assert m['gateway'] == '10.20.0.1' and m['ula'], m
+        assert npf.read_text() == npf_before and rcfile.read_text() == rc_new
+        assert (state / 'accepted').read_text().strip() == 'retire isolated'
+        assert not pending.exists()
+
+    request('retire-recovery')
+    final_model(model())
+    assert npf.read_text() == 'reviewed final NPF policy'
+    assert model()['loaded_npf'] == 'reviewed final NPF policy'
+    assert rcfile.read_text() == rc_new
+    assert not (state / 'retire-recovery-approved').exists()
+    request('rollback')
+    recovery_restored(model())
+    # Expiry through the independent watchdog.
+    gate('retire-recovery-approved'); request('retire-recovery'); edit(clock=10901)
+    run('confirm', success=False)
+    run('watchdog'); edit(clock=10000)
+    recovery_restored(model())
+    # Unconfirmed boot restores recovery before NPF and networking finish.
+    gate('retire-recovery-approved'); request('retire-recovery')
+    edit(npf_active=False)
+    run('boot')
+    edit(npf_active=True)
+    recovery_restored(model())
+    # Confirmation persists retire lab; boots never re-add recovery.
+    gate('retire-recovery-approved'); request('retire-recovery'); confirm()
+    assert (state / 'accepted').read_text().strip() == 'retire lab'
+    edit(v4=['198.51.100.125/24'], ula=False, npf_active=False, **{'return': 'absent'})
+    run('boot')
+    edit(npf_active=True)
+    final_model(model())
+    final = model()
+    gate('retire-recovery-approved'); request('retire-recovery', success=False)
+    gate('retire-approved'); request('retire', success=False)
+    assert model() == final and not pending.exists()
+    print('PASS: retire-recovery gates/preconditions (NPF candidate, rc.conf, routes, '
+          'addresses), recovery-free runtime and NPF, rollback/expiry/unconfirmed boot, '
+          'confirmed boots stay on retire lab')
+
     # The new transition is narrow: a claimed prior promotion cannot replace
     # the required staged lab address or accept an unrelated profile state.
     for invalid in ('promote shared', 'promote unrelated'):

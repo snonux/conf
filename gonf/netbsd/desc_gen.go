@@ -38,6 +38,10 @@ func (NetworkMigration) DescRetire() string {
 	return "Dispatches the guarded removal of the retained OLD IPv4 (task i24)"
 }
 
+func (NetworkMigration) DescRetireRecovery() string {
+	return "Dispatches the guarded removal of the igc1 recovery address, the laptop's 10.99.0.2 host route via 10.98.0.1 and their NPF rules (task j24): the accepted retire isolated profile becomes retire lab under the same 900-second journal"
+}
+
 func (NetworkMigration) DescRollback() string {
 	return "Dispatches restoration independently of the SSH origin"
 }

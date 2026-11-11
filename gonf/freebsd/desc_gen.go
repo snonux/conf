@@ -37,7 +37,7 @@ func (Carp) DescMigrationCandidate() string {
 func (Debug) DescGdb() string { return "Installs gdb (kgdb for /var/crash/vmcore.N)" }
 
 func (F3sctl) DescMigrationCandidate() string {
-	return "Stages additive Pi source pins, retaining old LAN and wg0"
+	return "Staged additive Pi source pins, retaining old LAN and wg0"
 }
 
 func (F3sctl) DescPackage() string {
@@ -90,6 +90,10 @@ func (NetworkMigration) DescPromote() string {
 
 func (NetworkMigration) DescRetire() string {
 	return "Removes the retained old IPv4 (alias200) under a 900-second journal"
+}
+
+func (NetworkMigration) DescRetireRecovery() string {
+	return "Removes the igc1 recovery alias202 and the 10.99.0.2 return route via 10.98.0.1 under a 900-second journal, so wg2 replies follow the 10.20.0.1 default (task j24)"
 }
 
 func (NetworkMigration) DescRollback() string {

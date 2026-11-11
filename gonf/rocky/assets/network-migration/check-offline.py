@@ -637,8 +637,12 @@ elif args[:4] == ['--escape', 'no', '-g', 'ipv4.dns']:
     print(','.join(nm['dns']))
 elif args[:2] == ['connection', 'modify']:
     nm['addresses'] = args[args.index('ipv4.addresses') + 1].split(',')
-    value = args[args.index('ipv4.dns') + 1]
-    nm['dns'] = value.split(',') if value else []
+    if 'ipv4.dns' in args:
+        value = args[args.index('ipv4.dns') + 1]
+        nm['dns'] = value.split(',') if value else []
+    if 'ipv4.routes' in args:
+        value = args[args.index('ipv4.routes') + 1]
+        nm['routes'] = value.split(',') if value else []
     (root / 'nm.json').write_text(json.dumps(nm))
 ''')
     (fixtures / 'ip').write_text('''#!/usr/bin/env python3
@@ -660,6 +664,12 @@ elif args[:3] == ['-4', 'address', 'del']:
 elif args[:3] == ['-4', 'address', 'restore']:
     live['addresses'] = live['saved']
     (root / 'ip.json').write_text(json.dumps(live))
+elif args[:3] == ['-4', 'route', 'del'] and args[3] == '10.99.0.2/32':
+    live['return'] = ''
+    (root / 'ip.json').write_text(json.dumps(live))
+elif args[:3] == ['-4', 'route', 'restore']:
+    live['return'] = live['saved_return']
+    (root / 'ip.json').write_text(json.dumps(live))
 ''')
     promoted = ['198.51.100.120/24', '192.0.2.120/24', '203.0.113.120/24']
     saved_routes = ['10.99.0.2/32 10.98.0.1 100']
@@ -675,7 +685,8 @@ elif args[:3] == ['-4', 'address', 'restore']:
         if dropin:
             (root / 'dns-dropin').write_text('[global-dns]\n')
         (root / 'ip.json').write_text(json.dumps({'addresses': list(addresses),
-                                                  'saved': list(addresses), 'return': ret}))
+                                                  'saved': list(addresses), 'return': ret,
+                                                  'saved_return': ret}))
         profile.write_text('uuid=00000000-0000-0000-0000-000000000000\nretained old\n')
         (state / 'retire-approved').touch()
         (state / 'serial-k3s-approved').write_text(node)
@@ -758,6 +769,85 @@ elif args[:3] == ['-4', 'address', 'restore']:
     assert pending.exists() and (pending / 'standalone').exists()
     run('rollback')
     assert not pending.exists()
+    # j24 retire-recovery: after i24, drop the recovery address and the
+    # laptop's 10.99.0.2/32 return route via 10.98.0.1 (replies then use the
+    # 10.20.0.1 default). Same journal, watchdog and boot restore.
+    conf.write_text("iface=enp0s5\nold=192.0.2.120\nlab=198.51.100.120\n"
+                    "recovery=203.0.113.120\nula=fd00::120\nshared_gateway=192.0.2.2\n")
+    retired = ['198.51.100.120/24', '203.0.113.120/24']
+    kept = '172.16.0.0/12 10.20.0.1 50'
+
+    def recovery_world(**world):
+        world.setdefault('addresses', retired)
+        world.setdefault('profile_addresses', retired)
+        world.setdefault('routes', saved_routes + [kept])
+        retire_world(**world)
+        (state / 'retire-approved').unlink()
+        (state / 'retire-recovery-approved').touch()
+        profile.write_text('uuid=00000000-0000-0000-0000-000000000000\nwith recovery\n')
+
+    def recovery_refused(**world):
+        recovery_world(**world)
+        run('retire-recovery', success=False)
+        assert not pending.exists(), ('Refused retire-recovery left a journal', world)
+        assert 'connection modify' not in log.read_text() and ' del ' not in log.read_text(), world
+
+    recovery_world()
+    (state / 'retire-recovery-approved').unlink()
+    run('retire-recovery', success=False)
+    assert not pending.exists(), 'Ungated retire-recovery armed a journal'
+    recovery_world()
+    (state / 'serial-k3s-approved').write_text('another.example')
+    run('retire-recovery', success=False)
+    assert not pending.exists(), 'k3s retire-recovery accepted a foreign serial gate'
+    recovery_refused(addresses=promoted)  # old address not retired yet (runtime)
+    recovery_refused(profile_addresses=promoted)  # old address still saved
+    recovery_refused(addresses=['198.51.100.120/24'])  # recovery already gone
+    recovery_refused(profile_addresses=['198.51.100.120/24'])
+    recovery_refused(profile_addresses=['203.0.113.120/24'])  # lab not saved
+    recovery_refused(gateway='192.0.2.1')
+    recovery_refused(saved_gateway='192.0.2.1')
+    recovery_refused(ret='10.99.0.2 via 10.20.0.1 proto static metric 100')
+    recovery_refused(routes=[kept])  # no saved laptop return route
+    recovery_refused(routes=saved_routes + ['172.16.0.0/12 10.98.0.9'])  # recovery hop
+    recovery_refused(routes=saved_routes + ['10.98.0.0/24'])  # recovery destination
+    recovery_refused(dropin=False)
+    recovery_world()
+    request('retire-recovery')
+    assert pending.exists()
+    world = json.loads(nm.read_text())
+    assert world['addresses'] == ['198.51.100.120/24'], world
+    assert world['routes'] == [kept], world
+    live = json.loads((root / 'ip.json').read_text())
+    assert live['addresses'] == ['198.51.100.120/24'] and live['return'] == '', live
+    assert 'connection up' not in log.read_text(), 'Retire-recovery bounced the connection'
+    assert not (state / 'retire-recovery-approved').exists()
+    assert not (state / 'serial-k3s-approved').exists()
+    request('rollback')
+    assert not pending.exists()
+    assert profile.read_text().endswith('with recovery\n'), 'Rollback lost the recovery profile'
+    live = json.loads((root / 'ip.json').read_text())
+    assert live['addresses'] == retired and 'via 10.98.0.1' in live['return'], live
+    # Expiry, unconfirmed boot and confirmation reuse the shared journal.
+    recovery_world()
+    run('retire-recovery')
+    (pending / 'deadline').write_text('1')
+    run('watchdog')
+    assert not pending.exists() and json.loads((root / 'ip.json').read_text())['addresses'] == retired
+    recovery_world()
+    run('retire-recovery')
+    run('restore-boot')
+    assert profile.read_text().endswith('with recovery\n')
+    run('restore-after-boot')
+    assert not pending.exists()
+    recovery_world()
+    run('retire-recovery')
+    (state / 'confirm-approved').touch()
+    run('confirm')
+    assert not pending.exists() and '10.98.0.1' not in json.dumps(json.loads(nm.read_text()))
+    print('PASS: retire-recovery is gated, refuses with the old address, without recovery/lab/'
+          'gateway/return route or with another recovery route, drops only the recovery '
+          'address and return route, and rolls back on request/expiry/boot')
     print('PASS: retire is gated, refuses without lab/recovery/gateway/return/old, '
           'arms before mutation, drops only the old /24, and rolls back on request/expiry/boot')
     print('PASS: real maintenance dispatch/rollback/expiry/boot preserve stopped k3s; '

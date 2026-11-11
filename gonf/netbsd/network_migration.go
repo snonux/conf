@@ -23,6 +23,9 @@ func (NetworkMigration) OptsConfirm() TaskOptions  { return TaskOptions{Operatio
 func (NetworkMigration) OptsRollback() TaskOptions { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsStatus() TaskOptions   { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsRetire() TaskOptions   { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRetireRecovery() TaskOptions {
+	return TaskOptions{Operational()}
+}
 
 // Prepare installs dormant transactions, a no-op watchdog and ordered boot recovery.
 func (NetworkMigration) Prepare() {
@@ -77,6 +80,15 @@ func (NetworkMigration) Promote() {
 // the lab primary and 10.20.0.1 under the same 900-second journal.
 func (NetworkMigration) Retire() {
 	Sh("/usr/local/sbin/gonf-network-migration request retire isolated")
+}
+
+// RetireRecovery dispatches the guarded removal of the igc1 recovery address,
+// the laptop's 10.99.0.2 host route via 10.98.0.1 and their NPF rules (task
+// j24): the accepted retire isolated profile becomes retire lab under the
+// same 900-second journal. It needs the activation and single-use
+// retire-recovery gates and a Prepare-installed recovery-free NPF candidate.
+func (NetworkMigration) RetireRecovery() {
+	Sh("/usr/local/sbin/gonf-network-migration request retire-recovery")
 }
 
 // Confirm accepts independently verified network and service state.

@@ -30,6 +30,9 @@ func (NetworkMigration) OptsRollback() TaskOptions    { return TaskOptions{Opera
 func (NetworkMigration) OptsStatus() TaskOptions      { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsDiagnostics() TaskOptions { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsRetire() TaskOptions      { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRetireRecovery() TaskOptions {
+	return TaskOptions{Operational()}
+}
 
 // Diagnostics installs tcpdump for migration packet diagnostics.
 func (NetworkMigration) Diagnostics() { Packages("tcpdump") }
@@ -108,6 +111,13 @@ func (NetworkMigration) Promote() { Sh(migrationHelper + " request promote share
 // 10.98.0.1 return route) and the retire-approved gate; Confirm or the timed
 // watchdog/boot hook then accepts or restores it (task i24).
 func (NetworkMigration) Retire() { Sh(migrationHelper + " request retire") }
+
+// RetireRecovery requests the guarded PID1-owned removal of the igc1 recovery
+// address and the laptop's 10.99.0.2/32 return route via 10.98.0.1, so wg2
+// replies follow the 10.20.0.1 default (task j24). It needs the retired old
+// IPv4 (i24) and the retire-recovery-approved gate (serial-k3s on r-nodes);
+// Confirm or the timed watchdog/boot hook then accepts or restores it.
+func (NetworkMigration) RetireRecovery() { Sh(migrationHelper + " request retire-recovery") }
 
 // Confirm accepts independently verified fresh management and service checks.
 func (NetworkMigration) Confirm() { Sh(migrationHelper + " confirm") }

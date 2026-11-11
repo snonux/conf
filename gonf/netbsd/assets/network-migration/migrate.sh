@@ -80,8 +80,10 @@ set_return() {
         route -n change -host 10.99.0.2 "$desired"
     fi
 }
+# i24 retired the OLD address for good; the accepted retire modes run without it.
+old_retired() { [ -f "$accepted" ] && grep -q '^retire ' "$accepted"; }
 check_addresses() {
-    has4 "$old" || fail 'OLD IPv4 missing'
+    old_retired || has4 "$old" || fail 'OLD IPv4 missing'
     foreign=$(v4 | awk -v a="$old" -v b="$lab" -v c="$recovery" '
         ($1!=a && $1!=b && $1!=c) || $2!=24 {print}')
     [ -z "$foreign" ] || fail 'unreviewed physical IPv4/prefix'
@@ -108,6 +110,8 @@ runtime() {
     [ "$mode" = retire ] || has4 "$old" || ifconfig "$iface" inet "$old/24" alias
     has4 "$lab" || ifconfig "$iface" inet "$lab/24" alias
     has6 || ifconfig "$iface" inet6 "$ula/64" alias
+    # isolated keeps the igc1 recovery address; shared and lab (j24, the
+    # final topology after the recovery retirement) run without it.
     if [ "$topology" = isolated ]; then
         has4 "$recovery" || ifconfig "$iface" inet "$recovery/24" alias
     else
@@ -124,8 +128,12 @@ runtime() {
     fi
     # NetBSD deletes routes associated with an IPv4 address when it is removed.
     # Rebuild routes only after primary/alias changes have finished.
-    if [ "$topology" = isolated ]; then set_return 10.98.0.1
-    else set_return "$shared_gateway"; fi
+    # lab: no laptop host route; replies follow the 10.20.0.1 default.
+    case "$topology" in
+        isolated) set_return 10.98.0.1;;
+        lab) set_return absent;;
+        *) set_return "$shared_gateway";;
+    esac
     reload_filter
 }
 snapshot() {
@@ -182,7 +190,8 @@ restore() {
     set_return "$(cat "$pending/return")"
     reload_filter
     archive rolled-back
-    rm -f "$state/stage-approved" "$state/promote-approved" "$state/retire-approved" "$state/confirm-approved"
+    rm -f "$state/stage-approved" "$state/promote-approved" "$state/retire-approved" \
+        "$state/retire-recovery-approved" "$state/confirm-approved"
     sync
 }
 # Recovery needs the independent cron watchdog and the boot hook.
@@ -246,6 +255,42 @@ retire_apply() {
     rm -f "$state/retire-approved"
 }
 
+# Retire-recovery (j24) removes the dedicated igc1 recovery path after i24:
+# the accepted `retire isolated` profile becomes `retire lab`, which drops
+# the recovery address and the laptop's 10.99.0.2 host route via 10.98.0.1
+# (replies follow the 10.20.0.1 default), and the NPF candidate without the
+# recovery and OLD rules replaces /etc/npf.conf. rc.conf already holds the lab
+# primary and 10.20.0.1 since retire and carries no recovery line (the boot
+# hook adds it per the accepted mode), so it stays untouched. The ordinary
+# 900 s snapshot restores the previous accepted mode, NPF, address and route
+# on expiry, unconfirmed boot or rollback.
+recovery_retire_apply() {
+    gate activation-approved
+    gate retire-recovery-approved
+    if [ ! -f "$accepted" ] || ! grep -qx 'retire isolated' "$accepted"; then
+        fail 'retire-recovery requires the accepted retire isolated profile'
+    fi
+    ! has4 "$old" || fail 'retire-recovery requires the retired OLD address'
+    [ "$(v4 | awk 'NR==1 {print $1}')" = "$lab" ] || fail 'retire-recovery requires the lab primary'
+    has4 "$recovery" || fail 'retire-recovery requires the recovery address'
+    [ "$(default_gateway)" = 10.20.0.1 ] || fail 'retire-recovery requires the 10.20.0.1 default'
+    [ "$(return_gateway)" = 10.98.0.1 ] || fail 'retire-recovery requires the 10.98.0.1 return route'
+    grep -qx "ifconfig_$iface=\"inet $lab netmask 0xffffff00\"" "$rcconf" ||
+        fail 'rc.conf lacks the lab primary'
+    grep -qx 'defaultroute="10.20.0.1"' "$rcconf" || fail 'rc.conf lacks defaultroute 10.20.0.1'
+    if grep -qF "${recovery%.*}." "$rcconf"; then fail 'rc.conf references the recovery /24'; fi
+    if grep -qF "$recovery" "$candidate"; then fail 'NPF candidate still admits the recovery address'; fi
+    prerequisites
+    snapshot
+    printf 'retire lab\n' > "$pending/next"
+    sync
+    cp "$pending/applied.npf" /etc/npf.conf.gonf-next
+    chmod 644 /etc/npf.conf.gonf-next
+    mv /etc/npf.conf.gonf-next /etc/npf.conf
+    runtime retire lab
+    rm -f "$state/retire-recovery-approved"
+}
+
 apply() {
     action=$1 topology=$2
     case "$action:$topology" in stage:shared|stage:isolated|promote:shared|promote:isolated) ;; *) fail 'invalid action';; esac
@@ -278,9 +323,11 @@ apply() {
 case ${1:-} in
     request)
         action=${2:-} topology=${3:-shared}
-        case "$action" in stage|promote|retire|rollback) ;; *) fail 'invalid request';; esac
-        # Retire is defined for the isolated topology only.
+        case "$action" in stage|promote|retire|retire-recovery|rollback) ;; *) fail 'invalid request';; esac
+        # Retire is defined for the isolated topology only, retire-recovery
+        # for the final lab topology only.
         [ "$action" != retire ] || topology=isolated
+        [ "$action" != retire-recovery ] || topology=lab
         [ ! -f "$state/worker.pid" ] || fail 'inspect existing worker before a new request'
         request=$(mktemp -d "$state/request.XXXXXX")
         printf '%s\n' "$action $topology" > "$request/action"
@@ -297,6 +344,7 @@ case ${1:-} in
         trap 'result=$?; rm -f "$state/worker.pid"; printf "%s\n" "$result" > "$request/result"' 0
         trap 'exit 143' TERM
         case "$action" in stage|promote) apply "$action" "$topology";; retire) retire_apply;;
+            retire-recovery) recovery_retire_apply;;
             rollback) restore;; *) fail 'invalid worker';; esac
         ;;
     watchdog)
@@ -310,7 +358,7 @@ case ${1:-} in
         elif [ -f "$accepted" ]; then
             read -r mode topology extra < "$accepted"
             [ -z "${extra:-}" ] || fail 'invalid accepted profile'
-            case "$mode:$topology" in stage:shared|stage:isolated|promote:shared|promote:isolated|retire:isolated) ;;
+            case "$mode:$topology" in stage:shared|stage:isolated|promote:shared|promote:isolated|retire:isolated|retire:lab) ;;
                 *) fail 'invalid accepted profile';; esac
             runtime "$mode" "$topology"
         fi
