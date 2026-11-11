@@ -17,6 +17,11 @@ type Controller struct{ RequiresRoot }
 const (
 	shellyCADir  = "/usr/local/etc/f3sctl"
 	shellyCAFile = shellyCADir + "/shelly-ca.pem"
+
+	liveController      = "/usr/local/etc/f3sctl.json"
+	controllerCandidate = liveController + ".triggerfish-candidate"
+	// controllerOwned is the endpoint helper's adopted copy (NetBSD state dir).
+	controllerOwned = "/var/db/gonf-endpoint-migration/controller-owned"
 )
 
 func (Controller) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
@@ -29,13 +34,22 @@ func (Controller) MigrationCandidate() {
 }
 
 // Config preserves custom configuration and installs the accepted inventory.
+//
+// The endpoint helper refuses a live f3sctl.json that is not an owned file
+// (legacy input, current candidate, or the copy adopt recorded). adopt runs
+// before a new candidate replaces the old one, so an unedited live file stays
+// owned across a candidate update (it replaced the arm lease task a74
+// retired); it reruns only while the live file differs from that copy.
 func (Controller) Config() {
-	legacy := InstallFile("/usr/local/etc/f3sctl.json.triggerfish-legacy", paths.GonfAsset("netbsd", "shelly-endpoints.json"), RootOwned)
-	candidate := InstallFile("/usr/local/etc/f3sctl.json.triggerfish-candidate", paths.GonfAsset("netbsd", "controller.json"), RootOwned)
+	helper := endpointfiles.InstallHelper("/usr/local/sbin")
+	adopt := Command(endpointfiles.Helper, List("adopt", "controller"), DependsOn(helper),
+		Unless("cmp", List("-s", liveController, controllerOwned)))
+	legacy := InstallFile("/usr/local/etc/f3sctl.json.triggerfish-legacy", paths.GonfAsset("netbsd", "shelly-endpoints.json"), RootOwned, DependsOn(adopt))
+	candidate := InstallFile(controllerCandidate, paths.GonfAsset("netbsd", "controller.json"), RootOwned, DependsOn(adopt))
 	// The CA is in place before a configuration that requires it is applied.
 	ca := installShellyCA()
 	Command(endpointfiles.Helper, List("apply", "controller"), DependsOn(legacy, candidate, ca),
-		Unless("cmp", List("-s", "/usr/local/etc/f3sctl.json", "/usr/local/etc/f3sctl.json.triggerfish-candidate")))
+		Unless("cmp", List("-s", liveController, controllerCandidate)))
 }
 
 // installShellyCA installs the public CA certificate that f3sctl pins for the

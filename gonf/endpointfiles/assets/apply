@@ -1,0 +1,84 @@
+#!/bin/sh
+# Plain apply path for the fleet's owned endpoint files (conf task a74).
+#
+# The existing gonf owners call this after they publish a candidate:
+#   apply hosts         merge /usr/local/etc/gonf-fleet-hosts into /etc/hosts
+#   adopt controller    record that the live f3sctl.json is still owned
+#   apply controller    publish f3sctl.json.triggerfish-candidate
+#
+# Task a74 retired the migration-era trial machinery (arm/confirm/rollback
+# leases, the every-minute watchdog cron and the boot restore hooks). "boot"
+# and "watchdog" stay as successful no-ops so that a hook not yet removed
+# (OpenBSD /etc/rc runs "gonf-endpoint-migration boot || exit 1", a stopped
+# host that has not run its *_endpoints_retire task) can never fail a boot or
+# mail cron errors. Never print configuration contents.
+set -eu
+umask 077
+PATH=/usr/local/sbin:/usr/local/bin:/usr/pkg/sbin:/usr/pkg/bin:/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+case "$(uname -s)" in Linux) state=/var/lib/gonf-endpoint-migration ;; *) state=/var/db/gonf-endpoint-migration ;; esac
+action=${1:-}
+profile=${2:-}
+
+controller=/usr/local/etc/f3sctl.json
+candidate=$controller.triggerfish-candidate
+legacy=$controller.triggerfish-legacy
+# Copy of the live controller file taken while it was still an owned
+# candidate (adopt), so that apply accepts it after the owner has published
+# a newer candidate. A hand-edited file is never recorded, so it stays refused.
+owned=$state/controller-owned
+
+fail() { printf '%s\n' "endpoint apply refused: $1" >&2; exit 1; }
+
+temporary=
+trap '[ -z "$temporary" ] || rm -f "$temporary"' 0
+trap 'exit 1' HUP INT TERM
+
+# copy_file replaces destination with source's bytes, keeping destination's
+# mode and owner (a new file gets 0644), via a same-directory rename.
+copy_file() {
+    source=$1 destination=$2
+    [ -f "$source" ] && [ ! -L "$source" ] || fail 'candidate is not a regular file'
+    [ ! -L "$destination" ] || fail 'destination is a symlink'
+    [ ! -e "$destination" ] || [ -f "$destination" ] || fail 'destination is not a regular file'
+    temporary=$(mktemp "${destination}.gonf.XXXXXXXX")
+    if [ -f "$destination" ]; then cp -p "$destination" "$temporary"; else chmod 644 "$temporary"; fi
+    cat "$source" > "$temporary"
+    mv "$temporary" "$destination"
+    temporary=
+    if command -v restorecon >/dev/null 2>&1; then restorecon "$destination" >/dev/null; fi
+}
+
+# private_state creates the root-only state directory, refusing a symlink.
+private_state() {
+    [ ! -L "$state" ] || fail 'state directory is a symlink'
+    mkdir -p "$state"
+    chmod 700 "$state"
+}
+
+# is_owned succeeds when the live controller file is byte-identical to the
+# legacy input, the current candidate or the adopted copy.
+is_owned() {
+    cmp -s "$controller" "$legacy" || cmp -s "$controller" "$candidate" ||
+        { [ -f "$owned" ] && [ ! -L "$owned" ] && cmp -s "$controller" "$owned"; }
+}
+
+case "$action" in
+    boot|watchdog) exit 0 ;;
+esac
+[ "$(id -u)" = 0 ] || fail 'root required'
+case "$action:$profile" in
+    apply:hosts)
+        exec /usr/local/sbin/gonf-fleet-hosts apply /usr/local/etc/gonf-fleet-hosts ;;
+    adopt:controller)
+        # Runs before the owner installs a new candidate. Recording an
+        # unowned (custom) file would launder it, so only owned bytes are kept.
+        private_state
+        if [ -f "$controller" ] && [ ! -L "$controller" ] && is_owned; then
+            copy_file "$controller" "$owned"
+        fi ;;
+    apply:controller)
+        [ -f "$controller" ] && is_owned || fail 'custom controller settings require a merged candidate'
+        copy_file "$candidate" "$controller" ;;
+    *) fail 'unknown action' ;;
+esac

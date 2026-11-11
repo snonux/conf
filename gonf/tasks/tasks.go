@@ -31,9 +31,9 @@ import (
 // keeps the prefixes that differ from it.
 func Register() {
 	workstation.Register()
-	RegisterMethods(endpointfiles.Recovery{Platform: "linux", InstallDirectory: "/usr/local/bin"}, WithPrefix("system_endpoints_"), WhenHostnameContains("earth"))
+	RegisterMethods(endpointfiles.Retirement{Platform: "linux"}, WithPrefix("system_endpoints_"), WhenHostnameContains("earth"))
 	RegisterMethods(triggerfish.Base{}, WithPrefix("triggerfish_"), OnCluster(cluster.NameTriggerfish))
-	RegisterMethods(endpointfiles.Recovery{Platform: "openbsd"}, WithPrefix("triggerfish_endpoints_"), OnCluster(cluster.NameTriggerfish))
+	RegisterMethods(endpointfiles.Retirement{Platform: "openbsd"}, WithPrefix("triggerfish_endpoints_"), OnCluster(cluster.NameTriggerfish))
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
 	RegisterMethods(triggerfish.Profiles{}, WithPrefix("triggerfish_profiles_"), OnCluster(cluster.NameTriggerfish))
 	RegisterMethods(triggerfish.Rollback{}, WithPrefix("triggerfish_rollback_"), OnCluster(cluster.NameTriggerfish))
@@ -45,7 +45,7 @@ func Register() {
 		frontends.Web{}, frontends.MailDNS{},
 	}, WithPrefix("frontends_"), OnCluster(cluster.NameFrontends))
 	RegisterOnCluster(cluster.NameFrontends, frontends.WireGuard{})
-	RegisterMethods(endpointfiles.Recovery{Platform: "openbsd"}, WithPrefix("frontends_endpoints_"), OnCluster(cluster.NameFrontends))
+	RegisterMethods(endpointfiles.Retirement{Platform: "openbsd"}, WithPrefix("frontends_endpoints_"), OnCluster(cluster.NameFrontends))
 
 	RegisterMethods(dtail.Deployment{}, WithPrefix("pis_netbsd_dtail_"), OnCluster(cluster.NameNetBSDPis))
 	// Standalone rocky has no dserver; keep its broader unattended role separate.
@@ -61,12 +61,12 @@ func Register() {
 	RegisterMethods(netbsd.Resolver{}, WithPrefix("pis_netbsd_resolver_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Controller{}, WithPrefix("pis_netbsd_controller_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.ShellyTLS{}, WithPrefix("pis_netbsd_shelly_tls_"), OnCluster(cluster.NameNetBSDPis))
-	RegisterMethods(endpointfiles.Recovery{Platform: "netbsd"}, WithPrefix("pis_netbsd_endpoints_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterMethods(endpointfiles.Retirement{Platform: "netbsd"}, WithPrefix("pis_netbsd_endpoints_"), OnCluster(cluster.NameNetBSDPis))
 
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.HostFile{}, WithPrefix("rocky_hosts_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.Resolver{}, WithPrefix("rocky_resolver_"), OnCluster(cluster.NameRockyAll))
-	RegisterMethods(endpointfiles.Recovery{Platform: "linux"}, WithPrefix("rocky_endpoints_"), OnCluster(cluster.NameRockyAll))
+	RegisterMethods(endpointfiles.Retirement{Platform: "linux"}, WithPrefix("rocky_endpoints_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;
 	// rocky_kernel_audit_packages installs its own ksh interpreter, so it
@@ -89,8 +89,8 @@ func Register() {
 	// One Resolver recipe, two clusters: private_interfaces names each
 	// cluster's LAN interface (re0 on the f-hosts, vtnet0 on the guest).
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{Interface: "re0", Owner: "freebsd_resolver_conf, task u54"})
-	RegisterMethods(endpointfiles.Recovery{Platform: "freebsd"}, WithPrefix("freebsd_endpoints_"), OnCluster(cluster.NameFreeBSD))
-	RegisterMethods(endpointfiles.Recovery{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuestMigration))
+	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_endpoints_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.GuestHosts{}, WithPrefix("freebsd_guest_hosts_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.NetworkMigration{}, WithPrefix("freebsd_guest_network_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	// The normally stopped guest is pushed by name when it next runs (v54);

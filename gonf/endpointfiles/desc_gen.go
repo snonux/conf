@@ -2,26 +2,6 @@
 
 package endpointfiles
 
-func (Recovery) DescApply() string {
-	return "Publishes staged candidates only while their original lease is valid"
-}
-
-func (Recovery) DescArm() string {
-	return "Snapshots only the profile's owned files under a fixed host-local deadline"
-}
-
-func (Recovery) DescConfirm() string {
-	return "Accepts a profile after separate fresh service and management checks"
-}
-
-func (Recovery) DescPrepare() string {
-	return "Installs independent expiry and early file restoration without activation"
-}
-
-func (Recovery) DescRollback() string {
-	return "Restores saved files and the previously active service runtime"
-}
-
-func (Recovery) DescStatus() string {
-	return "Reports the profile/deadline without reading configuration values"
+func (Retirement) DescRetire() string {
+	return "Removes the endpoint watchdog cron, boot hooks and orphan rollback units"
 }

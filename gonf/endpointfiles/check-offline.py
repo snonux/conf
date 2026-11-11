@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Exercise the real shell dispatcher and files with mocked OS service boundaries."""
-import os
-import fcntl
+"""Exercise the real endpoint apply helper with temporary paths.
+
+Runs assets/apply and the real fleetfiles merger against files in a temporary
+directory, with id/uname/restorecon mocked. Covers the hosts merge, the
+controller ownership rules (legacy, candidate, adopted copy, custom refusal),
+the retired boot/watchdog no-ops and the refusals (non-root, unknown action,
+symlinked destination, missing candidate).
+"""
 from pathlib import Path
 import subprocess
 import tempfile
-import time
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = (ROOT / 'gonf/endpointfiles/assets/guard').read_text()
+SOURCE = (ROOT / 'gonf/endpointfiles/assets/apply').read_text()
 MERGER = (ROOT / 'gonf/fleetfiles/assets/merge-hosts').read_text()
 
 
-def put(path, value, mode=0o600):
+def put(path, value, mode=0o644):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value)
     path.chmod(mode)
@@ -22,288 +26,121 @@ with tempfile.TemporaryDirectory(prefix='conf-endpoint-test-') as directory:
     base = Path(directory)
     fake = base / 'bin'
     state = base / 'state'
-    fake.mkdir()
-    node = base / 'node'
+    uid = base / 'uid'
     platform = base / 'platform'
-    put(node, 'f0\n')
+    put(uid, '0\n')
     put(platform, 'Linux\n')
     for command, body in {
-        'hostname': f'cat {node}',
+        'id': f'cat {uid}',
         'uname': f'cat {platform}',
-        'id': 'echo 0',
-        'sync': ':',
         'restorecon': ':',
-        'cp': f'''test ! -e {base}/fail-copy || exit 1
-if [ -e {base}/pause-copy ]; then
-    : > {base}/copy-paused
-    while [ -e {base}/pause-copy ]; do sleep 0.02; done
-fi
-exec /bin/cp "$@"''',
-        'systemctl': f'''case "$1" in
-is-active)
-    if [ -f {base}/delayed-active ]; then
-        remaining=$(cat {base}/delayed-active)
-        if [ "$remaining" -gt 0 ]; then
-            echo $((remaining-1)) > {base}/delayed-active
-            exit 1
-        fi
-    fi
-    test ! -e {base}/inactive ;;
-restart)
-    test ! -e {base}/fail-runtime || exit 1
-    if [ -f {base}/delay-after-restart ]; then echo 2 > {base}/delayed-active; fi
-    cat {base}/local/etc/apcupsd/apcupsd.conf > {base}/runtime
-    echo restarted >> {base}/calls ;;
-*) exit 2 ;;
-esac''',
-        'docker': f'''case "$1:$2" in
-inspect:*) echo healthy ;;
-compose:stop) echo daemon-shutdown-write > {base}/pihole/etc-pihole/pihole.toml ;;
-compose:up) test ! -e {base}/fail-runtime ;;
-*) exit 2 ;;
-esac''',
-        'pfctl': f'''case "$1" in
--s) test ! -e {base}/inactive ;;
--nf) test -s "$2" ;;
--f) test ! -e {base}/fail-runtime && cat "$2" > {base}/pf-runtime ;;
-*) exit 2 ;;
-esac''',
     }.items():
         put(fake / command, '#!/bin/sh\nset -eu\n' + body + '\n', 0o755)
-    helper = base / 'guard'
+    helper = base / 'apply'
     merge = base / 'merge'
     script = SOURCE.replace('PATH=/usr/local/sbin:', f'PATH={fake}:/usr/local/sbin:')
-    replacements = {
+    for old, new in {
         '/var/lib/gonf-endpoint-migration': str(state),
         '/var/db/gonf-endpoint-migration': str(state),
-        '/usr/local/sbin/gonf-endpoint-migration': str(helper),
         '/usr/local/sbin/gonf-fleet-hosts': str(merge),
         '/usr/local/etc/gonf-fleet-hosts': str(base / 'fleet'),
         '/usr/local/etc/': str(base / 'local/etc') + '/',
-        '/usr/local/sbin/shelly-fans-on': str(base / 'fan-helper'),
-        '/var/lib/f3s-pihole-migration': str(base / 'dns-stage'),
-        '/home/paul/pihole': str(base / 'pihole'),
-        '/etc/hosts': str(base / 'etc/hosts'),
-        '/etc/pf.conf': str(base / 'etc/pf.conf'),
-        '/var/db/gonf-pf.sha256': str(base / 'pf-digest'),
-        '/etc/rc': str(base / 'etc/rc'),
-        '/etc/ssh/authorized_keys.d/f3sctl': str(base / 'authorized-key'),
-        '/bin/ksh': '/bin/sh',
-    }
-    for old, new in replacements.items():
+    }.items():
         script = script.replace(old, new)
+    assert '/usr/local/etc/' not in script and '/var/' not in script
     put(helper, script, 0o755)
     put(merge, MERGER.replace('target=/etc/hosts', 'target=' + str(base / 'etc/hosts')), 0o755)
 
     def run(*args, ok=True):
         result = subprocess.run([str(helper), *args], text=True, capture_output=True, timeout=8)
         assert (result.returncode == 0) == ok, (args, result.returncode, result.stdout, result.stderr)
+        assert 'secret' not in result.stdout + result.stderr
         return result
 
-    def expire():
-        put(state / 'pending/deadline', '0\n')
-
-    # Exercise the actual kernel lock on all dispatcher branches. An empty
-    # lock file is valid: no PID publication/reaping window exists.
-    run('status')
-    lock_path = state / 'lock'
-    inode = lock_path.stat().st_ino
+    # Retired hooks: no-ops for every platform, even without root, and they
+    # create no state (a stale OpenBSD /etc/rc "boot || exit 1" must pass).
+    put(uid, '1000\n')
     for name in ('Linux', 'NetBSD', 'FreeBSD', 'OpenBSD'):
         put(platform, name + '\n')
-        with lock_path.open('a') as holder:
-            fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            run('status', ok=False)
-        run('status')
-        assert lock_path.stat().st_ino == inode
+        run('boot')
+        run('watchdog')
+    assert not state.exists()
+    run('apply', 'hosts', ok=False)
+    assert 'root required' in run('adopt', 'controller', ok=False).stderr
+    put(uid, '0\n')
     put(platform, 'Linux\n')
+    for args in ((), ('apply',), ('apply', 'dns'), ('arm', 'hosts', '60'), ('confirm', 'hosts'),
+                 ('rollback',), ('status',), ('adopt', 'hosts')):
+        assert 'unknown action' in run(*args, ok=False).stderr
 
+    # Hosts: the merger replaces conflicting fleet names, keeps local rows,
+    # and needs no accepted-hosts marker any more.
     hosts = base / 'etc/hosts'
     initial = '127.0.0.1 localhost f0\n192.168.1.130 f0 f0.lan unrelated\n# local comment\n192.0.2.7 extra\n'
-    put(hosts, initial, 0o644)
-    put(base / 'fleet', '10.20.0.130 f0 f0.lan\n192.168.1.130 f0.old.lan\n')
-    for name in ('Linux', 'NetBSD', 'FreeBSD', 'OpenBSD'):
-        put(platform, name + '\n')
-        put(base / 'pause-copy', '')
-        process = subprocess.Popen([str(helper), 'arm', 'hosts', '60'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            limit = time.monotonic() + 3
-            while not (base / 'copy-paused').exists():
-                assert process.poll() is None and time.monotonic() < limit
-                time.sleep(0.01)
-            run('status', ok=False)
-        finally:
-            (base / 'pause-copy').unlink()
-        stdout, stderr = process.communicate(timeout=8)
-        assert process.returncode == 0, (stdout, stderr)
-        (base / 'copy-paused').unlink()
-        run('rollback')
-    put(platform, 'Linux\n')
-    run('apply', 'hosts', ok=False)
-    assert hosts.read_text() == initial
-    run('arm', 'hosts', '60')
-    run('arm', 'hosts', '60', ok=False)
+    put(hosts, initial)
+    put(base / 'fleet', '10.20.0.130 f0 f0.lan\n')
     run('apply', 'hosts')
-    assert '192.168.1.130 unrelated' in hosts.read_text()
-    assert '127.0.0.1 localhost\n' in hosts.read_text()
-    assert '192.0.2.7 extra' in hosts.read_text()
-    expire()
-    run('confirm', 'hosts', ok=False)
-    run('watchdog')
-    assert hosts.read_text() == initial and not (state / 'pending').exists()
+    text = hosts.read_text()
+    assert '# BEGIN GONF fleet\n10.20.0.130 f0 f0.lan\n# END GONF fleet' in text, text
+    assert '192.168.1.130 unrelated' in text and '127.0.0.1 localhost\n' in text
+    assert '192.0.2.7 extra' in text and '# local comment' in text
     assert hosts.stat().st_mode & 0o777 == 0o644
-    run('rollback')
+    subprocess.run([str(merge), 'check', str(base / 'fleet')], check=True)
+    (base / 'fleet').unlink()
+    run('apply', 'hosts', ok=False)
+    assert hosts.read_text() == text
 
-    run('arm', 'hosts', '60')
-    run('apply', 'hosts')
-    put(base / 'fail-copy', '')
-    run('rollback', ok=False)
-    assert (state / 'pending/restoring').exists()
-    (base / 'fail-copy').unlink()
-    run('rollback')
-    assert hosts.read_text() == initial and not (state / 'pending').exists()
-
-    run('arm', 'hosts', '60')
-    run('apply', 'hosts')
-    run('boot')
-    assert hosts.read_text() == initial and (state / 'pending/restoring').exists()
-    run('watchdog')
-    assert not (state / 'pending').exists()
-    run('arm', 'hosts', '60')
-    run('apply', 'hosts')
-    run('confirm', 'hosts')
-    run('apply', 'hosts')
-    assert (state / 'accepted-hosts').is_file()
-
-    ups = base / 'local/etc/apcupsd/apcupsd.conf'
-    put(ups, 'OLD endpoint\n', 0o640)
-    put(Path(str(ups) + '.triggerfish-candidate'), 'NEW endpoint\n')
-    run('arm', 'ups', '900')
-    put(base / 'delay-after-restart', '')
-    run('apply', 'ups')
-    assert (base / 'delayed-active').read_text().strip() == '0'
-    (base / 'delay-after-restart').unlink()
-    (base / 'delayed-active').unlink()
-    assert (base / 'runtime').read_text() == 'NEW endpoint\n'
-    put(base / 'fail-runtime', '')
-    expire()
-    run('watchdog', ok=False)
-    assert ups.read_text() == 'OLD endpoint\n' and (state / 'pending/restoring').is_file()
-    (base / 'fail-runtime').unlink()
-    run('watchdog')
-    assert not (state / 'pending').exists()
-    assert (base / 'runtime').read_text() == 'OLD endpoint\n'
-    assert ups.stat().st_mode & 0o777 == 0o640
-
-    put(base / 'inactive', '')
-    run('arm', 'ups', '900', ok=False)
-    assert not (state / 'preparing').exists()
-    (base / 'inactive').unlink()
-    run('arm', 'ups', '900')
-    run('boot')
-    assert (state / 'pending').exists()
-    run('watchdog')
-    run('arm', 'controller', '900', ok=False)
-    run('arm', 'ups', 'bad', ok=False)
-
-    # Root-owned state does not turn symlinks/special files into config files.
-    ups.unlink()
-    ups.symlink_to(base / 'runtime')
-    run('arm', 'ups', '900', ok=False)
-    assert not (state / 'preparing').exists()
-    ups.unlink()
-    os.mkfifo(ups)
-    run('arm', 'ups', '900', ok=False)
-    ups.unlink()
-
-    # The existing Firewall owner publishes PF; the guard restores both files
-    # and reloads the saved policy if a failed/expired trial needs recovery.
-    put(node, 'pi0\n')
-    run('arm', 'pf', '900', ok=False)
-    put(node, 'f3\n')
-    put(platform, 'FreeBSD\n')
-    policy = base / 'etc/pf.conf'
-    put(policy, 'OLD policy\n', 0o644)
-    put(base / 'pf-digest', 'OLD checksum\n')
-    run('arm', 'pf', '900')
-    put(policy, 'NEW policy\n', 0o644)
-    put(base / 'pf-digest', 'NEW checksum\n')
-    run('apply', 'pf')
-    assert (base / 'pf-runtime').read_text() == 'NEW policy\n'
-    expire()
-    put(base / 'fail-runtime', '')
-    run('watchdog', ok=False)
-    assert policy.read_text() == 'OLD policy\n' and (state / 'pending').exists()
-    (base / 'fail-runtime').unlink()
-    run('watchdog')
-    assert not (state / 'pending').exists()
-    assert (base / 'pf-runtime').read_text() == 'OLD policy\n'
-    assert (base / 'pf-digest').read_text() == 'OLD checksum\n'
-
-    # DNS rollback stops FTL before restoring its TOML and retains failed health.
-    put(node, 'pi2\n')
-    put(platform, 'Linux\n')
-    for name in ('docker-compose.yml', 'etc-pihole/pihole.toml', 'etc-dnsmasq.d/99-f3s-lan-wildcard.conf'):
-        put(base / 'pihole' / name, 'ORIGINAL ' + name + '\n')
-    put(base / 'dns-stage/docker-compose.yml', 'NEW compose DNS directory enabled\n')
-    put(base / 'dns-stage/99-f3s-lan-hosts.conf', 'host-record=test.example,10.20.0.130\n')
-    put(base / 'dns-stage/99-f3s-lan-wildcard.conf', 'address=/.example/10.20.0.138\n')
-    run('arm', 'dns', '900')
-    run('apply', 'dns')
-    assert (base / 'pihole/docker-compose.yml').read_text() == 'NEW compose DNS directory enabled\n'
-    expire()
-    put(base / 'fail-runtime', '')
-    run('watchdog', ok=False)
-    assert (state / 'pending').exists()
-    assert (base / 'pihole/etc-pihole/pihole.toml').read_text() == 'ORIGINAL etc-pihole/pihole.toml\n'
-    (base / 'fail-runtime').unlink()
-    run('watchdog')
-    assert not (state / 'pending').exists()
-    assert (base / 'pihole/docker-compose.yml').read_text() == 'ORIGINAL docker-compose.yml\n'
-    assert not (base / 'pihole/etc-dnsmasq.d/99-f3s-lan-hosts.conf').exists()
-
-    # p34: an accepted controller configuration can be updated. Arm records
-    # that the live file was the owned candidate; apply then accepts it
-    # unchanged after the owner published a new candidate. A hand-edited file,
-    # or one changed after arm, stays refused.
-    put(node, 'pi0\n')
-    put(platform, 'NetBSD\n')
-    live = base / 'local/etc/f3sctl.json'
-    candidate = base / 'local/etc/f3sctl.json.triggerfish-candidate'
-    put(base / 'local/etc/f3sctl.json.triggerfish-legacy', '{"legacy":1}\n', 0o644)
-    put(live, '{"accepted":1}\n', 0o644)
-    put(candidate, '{"accepted":1}\n', 0o644)
-    run('arm', 'controller', '900')
-    put(candidate, '{"accepted":1,"shelly_https":true}\n', 0o644)
+    # Controller ownership.
+    etc = base / 'local/etc'
+    live, candidate, legacy = etc / 'f3sctl.json', etc / 'f3sctl.json.triggerfish-candidate', etc / 'f3sctl.json.triggerfish-legacy'
+    owned = state / 'controller-owned'
+    put(legacy, '{"v":"legacy"}\n')
+    put(candidate, '{"v":1}\n')
+    run('apply', 'controller', ok=False)  # no live file
+    put(live, '{"v":"legacy"}\n', 0o640)
     run('apply', 'controller')
-    assert live.read_text() == '{"accepted":1,"shelly_https":true}\n'
-    expire()
-    run('watchdog')
-    assert live.read_text() == '{"accepted":1}\n' and not (state / 'pending').exists()
-    # Changed after arm: refused, live untouched.
-    run('arm', 'controller', '900')
-    put(live, '{"accepted":1,"edited-after-arm":1}\n', 0o644)
-    run('apply', 'controller', ok=False)
-    assert live.read_text() == '{"accepted":1,"edited-after-arm":1}\n'
-    run('rollback', 'controller')
-    assert live.read_text() == '{"accepted":1}\n' and not (state / 'pending').exists()
-    # Hand-edited before arm: no ownership record, refused.
-    put(live, '{"custom":1}\n', 0o644)
-    run('arm', 'controller', '900')
-    assert not (state / 'pending/controller-owned').exists()
-    run('apply', 'controller', ok=False)
-    assert live.read_text() == '{"custom":1}\n'
-    run('rollback', 'controller')
+    assert live.read_text() == '{"v":1}\n' and live.stat().st_mode & 0o777 == 0o640
 
-    # Native OpenBSD hook shape is syntax/ordering tested, not a reboot claim.
-    put(node, 'blowfish\n')
-    put(platform, 'OpenBSD\n')
-    rc = base / 'etc/rc'
-    put(rc, '#!/bin/sh\nmount -uw /\nrootdisk_nodes\nsysctl_conf\n', 0o755)
-    run('install-openbsd-boot')
-    installed = rc.read_text()
-    run('install-openbsd-boot')
-    assert rc.read_text() == installed and installed.index(' boot ||') < installed.index('rootdisk_nodes')
-    put(rc, installed.replace(' boot || exit 1', ' status || exit 1'), 0o755)
-    run('install-openbsd-boot', ok=False)
+    # An unedited live file survives a candidate update through adopt.
+    run('adopt', 'controller')
+    assert owned.read_text() == '{"v":1}\n' and state.stat().st_mode & 0o777 == 0o700
+    put(candidate, '{"v":2}\n')
+    run('apply', 'controller')
+    assert live.read_text() == '{"v":2}\n'
+    # Without adopt the same update is refused (old candidate is unowned).
+    owned.unlink()
+    put(candidate, '{"v":3}\n')
+    assert 'custom controller settings' in run('apply', 'controller', ok=False).stderr
+    assert live.read_text() == '{"v":2}\n'
 
-print('PASS real dispatcher: expiry/boot, modes, partial failure/retry, inactive/symlink/FIFO refusal, FTL stop race and exact hook guards')
+    # A custom (hand-edited) file is never adopted and stays refused.
+    put(candidate, '{"v":2}\n')
+    run('adopt', 'controller')
+    put(live, '{"v":"custom","secret":"x"}\n')
+    run('adopt', 'controller')
+    assert owned.read_text() == '{"v":2}\n'
+    put(candidate, '{"v":4}\n')
+    run('apply', 'controller', ok=False)
+    assert live.read_text() == '{"v":"custom","secret":"x"}\n'
+
+    # Symlinks are refused: live destination, adopted copy and state dir.
+    live.unlink()
+    target = base / 'elsewhere.json'
+    put(target, '{"v":4}\n')
+    live.symlink_to(target)
+    run('apply', 'controller', ok=False)
+    assert target.read_text() == '{"v":4}\n'
+    live.unlink()
+    put(live, '{"v":"custom"}\n')
+    owned.unlink()
+    owned.symlink_to(live)
+    run('apply', 'controller', ok=False)
+    owned.unlink()
+    moved = base / 'state-real'
+    state.rename(moved)
+    state.symlink_to(moved)
+    put(live, '{"v":4}\n')
+    run('adopt', 'controller', ok=False)
+    assert not list(base.glob('local/etc/*.gonf.*')), 'temporary files left behind'
+
+print('endpointfiles offline checks passed')
