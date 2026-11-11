@@ -79,6 +79,10 @@ case "$action:$profile" in
         fi ;;
     apply:controller)
         [ -f "$controller" ] && is_owned || fail 'custom controller settings require a merged candidate'
-        copy_file "$candidate" "$controller" ;;
+        copy_file "$candidate" "$controller"
+        # Record the published bytes at once, so the owner's next run finds
+        # them adopted (no extra adopt run).
+        private_state
+        copy_file "$controller" "$owned" ;;
     *) fail 'unknown action' ;;
 esac

@@ -10,8 +10,10 @@ import (
 // Retirement removes the endpoint migration's host artifacts (task a74, the
 // user's decision of 2026-11-11): the every-minute watchdog cron, the boot
 // restore hooks of the retired trial helper, and the WireGuard endpoint
-// rollback units/rc.d hooks the old endpoint migrate.sh installed without a
-// gonf owner (r0-r2, f0-f3). The apply helper itself stays (InstallHelper).
+// rollback watchdog and boot hooks that wireguardmeshgenerator's endpoint
+// tooling installed without a gonf owner (systemd units on r0-r2; rc.d
+// hooks and an /etc/crontab line on f0-f3). The apply helper itself stays
+// (InstallHelper).
 //
 // One-shot: once every host ran its *_endpoints_retire task, a later commit
 // deletes this file and its registrations. It keeps the old helper's private
@@ -24,9 +26,9 @@ type Retirement struct {
 }
 
 // Linux unit files: gonf-endpoint-boot from the retired Prepare task, the
-// gonf-endpoint-rollback* units from the old endpoint migrate.sh. k3s
-// (RequiredBy) and wg-quick@wg0 (RequiredBy) hold enablement links to the
-// last two runtime/boot units on the r-nodes.
+// gonf-endpoint-rollback* units from wireguardmeshgenerator's endpoint
+// tooling. On the r-nodes k3s and wg-quick@wg0 hold RequiredBy enablement
+// links to the -runtime and -boot units.
 var (
 	linuxUnits = List("gonf-endpoint-boot.service", "gonf-endpoint-rollback.timer",
 		"gonf-endpoint-rollback.service", "gonf-endpoint-rollback-runtime.service",
@@ -34,6 +36,10 @@ var (
 	rcdHooks = List("/etc/rc.d/gonf_endpoint_migration", "/etc/rc.conf.d/gonf_endpoint_migration",
 		"/etc/rc.d/gonf_endpoint_rollback", "/etc/rc.d/gonf_endpoint_runtime")
 )
+
+// rollbackWatchdogLine is the FreeBSD system-crontab counterpart of the
+// r-nodes' gonf-endpoint-rollback.timer (f0-f3).
+const rollbackWatchdogLine = "* * * * * root /usr/local/bin/python3.12 /usr/local/sbin/gonf-endpoint-rollback watchdog /var/db/gonf-endpoint/pending"
 
 // openBSDRcBlock is the exact block install-openbsd-boot inserted into /etc/rc.
 const openBSDRcBlock = "# BEGIN gonf endpoint files\n/usr/local/sbin/gonf-endpoint-migration boot || exit 1\n# END gonf endpoint files\n"
@@ -48,6 +54,9 @@ func (r Retirement) Retire() {
 		// The rollback/runtime scripts have no rcvar: they run at every boot
 		// while present, so deleting the files is what disables them.
 		NoFile(rcdHooks)
+		if r.Platform == "freebsd" {
+			File("/etc/crontab", WithoutLines(rollbackWatchdogLine), RootOwned)
+		}
 	case "openbsd":
 		retireOpenBSDRc()
 	default:
@@ -84,7 +93,8 @@ func retireOpenBSDRc() {
 		`[ "$(sed -n '/^# BEGIN gonf endpoint files$/,/^# END gonf endpoint files$/p' /etc/rc)" = "$1" ]`,
 		`sed '/^# BEGIN gonf endpoint files$/,/^# END gonf endpoint files$/d' /etc/rc > "$next"`,
 		`/bin/ksh -n "$next"`,
-		`! grep -q 'gonf-endpoint-migration' "$next"`,
+		// A bare "! grep" would not stop sh -e; refuse explicitly.
+		`if grep -q 'gonf-endpoint-migration' "$next"; then exit 1; fi`,
 		`mv "$next" /etc/rc`,
 	}, "\n")
 	Command("sh", List("-ec", script, "retire-rc", strings.TrimSuffix(openBSDRcBlock, "\n")),

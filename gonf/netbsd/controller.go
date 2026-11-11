@@ -39,7 +39,8 @@ func (Controller) MigrationCandidate() {
 // (legacy input, current candidate, or the copy adopt recorded). adopt runs
 // before a new candidate replaces the old one, so an unedited live file stays
 // owned across a candidate update (it replaced the arm lease task a74
-// retired); it reruns only while the live file differs from that copy.
+// retired). apply records what it published as well, so adopt reruns only
+// while the live file differs from that copy (a hand-edited file).
 func (Controller) Config() {
 	helper := endpointfiles.InstallHelper("/usr/local/sbin")
 	adopt := Command(endpointfiles.Helper, List("adopt", "controller"), DependsOn(helper),

@@ -27,13 +27,16 @@ dns, pf, fan, pins). `boot` and `watchdog` remain successful no-ops so a
 hook not yet removed cannot fail a boot or mail cron errors.
 
 `Retirement.Retire` (`*_endpoints_retire`) removes those host artifacts,
-plus the WireGuard endpoint rollback units and rc.d hooks the old endpoint
-`migrate.sh` installed without a gonf owner (`gonf-endpoint-rollback*` on
-r0-r2, `gonf_endpoint_rollback`/`gonf_endpoint_runtime` on f0-f3). It is
+plus the WireGuard endpoint rollback watchdog and boot hooks that
+wireguardmeshgenerator's endpoint tooling installed without a gonf owner
+(`gonf-endpoint-rollback*` units on r0-r2; `gonf_endpoint_rollback` /
+`gonf_endpoint_runtime` rc.d hooks and the `/etc/crontab` watchdog line on
+f0-f3). It is
 one-shot: delete `retire.go` and its registrations once every host has run
 it (the normally stopped FreeBSD guest runs `freebsd_guest_endpoints_retire`
 when it is next up). Left on hosts on purpose: the old journals under
 `/var/{db,lib}/gonf-endpoint-migration` and the orphan
 `/usr/local/sbin/gonf-endpoint-rollback` with `/var/{db,lib}/gonf-endpoint`.
 
-`check-offline.py` runs the real helper and merger against temporary files.
+`check-offline.py` runs the real helper and merger against temporary files,
+and the OpenBSD `/etc/rc` edit from `retire.go` against fixtures.
