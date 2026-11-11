@@ -229,7 +229,7 @@ pkg-netbsd: /tmp/$(NAME)-netbsd
 		rm /tmp/$(NAME)-netbsd-$(VERSION).tgz"
 	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/$(NAME)-netbsd-pkg /tmp/$(NAME)-netbsd /tmp/pkg-netbsd.sh"
 	rm -f /tmp/$(NAME)-netbsd /tmp/$(NAME)-netbsd-$(VERSION).tgz
-	@$(MAKE) --no-print-directory netbsd-summary
+	@$(MAKE) -C $(CURDIR) --no-print-directory netbsd-summary
 	@echo "NetBSD package $(NAME)-$(VERSION) uploaded to repo"
 
 # Regenerate pkg_summary.gz from EVERY package in the NetBSD repo.
@@ -387,7 +387,9 @@ dtail-netbsd:
 	@# Clean up remote and local temp files
 	$(NETBSD_SSH) $(NETBSD_BUILD_HOST) "rm -rf /tmp/dtail-netbsd-pkg /tmp/dtail-netbsd-binaries /tmp/pkg-dtail-netbsd.sh"
 	rm -rf /tmp/dtail-netbsd-binaries /tmp/dtail-netbsd-$(DTAIL_NETBSD_VERSION).tgz
-	@$(MAKE) --no-print-directory netbsd-summary
+	@# -C $(CURDIR): with .ONESHELL the "cd $(DTAIL_SRC)" above still applies
+	@# here, and a plain $(MAKE) would look for netbsd-summary in the dtail tree.
+	@$(MAKE) -C $(CURDIR) --no-print-directory netbsd-summary
 	@echo "NetBSD package dtail-$(DTAIL_NETBSD_VERSION) uploaded to repo"
 
 # Build RPMs for Rocky Linux 9 (x86_64 + aarch64), generate repodata, and upload to the PV.
