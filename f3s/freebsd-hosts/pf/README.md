@@ -27,7 +27,8 @@ endpoints or bridge forwarding. New physical addresses are added only by the
 separate guarded network-migration task.
 
 Inbound defaults to block; outbound keeps state. `lo0` stays skipped for S7.
-The current candidate trusts `192.168.1.0/24`, `10.20.0.0/24`,
+The current candidate trusts `10.20.0.0/24` (the old `192.168.1.0/24` left in
+task i24),
 `fd22:c702:acb7::/64`, `fd02:ca0b:f1cb:20::/64` and `fe80::/10` on `re0`.
 LAN trust deliberately includes stunnel TCP 2323
 from r0–r2, Garage TCP 3900/3901/3903 from f-hosts/r-nodes and UPS TCP 3551.

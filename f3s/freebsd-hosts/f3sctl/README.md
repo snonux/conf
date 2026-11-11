@@ -22,7 +22,7 @@ Layers:
 
 1. Unprivileged user `f3sctl`, home `/var/db/f3sctl`, no `~/.ssh`. The key is
    in root-owned `/etc/ssh/authorized_keys.d/f3sctl`.
-2. `from="192.168.1.125,192.168.1.126,192.168.2.203,192.168.2.204"` on the
+2. `from="10.20.0.125,10.20.0.126,192.168.2.203,192.168.2.204"` on the
    key (pi0/pi1, LAN and WireGuard). The public key line is
    [`authorized_keys`](authorized_keys) here; the private key stays on pi0/pi1.
 3. `ForceCommand` in a `Match User f3sctl` block in `sshd_config` (the
@@ -59,7 +59,7 @@ From pi0, as the CGI user:
 
 ```sh
 doas -u _httpd ssh -i /var/db/f3sctl/id_ed25519 -o IdentitiesOnly=yes \
-    f3sctl@192.168.1.130 zusb-status      # "absent" or "loaded"
+    f3sctl@10.20.0.130 zusb-status      # "absent" or "loaded"
 ```
 
 Must be refused: `'echo pwned'` and `'zusb-status; echo pwned'` (expected

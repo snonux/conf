@@ -35,7 +35,7 @@ BIN=/usr/local/bin/f3sctl
 # Pis over WireGuard, so in practice it is the 192.168.2.x addresses that match
 # here; the LAN pair is included so the same key works when tested from the
 # LAN side.
-FROM='192.168.1.125,192.168.1.126,192.168.2.203,192.168.2.204'
+FROM='10.20.0.125,10.20.0.126,192.168.2.203,192.168.2.204'
 
 # --- account -------------------------------------------------------------
 # A real shell is required: sshd execs the ForceCommand through the account's
