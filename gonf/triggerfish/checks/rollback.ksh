@@ -43,8 +43,9 @@ pfctl() {
  '-f '*)
   print -- "pfctl $*" >> "$BASE/operations"
   if [[ $2 == "$STATE/candidate/pf.conf" ]]; then
-   # Local-only candidates deny RA/RS; the o34 uplink stages pass the CPE's.
-   if grep -Eq '^pass in quick on [$]up6_if inet6 proto icmp6 from fe80::1 .*icmp6-type routeradv$' "$2"; then
+   # Local-only candidates deny RA/RS; the o34 uplink stages pass the CPE's
+   # (lab-final with its l24 if-bound state).
+   if grep -Eq '^pass in quick on [$]up6_if inet6 proto icmp6 from fe80::1 .*icmp6-type routeradv( keep state [(]if-bound[)])?$' "$2"; then
     rm -f "$BASE/pf-blocks-ra"
    else touch "$BASE/pf-blocks-ra"; fi
    mkdir -p "$BASE/pf-tables"
@@ -1132,6 +1133,43 @@ cam_before_deny 'pass in quick on igc inet proto tcp to port 8080'
 i44_refuses camera-igc3 'camera zone deny must precede every permit'
 cam_before_deny 'pass in quick on egress inet proto tcp to port 8080'
 i44_refuses camera-igc3 'camera zone deny must precede every permit'
+# l24: only the rule header names the interface. Quoted text saying
+# "on igc0" (a label or tag) does not make an interface-less permit concrete.
+cam_before_deny 'pass in quick inet proto tcp to port 8080 label "x on igc0 y"'
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+cam_before_deny 'pass in quick inet proto tcp to port 8080 tag "on igc0"'
+i44_refuses camera-igc3 'PF tag names must be single words'
+cam_before_deny 'pass in log (all, to pflog0) quick inet proto tcp to port 8080'
+i44_refuses camera-igc3 'camera zone deny must precede every permit'
+# Anchors refuse anywhere: rules loaded into them at runtime could permit the
+# port, empty or not, and this helper does not own their loaders.
+cam_before_deny 'pass in quick on igc2 inet proto tcp to port 8080 tag "x no state"'
+i44_refuses camera-igc3 'PF tag names must be single words'
+cam_before_deny 'pass in quick on igc2 inet proto tcp to port 8080 !tagged "x no state"'
+i44_refuses camera-igc3 'PF tag names must be single words'
+cam_before_deny "pass in quick on igc2 inet proto tcp to port 8080 tag 'x no state'"
+i44_refuses camera-igc3 'PF tag names must be single words'
+cam_before_deny 'anchor "l24"'
+i44_refuses camera-igc3 'PF anchors are not supported in candidates'
+print 'anchor "l24" in on igc2 {\n pass in quick on igc2 inet proto tcp to port 8080\n}' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'PF anchors are not supported in candidates'
+# Supernets, ranges, admitting negations and tables that name the zone.
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.0.0.0/8 port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.39.255.0 - 10.40.0.20 port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to ! 10.20.0.0/24 port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'table <l24big> const { 10.0.0.0/8 }\npass in on wg2 inet proto tcp from 10.99.0.2 to <l24big> port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'table <l24dyn> persist\npass in on wg2 inet proto tcp from 10.99.0.2 to <l24dyn> port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'table <l24lab> const { 10.20.0.0/24 }\npass in on wg2 inet proto tcp from 10.99.0.2 to ! <l24lab> port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'table <l24hole> const { 10.0.0.0/8, !10.40.0.0/26 }\npass in on wg2 inet proto tcp from 10.99.0.2 to ! <l24hole> port 22' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'camera zone must stay default-deny'
+print 'match out on igc0 inet from 10.0.0.0/8 to ! <nonpublic> nat-to 192.168.1.2' >> "$cam/pf.conf"
+i44_refuses camera-igc3 'no NAT for the camera zone'
 # A deny after the interface-less transit permit no longer shields the port.
 edit '/^block drop [a-z]* log quick on [$]cam_if$/d' "$cam/pf.conf"
 # shellcheck disable=SC2016
@@ -1140,7 +1178,17 @@ i44_refuses camera-igc3 'camera zone deny must precede every permit'
 # Controls: a concrete other port before the deny, and a public 110.40.0.0/16
 # address after it, are not camera rules.
 cam_before_deny 'pass in quick on igc2 inet proto tcp from 10.30.0.0/24 to 10.30.0.1 port 8080'
-print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 110.40.0.1 port 22' >> "$cam/pf.conf"
+cam_before_deny 'pass in log (all, to pflog0) quick on igc2 inet proto tcp from 10.30.0.0/24 to 10.30.0.1 port 8081 tag "gonf_transit"'
+# l24 controls: quoted zone text, a negated table or prefix that excludes the
+# whole zone, and ranges and prefixes beside it are not camera rules.
+{
+ print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 110.40.0.1 port 22'
+ print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.1 port 22 label "10.40.0.11 on igc3"'
+ print 'table <l24big> const { 10.0.0.0/8 }\npass in on wg2 inet proto tcp from 10.99.0.2 to ! <l24big> port 22'
+ print 'pass in on wg2 inet proto tcp from 10.99.0.2 to ! 10.0.0.0/8 port 22'
+ print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.41.0.0 - 10.41.0.9 port 22'
+ print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.41.0.0/16 port 22'
+} >> "$cam/pf.conf"
 "$fixture/run" validate "$cam" camera-igc3
 rm -rf "$base/router-profiles"
 cp -Rp "$fixture/profiles.saved" "$base/router-profiles"
@@ -1457,9 +1505,31 @@ j24_refuses() {
  [[ $(cat "$base/router-state/token") == c24lab03 && $(cat "$base/router-state/status") == confirmed ]]
  rm -rf "$fin"; cp -Rp "$fixture/final.saved" "$fin"
 }
+# l24: every stateful pass of lab-final keeps an if-bound state, so a device
+# on the camera port cannot match states created on another port. The global
+# policy stays floating (the arm snapshot restores it with the loaded rules).
+grep -qx 'set state-policy floating' "$fin/pf.conf"
+awk '/^pass / && !/ keep state [(]if-bound[)]$/ {bad=1} END {exit bad}' "$fin/pf.conf"
+edit 's/^\(pass out on igc0 inet from 192[.]168[.]1[.]2 to ! <nonpublic>\) keep state (if-bound)$/\1 keep state/' "$fin/pf.conf"
+grep -qx 'pass out on igc0 inet from 192.168.1.2 to ! <nonpublic> keep state' "$fin/pf.conf"
+j24_refuses 'every stateful pass of this profile must keep if-bound states'
+# PF's default is keep state: a pass without a state keyword is floating too.
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.1 port 22' >> "$fin/pf.conf"
+j24_refuses 'every stateful pass of this profile must keep if-bound states'
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.1 port 22 label "keep state (if-bound)"' >> "$fin/pf.conf"
+j24_refuses 'every stateful pass of this profile must keep if-bound states'
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.1 port 22 keep state (floating)' >> "$fin/pf.conf"
+j24_refuses 'every stateful pass of this profile must keep if-bound states'
+# Controls: stateless passes and if-bound beside other state options.
+print 'pass in on wg2 inet proto udp from 10.99.0.2 to 10.20.0.1 port 53 no state' >> "$fin/pf.conf"
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.20.0.1 port 22 keep state (max 100, if-bound)' >> "$fin/pf.conf"
+"$fixture/run" validate "$fin" lab-final
+rm -rf "$fin"; cp -Rp "$fixture/final.saved" "$fin"
+# The older profiles keep their accepted floating states.
+if grep -q 'if-bound' "$base/router-profiles/lab-igc1/pf.conf" "$base/router-profiles/camera-igc3/pf.conf"; then exit 1; fi
 print 'inet alias 10.98.0.1 255.255.255.0' >> "$fin/hostname.igc1"
 j24_refuses 'final profile keeps a recovery leftover'
-print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port 22 keep state' >> "$fin/pf.conf"
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port 22 keep state (if-bound)' >> "$fin/pf.conf"
 j24_refuses 'final profile keeps a recovery leftover'
 print 'subnet 10.98.0.0 netmask 255.255.255.0 { deny unknown-clients; }' >> "$fin/dhcpd.conf"
 j24_refuses 'final profile keeps a recovery leftover'

@@ -78,6 +78,11 @@ old_management() {
 }
 # Profiles that must carry the explicit, logged camera-zone deny.
 camera_zone_profile() { [[ $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
+# l24: profiles whose every stateful pass keeps if-bound states (if_bound_states),
+# mirrors ifBoundStage() in camera.go. The global policy stays floating: the
+# arm snapshot restores "set state-policy floating" plus the loaded rules, and
+# those rules carry their per-rule if-bound option themselves.
+ifbound_profile() { [[ $1 == lab-final ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  # The NAT66 egress helper (nat66-egress) takes this lock for well under a
@@ -317,10 +322,19 @@ prefix_only_on() {
 # macros and lists ({igc2,igc3}, $cam_if) become one rule per interface and
 # address, nothing hides in an __automatic table, and the file order stays.
 # The text is still checked for the $cam_if macro, which expansion removes.
+# l24: anchors are refused outright (rules loaded into them at runtime could
+# permit the port, and this helper does not own their loaders), and the
+# if-bound profiles must give every stateful pass an interface-bound state.
 validate_camera() {
  typeset d=$1 p=$2 port rule x=$BASE/router-pf-expanded
  port=$(camera_port "$p") || fail 'profile has no reviewed camera port'
  pfctl -o none -nvf "$d/pf.conf" > "$x" || fail 'PF candidate does not parse'
+ awk '/^[ \t]*(anchor|load[ \t]+anchor)([ \t]|$)/ {bad=1} END {exit bad}' "$d/pf.conf" "$x" || fail 'PF anchors are not supported in candidates'
+ # The expansion prints tag names bare: "tag \"x no state\"" would read as
+ # a stateless rule. Tags are single words (gonf_transit, gonf_transit6);
+ # if_bound_states also ignores everything printed from the tag on. (A macro
+ # holding "x no state" expands to tokens, so "no state" really applies.)
+ awk '/(^|[^A-Za-z0-9_])tag(ged)?[ \t]+("[^"]*[^A-Za-z0-9_"][^"]*"|\047[^\047]*[^A-Za-z0-9_\047][^\047]*\047)/ {bad=1} END {exit bad}' "$d/pf.conf" || fail 'PF tag names must be single words'
  # One awk pass each: a grep pipeline under pipefail could lose a match to
  # SIGPIPE. Recorder and update permits are later, separately measured gates.
  awk '/^pass / && /[$]cam_if/ {bad=1} END {exit bad}' "$d/pf.conf" || fail 'camera zone must stay default-deny'
@@ -340,37 +354,129 @@ validate_camera() {
   done
   camera_deny_first "$port" "$x" || fail 'camera zone deny must precede every permit that can match the camera port'
  fi
+ if ifbound_profile "$p"; then
+  if_bound_states "$x" || fail 'every stateful pass of this profile must keep if-bound states'
+ fi
  rm -f "$x"
 }
-# Exit 1 when an expanded rule selected by the awk pattern $2 names the zone:
-# its addresses or tables, or (dedicated port only) the port as a whole word,
-# wherever it appears: "on igc3", "(igc3:network)", "(igc3)".
-camera_rules() {
- awk -v port="$1" '
-  function zone(r,  t, n, i, f) {
-   if (r ~ /(^|[^0-9])10[.]40[.]/ || r ~ /<(outdoor|recorders|camera_updates)>/) return 1
-   if (port == "igc0") return 0
-   t = r; gsub(/[(){},:!"]/, " ", t); n = split(t, f, " ")
-   for (i = 1; i <= n; i++) if (f[i] == port) return 1
-   return 0
+# Shared awk functions of the camera checks over pfctl's expansion (l24).
+# unquote() drops quoted strings (labels, anchor names), so their text can
+# never pass for a keyword, an interface or an address. pfctl prints tag
+# names unquoted, so validate_camera refuses tag names that are not one word. span() sets lo/hi
+# to the IPv4 interval of an address, prefix or "a - b" range; the zone is
+# 10.40.0.0/24 (ZLO..ZHI). Table declarations are read from the expansion
+# itself ("table <t> const { a b !c }"): table_line() records whether a
+# table names the zone (an entry overlaps it, or its contents are not fixed by
+# the file: not const, loaded from a file, or an entry that is no literal
+# address) and whether it covers the whole zone with no negated entry inside.
+# Awk program text, not shell expansions.
+# shellcheck disable=SC2016
+CAMERA_AWK='
+BEGIN { ZLO = 10 * 16777216 + 40 * 65536; ZHI = ZLO + 255 }
+function unquote(s) { gsub(/"[^"]*"/, " ", s); return s }
+function ipv4(t) { return t ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+([/][0-9]+)?$/ }
+function span(t,  p, b, o, size) {
+ split(t, p, "/"); b = (p[2] == "") ? 32 : p[2] + 0
+ split(p[1], o, "."); lo = ((o[1] * 256 + o[2]) * 256 + o[3]) * 256 + o[4]
+ size = 2 ^ (32 - b); lo -= lo % size; hi = lo + size - 1
+}
+function table_line(  t, n, f, i, name, e, fixed, file, over, cover, inner) {
+ t = unquote($0); file = (t != $0)
+ gsub(/[{},]/, " ", t); n = split(t, f, " ")
+ name = f[2]; gsub(/[<>]/, "", name)
+ for (i = 3; i <= n; i++) {
+  e = f[i]
+  if (e == "const") { fixed = 1; continue }
+  if (e == "persist" || e == "counters" || e == "file") continue
+  if (e ~ /:/) continue
+  if (e ~ /^!/) { e = substr(e, 2); if (!ipv4(e)) { over = 1; continue }
+   span(e); if (lo <= ZHI && hi >= ZLO) inner = 1; continue }
+  if (!ipv4(e)) { over = 1; continue }
+  span(e); if (lo <= ZHI && hi >= ZLO) over = 1; if (lo <= ZLO && hi >= ZHI) cover = 1
+ }
+ known[name] = 1
+ names[name] = over || !fixed || file
+ covered[name] = fixed && !file && cover && !inner
+}
+function zone(r, port,  t, n, f, i, neg, name, x) {
+ t = unquote(r)
+ if (t ~ /(^|[^0-9])10[.]40[.]/) return 1
+ if (port != "igc0") {
+  x = t; gsub(/[(){},:!]/, " ", x); n = split(x, f, " ")
+  for (i = 1; i <= n; i++) if (f[i] == port) return 1
+ }
+ if (t ~ /(^| )inet6( |$)/) return 0
+ x = t; gsub(/[{},]/, " ", x); n = split(x, f, " ")
+ for (i = 1; i <= n; i++) {
+  neg = 0
+  if (f[i] == "!") { neg = 1; i++ } else if (f[i] ~ /^![^=]/) { neg = 1; f[i] = substr(f[i], 2) }
+  if (f[i] ~ /^<[^<>]+>$/) {
+   name = substr(f[i], 2, length(f[i]) - 2)
+   if (!(name in known)) return 1
+   if (neg ? !covered[name] : names[name]) return 1
+   continue
   }
-  '"$2"' && zone($0) {bad=1}
-  END {exit bad}' "$3"
+  if (!ipv4(f[i])) continue
+  span(f[i])
+  if (f[i + 1] == "-" && ipv4(f[i + 2])) { x = lo; span(f[i + 2]); lo = x; i += 2 }
+  if (neg ? !(lo <= ZLO && hi >= ZHI) : (lo <= ZHI && hi >= ZLO)) return 1
+ }
+ return 0
+}
+'
+# Exit 1 when an expanded rule selected by the awk pattern $2 names the zone:
+# its addresses, a supernet or range overlapping 10.40.0.0/24 (10.0.0.0/8),
+# a negation that admits it ("! 10.20.0.0/24"), a table that names it (by
+# contents or because its contents are runtime-mutable, like <recorders> and
+# <camera_updates>), or (dedicated port only) the port as a whole word,
+# wherever it appears: "on igc3", "(igc3:network)", "(igc3)". IPv6 rules
+# cannot carry the IPv4 zone; only the port check applies to them. The file
+# is read twice: tables first, then the rules.
+camera_rules() {
+ awk -v port="$1" "$CAMERA_AWK"'
+  NR == FNR { if ($1 == "table") table_line(); next }
+  '"$2"' && zone($0, port) {bad=1}
+  END {exit bad}' "$3" "$3"
 }
 # A quick deny ends evaluation, so a permit can reach the camera port only
 # if it comes before both denies and can match the port: no interface, a
 # negated one ("on ! igc0"), an interface group ("on igc", "on egress") or
-# the port itself. Earlier permits must name one other concrete port.
+# the port itself. Earlier permits must name one other concrete port. Only
+# the rule header is read (l24): "pass [in|out] [log [(...)]] [quick] on IF",
+# with quoted strings removed, so a label such as "x on igc0" cannot stand in
+# for the interface of an interface-less rule.
 camera_deny_first() {
- awk -v port="$1" '
+ awk -v port="$1" "$CAMERA_AWK"'
+  function concrete(r,  f, n, i, iface) {
+   n = split(unquote(r), f, " "); i = 2
+   if (f[i] == "in" || f[i] == "out") i++
+   if (f[i] == "log") { i++; if (f[i] ~ /^[(]/) { while (i < n && f[i] !~ /[)]$/) i++; i++ } }
+   if (f[i] == "quick") i++
+   if (f[i] != "on") return 0
+   iface = f[i + 1]
+   return iface ~ /^(igc|wg)[0-9]+$/ && iface != port
+  }
   $0 == "block drop in log quick on " port " all" && !in_ {in_ = NR}
   $0 == "block drop out log quick on " port " all" && !out {out = NR}
-  $1 == "pass" && !(in_ && out) {
-   iface = ""
-   for (i = 2; i < NF; i++) if ($i == "on") {iface = $(i + 1); break}
-   if (iface !~ /^(igc|wg)[0-9]+$/ || iface == port) bad = 1
-  }
+  $1 == "pass" && !(in_ && out) && !concrete($0) {bad = 1}
   END {exit bad || !in_ || !out}' "$2"
+}
+# l24: with floating states, PF looks a packet up in the state table before
+# any rule, so a device on the camera port could inject packets that match a
+# state created on another port (replies to the router's own DNS or NTP on
+# igc0, a lab flow) and the quick camera deny never sees them. The if-bound
+# profiles therefore bind every state to the interface it was created on:
+# each stateful expanded pass rule must say "(if-bound)" in its state options
+# (pfctl omits the default "keep state", so a rule without "no state" and
+# without if-bound refuses). Quoted text is ignored: a label cannot fake it.
+# pfctl prints the state options before any "tag"/"tagged" (verified on
+# OpenBSD 8.0), so the text from the tag on is cut: a bare multi-word tag
+# name such as "x no state" cannot fake them either.
+if_bound_states() {
+ awk "$CAMERA_AWK"'
+  $1 == "pass" { r = unquote($0); sub(/ (! )?tag(ged)? .*$/, "", r)
+   if (r !~ / no state( |$)/ && r !~ /state [(]([^)]*[ ,])?if-bound[,)]/) bad = 1 }
+  END {exit bad}' "$1"
 }
 
 # o34 IPv6 placement. Local-only profiles keep exactly one persistent

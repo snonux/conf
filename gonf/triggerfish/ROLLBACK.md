@@ -357,9 +357,10 @@ const declaration in the saved runtime rules, which are parsed natively before
 arming. Mutable or unreferenced lookalikes refuse. Across a cold boot, acceptance
 compares these internal tables by contents and rule references; their opaque
 names can change. Named table identity and contents remain exact.
-Profiles use floating state policy
+Profiles use the global floating state policy
 and only loopback skip; unexpected persistent if-bound policy or skipped physical
-interfaces also refuse. Table declarations come from the saved parsed file,
+interfaces also refuse. Per-rule `keep state (if-bound)` (lab-final since l24)
+is part of the loaded rules, so `pfctl -sr` carries it into the snapshot. Table declarations come from the saved parsed file,
 while dynamic contents and live rules are captured separately. Restore also
 removes persistent tables introduced by the frozen candidate but absent from
 the snapshot; reloading old rules alone leaves those tables in the kernel.
@@ -792,3 +793,63 @@ path, and the router's igc1 recovery subnet last.
   DHCP probe, which missed an OFFER dhcpd logged; the rerun passed).
 - **k34 retired** (RECOVERY-TUNNEL.md): router side, gateway key line and the
   controller key material; the router keeps no recovery path besides wg2.
+
+## l24: camera-zone hardening before the cameras (2026-11-11)
+
+Two review notes on the camera zone, done before m24 cables igc3. Recorder
+access and camera update permits are not part of this step: they wait for
+the recorder identity, camera details and update policy (IQ
+`openbsdrouter-plan`, task l24).
+
+- **If-bound states in lab-final** (g24 review N2). PF looks a packet up in
+  the state table before it evaluates any rule. With floating states a device
+  on igc3 could send packets matching a state created on another port (the
+  replies to the router's own DNS and NTP queries on igc0, a lab flow), and
+  the quick camera deny would never see them. `lab-final` (`ifBoundStage`,
+  `ifBoundStates` in `camera.go`) now gives every `pass` rule
+  `keep state (if-bound)`: a state only matches packets on the interface it
+  was created on. Every routed flow already passes on both sides (the
+  `gonf_transit` tag), so nothing needs a floating state. The global
+  `set state-policy floating` stays: the arm snapshot restores it plus
+  `pfctl -sr`, which carries the per-rule option. Older profiles keep their
+  accepted bytes. router-rollback refuses an `ifbound_profile` candidate
+  with any stateful expanded `pass` (PF's default keep state included) that
+  lacks `(if-bound)`; quoted text such as a label cannot fake it.
+- **camera_deny_first** reads only the rule header (`pass [in|out]
+  [log [(...)]] [quick] on IF`) after removing quoted strings, so a label
+  like `"x on igc0 y"` no longer makes an interface-less permit look
+  concrete. `anchor` and `load anchor` lines refuse anywhere in the file or
+  its expansion: rules loaded into an anchor at runtime could permit the
+  port, and the helper does not own their loaders.
+- **Zone detection** (`camera_rules`) reads the table declarations from the
+  expansion. A pass or translation rule names the zone when it carries a
+  `10.40.` address, a prefix or range overlapping `10.40.0.0/24`
+  (`10.0.0.0/8`), a negation that admits the zone (`! 10.20.0.0/24`, or
+  `! <t>` unless `<t>` is const and covers the whole zone without a negated
+  entry inside), or a table that overlaps the zone or whose contents are not
+  fixed by the file (not const, loaded from a file, or a non-address entry,
+  so `<recorders>` and `<camera_updates>` stay covered). IPv6 rules get only
+  the port check. `any` is not treated as naming the zone: the deny-first
+  check, not the address check, keeps unrestricted permits off the port.
+  pfctl prints tag names unquoted (after the state options), so quoted
+  multi-word tag names refuse (`tag`, `tagged`, `!tagged`, either quote) and
+  the if-bound check ignores the text from the tag on.
+
+A later recorder or update permit has to be a quick, if-bound rule on each
+side (in on its source port with the transit tag, `pass out quick on
+$cam_if ...` before the deny), and validate_camera has to admit exactly that
+reviewed shape; today it still refuses any permit into the zone.
+
+Fixtures in `checks/rollback.ksh` cover each new refusal with real
+`pfctl -o none -nvf` on the router (labels and tags before the deny, `log
+(...)` options, anchors before the deny and inline, a /8 supernet, a range,
+an admitting negated prefix and table, a supernet table, a mutable table, a
+negated table with a hole, a supernet NAT, multi-word tags; lab-final rules without
+`(if-bound)`, with the default state, with a faked label and with
+`(floating)`) and controls that must still pass (quoted zone text, negations
+that exclude the zone, neighbouring prefixes and ranges, `no state` and
+combined state options, `log (...)` options and a quoted one-word tag).
+The previous helper fails the new label, tag, anchor, supernet, range,
+negation, table and NAT fixtures. The harness's `pfctl -f` mock recognises
+lab-final's CPE router-advertisement permit with its if-bound state.
+

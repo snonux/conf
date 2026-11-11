@@ -54,12 +54,16 @@ func labPortStage(name string) bool {
 // route move comes from the stage wiring (profileFiles; ipv6Files keeps the
 // lab's local-only IPv6 policy on igc1 and adds the uplink SLAAC line to
 // igc0), the lab DHCP on igc1 from dhcpInterfaces and profileDHCP, the
-// explicit camera deny from cameraZoneStage. Only the notes differ here.
+// explicit camera deny from cameraZoneStage. Apart from the notes, only
+// lab-final's if-bound states (l24, ifBoundStage) differ here.
 func labFiles(s routerStage, data RouterProfiles) map[string]string {
 	files := cameraFiles(s, data)
 	files["ACTIVATION.txt"] = labActivation(s)
 	if s.name == labFinalProfileName {
 		files["ACTIVATION.txt"] = labFinalActivation(s)
+	}
+	if ifBoundStage(s.name) {
+		files["pf.conf"] = ifBoundStates(files["pf.conf"])
 	}
 	return files
 }
@@ -162,7 +166,9 @@ anti-spoofing line for 10.98.0.0/24, a plain lab DHCP subnet (no recovery
 subnet, no shared-network). Activate only after every host answers the laptop
 through its 10.20.0.1 default (retire-recovery).
 %s with the JetKVM MAC reservations.
-Confirmation needs a fresh new receipt from a lab host and the VPN receipt. A timed or boot restore returns the snapshot (lab-igc1 with
-recovery the first time). Activate only through router-rollback.
-`, s.name, s.lab, s.wifi, s.camera, "DHCP: "+dhcpState(s))
+l24: every PF pass rule keeps if-bound states (global policy still floating),
+so a device on %s cannot match states of other ports.
+Confirmation needs a fresh new receipt from a lab host and the VPN receipt. A timed or boot restore returns the snapshot: the running profile before the
+trial (lab-igc1 with recovery the first time, floating lab-final for l24). Activate only through router-rollback.
+`, s.name, s.lab, s.wifi, s.camera, "DHCP: "+dhcpState(s), s.camera)
 }

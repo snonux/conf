@@ -1,6 +1,9 @@
 package triggerfish
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // g24: the outdoor camera zone gets its own router port before any camera
 // exists. Plan and acceptance live in IQ topics/infra/openbsdrouter-plan
@@ -49,7 +52,8 @@ func cameraZoneStage(name string) bool {
 // the zone closed against non-quick permits without an interface, such as
 // "pass out inet tagged gonf_transit", and give pflog a distinct rule. A
 // later measured permit therefore has to be a quick rule placed before these
-// lines (or replace them). <outdoor> is the static allocation (no DHCP);
+// lines (or replace them), with an if-bound state like every lab-final rule
+// (l24, ifBoundStates). <outdoor> is the static allocation (no DHCP);
 // <recorders> and <camera_updates> stay empty and unreferenced, so no NAT,
 // internet, router service, lab or Wi-Fi path reaches the zone.
 func cameraZoneRules() string {
@@ -74,4 +78,42 @@ tasks. Everything else is the wifi-ipv6-nat66 profile (Wi-Fi NAT66, Shelly
 TCP443). Activate only through router-rollback as a timed trial.
 Untested until cameras exist: real camera traffic and its pflog drops.
 `, s.name, s.lab, s.wifi, s.camera, s.camera, s.camera)
+}
+
+// ifBoundStage names the profiles whose PF states are bound to the interface
+// they were created on (l24): j24's lab-final, the profile that stays live
+// when the cameras are cabled. The older profiles keep their accepted bytes.
+// router-rollback's ifbound_profile lists the same names.
+func ifBoundStage(name string) bool { return name == labFinalProfileName }
+
+// ifBoundStates gives every pass rule of a rendered pf.conf an if-bound
+// state (g24 review N2). With "set state-policy floating" PF looks a packet
+// up in the state table before evaluating any rule, so a device on the
+// camera port could inject packets matching a state created on another port,
+// such as the replies to the router's own DNS and NTP queries on igc0 or a
+// lab flow, and the quick camera deny would never see them. An if-bound
+// state only matches packets on its own interface; every routed flow already
+// has a pass rule on each side (the gonf_transit tag), so nothing that works
+// today needs a floating state. The global policy stays floating on purpose:
+// router-rollback's arm snapshot restores "set state-policy floating" plus
+// the loaded rules (pfctl -sr), and the per-rule option travels with them.
+// "keep state" gains the option; a pass without a state keyword gets an
+// explicit "keep state (if-bound)" (PF's default is keep state). Rules with
+// state options or "no state" would need their own handling: none exist, and
+// router-rollback's if_bound_states refuses any stateful pass without it.
+func ifBoundStates(pf string) string {
+	lines := strings.Split(pf, "\n")
+	for i, line := range lines {
+		switch {
+		case !strings.HasPrefix(line, "pass "):
+		case strings.HasSuffix(line, " keep state"):
+			lines[i] = line + " (if-bound)"
+		case !strings.Contains(line, " state"):
+			lines[i] = line + " keep state (if-bound)"
+		}
+	}
+	pf = strings.Join(lines, "\n")
+	return strings.Replace(pf, "set state-policy floating\n", "set state-policy floating\n"+
+		"# l24: every pass rule keeps if-bound states, so a packet arriving on another\n"+
+		"# port (a device on the camera port) never matches them; see ifBoundStates.\n", 1)
 }
