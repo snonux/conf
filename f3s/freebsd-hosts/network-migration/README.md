@@ -1,5 +1,12 @@
 # FreeBSD address migration preparation (m14)
 
+**History (2026-11-11).** The migration is complete. i24 used this
+helper's `retire` verb to remove the old `192.168.1.x` aliases, and j24 used
+its `retire-recovery` verb to remove the `10.98.0.x` recovery aliases and
+the laptop return route. Exception: the stopped standalone `freebsd` guest,
+which is task 374. Paths below that mention a retained old address or the
+recovery route describe the migration. For the current state, see IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
+
 The bounded f3 native canary passed expiry, actual boot recovery, fresh
 old/new management, confirmation and scoped reapply on 2026-11-05; see the
 [v14 execution record](V14-CANARY.md#native-results--2026-11-05). The f3 primary

@@ -1,5 +1,10 @@
 # Dependent service endpoints (r14 preparation, 924 rollout)
 
+**History (2026-11-11).** The OLD-to-NEW endpoint migration described here
+is finished. Every service uses its lab address, and the old `192.168.1.x`
+addresses and the old VIP were retired in i24. The cable move (b24) has also
+been done. Use the normal owning tasks. For the current state, see IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
+
 ## 924 acceptance checkpoint (2026-11-07)
 
 UPS master/client endpoints, Garage RPC advertisements, all11 lab dserver

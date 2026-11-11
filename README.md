@@ -303,8 +303,9 @@ igc0 has only the upstream `192.168.1.2/24` (plus SLAAC for NAT66), the lab
 `10.98.0.0/24` was retired in j24), Wi-Fi `10.30.0.1/24` with DHCP
 and NAT66 is on igc2 (AP `10.30.0.2`, DHCP disabled) and the uncabled camera
 zone `10.40.0.1/24` is on igc3. Consult IQ's
-`topics/infra/openbsdrouter-plan/NEXT-SESSION.md` for current acceptance and
-the next step; do not replay legacy setup.
+`topics/infra/openbsdrouter-plan/DEPLOYMENT.md` for the accepted deployment,
+its ownership and open items (`NEXT-SESSION.md` there is the closed migration
+log); do not replay legacy setup.
 
 ## Workstation system configuration
 

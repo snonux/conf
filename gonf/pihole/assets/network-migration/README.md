@@ -1,5 +1,12 @@
 # Resolver migration — task 524
 
+**History (2026-11-11).** The migration is complete. On pi2/pi3, i24
+used the Rocky NetworkManager helper's `retire` verb
+(`gonf/rocky/assets/network-migration/`) to remove the old `192.168.1.127/.128`.
+j24 used its `retire-recovery` verb to remove the `10.98.0.x` recovery
+aliases and the laptop return route. Paths below that mention a retained old address or the
+recovery route describe the migration. For the current state, see IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
+
 Both resolvers completed shared-wire acceptance on 2026-11-07: NEW-primary
 10.20.0.127/.128, default gateway 10.20.0.1, retained OLD addresses, native ULA
 and the controller /32 return route through 192.168.1.2. Each separately

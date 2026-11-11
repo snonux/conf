@@ -1,5 +1,13 @@
 # Router rollback controller
 
+**Current state (2026-11-11):** the live profile is `lab-final`
+([j24 section](#j24-temporary-router-and-recovery-settings-retired-2026-11-11)).
+This file is the dated record of every guarded change since the 2026-11-05
+bootstrap. Statements below about retained old addresses, the `10.98.0.0/24`
+recovery subnet, `192.168.11.2`, the k34 tunnel or the laptop's recovery
+routes refer to their date. Those items are retired. The accepted deployment
+is described in IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
+
 The recovery controller and wg2 bootstrap were deployed on 2026-11-05.
 Two unconfirmed 180-second trials expired through native root cron; fresh old-LAN
 SSH verified restored/no-pending state and absence of wg2's file/interface.

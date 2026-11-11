@@ -1,6 +1,6 @@
 # NetBSD controller migration — task 624
 
-Live checkpoint, 2026-11-07 (history; OLD retired 2026-11-11 by i24, below): both controllers have confirmed NEW primaries and
+Live checkpoint, 2026-11-07 (history; OLD retired 2026-11-11 by i24, below, and the 10.98 recovery address and route by j24; current state: IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`): both controllers have confirmed NEW primaries and
 default10.20.0.1 with OLD/ULA/shared return retained, after actual confirmed
 boots and management, website, authenticated controller, mesh and external WoL
 checks. Original static WG and DTail are preserved. The native clean900s expiry
