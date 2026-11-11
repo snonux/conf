@@ -273,7 +273,9 @@ rollback() {
         (set -e; shift_addresses "$bridge" "$member") >> "$pending/log" 2>&1
         status=$?
         set -e
-        [ "$status" = 0 ] || fail "runtime restore failed ($status); journal kept for retry, see $pending/log"
+        # devd stays stopped on a half-restored CARP host: starting it would
+        # let carpcontrol.sh act on the half-built vhid. Say so.
+        [ "$status" = 0 ] || fail "runtime restore failed ($status); journal kept for retry, see $pending/log; on f0/f1 devd is left stopped"
         if is_carp && ! pgrep -x devd >/dev/null; then service devd start >/dev/null 2>&1 || :; fi
     fi
     archive "rolled-back"

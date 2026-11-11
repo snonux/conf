@@ -300,7 +300,8 @@ func (Carp) RcConf() {
 		line := carpAliasLine(n.Interface, n, pass)
 		compat := strings.Replace(carpAliasLine(labMember, n, pass), "alias0=", "alias1=", 1)
 		compat = strings.ReplaceAll(compat, carpVIP, carpCompatVIP)
-		guard := Command("sh", List("-c", `test ! -d `+bridgeState+`/pending && ! grep -q '^`+carpAliasKey(other)+`=' `+rcConf),
+		guard := Command("sh", List("-c", `test ! -d `+bridgeState+`/pending && ! grep -q '^`+carpAliasKey(other)+`=' `+rcConf+
+			` || { echo 'bridge move pending, or CarpNode.Interface not switched to match rc.conf' >&2; exit 1; }`),
 			WithName("rc-conf-carp-interface-guard"))
 		File(rcConf, WithKeyedLine(carpAliasKey(n.Interface)+"=", line),
 			WithoutLine(carpAliasLine(other, n, pass)),
