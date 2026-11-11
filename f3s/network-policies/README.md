@@ -425,7 +425,7 @@ re-pin the affected Application to that commit after the same comparison.
 
 Task i24 retired every lab host's old `192.168.1.x` address and the old CARP
 VIP `192.168.1.138`. The 36 old ipBlock `/32`s (r0–r2 `192.168.1.120–122`
-in twelve policies; f0/f1 `.130/.131` and `.138` in the two kube-system web
+in ten policies; f0/f1 `.130/.131` and `.138` in the two kube-system web
 receivers) were removed from cert-manager, infra, kube-system, monitoring
 and services. Each sat in the same rule as its `10.20.0.x` twin, which
 stays, so no receiver loses a current source. Before removal, r0–r2 had no

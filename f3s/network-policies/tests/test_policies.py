@@ -325,12 +325,15 @@ class Policies(unittest.TestCase):
                      ('cert-manager', {'app': 'webhook', INSTANCE: 'cert-manager'}, 10250),
                      ('monitoring', {'app': 'kube-prometheus-stack-operator', 'release': 'prometheus'}, 10250),
                      ('kube-system', TRAEFIK, 8000),
+                     ('kube-system', {'svccontroller.k3s.cattle.io/svcname': 'traefik',
+                                      'svccontroller.k3s.cattle.io/svcnamespace': 'kube-system'}, 443),
                      ('infra', {'app': 'docker-registry'}, 5000),
                      ('services', {'app': 'protonbridge'}, 143),
                      ('services', {'app': 'forgejo'}, 2222),
                      ('services', {'app': 'anki-sync-server'}, 8080)]
         for namespace, labels, port in receivers:
-            for address in ['10.20.0.120', '10.20.0.121', '10.20.0.122', '192.168.2.120']:
+            for address in ['10.20.0.120', '10.20.0.121', '10.20.0.122',
+                            '192.168.2.120', '192.168.2.122', '10.42.0.1', '10.42.2.0']:
                 self.assert_path({'ip': address}, namespace, labels, port, True)
             for address in ['192.168.1.120', '192.168.1.121', '192.168.1.122', '192.168.1.1']:
                 self.assert_path({'ip': address}, namespace, labels, port, False)
