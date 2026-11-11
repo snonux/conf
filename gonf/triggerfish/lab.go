@@ -13,8 +13,9 @@ import (
 // (Wi-Fi NAT66 on igc2, p34 Shelly TCP443, n44 Syncthing, the camera zone on
 // igc3) with 10.20.0.1/24, the lab ULA and their connected routes moved from
 // igc0 to igc1, next to the retained recovery 10.98.0.1. igc0 keeps the
-// upstream 192.168.1.2, the retained provisioning alias, the SLAAC uplink
-// and the NAT66 egress address. The old post-rack/post-ap stages must not be
+// upstream 192.168.1.2, the SLAAC uplink and the NAT66 egress address; j24
+// retired the provisioning alias 192.168.11.2 (inventory) and the ISP-LAN
+// management rules (oldManagementRules). The old post-rack/post-ap stages must not be
 // used instead: they put Wi-Fi back on igc0 or drop NAT66.
 const (
 	labProfileName = "lab-igc1"
@@ -78,14 +79,21 @@ func validateLabProof(t RouterTrial, client netip.Addr) error {
 	return nil
 }
 
-// oldManagementComment heads the old-address management rules. After b24
-// (lab-igc1) only the ISP router shares igc0, so only it could use them; every
-// other stage keeps its byte-identical wording.
-func oldManagementComment(s routerStage) string {
+// oldManagementRules renders the old-address router management rules on
+// igc0: SSH and ICMP from the ISP LAN to 192.168.1.2. Every stage before b24
+// keeps them byte-identical, because the lab and the laptop still shared that
+// LAN. After b24 (lab-igc1) only the ISP router shares igc0, so j24 retired
+// them: the ISP LAN is untrusted and gets no router management at all. The
+// wg2 endpoint 192.168.1.2:51822 and the router's own outbound connections
+// (upstream, NAT, the k34 recovery tunnel) do not depend on these rules.
+func oldManagementRules(s routerStage) string {
 	if s.name == labProfileName {
-		return "# Old-address router management: after b24 only the ISP router shares igc0."
+		return "# j24: no router management from the ISP LAN on igc0 (only the ISP router shares it).\n"
 	}
-	return "# Preserve fresh old-address router management from the existing LAN."
+	return `# Preserve fresh old-address router management from the existing LAN.
+pass in on igc0 inet proto tcp from 192.168.1.0/24 to 192.168.1.2 port 22 keep state
+pass in on igc0 inet proto icmp from 192.168.1.0/24 to 192.168.1.2 keep state
+`
 }
 
 // labRecoveryProofRules lets a lab host's recovery address reach the router's
@@ -107,8 +115,8 @@ old-management=isp-uplink-only, and before b24 dhcpd on igc1 would share
 the wire with the ISP router's DHCP.
 Moves 10.20.0.1/24, fd02:ca0b:f1cb:20::1/64 and their connected routes from
 igc0 to %s, never on both; recovery 10.98.0.1 stays on igc1. igc0 keeps
-192.168.1.2 (upstream, NAT, wg2 endpoint, k34 source), the retained
-provisioning alias, SLAAC and the NAT66 egress address.
+192.168.1.2 (upstream, NAT, wg2 endpoint, k34 source), SLAAC and the
+NAT66 egress address; no router management from the ISP LAN (j24).
 %s with the JetKVM MAC reservations.
 Lab IPv4 to the internet via NAT on igc0; the lab ULA stays local-only.
 Wi-Fi NAT66, Shelly TCP443 pairs, n44 Syncthing, wg2 and the camera zone are

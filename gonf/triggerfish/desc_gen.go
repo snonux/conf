@@ -10,10 +10,6 @@ func (Base) DescHosts() string {
 	return "Merges the fleet while retaining the router's upstream canonical address"
 }
 
-func (Base) DescNetwork() string {
-	return "Configures the temporary LAN alias, IPv4 forwarding and upstream NAT"
-}
-
 func (Base) DescUpload() string {
 	return "Installs the API token, upload client and hourly root cron job"
 }

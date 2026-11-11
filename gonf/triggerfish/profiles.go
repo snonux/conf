@@ -27,9 +27,10 @@ type RouterProfiles struct {
 	// o34 NAT66 profile and the g24 camera-igc3 profile (see bootCanaryStage;
 	// never c24's lab-igc1).
 	BootCanary bool
-	// RetainProvisioningAlias keeps the existing 192.168.11.2 alias in every
-	// candidate until verified retirement. This retains its address only: any
-	// active provisioning clients need explicit reviewed PF permissions.
+	// RetainProvisioningAlias keeps the old 192.168.11.2 alias in every
+	// candidate. This retains its address only: any active provisioning
+	// clients need explicit reviewed PF permissions. j24 retired the alias:
+	// the inventory leaves it false (after b24 no client shares igc0).
 	RetainProvisioningAlias bool
 	// TemporaryFlows are reviewed routed dependencies during mixed-address stages.
 	TemporaryFlows []MigrationFlow
@@ -254,10 +255,7 @@ block return log all
 	if cameraZoneStage(s.name) {
 		rules += cameraZoneRules()
 	}
-	rules += oldManagementComment(s) + `
-pass in on igc0 inet proto tcp from 192.168.1.0/24 to 192.168.1.2 port 22 keep state
-pass in on igc0 inet proto icmp from 192.168.1.0/24 to 192.168.1.2 keep state
-pass in on { igc0 $wifi_if } inet proto udp to { 192.168.1.2, 10.30.0.1 } port 51822 keep state
+	rules += oldManagementRules(s) + `pass in on { igc0 $wifi_if } inet proto udp to { 192.168.1.2, 10.30.0.1 } port 51822 keep state
 # Router-originated public IPv4 services, including DNS and clock sync.
 pass out on igc0 inet from 192.168.1.2 to ! <nonpublic> keep state
 # A forwarded packet is filtered again on egress. Only ingress-authorized

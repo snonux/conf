@@ -79,17 +79,11 @@ func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	// Temporary outbound management stays on port0 even if the lab gateway moves.
 	// Only the selected frontend carries the matching optional gateway data.
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
-		WithData(triggerfish.RouterProfiles{
-			RetainProvisioningAlias: true, BootCanary: trial.BootCanary,
-			// AP trial management only; retire this exact flow with j24.
-			TemporaryFlows: []triggerfish.MigrationFlow{
-				{Source: "10.20.0.130", Destination: "10.30.0.2", Protocol: "tcp", Port: 22},
-			},
-			// Shared-wire canary only; the other reserved devices need their own native range proof.
-			JetKVMManagement: []triggerfish.JetKVMManagementEndpoint{
-				{Address: "192.168.11.140", UDPMin: 32768, UDPMax: 60999},
-			},
-		}),
+		// j24 retired the provisioning alias 192.168.11.2 (no clients on igc0
+		// after b24), the f0 -> AP TCP22 migration flow (the AP is managed from
+		// Wi-Fi, where it sits) and the shared-wire JetKVM canary, which needed
+		// that alias. Every profile renders without them.
+		WithData(triggerfish.RouterProfiles{BootCanary: trial.BootCanary}),
 		WithData(trial), WithData(routerRecoveryGateway()))
 	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()
