@@ -110,7 +110,7 @@ func validateLabProof(t RouterTrial, client netip.Addr) error {
 // LAN. After b24 (lab-igc1) only the ISP router shares igc0, so j24 retired
 // them: the ISP LAN is untrusted and gets no router management at all. The
 // wg2 endpoint 192.168.1.2:51822 and the router's own outbound connections
-// (upstream, NAT, the k34 recovery tunnel) do not depend on these rules.
+// (upstream, NAT) do not depend on these rules.
 func oldManagementRules(s routerStage) string {
 	if labPortStage(s.name) {
 		return "# j24: no router management from the ISP LAN on igc0 (only the ISP router shares it).\n"
