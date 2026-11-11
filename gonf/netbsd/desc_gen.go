@@ -40,12 +40,8 @@ func (Periodic) DescLogs() string {
 
 func (Resolver) DescConf() string { return "Writes /etc/resolv.conf with the lab resolver" }
 
-func (ShellyEndpoints) DescActivate() string {
-	return "Adopts verified plug endpoints while preserving all other defaults"
-}
-
-func (ShellyEndpoints) DescPrepare() string {
-	return "Installs an inactive partial configuration without changing callers"
+func (ShellyEndpoints) DescRetireState() string {
+	return "Removes the Shelly endpoint candidate and the f3sctl rollback copies"
 }
 
 func (ShellyTLS) DescAccount() string {

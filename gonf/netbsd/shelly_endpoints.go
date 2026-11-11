@@ -2,50 +2,32 @@ package netbsd
 
 import (
 	. "github.com/snonux/gonf/api"
-
-	"github.com/snonux/conf/gonf/paths"
 )
 
-// ShellyEndpoints manages the partial power-controller configuration.
-// Missing fields retain f3sctl defaults. Existing custom configurations are
-// refused rather than replaced: they need a separately reviewed merge.
+// ShellyEndpoints retires what the Shelly endpoint adoption (task 724) and
+// the f3sctl HTTPS rollout (p34, f54) left on pi0/pi1 (task e74). The former
+// prepare/activate tasks are gone: Controller.Config owns
+// /usr/local/etc/f3sctl.json, with assets/shelly-endpoints.json as its
+// recognised legacy input. RetireState is a one-shot task, deleted in a later
+// commit once both Pis are clean.
+//
+// /var/db/gonf-endpoint-migration belongs to the endpoint helper that
+// Controller.Config still uses and stays.
 type ShellyEndpoints struct{ RequiresRoot }
 
-const (
-	shellyConfig    = "/usr/local/etc/f3sctl.json"
-	shellyCandidate = shellyConfig + ".triggerfish-shelly-candidate"
-)
+// OptsRetireState keeps the one-shot removal out of the pis_netbsd aggregate.
+func (ShellyEndpoints) OptsRetireState() TaskOptions { return TaskOptions{Operational()} }
 
-func (ShellyEndpoints) OptsPrepare() TaskOptions { return TaskOptions{Operational()} }
-func (ShellyEndpoints) OptsActivate() TaskOptions {
-	return TaskOptions{Operational(), Needs(ShellyEndpoints.Prepare)}
-}
-
-// Prepare installs an inactive partial configuration without changing callers.
-func (ShellyEndpoints) Prepare() {
-	EnsureDir("/usr/local/etc", RootOwned)
-	EnsureDir("/var/db/gonf-shelly-migration", RootPrivate)
-	InstallFile(shellyCandidate, paths.GonfAsset("netbsd", "shelly-endpoints.json"), RootOwned)
-}
-
-// Activate adopts verified plug endpoints while preserving all other defaults.
-func (ShellyEndpoints) Activate() {
-	guard := Command("/bin/sh", List("-ec", `
-PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/pkg/bin
-export PATH
-config=/usr/local/etc/f3sctl.json
-candidate=$config.triggerfish-shelly-candidate
-gate=/var/db/gonf-shelly-migration/devices-approved
-test ! -L "$config"
-if test -e "$config"; then
-    test -f "$config"
-    cmp -s "$config" "$candidate"
-else
-    test -f "$gate" && test ! -L "$gate"
-    test "$(stat -f '%u:%Lp' "$gate")" = 0:600
-    test "$(cat "$gate")" = 'shellyplugmg3-0892725e366c 10.30.0.28
-shellyplugmg3-0892725f8a04 10.30.0.29'
-fi`), WithName("shelly-endpoints-ownership-and-acceptance"))
-	InstallFile(shellyConfig, paths.GonfAsset("netbsd", "shelly-endpoints.json"),
-		RootOwned, DependsOn(guard))
+// RetireState removes the Shelly endpoint candidate and the f3sctl rollback copies.
+//
+// The rollback copies (f3sctl 0.11.3 and 0.11.4rc1 binaries plus their
+// configs) are obsolete: f3sctl 0.11.4 from pkgrepo is the installed release,
+// and older packages remain on pkgrepo for a rollback.
+func (ShellyEndpoints) RetireState() {
+	NoFile("/usr/local/etc/f3sctl.json.triggerfish-shelly-candidate")
+	NoDir(List(
+		"/var/db/gonf-shelly-migration",
+		"/var/db/gonf-p34-shelly",
+		"/var/db/gonf-f54-f3sctl",
+	), WithPrune)
 }
