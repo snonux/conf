@@ -190,3 +190,17 @@ return route and disabled-IPv6 policy without changing any live connection.
 The disposable fixture exercises guest stage/promote/boot restore and rejects
 an unallocated policy, checking no k3s restart or drop-in changes. Separate
 synthetic WireGuard fixtures check unchanged-mark refresh and failure recovery.
+
+## Recovery-path retirement (j24)
+
+`request retire-recovery` (`*_network_retire_recovery`) runs after i24 and
+removes the igc1 recovery address and the laptop's `10.99.0.2/32` route via
+10.98.0.1 from the NM profile and at runtime (no reactivation), so laptop
+replies follow the 10.20.0.1 default. Gates: `activation-approved`, single-use
+`retire-recovery-approved`, plus `serial-k3s-approved` naming the node on
+r-nodes. It refuses before arming unless the old address is gone (runtime and
+profile), the lab and recovery addresses are present, the gateway is
+10.20.0.1 (runtime and saved), the route uses 10.98.0.1 (runtime and saved),
+no other saved route uses 10.98.x and the global DNS drop-in exists. The same
+journal, PID1 watchdog and boot restore bring both back. Live 2026-11-11 on
+rocky, pi3, pi2, r2, r1, r0.

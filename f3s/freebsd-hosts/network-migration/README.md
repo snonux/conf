@@ -117,6 +117,20 @@ runtime configuration is reapplied unchanged (as after promote) so no peer
 keeps the deleted address as its UDP source. Confirm, the minute cron
 watchdog and the early boot hook restore alias200 exactly as for promote.
 
+## Recovery-path retirement (j24)
+
+`retire-recovery [seconds]` (task `freebsd_network_migration_retire_recovery`,
+default 900 s) runs after i24 and removes the dedicated igc1 recovery path:
+alias202 and the laptop route `route_gonfmigration` (and its `static_routes`
+entry; the key goes when nothing else is listed). Laptop replies then follow
+the 10.20.0.1 default. It needs `activation-approved`, `igc1-approved` and a
+single-use `retire-recovery-approved`, and refuses before arming unless the old
+address is gone (re0 and alias200), the lab address is the physical primary,
+alias202 and the recovery address are present, the default is 10.20.0.1 and
+the laptop route uses 10.98.0.1, runtime and saved, and no other saved route
+uses 10.98.x. Confirm, the cron watchdog and the boot hook restore both
+exactly as for retire. Live 2026-11-11 on f2, f1, f0; f3 not yet.
+
 ## Endpoint rollback integration (p24)
 
 The helper never reads or changes mesh keys, peer sets, AllowedIPs or endpoints.

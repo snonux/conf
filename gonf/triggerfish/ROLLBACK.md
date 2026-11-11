@@ -266,9 +266,10 @@ cron, the checked boot hook, a real provisioned/running wg2 and reviewed depende
 input. It saves running addresses, physical gateway routes, forwarding sysctls,
 PF rules/tables/enabled state, service runtime flags/running state, and persistent
 files separately. `/etc/gonf/router-owner` transfers ownership away from legacy
-`Base.Network` and remains after restore/confirmation. That legacy method must
-be operational and refuse any invocation while this marker exists. Routine
-reapply therefore cannot overwrite a restored current-cabling profile.
+`Base.Network` and remains after restore/confirmation. That legacy method was
+operational and refused any invocation while this marker existed; j24 removed
+it (and its `assets/pf.conf`), so only router-rollback writes the network
+configuration and routine reapply cannot overwrite a restored profile.
 
 Readiness is machine input from the later dependency/VPN workflow, not another
 human gate. That workflow installs a root-owned mode-600 file at
@@ -739,3 +740,31 @@ no requested-address option), which OpenBSD dhcpd ignores whatever the
 setting, so `authoritative;` is not rendered (comment in `labDHCPNetwork`).
 Private receipts: `~/.local/state/conf/h24-20261109/`; acceptance record in
 IQ `openbsdrouter-plan/NEXT-SESSION.md` (h24 section).
+
+## j24: temporary router and recovery settings retired (2026-11-11)
+
+Order: router leftovers without clients first, then the hosts' recovery
+path, and the router's igc1 recovery subnet last.
+
+- **Step A (live, confirmed):** inventory `RouterProfiles{}` no longer
+  retains `192.168.11.2`, the f0 -> AP `10.30.0.2` TCP22 migration flow or the
+  shared-wire JetKVM canary; `lab-igc1` renders no SSH/ICMP from
+  `192.168.1.0/24` to `192.168.1.2` (`oldManagementRules`; earlier stages are
+  byte-identical). Trial `j24-a-lab-igc1-20261111-a`: stage (every staged
+  profile equal to the render, candidate vs live exactly `hostname.igc0` and
+  `pf.conf`), readiness, arm, activate, GATE PASS (new/recovery/vpn plus the
+  c24 gate checks), igc0 IPv4 only `192.168.1.2`, f0 -> AP refused, AP SSH
+  still on-link from Wi-Fi, confirm. A 60 s igc0 capture before saw no
+  `192.168.11.0/24` client. The rollback fixture passed on the router.
+- **Hosts:** the migration helpers gained `retire-recovery` (see the f-host,
+  Rocky and NetBSD helper READMEs/sources); all hosts except f3 and its stopped
+  freebsd guest answer the laptop through the `10.20.0.1` default, without a
+  `10.98.0.x` address. The r-node and Pi-hole nft guards dropped their
+  recovery entries.
+- **Still open:** removing `10.98.0.1`, the igc1 recovery PF permits
+  (`wg2 -> 10.98.0.0/24`, `igc1 10.98.0.0/24 -> 10.98.0.1:22`, the anti-spoof
+  line) and the pool-less `10.98.0.0/24` dhcpd subnet needs a profile without
+  `recovery`; router-rollback's `validate`, `confirm_roles` (`recovery`) and
+  `drain_addresses` (keeps `10.98.0.1`) assume it everywhere. Blocked on f3,
+  whose return route still uses `10.98.0.1`; then the router reboot test
+  and the k34 tunnel retirement (RECOVERY-TUNNEL.md).

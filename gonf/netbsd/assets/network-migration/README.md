@@ -121,3 +121,17 @@ restore and retry every minute; after a reboot the host still comes up on
 the lab address but without the recovery alias and 10.99.0.2 return route.
 After a confirmed retire there is no scripted way back (stage/promote need
 OLD): restore rc.conf and `accepted` by hand from the private copy.
+
+## Recovery-path retirement (j24)
+
+`request retire-recovery` (`pis_netbsd_network_retire_recovery`) turns the
+accepted `retire isolated` into `retire lab`: no recovery address and no
+`10.99.0.2` host route (replies follow 10.20.0.1), and the Prepare-installed
+NPF candidate, which no longer admits the recovery or retired OLD address,
+replaces `/etc/npf.conf`. rc.conf is unchanged (it already has the lab primary
+and 10.20.0.1). Gates: `activation-approved`, single-use
+`retire-recovery-approved`; it refuses unless the OLD address is gone, the lab
+primary, recovery address, 10.20.0.1 default and 10.98.0.1 route are present,
+rc.conf has the lab lines and no 10.98 mention, and the candidate has no
+recovery address. The 900 s journal restores the previous mode, NPF, address
+and route. Live 2026-11-11 on pi1 (rebooted) and pi0.
