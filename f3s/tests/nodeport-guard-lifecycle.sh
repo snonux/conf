@@ -33,8 +33,8 @@ install -m 755 "$repo/f3s/r-nodes/nodeport-guard/f3s-nodeport-guard" \
     /usr/local/sbin/f3s-nodeport-guard
 declare -r helper=/usr/local/sbin/f3s-nodeport-guard
 declare -r pending=/var/lib/f3s-nodeport-guard/pending
-declare -r first='192.168.1.156 10001 192.168.1.120 22'
-declare -r second='192.168.1.156 10002 192.168.1.120 22'
+declare -r first='10.20.0.156 10001 10.20.0.120 22'
+declare -r second='10.20.0.156 10002 10.20.0.120 22'
 
 cat > "$scratch/bin/systemctl" <<'SH'
 #!/usr/bin/env bash
@@ -85,7 +85,7 @@ exec "$F3S_TEST_NFT" "$@"
 SH
 chmod +x "$scratch/bin/"*
 
-python3 - "$repo/f3s/r-nodes/nodeport-guard/candidate.nft" <<'PY'
+python3 - "$repo/f3s/r-nodes/nodeport-guard/migration.nft" <<'PY'
 from pathlib import Path
 import sys
 rules = Path(sys.argv[1]).read_text().replace('{{.Interface}}', 'enp0s5')

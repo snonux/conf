@@ -44,8 +44,9 @@ physical-cable and igc1 gates. Retain OLD resolver addresses and current Wi-Fi
 client DNS throughout. Never renumber the only working resolver.
 
 `pihole_firewall_migration_stage` installs only the dormant migration policy.
-It owns only `inet f3s_guard`, retaining old-LAN client trust during staging.
-NEW lab/ULA DNS is allowed. Both known wg2 identities receive TCP/UDP53 only
+It owns only `inet f3s_guard`. The old-LAN `192.168.1.0/24` client trust kept
+during staging was removed in task 074 (2026-11-11), after i24 retired the
+resolvers' old addresses. NEW lab/ULA DNS is allowed. Both known wg2 identities receive TCP/UDP53 only
 to the resolver pair; laptop SSH/web and phone HTTPS follow router permissions.
 Recovery aliases accept only laptop TCP22, before general LAN trust. New Wi-Fi
 and camera subnets receive no service trust. Existing diagnostics and old-mode

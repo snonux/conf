@@ -10,10 +10,12 @@ table inet f3s_guard {
         ct state established,related return
         # Dedicated recovery is SSH-only, before any shared-wire trust.
         ip daddr { 10.98.0.127, 10.98.0.128 } goto recovery
-        # Keep current Wi-Fi/old-LAN clients working during shared-wire staging.
-        ip saddr 192.168.1.0/24 return
+        # Task 074: the old 192.168.1.0/24 resolver addresses were retired in
+        # i24 and the router never forwards that subnet to the lab, so no old
+        # IPv4 source or destination is trusted any more.
+        # Old physical ULA: IPv6 compatibility, outside the IPv4 retirement.
         ip6 saddr fd22:c702:acb7::/64 return
-        ip saddr 10.20.0.0/24 ip daddr { 10.20.0.0/24, 192.168.1.0/24 } return
+        ip saddr 10.20.0.0/24 ip daddr 10.20.0.0/24 return
         ip6 saddr fd02:ca0b:f1cb:20::/64 ip6 daddr fd02:ca0b:f1cb:20::/64 return
         # Match the router's two identities and resolver-only DNS exception.
         ip saddr { 10.99.0.2, 10.99.0.3 } ip daddr { 10.20.0.127, 10.20.0.128 } udp dport 53 return

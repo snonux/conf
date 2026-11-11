@@ -49,7 +49,7 @@ semantics; the namespace packet test exercises the actual DNAT/FORWARD path.
 
 | Physical-LAN ingress to a local destination | Guard action |
 |---|---|
-| IPv4 source 192.168.1.0/24 or IPv6 source fd22:c702:acb7::/64 | Return to the existing firewall rules |
+| IPv4 source 10.20.0.0/24 (192.168.1.0/24 until its retirement, task 074) or IPv6 source fd22:c702:acb7::/64 | Return to the existing firewall rules |
 | Established/related replies and existing sessions | Preserve until they close |
 | ICMP/ICMPv6; link-local DHCPv6 server 547 → client 546 | Preserve |
 | R-node UDP 56709 | Preserve encrypted WireGuard transport |

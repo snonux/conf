@@ -9,7 +9,7 @@ fi
 [[ $(readlink /proc/self/ns/net) != "$(readlink /proc/1/ns/net)" ]]
 repo=$(cd -- "$(dirname -- "$0")/../.." && pwd)
 declare -r repo
-declare -r rules=$repo/f3s/r-nodes/nodeport-guard/candidate.nft
+declare -r rules=$repo/f3s/r-nodes/nodeport-guard/migration.nft
 scratch=$(mktemp -d)
 declare -r scratch
 declare -a children=()
@@ -57,21 +57,21 @@ ip route add 10.42.2.99/32 dev cni0
 
 ip link add lan0 type veth peer name peer0
 ip link set peer0 netns "$peer"
-ip addr add 192.168.1.120/24 dev lan0
+ip addr add 10.20.0.120/24 dev lan0
 ip link set lan0 up
-nsenter -t "$peer" -n ip addr add 192.168.1.121/24 dev peer0
-nsenter -t "$peer" -n ip addr add 192.168.1.122/32 dev peer0
+nsenter -t "$peer" -n ip addr add 10.20.0.121/24 dev peer0
+nsenter -t "$peer" -n ip addr add 10.20.0.122/32 dev peer0
 nsenter -t "$peer" -n ip link set peer0 up
 for address in 192.168.2.121 192.168.2.122; do
     nsenter -t "$peer" -n ip addr add "$address/32" dev lo
-    ip route add "$address/32" via 192.168.1.121
+    ip route add "$address/32" via 10.20.0.121
 done
 for subnet in 10.42.1.0/24 10.42.2.0/24; do
-    ip route add "$subnet" via 192.168.1.121
+    ip route add "$subnet" via 10.20.0.121
 done
-nsenter -t "$peer" -n ip route add 10.42.0.0/24 via 192.168.1.120
+nsenter -t "$peer" -n ip route add 10.42.0.0/24 via 10.20.0.120
 for address in 10.42.1.99 10.42.2.99; do
-    nsenter -t "$peer" -n ip route add "$address/32" via 192.168.1.120
+    nsenter -t "$peer" -n ip route add "$address/32" via 10.20.0.120
 done
 
 ip link add wg0 type veth peer name external0
@@ -81,15 +81,15 @@ ip link set wg0 up
 for address in 192.168.2.110 192.168.2.111 192.168.2.200 192.168.2.201; do
     nsenter -t "$external" -n ip addr add "$address/24" dev external0
 done
-nsenter -t "$external" -n ip addr add 192.168.1.6/32 dev external0
+nsenter -t "$external" -n ip addr add 203.0.113.6/32 dev external0
 nsenter -t "$external" -n ip link set external0 up
 nsenter -t "$external" -n ip route add default via 192.168.2.120
 for address in 192.168.2.121 192.168.2.122; do
     nsenter -t "$external" -n ip route add "$address/32" via 192.168.2.120
 done
-ip route add 192.168.1.6/32 dev wg0
-nsenter -t "$peer" -n ip route add 192.168.1.6/32 via 192.168.1.120
-nsenter -t "$peer" -n ip route add 192.168.2.0/24 via 192.168.1.120
+ip route add 203.0.113.6/32 dev wg0
+nsenter -t "$peer" -n ip route add 203.0.113.6/32 via 10.20.0.120
+nsenter -t "$peer" -n ip route add 192.168.2.0/24 via 10.20.0.120
 sysctl -qw net.ipv4.ip_forward=1
 sysctl -qw net.ipv4.conf.all.route_localnet=1
 nsenter -t "$peer" -n sysctl -qw net.ipv4.ip_forward=1
@@ -175,7 +175,7 @@ NFT
 }
 _proxy 10.42.1.2
 # The source node must route this virtual Service toward the destination node.
-ip route add 10.43.0.9/32 via 192.168.1.121
+ip route add 10.43.0.9/32 via 10.20.0.121
 
 cat > "$scratch/probe.py" <<'PY'
 import concurrent.futures
@@ -186,11 +186,11 @@ import time
 
 phase = sys.argv[1]
 ports = [30001, 30222, 30800, 30143, 30025]
-nodes = ['192.168.1.120', '192.168.1.121', '192.168.1.122',
+nodes = ['10.20.0.120', '10.20.0.121', '10.20.0.122',
          '192.168.2.120', '192.168.2.121', '192.168.2.122']
 pods = ['10.42.0.99', '10.42.1.99', '10.42.2.99']
 trusted = ['192.168.2.110', '192.168.2.111', '192.168.2.200',
-           '192.168.2.201', '192.168.1.6']
+           '192.168.2.201', '203.0.113.6']
 
 def request(case):
     source, destination, port, expected = case
@@ -221,11 +221,11 @@ if phase == 'ready':
 elif phase == 'trusted':
     cases = [(s, d, p, True) for s in trusted for d in nodes for p in ports]
 elif phase == 'receiver-only':
-    cases = [(pods[0], '192.168.1.121', p, True) for p in ports]
+    cases = [(pods[0], '10.20.0.121', p, True) for p in ports]
 elif phase == 'host-local':
     cases = [(None, '127.0.0.1', p, True) for p in ports]
 elif phase == 'other-paths':
-    cases = [(s, '192.168.1.121', 6443, True) for s in pods]
+    cases = [(s, '10.20.0.121', 6443, True) for s in pods]
     cases += [(s, '192.168.2.110', 30001, True) for s in pods]
     cases += [(s, d, 5000, False) for s in pods for d in ['10.43.0.9', sys.argv[2]]]
 else:

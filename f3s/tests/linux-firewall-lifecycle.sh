@@ -33,8 +33,8 @@ install -m 755 "$repo/gonf/hostfirewall/assets/f3s-firewall" \
     /usr/local/sbin/f3s-firewall
 declare -r helper=/usr/local/sbin/f3s-firewall
 declare -r pending=/var/lib/f3s-firewall/pending
-declare -r first='192.168.1.156 10001 192.168.1.120 22'
-declare -r second='192.168.1.156 10002 192.168.1.120 22'
+declare -r first='10.20.0.156 10001 10.20.0.120 22'
+declare -r second='10.20.0.156 10002 10.20.0.120 22'
 
 cat > "$scratch/bin/systemctl" <<'SH'
 #!/usr/bin/env bash
@@ -101,7 +101,7 @@ nft list table inet f3s_guard > "$scratch/prior.nft"
 nft list table inet unrelated > "$scratch/unrelated.nft"
 # co3 is already deployed. Exercise its actual candidate in the same kernel
 # namespace, and require every source-firewall operation to preserve it.
-nft -f "$repo/f3s/r-nodes/nodeport-guard/candidate.nft"
+nft -f "$repo/f3s/r-nodes/nodeport-guard/migration.nft"
 nft list table inet f3s_nodeport_guard > "$scratch/nodeport-before.nft"
 _helper() {
     local helper_status=0

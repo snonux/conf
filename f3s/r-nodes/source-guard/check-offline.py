@@ -36,8 +36,10 @@ try:
     run('ip', 'link', 'set', 'client0', 'netns', str(client.pid))
     run('ip', 'link', 'set', 'enp0s5', 'up')
     run(*ns, 'ip', 'link', 'set', 'client0', 'up')
+    # 192.168.1.120 stays as a fixture destination to prove it is no longer
+    # trusted (task 074); the live hosts no longer carry it.
     destinations = ['10.20.0.120', '192.168.1.120', '10.98.0.120']
-    sources = ['10.20.0.130', '192.168.1.130', '192.168.1.236',
+    sources = ['10.20.0.130', '192.168.1.130', '192.168.1.138', '192.168.1.236',
                '192.168.1.50', '10.99.0.2', '10.99.0.3', '10.99.0.4',
                '10.30.0.2', '10.40.0.11', '10.42.0.2']
     for address in destinations:
@@ -86,12 +88,14 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
 '''
         run(*ns, sys.executable, '-c', code, source, target, str(port), str(allowed))
 
-    for source in ['10.20.0.130', '192.168.1.130']:
-        for target in destinations[:2]:
-            probe(source, target, 9999, True)
-        probe(source, destinations[2], 22, False)
-    probe('192.168.1.236', destinations[0], 22, True)
-    probe('192.168.1.236', destinations[0], 6443, False)
+    probe('10.20.0.130', destinations[0], 9999, True)
+    probe('10.20.0.130', destinations[2], 22, False)
+    # Task 074: the retired old /24 (former infra peers, the controller's
+    # old .236 and the old local destination) receives no trust any more.
+    for source in ['192.168.1.130', '192.168.1.138', '192.168.1.236']:
+        for port in [22, 9999]:
+            probe(source, destinations[0], port, False)
+    probe('10.20.0.130', destinations[1], 9999, False)
     for source in ['192.168.1.50', '10.99.0.4', '10.30.0.2', '10.40.0.11']:
         probe(source, destinations[0], 443, False)
     # n44: the laptop also reaches the Syncthing NodePort 32200, on lab
@@ -119,7 +123,7 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         probe('10.42.0.2', target, 30001, False)
         after = run('nft', 'list', 'chain', 'inet', 'f3s_nodeport_guard', 'from_pod').stdout
         assert before != after, target
-    print('PASS: native syntax, atomic replacement, mixed addressing, wg2/recovery scope (incl. n44 32200), ULA, independent local/remote pod guard')
+    print('PASS: native syntax, atomic replacement, retired old /24 denied, wg2/recovery scope (incl. n44 32200), ULA, independent local/remote pod guard')
 finally:
     if server:
         server.terminate()

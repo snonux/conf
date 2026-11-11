@@ -10,7 +10,8 @@ table inet f3s_guard {
     }
     chain from_lan {
         # Trust source ranges, never the public IPv6 prefix assigned by ISP.
-        ip saddr 192.168.1.0/24 return
+        # Lab LAN since task 074; the old 192.168.1.0/24 was retired in i24.
+        ip saddr 10.20.0.0/24 return
         ip6 saddr fd22:c702:acb7::/64 return
         # Authenticated laptop wg2 management through triggerfish. Address
         # staging owns the explicit return /32; no NodePort trust is added.

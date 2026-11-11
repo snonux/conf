@@ -35,7 +35,7 @@ try:
     run(*ns, 'ip', 'link', 'set', 'client0', 'up')
     targets = ['10.20.0.127', '10.20.0.128', '192.168.1.127',
                '10.98.0.127', '10.98.0.128', '10.20.0.120']
-    sources = ['10.20.0.130', '192.168.1.236', '10.99.0.2', '10.99.0.3',
+    sources = ['10.20.0.130', '192.168.1.236', '192.168.1.50', '10.99.0.2', '10.99.0.3',
                '10.99.0.4', '10.30.0.2', '10.40.0.11']
     for ip in targets:
         run('ip', 'addr', 'add', ip + '/32', 'dev', 'eth0')
@@ -86,11 +86,16 @@ assert ok==(expected=='True'),sys.argv[1:]
 '''
         run(*ns, sys.executable, '-c', code, source, target, str(port), transport, str(allowed))
 
-    for source in ['192.168.1.236', '10.20.0.130', '10.99.0.2', '10.99.0.3']:
+    for source in ['10.20.0.130', '10.99.0.2', '10.99.0.3']:
         for target in targets[:2]:
             for transport in ('tcp', 'udp'):
                 probe(source, target, 53, True, transport)
-    probe('192.168.1.236', '192.168.1.127', 53, True, 'udp')
+    # Task 074: the retired old /24 gets no trust as source or destination.
+    for source in ['192.168.1.236', '192.168.1.50']:
+        for transport in ('tcp', 'udp'):
+            probe(source, targets[0], 53, False, transport)
+        probe(source, targets[0], 22, False)
+    probe('10.20.0.130', '192.168.1.127', 53, False, 'udp')
     for source in ['10.99.0.4', '10.30.0.2', '10.40.0.11']:
         for transport in ('tcp', 'udp'):
             probe(source, targets[0], 53, False, transport)
@@ -107,7 +112,7 @@ assert ok==(expected=='True'),sys.argv[1:]
         probe('10.99.0.3', targets[0], port, port == 443)
     for transport in ('tcp', 'udp'):
         probe('fd02:ca0b:f1cb:20::130', 'fd02:ca0b:f1cb:20::127', 53, True, transport)
-    print('PASS: native atomic rules, OLD client continuity, NEW/ULA DNS, '
+    print('PASS: native atomic rules, retired OLD /24 denied, NEW/ULA DNS, '
           'scoped two-peer TCP/UDP DNS, recovery SSH and denied Wi-Fi/camera sources')
 finally:
     if server:

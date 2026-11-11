@@ -16,11 +16,11 @@ a loader, changes systemd state, or requests a restart.
 
 The host policy owns only `inet f3s_guard`, at prerouting -150 before DNAT.
 It preserves homelab-local service trust for 10.20.0.0/24 and native
-fd02:ca0b:f1cb:20::/64, with no new Wi-Fi/camera source trust. New lab sources
-can reach retained old local IPv4 aliases during mixed-address staging.
-Temporary old IPv4 trust is restricted to inventoried infrastructure peers;
-the controller's current 192.168.1.236 address gets SSH only. Confirm the
-controller address again before activation. The old physical ULA /64 remains
+fd02:ca0b:f1cb:20::/64, with no new Wi-Fi/camera source trust. Task 074
+(2026-11-11) removed all old 192.168.1.x trust after i24 retired those
+addresses: the inventoried old infrastructure /32 set (incl. CARP VIP .138),
+the controller's old 192.168.1.236 SSH permission and the old destination
+/24. Old IPv4 sources now fall through to the drop. The old physical ULA /64 remains
 a temporary compatibility permission until all physical IPv6 moves are accepted;
 it grants no new global-prefix trust. Native ICMPv6 errors and NDP are allowed;
 RA/DHCPv6 receive no service exception. Host RA suppression remains n14's job.
@@ -37,8 +37,8 @@ AllowedIPs, node/advertise-address, pod or Service CIDR changes are made.
 
 The independent `inet f3s_nodeport_guard` retains its -151 pod-source check,
 receiver port list, pod CIDR and fib-local catch. Its migration candidate adds
-all three new lab and recovery IPv4 destinations alongside old physical and
-wg0 addresses. This prevents a pod targeting another node's future alias from
+all three lab and recovery IPv4 destinations alongside the wg0 addresses (the
+old physical 192.168.1.12x were removed in task 074). This prevents a pod targeting another node's future alias from
 escaping the receiver-port restriction before DNAT/Flannel source NAT. Never
 combine the tables or flush kube-proxy/CNI tables. They have separate loaders,
 confirmation state and rollback timers.

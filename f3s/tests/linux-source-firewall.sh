@@ -39,13 +39,16 @@ done
 ip link set lo up
 ip link add enp0s5 type veth peer name client0
 ip link set client0 netns "$client"
-ip addr add 192.168.1.120/24 dev enp0s5
+ip addr add 10.20.0.120/24 dev enp0s5
 ip -6 addr add fd22:c702:acb7::120/64 dev enp0s5 nodad
 ip -6 addr add 2001:db8:1::120/64 dev enp0s5 nodad
 ip link set enp0s5 up
 ip route add 203.0.113.0/24 dev enp0s5
-nsenter -t "$client" -n ip addr add 192.168.1.156/24 dev client0
+ip route add 192.168.1.156/32 dev enp0s5
+nsenter -t "$client" -n ip addr add 10.20.0.156/24 dev client0
 nsenter -t "$client" -n ip addr add 203.0.113.2/24 dev client0
+# Retired old LAN source (task 074): the template must no longer trust it.
+nsenter -t "$client" -n ip addr add 192.168.1.156/32 dev client0
 nsenter -t "$client" -n ip -6 addr add fd22:c702:acb7::2/64 dev client0 nodad
 nsenter -t "$client" -n ip -6 addr add 2001:db8:1::2/64 dev client0 nodad
 nsenter -t "$client" -n ip link set client0 up
@@ -135,7 +138,7 @@ for ((attempt=0; attempt<100; attempt++)); do
     fi
     sleep 0.02
 done
-_probe allow 203.0.113.2 http://192.168.1.120:30090
+_probe allow 203.0.113.2 http://10.20.0.120:30090
 _probe allow 2001:db8:1::2 'http://[2001:db8:1::120]:6443'
 
 # Render just the two simple Go template substitutions for the real asset.
@@ -160,18 +163,20 @@ if nft -f "$scratch/broken.nft" 2>/dev/null; then
     echo 'FAIL: deliberately invalid transaction succeeded' >&2
     exit 1
 fi
-_probe allow 192.168.1.156 http://192.168.1.120:6443
+_probe allow 10.20.0.156 http://10.20.0.120:6443
 _probe allow fd22:c702:acb7::2 'http://[fd22:c702:acb7::120]:6443'
-_probe drop 203.0.113.2 http://192.168.1.120:6443
+_probe drop 203.0.113.2 http://10.20.0.120:6443
+_probe drop 192.168.1.156 http://10.20.0.120:6443
+_udp_probe drop 192.168.1.156 10.20.0.120 53
 _probe drop 2001:db8:1::2 'http://[2001:db8:1::120]:6443'
-_probe allow 192.168.1.156 http://192.168.1.120:30090
-_probe drop 203.0.113.2 http://192.168.1.120:30090
-_udp_probe allow 192.168.1.156 192.168.1.120 53
+_probe allow 10.20.0.156 http://10.20.0.120:30090
+_probe drop 203.0.113.2 http://10.20.0.120:30090
+_udp_probe allow 10.20.0.156 10.20.0.120 53
 _udp_probe allow fd22:c702:acb7::2 fd22:c702:acb7::120 53
-_udp_probe drop 203.0.113.2 192.168.1.120 53
+_udp_probe drop 203.0.113.2 10.20.0.120 53
 _udp_probe drop 2001:db8:1::2 2001:db8:1::120 53
-_udp_probe allow 203.0.113.2 192.168.1.120 56709
-curl -fs --noproxy '*' --interface 192.168.1.120 --max-time 2 \
+_udp_probe allow 203.0.113.2 10.20.0.120 56709
+curl -fs --noproxy '*' --interface 10.20.0.120 --max-time 2 \
     http://203.0.113.2:8080 >/dev/null
 echo 'PASS: host-initiated traffic receives replies through the source guard'
 nsenter -t "$pod" -n curl -fs --noproxy '*' --max-time 2 \
@@ -191,10 +196,10 @@ pathlib.Path(sys.argv[2]).write_text(rules)
 PY
 nft -c -f "$scratch/pi.nft"
 nft -f "$scratch/pi.nft"
-_udp_probe allow 192.168.1.156 192.168.1.120 53
+_udp_probe allow 10.20.0.156 10.20.0.120 53
 _udp_probe allow fd22:c702:acb7::2 fd22:c702:acb7::120 53
 _udp_probe drop 2001:db8:1::2 2001:db8:1::120 53
-_udp_probe drop 203.0.113.2 192.168.1.120 56709
+_udp_probe drop 203.0.113.2 10.20.0.120 56709
 
 # Match the helper's own-table rollback batch and restore the prior profile.
 ip link set eth0 name enp0s5
@@ -204,6 +209,6 @@ ip link set eth0 name enp0s5
 } > "$scratch/rollback.nft"
 nft -c -f "$scratch/rollback.nft"
 nft -f "$scratch/rollback.nft"
-_udp_probe allow 203.0.113.2 192.168.1.120 56709
+_udp_probe allow 203.0.113.2 10.20.0.120 56709
 nft list table ip simulated_kube_proxy >/dev/null
 echo 'PASS: rollback restores only the prior owned table'

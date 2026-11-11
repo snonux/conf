@@ -11,12 +11,16 @@ import sys
 import tempfile
 
 repo = pathlib.Path(sys.argv[1])
+# Both groups select a template-free Rules file, so the rendering must equal
+# that file's bytes. Hashing the asset (instead of a pinned digest, which went
+# stale when staging switched to the migration files) keeps the oracle exact.
 cases = [
-    ('pihole_firewall_stage', '4276353bd7ef3e92aeaa46975b89d235f0ac5756426566f022f9ad9e90b42df1', False),
-    ('rnodes_firewall_stage', '794a9c28c4bbfa174eaa7f0edb77e958568e490f701ffc08eede45641ea435e7', True),
+    ('pihole_firewall_stage', 'gonf/pihole/assets/network-migration/firewall.nft', False),
+    ('rnodes_firewall_stage', 'f3s/r-nodes/source-guard/migration.nft', True),
 ]
 with tempfile.TemporaryDirectory(prefix='gonf-firewall-render-') as directory:
-    for task, expected, wireguard in cases:
+    for task, asset, wireguard in cases:
+        expected = hashlib.sha256((repo / asset).read_bytes()).hexdigest()
         recorded = subprocess.run([str(repo / 'gonf.sh'), 'plan', '-stdout', task],
                                   check=True, capture_output=True, text=True)
         ops = [json.loads(line) for line in recorded.stdout.splitlines()]

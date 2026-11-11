@@ -6,7 +6,6 @@ table inet f3s_nodeport_guard {
     set node_ipv4 {
         type ipv4_addr;
         elements = {
-            192.168.1.120, 192.168.1.121, 192.168.1.122,
             10.20.0.120, 10.20.0.121, 10.20.0.122,
             10.98.0.120, 10.98.0.121, 10.98.0.122,
             192.168.2.120, 192.168.2.121, 192.168.2.122
@@ -24,7 +23,8 @@ table inet f3s_nodeport_guard {
         ip saddr 10.42.0.0/16 tcp dport @receiver_ports jump from_pod
     }
     chain from_pod {
-        # Cover the other nodes as well as this node's LAN/WG addresses.
+        # Cover the other nodes as well as this node's lab/recovery/WG addresses.
+        # The old 192.168.1.12x addresses were retired in i24 (task 074).
         ip daddr @node_ipv4 counter drop
         # Also cover local CNI gateways and other local IPv4 aliases.
         fib daddr type local counter drop
