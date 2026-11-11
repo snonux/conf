@@ -6,10 +6,6 @@ func (Deployment) DescCompose() string {
 	return "Installs ~paul/pihole/docker-compose.yml and the LAN wildcard, recreates on change"
 }
 
-func (Deployment) DescMigrationRetire() string {
-	return "Removes the resolver-migration staging directory and the dormant firewall migration policy (task 774)"
-}
-
 func (Firewall) DescStage() string {
 	return "Installs a candidate and guarded firewall activation tools without loading rules"
 }

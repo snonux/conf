@@ -23,26 +23,6 @@ type Deployment struct {
 
 const piholeDir = "/home/paul/pihole"
 
-// stagingDir held the resolver-migration candidates (compose, wildcard and
-// host records) that the retired network/endpoint migration helpers applied.
-const stagingDir = "/var/lib/f3s-pihole-migration"
-
-// OptsMigrationRetire keeps the one-shot cleanup out of routine deployments.
-func (Deployment) OptsMigrationRetire() TaskOptions { return TaskOptions{Operational()} }
-
-// MigrationRetire removes the resolver-migration staging directory and the dormant firewall migration policy (task 774).
-//
-// Neither is read by the live Pi-hole or the f3s-firewall loader (which uses
-// candidate.nft and confirmed.nft). Retire on one Pi at a time and check DNS
-// on both before the next. One-shot: delete this task once both Pis are done.
-func (Deployment) MigrationRetire() {
-	files := NoFile(List(stagingDir+"/docker-compose.yml", stagingDir+"/99-f3s-lan-wildcard.conf",
-		stagingDir+"/99-f3s-lan-hosts.conf"))
-	// No prune: unexpected files refuse removal rather than being discarded.
-	NoDir(stagingDir, DependsOn(files))
-	NoFile("/etc/f3s-firewall/migration.nft")
-}
-
 func hostDNSRows() (string, error) {
 	candidate, err := etchosts.RenderMigration("accepted", "lab")
 	if err != nil {

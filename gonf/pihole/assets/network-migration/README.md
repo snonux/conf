@@ -7,6 +7,12 @@ j24 used its `retire-recovery` verb to remove the `10.98.0.x` recovery
 aliases and the laptop return route. Paths below that mention a retained old address or the
 recovery route describe the migration. For the current state, see IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
 
+Task 774 (2026-11-11) removed the staging tasks `pihole_migration_{dns,
+dns_canary,current_dns,service}` and `pihole_firewall_migration_stage`, and
+on both Pis `/var/lib/f3s-pihole-migration/` and the dormant
+`/etc/f3s-firewall/migration.nft`. `firewall.nft` here is the live guard
+policy that `pihole_firewall_stage` stages.
+
 Both resolvers completed shared-wire acceptance on 2026-11-07: NEW-primary
 10.20.0.127/.128, default gateway 10.20.0.1, retained OLD addresses, native ULA
 and the controller /32 return route through 192.168.1.2. Each separately
