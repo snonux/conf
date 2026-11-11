@@ -13,13 +13,15 @@ import (
 //
 // It is registered twice (gonf/tasks/tasks.go), because the two FreeBSD
 // clusters differ in their LAN interface:
-//   - freebsd_resolver_conf on the f-hosts (task u54), Interface "re0";
+//   - freebsd_resolver_conf on the f-hosts (task u54), Interface
+//     "vm-public re0": the bridge that carries the addresses since task
+//     764 and its member re0 (private_interfaces takes a list);
 //   - freebsd_guest_resolver_conf on the normally stopped standalone guest
 //     "freebsd" (task v54), Interface "vtnet0". Push it when the guest is
 //     next started; see IQ topics/infra/f3s/network/host-dns.md.
 //
-// resolvconf(8) owns /etc/resolv.conf: on the f-hosts no dhclient runs (re0
-// is static) and rtsold is off (-accept_rtadv), so name_servers is the only
+// resolvconf(8) owns /etc/resolv.conf: on the f-hosts no dhclient runs (the
+// lab address is static) and rtsold is off (-accept_rtadv), so name_servers is the only
 // source and "resolvconf -u" regenerates the file at once. private_interfaces
 // keeps any RA RDNSS (or DHCP) servers learned on Interface out of the global
 // list, as before; on the guest this is presumably the SLAAC fix it already
@@ -31,7 +33,8 @@ import (
 // longer reach the ISP CPE, so that rollback would cut the host's DNS. A later run of the owning task re-applies this file.
 type Resolver struct {
 	RequiresRoot
-	// Interface is the LAN interface named in private_interfaces.
+	// Interface is the LAN interface (or blank-separated list) named in
+	// private_interfaces.
 	Interface string
 	// Owner names the gonf task and the conf task that introduced it, for
 	// the "Managed by gonf (...)" header of the rendered file.
@@ -53,9 +56,10 @@ func (r Resolver) Conf() {
 	Sh("resolvconf -u", OnChange(conf))
 }
 
-// render returns the resolvconf.conf content. The f-host rendering (Owner
-// "freebsd_resolver_conf, task u54", Interface "re0") must stay byte-identical
-// to what u54 deployed, so the f-hosts see no change.
+// render returns the resolvconf.conf content. Task 764 changed the f-host
+// rendering (Owner and Interface, see gonf/tasks): only the header and
+// private_interfaces differ, so "resolvconf -u" rewrites resolv.conf with
+// the same nameserver; no dynamic DNS source exists on the f-hosts.
 func (r Resolver) render() string {
 	return `# Managed by gonf (` + r.Owner + `). Static nameserver: the
 # router's unbound on the lab gateway, reachable before and after the b24/c24

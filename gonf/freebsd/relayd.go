@@ -15,8 +15,9 @@ import (
 //
 // Both hosts carry the same ingress config on purpose: after a CARP failover
 // f1 must serve the VIP exactly like f0. On the BACKUP relayd runs too (the
-// VIP address stays configured on re0, CARP only stops answering for it), so
-// a failover needs no service start.
+// VIP address stays configured on the CARP interface, re0 or, after the
+// task 764 move, vm-public, and CARP only stops answering for it), so a failover needs no
+// service start.
 //
 // relayd.conf is validated before publication and relayd is restarted only
 // when its configuration changed. A reload (SIGHUP) keeps state such as TLS

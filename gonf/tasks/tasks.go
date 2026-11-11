@@ -85,10 +85,12 @@ func Register() {
 
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
+	RegisterOnCluster(cluster.NameFreeBSD, freebsd.BridgeMigration{})
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
 	// One Resolver recipe, two clusters: private_interfaces names each
-	// cluster's LAN interface (re0 on the f-hosts, vtnet0 on the guest).
-	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{Interface: "re0", Owner: "freebsd_resolver_conf, task u54"})
+	// cluster's LAN interfaces (the bridge vm-public, which carries the
+	// f-host addresses after the task 764 move, and its member re0; vtnet0 on the guest).
+	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{Interface: freebsd.LabBridge + " re0", Owner: "freebsd_resolver_conf, tasks u54 and 764"})
 	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_endpoints_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterMethods(freebsd.GuestHosts{}, WithPrefix("freebsd_guest_hosts_"), OnCluster(cluster.NameFreeBSDGuestMigration))

@@ -1,0 +1,27 @@
+#!/bin/sh
+# PROVIDE: gonf_bridge_rollback
+# REQUIRE: FILESYSTEMS random
+# BEFORE: netif routing
+# KEYWORD: nojail
+#
+# Early boot hook of gonf-bridge-migration (task 764, BRIDGE.md): restores
+# an unconfirmed bridge move before netif reads rc.conf, then asks the
+# parent rc to reload it, like gonf_network_rollback (rc-rollback).
+# shellcheck source=/dev/null
+. /etc/rc.subr
+# shellcheck disable=SC2034
+name=gonf_bridge_rollback
+rollback_start()
+{
+    rollback_status=0
+    /usr/local/sbin/gonf-bridge-migration boot || rollback_status=$?
+    # /etc/rc runs rc scripts in a subshell; $$ remains the parent rc PID.
+    # Its ALRM handler reloads the restored global rc.conf.
+    if [ -n "${autoboot:-}" ]; then kill -ALRM "$$"; fi
+    return "$rollback_status"
+}
+# shellcheck disable=SC2034
+start_cmd=rollback_start
+# shellcheck disable=SC2034
+stop_cmd=':'
+run_rc_command "$1"

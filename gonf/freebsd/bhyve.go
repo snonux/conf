@@ -24,7 +24,11 @@ import (
 //   - uuid and network0_mac: per-VM identity; a new MAC would break the
 //     guest's DHCP/NIC config.
 //   - disk images, ISOs, VM creation and OS install.
-//   - the vm switch "public" on re0 (/zroot/bhyve/.config/system.conf).
+//   - the vm switch "public" (/zroot/bhyve/.config/system.conf). Before
+//     task 764 it was a standard switch whose bridge vm-bhyve created with
+//     re0 as port; BridgeMigration turns it into a manual switch on the
+//     bridge vm-public that rc.conf creates (it carries the host's
+//     addresses), together with the rc.conf keys, in one journal.
 //   - the /bhyve -> /zroot/bhyve symlink (f3's target carries a trailing
 //     slash; both work, the link only exists for the blog's command lines).
 //   - guests not listed in BhyveHost.Guests: the stopped "fedora" VM on f0

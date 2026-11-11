@@ -29,20 +29,26 @@ separate guarded network-migration task.
 Inbound defaults to block; outbound keeps state. `lo0` stays skipped for S7.
 The current candidate trusts `10.20.0.0/24` (the old `192.168.1.0/24` left in
 task i24),
-`fd22:c702:acb7::/64`, `fd02:ca0b:f1cb:20::/64` and `fe80::/10` on `re0`.
+`fd22:c702:acb7::/64`, `fd02:ca0b:f1cb:20::/64` and `fe80::/10` on the LAN
+interfaces `$lan_if` = `{ re0, vm-public }` to the host addresses
+`$lan_addr` = `{ (re0), (vm-public) }`. Task 764 moves the host addresses
+from re0 onto the bridge vm-public (see
+[BRIDGE.md](../network-migration/BRIDGE.md)); listing both lets one ruleset
+fit a host on either side of that move and its rollback.
 LAN trust deliberately includes stunnel TCP 2323
 from r0–r2, Garage TCP 3900/3901/3903 from f-hosts/r-nodes and UPS TCP 3551.
 WireGuard `wg0` remains trusted, including frontend Garage access and zrepl
-TCP 8888. Encrypted WireGuard UDP **56709** remains reachable on `re0` over
+TCP 8888. Encrypted WireGuard UDP **56709** remains reachable on `$lan_if` over
 both IP families, and on the `tap` group over IPv4 from the r0–r2 lab
 addresses only (task 364, see "Guest-to-host traffic on tap" below). CARP
 protocol 112 advertisements between f0/f1 (lab addresses only), ICMP and
 IPv6 errors/ND/SLAAC/MLD are allowed. LAN access to the storage VIP
 10.20.0.138 (relayd TCP 80/443, stunnel 2323) needs no rule of its own: the
-VIP is an address of `re0`, so the trusted-LAN rule's `($lan_if)` covers it.
+VIP is an address of the CARP interface (re0 before the move, vm-public
+after), so the trusted-LAN rule's `$lan_addr` covers it.
 The old compatibility VIP 192.168.1.138, its `storage_vip` rule and the old
 `carp_pair` entries were retired in task i24. Other global IPv6
-TCP/UDP traffic is blocked. Dynamic `(re0)` address matching follows SLAAC
+TCP/UDP traffic is blocked. Dynamic `(if)` address matching follows address
 changes without opening additional services.
 
 The bhyve bridge remains unfiltered: both `net.link.bridge.pfil_member`
@@ -66,9 +72,13 @@ handshake (`rN` → `fN`, `10.20.0.12N:56709` → `10.20.0.13N:56709`) was
 therefore dropped (`block in on tap0`, reproduced on f2 2026-11-09) and the
 pair worked only after the host initiated. The fix admits exactly UDP 56709
 on the `tap` interface group from `<wg_guests>` (r0–r2 lab addresses) to
-`(re0)`. Other guest-to-own-host services on tap (for example SSH to the
+`$lan_addr`. Other guest-to-own-host services on tap (for example SSH to the
 host's own address) are still blocked; the storage VIP is unaffected
-because its CARP MAC is matched on `re0`. If a wg0 endpoint were rolled
+because its CARP MAC is matched on the CARP interface. Once a host's
+addresses are on vm-public (task 764), the bridge answers the guest's ARP
+and ND with its own MAC, so the guest's traffic arrives on vm-public and is
+trusted like any lab host's; the tap rule only covers a guest that still
+caches the tap MAC and hosts not (or no longer) moved. If a wg0 endpoint were rolled
 back to the old 192.168.1.x addresses, that pair would again need the
 host to initiate.
 
@@ -77,8 +87,8 @@ a PF matter: the guest's neighbour solicitation arrives on `tap0`, whose
 IPv6 is disabled (`ndp -i tap0`), and the IPv6 stack discards it before PF
 (`netstat -s -6 -I tap0` "input datagrams discarded" grows, pflog stays
 silent). IPv6 ND, unlike ARP, never answers for an address on another
-bridge member. Fixing it means moving the host addresses from `re0` to
-`vm-public`, a separate network change.
+bridge member. Task 764 fixes it by moving the host addresses from `re0`
+to `vm-public` ([BRIDGE.md](../network-migration/BRIDGE.md)).
 
 Deployed to f0, f1 and f2 on 2026-11-09 with `./gonf.sh push
 -privilege=doas -- -p22 … paul@fN.lan.buetow.org freebsd_firewall_config`

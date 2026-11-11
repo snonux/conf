@@ -1,6 +1,7 @@
 package freebsd
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,10 @@ import (
 //   - carpcontrol.sh, which starts/stops the NFS server and stunnel on a
 //     state change, and the devd rule that calls it (task gk2);
 //   - carp_load in /boot/loader.conf and the rc.conf CARP alias line
-//     ifconfig_re0_alias0, whose password comes from the vault (task gk2).
+//     ifconfig_<if>_alias0, whose password comes from the vault (task gk2).
+//     <if> is the interface carrying the host's lab addresses: re0, or
+//     vm_public (the bridge vm-public) after the task 764 move;
+//     CarpNode.Interface.
 //
 // All of it used to be hand-installed; the sources now live in
 // f3s/freebsd-hosts/carp. The live files matched them byte for byte when
@@ -44,8 +48,13 @@ type Carp struct {
 // CarpNode is a CARP member's per-host setting (host data, see gonf/cluster).
 // AdvSkew is the advskew of the vhid: 0 (omitted from the line, the kernel
 // default) wins the election, so f0 has 0 and f1, the standby, 100.
+// Interface carries the VIP: LabBridge ("vm-public") once the host's
+// addresses moved onto the bridge (task 764, BridgeMigration), "re0"
+// before. It must match the host's rc.conf: the move rewrites the line
+// itself, and this field is switched after the move is confirmed.
 type CarpNode struct {
-	AdvSkew int
+	AdvSkew   int
+	Interface string
 }
 
 const (
@@ -254,7 +263,7 @@ func (Carp) LoaderConf() {
 
 // DescRcConf returns the description for the CARP alias line.
 func (Carp) DescRcConf() string {
-	return "rc.conf ifconfig_re0_alias0 (CARP vhid 1, VIP 10.20.0.138, per-host advskew, password from the vault) on f0/f1, without the retired 192.168.1.138 alias1; next boot, no netif restart"
+	return "rc.conf ifconfig_<if>_alias0 (CARP vhid 1, VIP 10.20.0.138, per-host interface and advskew, password from the vault) on f0/f1, without the other interface's line or the retired 192.168.1.138 alias1; next boot, no netif restart"
 }
 
 // RcConf owns the rc.conf line that creates the CARP VIP at boot. The
@@ -271,23 +280,58 @@ func (Carp) DescRcConf() string {
 // vhid's whole address set and members with different sets both go MASTER.
 // The runtime removal is an operator procedure with the BACKUP fenced
 // first (IQ topics/infra/openbsdrouter-plan/RETIREMENT-I24.md), not this task.
+//
+// The same line on the other interface (re0 or vm-public) is removed by its
+// exact content too: two alias0 lines would create the vhid twice at boot.
+// Moving the line between interfaces is BridgeMigration's job; this task
+// only follows CarpNode.Interface once the move is confirmed. A guard
+// refuses the write while a bridge move is pending or while rc.conf still
+// carries the other interface's alias0 key, i.e. while the inventory and
+// the host disagree: rewriting the live line back would put the VIP on an
+// interface without the lab address at the next boot (split brain).
 func (Carp) RcConf() {
 	pass := MustSecret(CarpPassSecret())
 	EachHostWith(func(n CarpNode) {
-		compat := strings.Replace(carpAliasLine(n, pass), "alias0=", "alias1=", 1)
+		other, ok := carpOtherInterface(n.Interface)
+		if !ok {
+			Refuse("Carp", rcConf, fmt.Errorf("CarpNode.Interface %q is neither %s nor %s", n.Interface, labMember, LabBridge))
+			return
+		}
+		line := carpAliasLine(n.Interface, n, pass)
+		compat := strings.Replace(carpAliasLine(labMember, n, pass), "alias0=", "alias1=", 1)
 		compat = strings.ReplaceAll(compat, carpVIP, carpCompatVIP)
-		File(rcConf, WithKeyedLine(`ifconfig_re0_alias0=`, carpAliasLine(n, pass)),
+		guard := Command("sh", List("-c", `test ! -d `+bridgeState+`/pending && ! grep -q '^`+carpAliasKey(other)+`=' `+rcConf),
+			WithName("rc-conf-carp-interface-guard"))
+		File(rcConf, WithKeyedLine(carpAliasKey(n.Interface)+"=", line),
+			WithoutLine(carpAliasLine(other, n, pass)),
 			WithoutLine(compat),
-			RootOwned, WithName("rc-conf-carp"))
+			RootOwned, WithName("rc-conf-carp"), DependsOn(guard))
 	})
 }
 
-// carpAliasLine renders ifconfig_re0_alias0 in the live spelling:
+// carpOtherInterface returns the interface that must not carry the line.
+func carpOtherInterface(iface string) (string, bool) {
+	switch iface {
+	case labMember:
+		return LabBridge, true
+	case LabBridge:
+		return labMember, true
+	}
+	return "", false
+}
+
+// carpAliasKey returns the rc.conf key of iface's alias0. network.subr
+// reads ifconfig_vm_public_* for vm-public: it maps ".-/+" to "_".
+func carpAliasKey(iface string) string {
+	return "ifconfig_" + strings.NewReplacer(".", "_", "-", "_", "/", "_", "+", "_").Replace(iface) + "_alias0"
+}
+
+// carpAliasLine renders iface's alias0 line in the live spelling:
 // "inet vhid 1 [advskew N ]pass P alias 10.20.0.138/32".
-func carpAliasLine(n CarpNode, pass string) string {
+func carpAliasLine(iface string, n CarpNode, pass string) string {
 	skew := ""
 	if n.AdvSkew != 0 {
 		skew = " advskew " + strconv.Itoa(n.AdvSkew)
 	}
-	return `ifconfig_re0_alias0="inet vhid ` + carpVhid + skew + ` pass ` + pass + ` alias ` + carpVIP + `"`
+	return carpAliasKey(iface) + `="inet vhid ` + carpVhid + skew + ` pass ` + pass + ` alias ` + carpVIP + `"`
 }

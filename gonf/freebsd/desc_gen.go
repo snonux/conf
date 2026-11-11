@@ -26,6 +26,28 @@ func (Base) DescUptimed() string {
 	return "Installs uptimed, its config (LOG_MAXIMUM_ENTRIES=0), enables and runs it; restarts on config change"
 }
 
+func (BridgeMigration) DescBootTrial() string {
+	return "Lets the next boot keep the pending move once, within 1200 s"
+}
+
+func (BridgeMigration) DescConfirm() string {
+	return "Accepts a pending move after separate fresh access and service checks"
+}
+
+func (BridgeMigration) DescMove() string {
+	return "Arms a 900-second journal and moves the addresses onto the bridge"
+}
+
+func (BridgeMigration) DescPrepare() string {
+	return "Installs the dormant bridge-move helper, its boot hook and watchdog"
+}
+
+func (BridgeMigration) DescRollback() string {
+	return "Restores a pending move to re0 without restarting netif or guests"
+}
+
+func (BridgeMigration) DescStatus() string { return "Reports a pending move and its deadline" }
+
 func (Carp) DescFailbackNewsyslog() string {
 	return "Rotates /var/log/carp-auto-failback.log on f0 via /etc/newsyslog.conf"
 }

@@ -19,11 +19,12 @@ func (Carp) WhenMigrationCandidate() TaskOption { return WhenHostnameIn(carpMemb
 // This is deliberately not an rc.conf fragment that can be activated as-is.
 // Guarded promotion must resolve MustSecret(CarpPassSecret()) through RcConf's
 // existing ownership, retaining vhid, skew, key, old management and alias0.
+// The 824 template is history from before task 764 and keeps re0's keys.
 func (Carp) MigrationCandidate() {
 	EachHostWith(func(n CarpNode) {
-		line := carpAliasLine(n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@")
+		line := carpAliasLine(labMember, n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@")
 		line = strings.ReplaceAll(line, carpVIP, storagemigration.LabVIP+"/32")
-		compat := strings.Replace(carpAliasLine(n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@"), "alias0=", "alias1=", 1)
+		compat := strings.Replace(carpAliasLine(labMember, n, "@RESOLVE_EXISTING_CARP_SECRET_AT_PROMOTION@"), "alias0=", "alias1=", 1)
 		compat = strings.ReplaceAll(compat, carpVIP, storagemigration.OldVIP+"/32")
 		File(rcConf+".carp"+storagemigration.Suffix,
 			WithContent("# INACTIVE TEMPLATE; not a shell configuration.\n# Both addresses MUST share existing vhid1 on BOTH members.\n# Secret reference: "+CarpPassSecret()+"\n"+line+"\n"+compat+"\n"), RootOwned)
