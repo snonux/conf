@@ -30,10 +30,6 @@ func (Network) DescRcConf() string {
 	return "Writes the lab IPv4, the ULA and the default route to rc.conf"
 }
 
-func (Network) DescRetireMigration() string {
-	return "Removes the network-migration watchdog, boot hook and state"
-}
-
 func (Periodic) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
 }
