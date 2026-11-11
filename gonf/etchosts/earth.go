@@ -6,9 +6,10 @@ import (
 
 // earthLAN are the non-rack rows (first listed for the laptop). RenderMigration
 // renders them into every profile, so every hosts file, NSD and Pi-hole get
-// them. The Shellys left 192.168.1.x for Wi-Fi (oldRetired); the normally
-// stopped freebsd VM still has its old address configured (not part of i24),
-// so it keeps freebsd.old.
+// them. The Shellys left 192.168.1.x for Wi-Fi (oldRetired). The normally
+// stopped freebsd VM retired its old address on 2026-11-11 (task 374, after
+// i24), but freebsd.old is still rendered: setting oldRetired here needs a
+// push to every hosts file, Pi-hole and NSD that carries it.
 var earthLAN = []lanHost{
 	{name: "shelly1", ip: "192.168.1.28", migration: migrationHost{zone: wifiZone, oldRetired: true}},
 	{name: "shelly2", ip: "192.168.1.29", migration: migrationHost{zone: wifiZone, oldRetired: true}},

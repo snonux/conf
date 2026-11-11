@@ -10,8 +10,9 @@ by device ID). Task 274 (2026-11-11) dropped the accepted `.old` aliases of
 every endpoint that no longer holds its old 192.168.1.x address (`oldRetired`):
 f0–f3, the storage VIP, r0–r2, rocky, pi0–pi3 (i24), the Shellys and the
 JetKVMs. Only the router (upstream 192.168.1.2), the held AP and the stopped
-freebsd VM (old address still configured) keep `.old` names; the historical
-staging/target/ap-target previews still render all of them. Recovery aliases
+freebsd VM keep `.old` names. The VM retired its old address on 2026-11-11
+(task 374). Its `.old` name goes once its row is marked `oldRetired` and every
+hosts file, Pi-hole and NSD is pushed (not done yet). The historical staging/target/ap-target previews still render all of them. Recovery aliases
 reserve the later physical recovery network and do not prove it is connected.
 Native Pi ULA addresses are explicit `lan6` aliases only. WG rows are unchanged.
 

@@ -3,8 +3,9 @@
 **History (2026-11-11).** The migration is complete. i24 used this
 helper's `retire` verb to remove the old `192.168.1.x` aliases, and j24 used
 its `retire-recovery` verb to remove the `10.98.0.x` recovery aliases and
-the laptop return route. Exception: the stopped standalone `freebsd` guest,
-which is task 374. Paths below that mention a retained old address or the
+the laptop return route. The stopped standalone `freebsd` guest followed on
+2026-11-11 (task 374): retire, then retire-recovery, then a clean reboot,
+then stopped again. Paths below that mention a retained old address or the
 recovery route describe the migration. For the current state, see IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
 
 The bounded f3 native canary passed expiry, actual boot recovery, fresh
@@ -136,7 +137,7 @@ address is gone (re0 and alias200), the lab address is the physical primary,
 alias202 and the recovery address are present, the default is 10.20.0.1 and
 the laptop route uses 10.98.0.1, runtime and saved, and no other saved route
 uses 10.98.x. Confirm, the cron watchdog and the boot hook restore both
-exactly as for retire. Live 2026-11-11 on f2, f1, f0; f3 not yet.
+exactly as for retire. Live 2026-11-11 on f2, f1, f0, f3 and the `freebsd` guest.
 
 ## Endpoint rollback integration (p24)
 

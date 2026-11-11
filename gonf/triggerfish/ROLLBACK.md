@@ -766,12 +766,14 @@ path, and the router's igc1 recovery subnet last.
   still on-link from Wi-Fi, confirm. A 60 s igc0 capture before saw no
   `192.168.11.0/24` client. The rollback fixture passed on the router.
 - **Hosts:** the migration helpers gained `retire-recovery` (see the f-host,
-  Rocky and NetBSD helper READMEs/sources); all hosts except f3 and its stopped
-  freebsd guest answer the laptop through the `10.20.0.1` default, without a
-  `10.98.0.x` address. The r-node and Pi-hole nft guards dropped their
+  Rocky and NetBSD helper READMEs/sources); all hosts (f3 and its stopped
+  freebsd guest included, see below) answer the laptop through the
+  `10.20.0.1` default, without a `10.98.0.x` address. The r-node and Pi-hole nft guards dropped their
   recovery entries.
-- **f3** (user decision 2026-11-11) got the same retire-recovery; its stopped
-  freebsd guest keeps its recovery config until it next runs (task 374).
+- **f3** (user decision 2026-11-11) got the same retire-recovery. Its stopped
+  freebsd guest followed later that day (task 374): retire, retire-recovery,
+  a clean reboot on `10.20.0.139` only with default `10.20.0.1`, then it was
+  stopped again.
 - **Step C, live:** profile `lab-final` (`lab.go`) is `lab-igc1` without
   `10.98.0.1`, the wg2 and igc1 recovery permits, the `10.98.0.0/24`
   anti-spoofing line and the recovery DHCP subnet. router-rollback: listed in

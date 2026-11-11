@@ -2,7 +2,10 @@
 // f3s hosts share: accepted LAN names with their new/lan6 aliases (the .recovery ones were
 // retired in j24), and
 // wg0 mesh names. The .old aliases of the hosts retired from 192.168.1.x in i24
-// are gone (task 274); router, AP and the stopped freebsd VM keep theirs.
+// are gone (task 274); router, AP and the stopped freebsd VM keep theirs. The
+// freebsd VM itself dropped 192.168.1.139 on 2026-11-11 (task 374); its
+// freebsd.old row is stale but unused. It goes once that row is marked
+// oldRetired and every hosts file, Pi-hole and NSD is pushed (not done yet).
 // The f-host recipe (freebsd.Base.Hosts) and the r-node recipe
 // (rnodes.Base.Hosts) render the rows from here into their own OS-specific
 // file skeleton, so a new host is one row here, not one edit per template.
