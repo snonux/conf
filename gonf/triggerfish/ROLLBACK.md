@@ -793,7 +793,8 @@ path, and the router's igc1 recovery subnet last.
   `restored-at-boot profile=lab-final`; confirmed identical reapply
   `...-final` 13:01:06Z (the first gate run failed only the laptop's Wi-Fi
   DHCP probe, which missed an OFFER dhcpd logged; the rerun passed).
-- **k34 retired** (RECOVERY-TUNNEL.md): router side, gateway key line and the
+- **k34 retired** (its code and RECOVERY-TUNNEL.md were deleted in task 674;
+  see git history): router side, gateway key line and the
   controller key material; the router keeps no recovery path besides wg2.
 
 ## l24: camera-zone hardening before the cameras (2026-11-11)

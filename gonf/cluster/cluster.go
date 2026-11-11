@@ -12,7 +12,6 @@ import (
 	"github.com/snonux/conf/gonf/openbsd"
 	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
-	"github.com/snonux/conf/gonf/routerrecovery"
 	"github.com/snonux/conf/gonf/triggerfish"
 	. "github.com/snonux/gonf/api"
 )
@@ -76,15 +75,13 @@ func Register() {
 // trial input. Ordinary registration keeps the fail-closed zero default.
 func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	registerFrontends()
-	// Temporary outbound management stays on port0 even if the lab gateway moves.
-	// Only the selected frontend carries the matching optional gateway data.
 	router := Host("triggerfish", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("openbsd/amd64"),
 		// j24 retired the provisioning alias 192.168.11.2 (no clients on igc0
 		// after b24), the f0 -> AP TCP22 migration flow (the AP is managed from
 		// Wi-Fi, where it sits) and the shared-wire JetKVM canary, which needed
 		// that alias. Every profile renders without them.
 		WithData(triggerfish.RouterProfiles{BootCanary: trial.BootCanary}),
-		WithData(trial), WithData(routerRecoveryGateway()))
+		WithData(trial))
 	Cluster(NameTriggerfish, router)
 	pi2, pi3 := registerPis()
 	registerRockyK3s(pi2, pi3)
@@ -117,7 +114,6 @@ func registerFrontends() {
 		WithPlatform("openbsd/amd64"),
 	)
 	blowfish := Host("blowfish", frontend,
-		WithData(routerRecoveryGateway()),
 		WithData(dtail.ServerHost{BindAddress: "192.168.2.110", Platform: "openbsd"}),
 		WithData(openbsd.UnattendedSchedule{BaseHour: "6", PkgsHour: "6", AuditHour: "7"}),
 		WithData(frontends.MustServer("blowfish")),
@@ -128,10 +124,6 @@ func registerFrontends() {
 		WithData(frontends.MustServer("fishfinger")),
 	)
 	Cluster(NameFrontends, blowfish, fishfinger).Parallel(5)
-}
-
-func routerRecoveryGateway() routerrecovery.Gateway {
-	return routerrecovery.Gateway{Address: "23.88.35.144", User: "rex", SSHPort: 2, ListenPort: 55322}
 }
 
 // registerPis registers the four Raspberry Pi hosts and their OS-pair and

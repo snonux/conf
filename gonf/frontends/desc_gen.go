@@ -86,14 +86,6 @@ func (Monitoring) DescSyncthingState() string {
 	return "Repairs ownership of existing Syncthing check state files"
 }
 
-func (RouterRecovery) DescAuthorize() string {
-	return "Admits a restricted key for one loopback reverse-forward listener"
-}
-
-func (RouterRecovery) DescRetire() string {
-	return "Removes only the temporary router key after its tunnel is stopped"
-}
-
 func (Web) DescACMEInvoke() string { return "Requests and renews frontend ACME certificates" }
 
 func (Web) DescInetd() string { return "Installs and converges frontend inetd" }
