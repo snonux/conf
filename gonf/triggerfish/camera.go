@@ -41,7 +41,7 @@ func cameraFiles(s routerStage, data RouterProfiles) map[string]string {
 // stage revisits the camera policy. router-rollback's camera_zone_profile
 // lists the same names.
 func cameraZoneStage(name string) bool {
-	return name == cameraProfileName || name == labProfileName
+	return name == cameraProfileName || labPortStage(name)
 }
 
 // cameraZoneRules denies the camera port in both directions, logged. The

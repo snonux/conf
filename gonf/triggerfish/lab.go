@@ -19,6 +19,11 @@ import (
 // used instead: they put Wi-Fi back on igc0 or drop NAT66.
 const (
 	labProfileName = "lab-igc1"
+	// labFinalProfileName is j24's final profile: lab-igc1 without the igc1
+	// recovery subnet 10.98.0.0/24 (address, PF exceptions, DHCP subnet) and
+	// without any migration flow, once every host answers the laptop through
+	// its 10.20.0.1 default.
+	labFinalProfileName = "lab-final"
 	// labPort is the lab switch port after b24.
 	labPort = "igc1"
 	// labOldManagement is lab-igc1's readiness value for the old management
@@ -33,7 +38,15 @@ const (
 func labStages() []routerStage {
 	return []routerStage{
 		{labProfileName, labPort, "igc2", cameraPort, true, true},
+		{labFinalProfileName, labPort, "igc2", cameraPort, false, false},
 	}
+}
+
+// labPortStage names the profiles after the b24 cable move: the lab on its
+// own port igc1 and only the ISP CPE on igc0 (c24's lab-igc1 and j24's
+// lab-final). router-rollback's lab_port_profile lists the same names.
+func labPortStage(name string) bool {
+	return name == labProfileName || name == labFinalProfileName
 }
 
 // labFiles renders c24 on top of the camera-igc3 files. The address and
@@ -44,13 +57,16 @@ func labStages() []routerStage {
 func labFiles(s routerStage, data RouterProfiles) map[string]string {
 	files := cameraFiles(s, data)
 	files["ACTIVATION.txt"] = labActivation(s)
+	if s.name == labFinalProfileName {
+		files["ACTIVATION.txt"] = labFinalActivation(s)
+	}
 	return files
 }
 
 // oldManagementReceipt is the old-management line of a profile's readiness
 // receipt; router-rollback's old_management prints the same values.
 func oldManagementReceipt(profile string) string {
-	if profile == labProfileName {
+	if labPortStage(profile) {
 		return labOldManagement
 	}
 	return "fresh-authenticated"
@@ -62,7 +78,7 @@ func oldManagementReceipt(profile string) string {
 // moved lab port itself; the laptop's wg2 sessions to those addresses never
 // touch igc1. router-rollback's proof checks the same.
 func validateLabProof(t RouterTrial, client netip.Addr) error {
-	if t.Profile != labProfileName {
+	if !labPortStage(t.Profile) {
 		return nil
 	}
 	prefix, server := map[string]string{
@@ -87,7 +103,7 @@ func validateLabProof(t RouterTrial, client netip.Addr) error {
 // wg2 endpoint 192.168.1.2:51822 and the router's own outbound connections
 // (upstream, NAT, the k34 recovery tunnel) do not depend on these rules.
 func oldManagementRules(s routerStage) string {
-	if s.name == labProfileName {
+	if labPortStage(s.name) {
 		return "# j24: no router management from the ISP LAN on igc0 (only the ISP router shares it).\n"
 	}
 	return `# Preserve fresh old-address router management from the existing LAN.
@@ -129,4 +145,19 @@ until a fixed retry or the user's separate reverse cable action; recovery
 stays on igc1 and wg2 on the router. No boot canary (it lives on igc0).
 Activate only through router-rollback as a timed trial.
 `, s.name, s.lab, s.wifi, s.camera, s.lab, "DHCP: "+dhcpState(s))
+}
+
+func labFinalActivation(s routerStage) string {
+	return fmt.Sprintf(`J24 FINAL: %s (lab-igc1 without the igc1 recovery subnet)
+Wiring: ISP CPE alone on igc0 (192.168.1.2/24 only, SLAAC for NAT66), lab
+switch on %s (10.20.0.1/24 and the lab ULA, local-only), Wi-Fi AP on %s
+(10.30.0.1/24, NAT66), cameras %s (uncabled, default deny).
+Differences from lab-igc1: no 10.98.0.1 on igc1, no wg2 or igc1 permit and no
+anti-spoofing line for 10.98.0.0/24, a plain lab DHCP subnet (no recovery
+subnet, no shared-network). Activate only after every host answers the laptop
+through its 10.20.0.1 default (retire-recovery).
+%s with the JetKVM MAC reservations. Confirmation needs a fresh new receipt from a lab host and the
+VPN receipt. A timed or boot restore returns the snapshot (lab-igc1 with
+recovery the first time). Activate only through router-rollback.
+`, s.name, s.lab, s.wifi, s.camera, "DHCP: "+dhcpState(s))
 }

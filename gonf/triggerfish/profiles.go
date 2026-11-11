@@ -165,7 +165,7 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 // so the igc0 canary would put 10.20.0.0/24 on two ports (router-rollback
 // refuses that, and its canary_profile excludes lab-igc1 as well).
 func bootCanaryStage(name string) bool {
-	return name == "shared-igc0" || (nat66Stage(name) && name != labProfileName)
+	return name == "shared-igc0" || (nat66Stage(name) && !labPortStage(name))
 }
 
 func validateMigrationFlows(flows []MigrationFlow) error {
@@ -250,6 +250,9 @@ block return log all
 		{s.lab, "10.20.0.0/24"}, {s.wifi, "10.30.0.0/24"}, {s.camera, "10.40.0.0/24"},
 		{"igc1", "10.98.0.0/24"}, {"wg2", "10.99.0.0/24"},
 	} {
+		if zone.prefix == "10.98.0.0/24" && !s.recovery {
+			continue // j24: the recovery subnet is gone, nothing to anti-spoof
+		}
 		rules += fmt.Sprintf("block drop in quick on ! %s inet from %s to any\n", zone.iface, zone.prefix)
 	}
 	if cameraZoneStage(s.name) {

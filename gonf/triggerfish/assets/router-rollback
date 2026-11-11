@@ -19,12 +19,17 @@ NAT66_EGRESS=$BASE/nat66-egress
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3|lab-igc1) return 0;; *) return 1;; esac; }
+profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3|lab-igc1|lab-final) return 0;; *) return 1;; esac; }
 # o34 stages: SLAAC on the igc0 uplink; NAT66 adds Wi-Fi ULA, rad and forwarding.
 # The g24 camera-igc3 profile is the NAT66 profile with the camera zone on igc3;
-# c24's lab-igc1 is camera-igc3 with the lab moved to igc1 after the b24 cables.
-ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 ]]; }
-nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 ]]; }
+# c24's lab-igc1 is camera-igc3 with the lab moved to igc1 after the b24 cables;
+# j24's lab-final is lab-igc1 without the igc1 recovery subnet.
+ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
+nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
+# Profiles after the b24 cable move: the lab on igc1, only the ISP CPE on igc0.
+lab_port_profile() { [[ $1 == lab-igc1 || $1 == lab-final ]]; }
+# j24: the final profile carries no igc1 recovery subnet (10.98.0.0/24) at all.
+recovery_profile() { [[ $1 != lab-final ]]; }
 # Profiles whose unconfirmed trial may carry the fixed 10.20.0.254 boot canary.
 # The canary lives on igc0, so never lab-igc1: its lab prefix is on igc1.
 canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
@@ -37,7 +42,7 @@ wiring() {
  shared-igc0) print igc0 igc0 igc0;;
  wifi-prepare|wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) print igc0 igc2 igc0;;
  camera-igc3) print igc0 igc2 igc3;;
- lab-igc1) print igc1 igc2 igc3;;
+ lab-igc1|lab-final) print igc1 igc2 igc3;;
  post-rack) print igc1 igc0 igc0;;
  post-ap) print igc1 igc2 igc3;;
  *) return 1;;
@@ -60,6 +65,8 @@ camera_port() {
 confirm_roles() {
  case $1 in
  lab-igc1) print new recovery vpn;;
+ # j24: no recovery subnet any more; the lab-host new receipt proves igc1.
+ lab-final) print new vpn;;
  post-rack|post-ap) print old new recovery;;
  *) print old new;;
  esac
@@ -67,10 +74,10 @@ confirm_roles() {
 # Readiness value of the old 192.168.1.2 management path (oldManagementReceipt
 # in lab.go): a fresh old-LAN login, except after b24 for lab-igc1.
 old_management() {
- if [[ $1 == lab-igc1 ]]; then print isp-uplink-only; else print fresh-authenticated; fi
+ if lab_port_profile "$1"; then print isp-uplink-only; else print fresh-authenticated; fi
 }
 # Profiles that must carry the explicit, logged camera-zone deny.
-camera_zone_profile() { [[ $1 == camera-igc3 || $1 == lab-igc1 ]]; }
+camera_zone_profile() { [[ $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
 need_token() { token_ok "${1:-}" || fail 'invalid trial token'; [[ $(cat "$STATE/token") == "$1" ]] || fail 'trial token mismatch'; }
 lock() {
  # The NAT66 egress helper (nat66-egress) takes this lock for well under a
@@ -126,17 +133,22 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  grep -qx 'set state-policy floating' "$d/pf.conf" || fail 'PF policy must remain floating'
  [[ $(cat "$d/mygate") == 192.168.1.1 ]] || fail 'upstream gateway changed'
  grep -qx 'inet 192.168.1.2 255.255.255.0' "$d/hostname.igc0" || fail 'missing old management address'
- grep -qx 'inet alias 10.98.0.1 255.255.255.0' "$d/hostname.igc1" || fail 'missing igc1 recovery address'
- for f in igc0 igc2 igc3; do
-  ! grep -q '10.98.0.' "$d/hostname.$f" || fail 'recovery moved from igc1'
- done
+ if recovery_profile "$p"; then
+  grep -qx 'inet alias 10.98.0.1 255.255.255.0' "$d/hostname.igc1" || fail 'missing igc1 recovery address'
+  for f in igc0 igc2 igc3; do
+   ! grep -q '10.98.0.' "$d/hostname.$f" || fail 'recovery moved from igc1'
+  done
+ else
+  # j24: no recovery address, PF exception or DHCP subnet may remain.
+  ! grep -q '10[.]98[.]' "$d"/hostname.igc[0-3] "$d/pf.conf" "$d/dhcpd.conf" || fail 'final profile keeps a recovery leftover'
+ fi
  validate_hostnames "$d"
  validate_prefixes "$d" "$p"
  case $p in
  shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
  wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
  post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
- post-ap|lab-igc1) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
+ post-ap|lab-igc1|lab-final) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
  validate_dhcp_networks "$d"
  pfctl -nf "$d/pf.conf"
@@ -492,7 +504,9 @@ current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bou
  fi
  # Must already have upstream and current-cabling recovery before post-rack
  # trials. Never synthesize a shared-wire rollback after the rack has moved.
- if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
+ # lab-final (j24) is the profile that retires recovery: its trials may run
+ # with or without it, and restore whatever the snapshot holds.
+ if [[ $(cat "$STATE/profile") != shared-igc0 ]] && recovery_profile "$(cat "$STATE/profile")"; then
   ifconfig igc1 | grep -q 'inet 10.98.0.1 netmask 0xffffff00' || fail 'current-cabling recovery not active'
   grep -qx 'inet alias 10.98.0.1 255.255.255.0' /etc/hostname.igc1 || fail 'current-cabling recovery not persistent'
  fi
@@ -669,7 +683,7 @@ persist_candidate() {
  shared-igc0|wifi-prepare) rcctl disable dhcpd;;
  wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
  post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
- post-ap|lab-igc1) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
+ post-ap|lab-igc1|lab-final) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
  esac
 }
 
@@ -785,7 +799,11 @@ activate() {
  fi
  for service in $SERVICES; do rcctl stop "$service"; done
  persist_candidate
- clear_physical yes
+ # Keep 10.98.0.1 across the drain only when the candidate keeps it; the
+ # final profile (j24) drops it, a restore brings it back from the snapshot.
+ typeset keep=no
+ if grep -qx 'inet alias 10.98.0.1 255.255.255.0' "$STATE/candidate/hostname.igc1"; then keep=yes; fi
+ clear_physical "$keep"
  apply_addresses
  # Draining keeps link-local addresses. A dedicated camera port gets no IPv6
  # at all; restore re-enables the family only if the snapshot had it.
@@ -1071,7 +1089,7 @@ END
  # so new and recovery receipts from a lab host prove the moved lab port; the
  # laptop's wg2 sessions to 10.20.0.1 or 10.98.0.1 never touch igc1
  # (validateLabProof in lab.go checks the same).
- if [[ $(cat "$STATE/profile") == lab-igc1 ]]; then
+ if lab_port_profile "$(cat "$STATE/profile")"; then
   case $role in
   new) [[ $client == 10.20.0.+([0-9]) && $client != 10.20.0.1 ]] || fail 'lab-igc1 new and recovery receipts must come from a lab host';;
   recovery) [[ $client == 10.98.0.+([0-9]) && $client != 10.98.0.1 ]] || fail 'lab-igc1 new and recovery receipts must come from a lab host';;

@@ -194,11 +194,12 @@ func trialCommand(action string, profile bool) {
 
 // migrationProfiles lists the physical profiles a trial may stage; the list
 // must match router-rollback's profile_ok minus vpn-bootstrap, and its
-// wiring table. final is rendered for review only and needs the separate
-// retirement gate.
+// wiring table. The legacy final is rendered for review only; j24's
+// lab-final is the stageable final profile (no recovery subnet).
 func migrationProfiles() []string {
 	return []string{"shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap",
-		ipv6UplinkProfileName, ipv6NAT66ProfileName, cameraProfileName, labProfileName}
+		ipv6UplinkProfileName, ipv6NAT66ProfileName, cameraProfileName, labProfileName,
+		labFinalProfileName}
 }
 
 // trialProfile admits the physical profiles plus the wg2 bootstrap, which

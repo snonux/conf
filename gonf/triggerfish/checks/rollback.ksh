@@ -1036,9 +1036,10 @@ for d in "$base"/router-profiles/*/; do
  "$fixture/run" wiring "$p" > /dev/null
  (( rendered += 1 ))
 done
-# The nine stageable physical profiles of the c24 render (lab-igc1 included).
-(( rendered >= 9 ))
-[[ -d $base/router-profiles/lab-igc1 ]]
+# The ten stageable physical profiles (c24's lab-igc1 and j24's lab-final included).
+(( rendered >= 10 ))
+[[ -d $base/router-profiles/lab-igc1 && -d $base/router-profiles/lab-final ]]
+[[ $("$fixture/run" wiring lab-final) == 'igc1 igc2 igc3' && $("$fixture/run" camera_port lab-final) == igc3 ]]
 [[ $("$fixture/run" wiring lab-igc1) == 'igc1 igc2 igc3' && $("$fixture/run" camera_port lab-igc1) == igc3 ]]
 [[ $("$fixture/run" camera_port camera-igc3) == igc3 && $("$fixture/run" camera_port post-ap) == igc3 ]]
 [[ $("$fixture/run" camera_port wifi-first) == igc0 && $("$fixture/run" camera_port post-rack) == igc0 ]]
@@ -1444,6 +1445,85 @@ rm "$base/dhcpd-down"
 "$fixture/run" confirm c24lab03 services-checked
 [[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
 expect_fail restore
+# j24 lab-final: lab-igc1 without the igc1 recovery subnet. Any recovery
+# leftover (address, PF exception, DHCP subnet) refuses at stage.
+fin=$base/router-profiles/lab-final
+"$fixture/run" validate "$fin" lab-final
+if grep -q '10[.]98[.]' "$fin"/hostname.igc[0-3] "$fin/pf.conf" "$fin/dhcpd.conf"; then exit 1; fi
+cp -Rp "$fin" "$fixture/final.saved"
+j24_refuses() {
+ expect_fail stage j24bad01 lab-final 180
+ grep -qF -- "$1" "$fixture/failure.log" || { print -u2 -- "wrong refusal: $1"; cat "$fixture/failure.log" >&2; exit 1; }
+ [[ $(cat "$base/router-state/token") == c24lab03 && $(cat "$base/router-state/status") == confirmed ]]
+ rm -rf "$fin"; cp -Rp "$fixture/final.saved" "$fin"
+}
+print 'inet alias 10.98.0.1 255.255.255.0' >> "$fin/hostname.igc1"
+j24_refuses 'final profile keeps a recovery leftover'
+print 'pass in on wg2 inet proto tcp from 10.99.0.2 to 10.98.0.0/24 port 22 keep state' >> "$fin/pf.conf"
+j24_refuses 'final profile keeps a recovery leftover'
+print 'subnet 10.98.0.0 netmask 255.255.255.0 { deny unknown-clients; }' >> "$fin/dhcpd.conf"
+j24_refuses 'final profile keeps a recovery leftover'
+"$fixture/run" stage j24fin01 lab-final 180
+review lab-final isp-uplink-only
+"$fixture/run" arm j24fin01 lab-final 180
+: > "$base/operations"
+"$fixture/run" activate j24fin01
+# The recovery address leaves igc1; the lab gateway, ULA and upstream stay.
+if grep -q ' inet 10.98.0.1 ' "$base/interfaces/igc1"; then exit 1; fi
+grep -qx 'ifconfig igc1 inet 10.98.0.1 delete' "$base/operations"
+grep -q ' inet 10.20.0.1 ' "$base/interfaces/igc1"
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 ' "$base/interfaces/igc1"
+grep -q ' inet 192.168.1.2 ' "$base/interfaces/igc0"
+grep -qx 'rcctl set dhcpd flags igc1 igc2' "$base/operations"
+for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$fin/$f" "$fixture/etc/$f"; done
+# Confirmation needs a lab-host new receipt and the VPN receipt, no recovery one.
+print '' > "$base/router-state/preexisting-connections"
+print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47231 ESTABLISHED' > "$base/sockets"
+expect_fail proof new j24fin01 '10.99.0.2 47231 10.20.0.1 22'
+grep -q 'lab-igc1 new and recovery receipts must come from a lab host' "$fixture/failure.log"
+cat > "$base/sockets" <<'SOCKETS'
+tcp 0 0 10.20.0.1.22 10.20.0.125.47232 ESTABLISHED
+tcp 0 0 10.99.0.1.22 10.99.0.2.47233 ESTABLISHED
+SOCKETS
+"$fixture/run" proof new j24fin01 '10.20.0.125 47232 10.20.0.1 22'
+expect_fail confirm j24fin01 services-checked
+grep -q 'fresh VPN receipt missing' "$fixture/failure.log"
+# Timed restore returns lab-igc1, with the recovery address back on igc1.
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+grep -q ' inet 10.98.0.1 ' "$base/interfaces/igc1"
+grep -q ' inet 10.20.0.1 ' "$base/interfaces/igc1"
+for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$fixture/lab.saved/$f" "$fixture/etc/$f"; done
+# Confirmed with new and VPN receipts.
+"$fixture/run" stage j24fin02 lab-final 180
+review lab-final isp-uplink-only
+"$fixture/run" arm j24fin02 lab-final 180
+"$fixture/run" activate j24fin02
+print '' > "$base/router-state/preexisting-connections"
+cat > "$base/sockets" <<'SOCKETS'
+tcp 0 0 10.20.0.1.22 10.20.0.125.47241 ESTABLISHED
+tcp 0 0 10.99.0.1.22 10.99.0.2.47242 ESTABLISHED
+SOCKETS
+"$fixture/run" proof new j24fin02 '10.20.0.125 47241 10.20.0.1 22'
+"$fixture/run" proof vpn j24fin02 '10.99.0.2 47242 10.99.0.1 22'
+"$fixture/run" confirm j24fin02 services-checked
+[[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
+if grep -q ' inet 10.98.0.1 ' "$base/interfaces/igc1"; then exit 1; fi
+# Without live recovery, lab-final re-arms (reapply and boot test) while a
+# recovery profile refuses: it would need the current-cabling recovery.
+"$fixture/run" stage j24back1 lab-igc1 180
+review lab-igc1 isp-uplink-only
+expect_fail arm j24back1 lab-igc1 180
+grep -q 'current-cabling recovery not active' "$fixture/failure.log"
+"$fixture/run" stage j24fin03 lab-final 180
+review lab-final isp-uplink-only
+"$fixture/run" arm j24fin03 lab-final 180
+"$fixture/run" activate j24fin03
+"$fixture/run" boot_restore
+[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
+for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$fixture/final.saved/$f" "$fixture/etc/$f"; done
+rm -rf "$fixture/final.saved"
 rm -rf "$fixture/lab.saved" "$fixture/camera.c24"
 # Bootstrap must not alter physical interfaces, PF, routes or service state.
 rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"

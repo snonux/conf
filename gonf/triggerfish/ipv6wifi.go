@@ -55,7 +55,7 @@ func ipv6Stages() []routerStage {
 // c24 lab profile on top of that (lab.go). router-rollback's nat66_profile
 // must list the same names.
 func nat66Stage(name string) bool {
-	return name == ipv6NAT66ProfileName || name == cameraProfileName || name == labProfileName
+	return name == ipv6NAT66ProfileName || name == cameraProfileName || labPortStage(name)
 }
 
 // ipv6Files derives an o34 stage from the stage's IPv4/ULA files. The uplink
