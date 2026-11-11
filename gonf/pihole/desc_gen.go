@@ -6,24 +6,8 @@ func (Deployment) DescCompose() string {
 	return "Installs ~paul/pihole/docker-compose.yml and the LAN wildcard, recreates on change"
 }
 
-func (Deployment) DescMigrationCurrentDNS() string {
-	return "Stages accepted host records and the current wildcard"
-}
-
-func (Deployment) DescMigrationDNS() string {
-	return "Stages a future wildcard outside every active container mount"
-}
-
-func (Deployment) DescMigrationDNSCanary() string {
-	return "Stages a conf-only disposable record to prove directory loading"
-}
-
-func (Deployment) DescMigrationService() string {
-	return "Stages the resolver service for the existing recovery transaction"
-}
-
-func (Firewall) DescMigrationStage() string {
-	return "Installs dormant resolver source permissions without loading rules"
+func (Deployment) DescMigrationRetire() string {
+	return "Removes the resolver-migration staging directory and the dormant firewall migration policy (task 774)"
 }
 
 func (Firewall) DescStage() string {

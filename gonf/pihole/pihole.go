@@ -23,55 +23,24 @@ type Deployment struct {
 
 const piholeDir = "/home/paul/pihole"
 
-// OptsMigrationDNS keeps future ingress addresses out of ordinary deployments.
-func (Deployment) OptsMigrationDNS() TaskOptions { return TaskOptions{Operational()} }
+// stagingDir held the resolver-migration candidates (compose, wildcard and
+// host records) that the retired network/endpoint migration helpers applied.
+const stagingDir = "/var/lib/f3s-pihole-migration"
 
-// OptsMigrationService keeps guarded resolver service staging out of ordinary deployments.
-func (Deployment) OptsMigrationService() TaskOptions { return TaskOptions{Operational()} }
+// OptsMigrationRetire keeps the one-shot cleanup out of routine deployments.
+func (Deployment) OptsMigrationRetire() TaskOptions { return TaskOptions{Operational()} }
 
-// MigrationService stages the resolver service for the existing recovery transaction.
-func (Deployment) MigrationService() {
-	const staging = "/var/lib/f3s-pihole-migration"
-	EnsureDir(staging, RootPrivate)
-	InstallFile(staging+"/docker-compose.yml", paths.PiholeAsset("docker-compose.yml"), RootPrivate)
-}
-
-// MigrationDNS stages a future wildcard outside every active container mount.
-func (Deployment) MigrationDNS() {
-	const staging = "/var/lib/f3s-pihole-migration"
-	EnsureDir(staging, RootPrivate)
-	InstallFile(staging+"/99-f3s-lan-wildcard.conf",
-		paths.GonfAsset("pihole", "network-migration/99-f3s-lan-wildcard-new-vip.conf"), RootPrivate)
-}
-
-func (Deployment) OptsMigrationCurrentDNS() TaskOptions { return TaskOptions{Operational()} }
-func (Deployment) OptsMigrationDNSCanary() TaskOptions  { return TaskOptions{Operational()} }
-
-// MigrationDNSCanary stages a conf-only disposable record to prove directory loading.
-func (Deployment) MigrationDNSCanary() { stageCurrentDNS(true) }
-
-// MigrationCurrentDNS stages accepted host records and the current wildcard.
-func (Deployment) MigrationCurrentDNS() {
-	stageCurrentDNS(false)
-}
-
-func stageCurrentDNS(canary bool) {
-	const staging = "/var/lib/f3s-pihole-migration"
-	rows, err := hostDNSRows()
-	if err != nil {
-		Refuse("Pi-hole hosts", staging, err)
-		return
-	}
-	if canary {
-		rows += "host-record=gonf-924-dns-canary.lan.buetow.org,192.0.2.24,60\n"
-	}
-	EnsureDir(staging, RootPrivate)
-	InstallFile(staging+"/docker-compose.yml", paths.PiholeAsset("docker-compose.yml"), RootPrivate,
-		WithValidation("docker", List("compose", "--env-file", piholeDir+"/.env", "-f", CandidatePath, "config", "--quiet")))
-	File(staging+"/99-f3s-lan-hosts.conf", WithContent(rows), RootPrivate,
-		WithValidation("sh", List("-ec", `docker exec -i pihole pihole-FTL dnsmasq-test --conf-file=- < "$1"`, "dnsmasq-check", CandidatePath)))
-	InstallFile(staging+"/99-f3s-lan-wildcard.conf", paths.PiholeAsset("dnsmasq.d/99-f3s-lan-wildcard.conf"), RootPrivate,
-		WithValidation("sh", List("-ec", `docker exec -i pihole pihole-FTL dnsmasq-test --conf-file=- < "$1"`, "dnsmasq-check", CandidatePath)))
+// MigrationRetire removes the resolver-migration staging directory and the dormant firewall migration policy (task 774).
+//
+// Neither is read by the live Pi-hole or the f3s-firewall loader (which uses
+// candidate.nft and confirmed.nft). Retire on one Pi at a time and check DNS
+// on both before the next. One-shot: delete this task once both Pis are done.
+func (Deployment) MigrationRetire() {
+	files := NoFile(List(stagingDir+"/docker-compose.yml", stagingDir+"/99-f3s-lan-wildcard.conf",
+		stagingDir+"/99-f3s-lan-hosts.conf"))
+	// No prune: unexpected files refuse removal rather than being discarded.
+	NoDir(stagingDir, DependsOn(files))
+	NoFile("/etc/f3s-firewall/migration.nft")
 }
 
 func hostDNSRows() (string, error) {
