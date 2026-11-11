@@ -297,10 +297,10 @@ Gonf push builds and installs its OpenBSD runtime automatically; no custom
 package repository is needed. `/etc/installurl` remains the official mirror.
 
 The legacy `triggerfish_network` task was removed in j24; only router-rollback
-writes the router's network configuration. The live profile is `lab-igc1`:
+writes the router's network configuration. The live profile is `lab-final`:
 igc0 has only the upstream `192.168.1.2/24` (plus SLAAC for NAT66), the lab
-`10.20.0.1/24` and its ULA are on igc1 next to the temporary recovery subnet
-`10.98.0.0/24` (pending retirement in j24), Wi-Fi `10.30.0.1/24` with DHCP
+`10.20.0.1/24` and its ULA are on igc1 (the temporary recovery subnet
+`10.98.0.0/24` was retired in j24), Wi-Fi `10.30.0.1/24` with DHCP
 and NAT66 is on igc2 (AP `10.30.0.2`, DHCP disabled) and the uncabled camera
 zone `10.40.0.1/24` is on igc3. Consult IQ's
 `topics/infra/openbsdrouter-plan/NEXT-SESSION.md` for current acceptance and

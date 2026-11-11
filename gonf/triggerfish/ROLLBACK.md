@@ -761,10 +761,25 @@ path, and the router's igc1 recovery subnet last.
   freebsd guest answer the laptop through the `10.20.0.1` default, without a
   `10.98.0.x` address. The r-node and Pi-hole nft guards dropped their
   recovery entries.
-- **Still open:** removing `10.98.0.1`, the igc1 recovery PF permits
-  (`wg2 -> 10.98.0.0/24`, `igc1 10.98.0.0/24 -> 10.98.0.1:22`, the anti-spoof
-  line) and the pool-less `10.98.0.0/24` dhcpd subnet needs a profile without
-  `recovery`; router-rollback's `validate`, `confirm_roles` (`recovery`) and
-  `drain_addresses` (keeps `10.98.0.1`) assume it everywhere. Blocked on f3,
-  whose return route still uses `10.98.0.1`; then the router reboot test
-  and the k34 tunnel retirement (RECOVERY-TUNNEL.md).
+- **f3** (user decision 2026-11-11) got the same retire-recovery; its stopped
+  freebsd guest keeps its recovery config until it next runs (task 374).
+- **Step C, live:** profile `lab-final` (`lab.go`) is `lab-igc1` without
+  `10.98.0.1`, the wg2 and igc1 recovery permits, the `10.98.0.0/24`
+  anti-spoofing line and the recovery DHCP subnet. router-rollback: listed in
+  `profile_ok`, `wiring`, the IPv6/NAT66/camera lists and `lab_port_profile`
+  (isp-uplink-only readiness, lab-host `new` receipt); `confirm_roles` is
+  `new vpn`; `validate` refuses any `10.98.` leftover in it and still requires
+  the recovery address in every other profile; activation keeps `10.98.0.1`
+  across the drain only if the candidate does; `ready` skips the
+  current-cabling recovery check for it alone. Fixtures cover refusals,
+  activation, receipts, timed restore to lab-igc1, confirmation, lab-igc1
+  refusing to arm without live recovery and a boot restore; a mutant that
+  always keeps `10.98.0.1` fails them.
+  Trial `j24-c-lab-final-20261111-a` confirmed 12:56:24Z (GATE PASS new/vpn,
+  12/12 fresh host SSH, no 10.98 on the router). Reboot test: identical
+  unconfirmed trial `...-boot`, `shutdown -r` 12:57:38Z, back in 40 s with
+  `restored-at-boot profile=lab-final`; confirmed identical reapply
+  `...-final` 13:01:06Z (the first gate run failed only the laptop's Wi-Fi
+  DHCP probe, which missed an OFFER dhcpd logged; the rerun passed).
+- **k34 retired** (RECOVERY-TUNNEL.md): router side, gateway key line and the
+  controller key material; the router keeps no recovery path besides wg2.

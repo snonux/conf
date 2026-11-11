@@ -1,5 +1,14 @@
 # Temporary router management during cable cutover
 
+**Retired 2026-11-11 (j24).** `triggerfish_recovery_retire` (via wg2) removed
+the enabled marker, the cron block, the client and `/etc/gonf/router-recovery`;
+a stale blowfish sshd session still holding `127.0.0.1:55322` (no router-side
+client) was terminated; `frontends_router_recovery_retire` removed the key line
+(the other authorized-key bytes are unchanged) and the controller references
+`router-recovery.{key,pub,known_hosts}` were deleted. The Prepare/Authorize
+tasks below now refuse (the public key reference is gone); this file is
+history.
+
 Task k34 closes one specific gap: Earth can use Mars11 and wg0 to reach f0/r0,
 but a jump through those hosts still depends on the lab's normal gateway.
 Moving that gateway or its cable can interrupt the jump itself.
