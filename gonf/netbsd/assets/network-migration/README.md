@@ -46,8 +46,9 @@ unconditionally, even with a stale RTC-less boot clock. A crash between publishi
 the accepted mode and archiving pending restores the prior snapshot. Publication
 and confirmation sync before acknowledging persistence.
 
-This transaction also owns NPF changes: explicit old/new service targets,
-recovery laptop-only SSH, native ULA services/NDP and unchanged tun0 permissions.
+This transaction also owns NPF changes: explicit service targets (since j24
+the lab address only; OLD and the recovery laptop-only SSH are retired),
+native ULA services/NDP and unchanged tun0 permissions.
 Runtime reload retains active filtering; no stop/flush is used. Boot restores
 the disk policy before ordinary NPF startup. Recovery refuses an unrelated edit
 to /etc/npf.conf, retaining its journal rather than overwriting another owner.
@@ -112,7 +113,8 @@ expiry, rollback and an unconfirmed boot restore rc.conf, the OLD address,
 routes and the prior `promote isolated` mode (a foreign rc.conf edit keeps
 the journal). Confirmation persists `retire isolated`; its boot override
 adds recovery, ULA and the return route and never re-adds OLD. NPF is not
-changed (`$host4` still lists OLD, which matches nothing). Like the other
+changed (`$host4` still listed OLD until j24's retire-recovery installed the
+candidate without it). Like the other
 requests, the result is in `request.*/result`, not the dispatch exit code.
 
 Do not deploy anything that edits `/etc/rc.conf` (for example a `pis_netbsd`

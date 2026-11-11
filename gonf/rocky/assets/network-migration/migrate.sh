@@ -418,6 +418,8 @@ _retire_recovery() {
         destination='' hop=''
         read -r destination hop _ <<< "$route" || :
         [[ -n $destination ]] || continue
+        [[ $destination =~ ^[0-9.]+/[0-9]+$ ]] ||
+            _fail 'Unrecognized NM route serialization; refusing route replacement'
         if [[ $destination == 10.99.0.2/32 && $hop == 10.98.0.1 ]]; then
             found=yes
             continue

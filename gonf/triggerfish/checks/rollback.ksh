@@ -1241,6 +1241,17 @@ lab=$base/router-profiles/lab-igc1
 "$fixture/run" validate "$lab" lab-igc1
 grep -qx 'pass in on igc1 inet proto tcp from 10.98.0.0/24 to 10.98.0.1 port 22 keep state' "$lab/pf.conf"
 if grep -q 'from 10.98.0.0/24 to 10.98.0.1' "$cam/pf.conf"; then exit 1; fi
+# j24: lab-igc1 gives the ISP LAN no router management; the stages before
+# b24 keep both old-management rules. No profile keeps 192.168.11.2 or the
+# f0 -> AP migration flow (both retired from the inventory).
+if grep -q 'from 192.168.1.0/24' "$lab/pf.conf"; then exit 1; fi
+for r in 'pass in on igc0 inet proto tcp from 192.168.1.0/24 to 192.168.1.2 port 22 keep state' \
+ 'pass in on igc0 inet proto icmp from 192.168.1.0/24 to 192.168.1.2 keep state'; do
+ grep -qx -- "$r" "$cam/pf.conf"
+done
+grep -qx 'pass in on { igc0 $wifi_if } inet proto udp to { 192.168.1.2, 10.30.0.1 } port 51822 keep state' "$lab/pf.conf"
+if grep -q '192[.]168[.]11[.]' "$base"/router-profiles/*/hostname.igc0; then exit 1; fi
+if grep -Eq 'to 10[.]30[.]0[.]2 port' "$base"/router-profiles/*/pf.conf; then exit 1; fi
 cp -Rp "$lab" "$fixture/lab.saved"
 cp -Rp "$cam" "$fixture/camera.c24"
 # Every misplaced lab element refuses at stage; the confirmed journal stays.

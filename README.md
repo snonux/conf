@@ -296,15 +296,15 @@ ignored `gonf/secrets/frontends/etc/goprecords/triggerfish.token` file.
 Gonf push builds and installs its OpenBSD runtime automatically; no custom
 package repository is needed. `/etc/installurl` remains the official mirror.
 
-The legacy `triggerfish_network` task is operational-only and refuses to
-replace the active router owner. Current migration profiles and rollback are
-managed through `gonf/triggerfish`: Wi-Fi `10.30.0.1/24` and DHCP are on
-igc2; the AP is `10.30.0.2` with DHCP disabled. Lab `10.20.0.1/24` and its
-ULA remain on igc0, while igc1 carries the temporary recovery subnet
-`10.98.0.0/24`. The AP data cable has moved to port2; ISP/lab-switch isolation
-and the normal lab-prefix transfer remain pending. Consult IQ's
-`topics/infra/openbsdrouter-plan/NEXT-SESSION.md` for current acceptance,
-physical gates and the next migration profile; do not replay legacy setup.
+The legacy `triggerfish_network` task was removed in j24; only router-rollback
+writes the router's network configuration. The live profile is `lab-igc1`:
+igc0 has only the upstream `192.168.1.2/24` (plus SLAAC for NAT66), the lab
+`10.20.0.1/24` and its ULA are on igc1 next to the temporary recovery subnet
+`10.98.0.0/24` (pending retirement in j24), Wi-Fi `10.30.0.1/24` with DHCP
+and NAT66 is on igc2 (AP `10.30.0.2`, DHCP disabled) and the uncabled camera
+zone `10.40.0.1/24` is on igc3. Consult IQ's
+`topics/infra/openbsdrouter-plan/NEXT-SESSION.md` for current acceptance and
+the next step; do not replay legacy setup.
 
 ## Workstation system configuration
 

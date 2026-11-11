@@ -434,6 +434,10 @@ else:raise AssertionError(name)
     final = model()
     gate('retire-recovery-approved'); request('retire-recovery', success=False)
     gate('retire-approved'); request('retire', success=False)
+    # A retired host never stages or promotes again (that re-adds OLD).
+    gate('stage-approved'); request('stage', success=False)
+    gate('stage-approved'); request('stage', success=False, topology='isolated')
+    gate('promote-approved'); request('promote', success=False, topology='isolated')
     assert model() == final and not pending.exists()
     print('PASS: retire-recovery gates/preconditions (NPF candidate, rc.conf, routes, '
           'addresses), recovery-free runtime and NPF, rollback/expiry/unconfirmed boot, '

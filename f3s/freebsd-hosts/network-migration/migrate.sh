@@ -439,17 +439,19 @@ retire_recovery_preflight() {
         fail 'alias202 is not the recovery address'
     [ "$(route -n get -inet default | awk '/gateway:/ {print $2}')" = 10.20.0.1 ] ||
         fail 'retire-recovery requires the 10.20.0.1 default'
-    [ "$(sysrc -n defaultrouter 2>/dev/null || :)" = 10.20.0.1 ] ||
+    # Read /etc/rc.conf, the file retire_recovery edits: a key that lived in
+    # rc.conf.local would pass a merged read and survive the removal.
+    [ "$(sysrc -f /etc/rc.conf -n defaultrouter 2>/dev/null || :)" = 10.20.0.1 ] ||
         fail 'retire-recovery requires the saved defaultrouter 10.20.0.1'
     [ "$(route -n get -inet 10.99.0.2 | awk '/gateway:/ {print $2}')" = 10.98.0.1 ] ||
         fail 'retire-recovery requires the 10.98.0.1 return route'
-    [ "$(sysrc -n route_gonfmigration 2>/dev/null || :)" = '-host 10.99.0.2 10.98.0.1' ] ||
+    [ "$(sysrc -f /etc/rc.conf -n route_gonfmigration 2>/dev/null || :)" = '-host 10.99.0.2 10.98.0.1' ] ||
         fail 'retire-recovery requires the saved 10.98.0.1 return route'
-    routes=$(sysrc -n static_routes 2>/dev/null || :)
+    routes=$(sysrc -f /etc/rc.conf -n static_routes 2>/dev/null || :)
     case " $routes " in *' gonfmigration '*) :;; *) fail 'static_routes lacks gonfmigration';; esac
     for name in $routes; do
         [ "$name" != gonfmigration ] || continue
-        for word in $(sysrc -n "route_$name" 2>/dev/null || :); do
+        for word in $(sysrc -f /etc/rc.conf -n "route_$name" 2>/dev/null || :); do
             case "$word" in 10.98.*) fail "saved route_$name uses the recovery /24";; esac
         done
     done

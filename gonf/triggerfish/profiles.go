@@ -452,8 +452,8 @@ BEFORE adding them to the target. Netstart alone does not remove old aliases.
 Disable obsolete physical IPv6 autoconfiguration and remove learned default
 routes/global addresses while retaining intended link-local/ULA and wg0 state.
 Keep the existing upstream .1.2 and gateway .1.1 throughout. Never duplicate a
-connected prefix. Retire provisioning .11.2 only after separate dependency proof
-and setting RetainProvisioningAlias=false. That flag retains its address only;
+connected prefix. j24 retired provisioning .11.2 (RetainProvisioningAlias=false
+after its dependency proof). That flag retains its address only;
 unlisted active provisioning clients make this candidate unready for activation.
 Inventory every such client and its required explicit PF permission first.
 Recovery 10.98/24 stays on igc1 through post-rack/post-AP rollback; shared-link

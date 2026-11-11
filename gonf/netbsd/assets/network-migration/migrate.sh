@@ -225,7 +225,8 @@ rc_retire_candidate() {
 # without the hook; the hook still adds recovery, ULA and the return route.
 # The ordinary 900 s snapshot plus a private rc.conf copy restore the prior
 # accepted mode, OLD address, routes and rc.conf on expiry, unconfirmed
-# boot or rollback. NPF is unchanged ($host4 still lists OLD; harmless).
+# boot or rollback. NPF is unchanged here; j24's retire-recovery installs the
+# candidate without OLD and recovery.
 retire_apply() {
     gate activation-approved
     gate retire-approved
@@ -297,6 +298,11 @@ apply() {
     gate activation-approved
     gate "$action-approved"
     [ "$topology" != isolated ] || gate igc1-approved
+    # After i24/j24 a retire mode is final: stage/promote would re-add the
+    # retired OLD address (check_addresses tolerates its absence only there).
+    if [ -f "$accepted" ] && grep -q '^retire ' "$accepted"; then
+        fail 'retired: stage/promote would re-add the OLD address'
+    fi
     if [ "$action" = promote ]; then
         [ -f "$accepted" ] || fail 'accept Stage first'
         if ! grep -qx "stage $topology" "$accepted"; then
