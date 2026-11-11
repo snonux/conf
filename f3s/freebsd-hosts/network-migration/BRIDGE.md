@@ -97,3 +97,23 @@ Hold `~/.local/state/conf/live-rollout.lock`. Receipts:
    same checks.
 6. `freebsd_bridge_migration_confirm`; f0/f1: switch `CarpNode.Interface`
    to `freebsd.LabBridge`, then `freebsd_carp_rc_conf` must report no change.
+
+## Live record (2026-11-11, paused by the user)
+
+Receipts in `~/.local/state/conf/764-20261111/`. Step 0 is live on f0–f3
+(pf.conf on both interfaces, states kept; devd rule on f0/f1; resolver).
+Helper prepared on **f3 only**.
+
+- f3 move 16:29:46Z: 0/100 IPv4 pings lost; fresh SSH from the laptop (wg2)
+  and ULA TCP 22 from r0–r2, pi0 and f2; the rocky guest now reaches f3 over
+  IPv4 (blocked on tap before). The rocky guest has IPv6 disabled on its NIC,
+  so guest→host ULA is testable only on f0–f2 (r-nodes). Neighbours with a
+  cached re0 MAC re-resolved the ULA within seconds (NUD).
+- Native explicit rollback: exact (rc.conf, system.conf, re0 link-local), 0/60 lost.
+- Re-move, `boot-trial`, reboot 16:31:51Z: the trial boot created
+  `bridge0`, renamed it `vm-public` (clean shutdown and boot). It was not
+  confirmed before the 16:51:48Z deadline, so the watchdog restored re0 at
+  16:52 (`rolled-back-1794415920`). **f3 is on re0, nothing pending.**
+
+Next: redo f3 (move, boot-trial, reboot, checks incl. services, confirm in
+the window), then f2, f1, f0; prepare each host first.
