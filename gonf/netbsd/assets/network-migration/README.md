@@ -1,6 +1,6 @@
 # NetBSD controller migration — task 624
 
-Live checkpoint, 2026-11-07: both controllers have confirmed NEW primaries and
+Live checkpoint, 2026-11-07 (history; OLD retired 2026-11-11 by i24, below): both controllers have confirmed NEW primaries and
 default10.20.0.1 with OLD/ULA/shared return retained, after actual confirmed
 boots and management, website, authenticated controller, mesh and external WoL
 checks. Original static WG and DTail are preserved. The native clean900s expiry
@@ -27,13 +27,13 @@ controller/static backend throughout.
 
 `pis_netbsd_network_prepare` installs a base-sh helper, dormant NPF candidate,
 minute cron watchdog and an enabled no-op rc hook. Without pending or accepted
-state the hook changes nothing. Every method is Operational. Existing rc.conf
-interface/default settings remain unchanged; the accepted mode under
+state the hook changes nothing. Every method is Operational. Until retire, rc.conf
+interface/default settings remain unchanged (retire rewrites them, see below); the accepted mode under
 `/var/db/gonf-network-migration/accepted` is the managed persistent override,
 applied after base network and before NPF/NETWORKING, WireGuard, HTTP and SSH.
 Native rcorder verified that order on both actual controllers.
 
-| Host | OLD retained | NEW | Recovery | Local ULA |
+| Host | OLD (retired i24) | NEW | Recovery | Local ULA |
 | --- | --- | --- | --- | --- |
 | pi0 | 192.168.1.125 | 10.20.0.125 | 10.98.0.125 | fd02:ca0b:f1cb:20::125 |
 | pi1 | 192.168.1.126 | 10.20.0.126 | 10.98.0.126 | fd02:ca0b:f1cb:20::126 |
@@ -114,3 +114,10 @@ the journal). Confirmation persists `retire isolated`; its boot override
 adds recovery, ULA and the return route and never re-adds OLD. NPF is not
 changed (`$host4` still lists OLD, which matches nothing). Like the other
 requests, the result is in `request.*/result`, not the dispatch exit code.
+
+Do not deploy anything that edits `/etc/rc.conf` (for example a `pis_netbsd`
+run) while a retire is pending: the watchdog and boot hook then refuse to
+restore and retry every minute; after a reboot the host still comes up on
+the lab address but without the recovery alias and 10.99.0.2 return route.
+After a confirmed retire there is no scripted way back (stage/promote need
+OLD): restore rc.conf and `accepted` by hand from the private copy.

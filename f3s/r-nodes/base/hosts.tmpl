@@ -11,7 +11,7 @@
 # part 7). The k3s registries.yaml mirror dials localhost:30001 directly.
 127.0.0.1 registry.lan.buetow.org
 
-# LAN (192.168.1.0/24)
+# LAN (10.20.0.0/24)
 {{- range .LAN}}
 {{.}}
 {{- end}}

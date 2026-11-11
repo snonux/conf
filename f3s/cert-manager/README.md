@@ -2,7 +2,7 @@
 
 Self-signed wildcard certificate `*.f3s.lan.buetow.org` for the LAN
 ingresses. Traefik terminates TLS with the `f3s-lan-tls` secret; relayd on the
-CARP VIP (192.168.1.138) on f0/f1 is plain TCP passthrough and holds no cert.
+CARP VIP (10.20.0.138) on f0/f1 is plain TCP passthrough and holds no cert.
 Full LAN path: [`../docs/lan-access-setup-guide.md`](../docs/lan-access-setup-guide.md).
 
 | File | Content |
@@ -95,7 +95,7 @@ for ns in cert-manager services cicd; do
   kubectl -n $ns get secret f3s-lan-tls -o jsonpath='{.data.tls\.crt}' \
     | base64 -d | openssl x509 -noout -enddate
 done
-echo | openssl s_client -connect 192.168.1.138:443 \
+echo | openssl s_client -connect 10.20.0.138:443 \
   -servername code.f3s.lan.buetow.org 2>/dev/null | openssl x509 -noout -enddate
 ```
 

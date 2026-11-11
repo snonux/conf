@@ -23,7 +23,8 @@ Private reproducible evidence is under
 `524-pis-20261107/native-20261107T1050/`, particularly each
 `piN-final-acceptance-accepted.json` and the Pi2 expiry/boot receipts.
 
-The live wildcard remains OLD VIP 192.168.1.138. Only the future VIP file is
+History: the wildcard pointed at OLD VIP 192.168.1.138 until task i24
+(2026-11-11) retired that VIP; it is now 10.20.0.138. The future VIP file was
 dormant, outside active mounts/includes. Activation remains coordinated with
 storage/ingress acceptance and the canonical mapping step, task 924.
 
@@ -72,7 +73,7 @@ accepting the changed service. Do not deploy a candidate during a pending trial.
 
 `pihole_migration_dns` stages the future VIP wildcard under
 `/var/lib/f3s-pihole-migration/`, outside active bind mounts and dnsmasq includes.
-The live wildcard remains 192.168.1.138. Do not place even a renamed candidate
+Since i24 the live wildcard is 10.20.0.138 (OLD VIP .138 retired). Do not place even a renamed candidate
 in an active include directory. Activate 10.20.0.138 only with accepted storage
 and ingress, including the authoritative public-zone update and cache handling.
 

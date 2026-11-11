@@ -17,7 +17,7 @@ reference for rollback.
 ## Intended boundary and scope
 
 Use `https://argocd.f3s.lan.buetow.org`. LAN DNS resolves the CARP VIP
-192.168.1.138; TLS remains on Traefik's `websecure` entrypoint using cicd's
+10.20.0.138; TLS remains on Traefik's `websecure` entrypoint using cicd's
 existing `f3s-lan-tls`. Keep the existing LAN CA trusted on clients. On WireGuard,
 route to a reachable Traefik HTTPS endpoint using this same TLS/Host name (for
 example a client DNS override to its reachable r-node WG address). Do not assume

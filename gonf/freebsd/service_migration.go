@@ -80,7 +80,9 @@ func upsCandidate(data apcupsdConfData) {
 // OptsMigrationCandidate keeps restricted-key candidates out of aggregates.
 func (F3sctl) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
 
-// MigrationCandidate stages additive Pi source pins, retaining old LAN and wg0.
+// MigrationCandidate staged additive Pi source pins, retaining old LAN and wg0.
+// Since task i24 removed the old Pi addresses from the key, it refuses on the
+// current asset (the old from= string is gone); kept only as migration history.
 func (F3sctl) MigrationCandidate() {
 	raw, err := os.ReadFile(paths.FHostAsset("f3sctl/authorized_keys"))
 	if err != nil {
