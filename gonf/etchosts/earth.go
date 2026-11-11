@@ -35,7 +35,7 @@ func RouterHostsBlock() []string { return fleetBlockWithMesh("upstream") }
 // fleetBlockWithMesh renders the accepted fleet in one router view plus the
 // unchanged wg0 mesh names of the standalone peers and the laptop's extras.
 func fleetBlockWithMesh(routerView string) []string {
-	lines := append([]string{"# Accepted LAN; reserved recovery aliases retained, retired OLD aliases dropped"}, acceptedView(routerView).HostsBlock...)
+	lines := append([]string{"# Accepted LAN; retired OLD and recovery aliases dropped"}, acceptedView(routerView).HostsBlock...)
 	lines = append(lines, "# WireGuard mesh wg0 (wireguardmeshgenerator)")
 	peers := append(frontends.StandaloneWireGuardAddresses(), earthWireGuard...)
 	return append(lines, frontends.WireGuardHostLines(peers...)...)

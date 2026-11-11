@@ -28,7 +28,11 @@ for dev, new_ip, old_ip in (('46793b0d4c8d45d', '10.20.0.151', '192.168.1.248'),
                             ('cee6ab4df2f88754', '10.20.0.198', '192.168.1.245')):
     assert rows['jetkvm-' + dev] == new_ip and 'jetkvm-' + dev + '.old.lan' not in rows
 assert rows['jetkvm-46793b0d4c8d45d.new.lan'] == '10.20.0.151'
-assert rows['f0.recovery.lan'] == '10.98.0.130'
+# j24: the recovery subnet is retired; accepted has no .recovery name or
+# 10.98.0.x row (hosts, DNS, Pi-hole); the staging preview keeps them.
+assert not any('.recovery.' in n or n.endswith('.recovery.lan') for n in rows), 'accepted keeps a .recovery name'
+assert not any(ip.startswith('10.98.') for ip in rows.values())
+assert not any('10.98.' in r or '.recovery.' in r for r in render('accepted', 'lab')['PiHoleDNSMasq'])
 # 274: i24 retired the old 192.168.1.x of these endpoints; accepted drops their
 # .old names (hosts and DNS). Router, AP and the stopped freebsd VM still hold
 # theirs, and the historical staging preview keeps every .old alias.
@@ -40,6 +44,7 @@ assert pihole_old == ['freebsd', 'openwrt', 'triggerfish'], pihole_old
 assert rows['triggerfish.old.lan'] == '192.168.1.2' and rows['openwrt.old.lan'] == '192.168.1.101'
 assert rows['freebsd.old.lan'] == '192.168.1.139'
 staged = {name: line.split()[0] for line in staging['HostsBlock'] for name in line.split()[1:]}
+assert staged['f0.recovery.lan'] == '10.98.0.130'
 assert staged['f0.old.lan'] == '192.168.1.130' and staged['jetkvm-46793b0d4c8d45d.old.lan'] == '192.168.1.248'
 for profile, view in (('target', 'lab'), ('ap-target', 'wifi')):
     preview = render(profile, view)['HostsBlock']

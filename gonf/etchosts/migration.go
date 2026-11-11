@@ -132,7 +132,10 @@ func migrationRows(h lanHost, profile, routerView string) ([]string, error) {
 		rows = append(rows, migrationAlias(h.ip, h.name, "old"))
 	}
 	rows = append(rows, migrationAlias(target, h.name, "new"))
-	if h.migration.recovery {
+	// j24 retired the igc1 recovery subnet 10.98.0.0/24 (hosts and router),
+	// so the accepted view has no .recovery names; the historical staging
+	// and target previews keep them.
+	if h.migration.recovery && profile != "accepted" {
 		suffix := old.As4()[3]
 		if h.migration.zone == routerZone {
 			suffix = 1

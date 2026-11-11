@@ -82,8 +82,10 @@ also under `.lan.buetow.org` (the accepted profile has since dropped `.old`
 for retired endpoints, see above). Allocated management recovery names are
 `<host>.recovery.lan`; the VIP, AP, Shelly and JetKVM devices have no invented
 recovery aliases. These are planned mappings, not proof of connectivity.
-In particular, host recovery addresses belong to the later igc1 path and
-must not be treated as usable shared-igc0 recovery. F/r and router native ULA
+In particular, host recovery addresses belonged to the igc1 path and were
+never usable shared-igc0 recovery. j24 retired that path (10.98.0.0/24 on the
+hosts and the router), so the accepted profile has no `.recovery` names; the
+staging and target previews keep them as history. F/r and router native ULA
 addresses use only `<host>.lan6` / `<host>.lan6.buetow.org`; no ULA is attached
 to ordinary canonical names or inferred for other VMs/Pis. wg0 IPv4/IPv6
 rows come unchanged from their existing inventory, including laptop extras.
