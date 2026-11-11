@@ -298,20 +298,48 @@ class Policies(unittest.TestCase):
         receivers = [(TRAEFIK, (8000, 8443)),
                      ({'svccontroller.k3s.cattle.io/svcname': 'traefik',
                        'svccontroller.k3s.cattle.io/svcnamespace': 'kube-system'}, (80, 443))]
-        for address in ['10.20.0.130', '10.20.0.131', '10.20.0.138',
-                        '192.168.1.130', '192.168.1.131', '192.168.1.138']:
+        for address in ['10.20.0.130', '10.20.0.131', '10.20.0.138']:
             for labels, ports in receivers:
                 for port in ports:
                     self.assert_path({'ip': address}, 'kube-system', labels, port, True)
                     self.assert_path({'ip': address}, 'kube-system', labels, port, False, 'UDP')
                 self.assert_path({'ip': address}, 'kube-system', labels, 9100, False)
             self.assert_path({'ip': address}, 'services', {'app': 'miniflux-postgres'}, 5432, False)
-        # Neither adjacent lab hosts nor direct wg2 clients inherit relay trust.
+        # Neither adjacent lab hosts, direct wg2 clients nor the relays' old
+        # LAN addresses (retired in task i24, removed in task 174) inherit
+        # relay trust.
         for address in ['10.20.0.129', '10.20.0.132', '10.20.0.133',
-                        '10.20.0.139', '10.99.0.2', '10.99.0.3']:
+                        '10.20.0.139', '10.99.0.2', '10.99.0.3',
+                        '192.168.1.130', '192.168.1.131', '192.168.1.138']:
             for labels, ports in receivers:
                 for port in ports:
                     self.assert_path({'ip': address}, 'kube-system', labels, port, False)
+
+    def test_node_paths_use_lab_addresses_not_retired_old_lan(self):
+        # Task 174: the r-nodes' old LAN /32s (192.168.1.120-122) were
+        # removed after task i24 retired them. Every receiver that admitted
+        # them keeps its lab (10.20.0.x), wg0 and CNI node paths; the old
+        # addresses, and any other old-LAN host, are now denied.
+        receivers = [('kube-system', {'k8s-app': 'kube-dns'}, 53),
+                     ('kube-system', {'k8s-app': 'metrics-server'}, 10250),
+                     ('cert-manager', {'app': 'webhook', INSTANCE: 'cert-manager'}, 10250),
+                     ('monitoring', {'app': 'kube-prometheus-stack-operator', 'release': 'prometheus'}, 10250),
+                     ('kube-system', TRAEFIK, 8000),
+                     ('infra', {'app': 'docker-registry'}, 5000),
+                     ('services', {'app': 'protonbridge'}, 143),
+                     ('services', {'app': 'forgejo'}, 2222),
+                     ('services', {'app': 'anki-sync-server'}, 8080)]
+        for namespace, labels, port in receivers:
+            for address in ['10.20.0.120', '10.20.0.121', '10.20.0.122', '192.168.2.120']:
+                self.assert_path({'ip': address}, namespace, labels, port, True)
+            for address in ['192.168.1.120', '192.168.1.121', '192.168.1.122', '192.168.1.1']:
+                self.assert_path({'ip': address}, namespace, labels, port, False)
+        # No policy source keeps any address of the retired old LAN.
+        old_lan = [peer['ipBlock']['cidr'] for policy in self.prepared
+                   for rule in (policy['spec'].get('ingress') or [])
+                   for peer in rule.get('from', [])
+                   if 'ipBlock' in peer and peer['ipBlock']['cidr'].startswith('192.168.1.')]
+        self.assertEqual(old_lan, [])
 
     def test_cross_node_nodeport_snat_is_a_documented_receiver_bypass(self):
         # Observed KUBE-EXT/MARK-MASQ/POSTROUTING rules rewrite a cross-node

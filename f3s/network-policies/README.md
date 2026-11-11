@@ -91,7 +91,7 @@ SMTP STARTTLS checked against its pinned certificate. Direct frontend WG access
 to Bridge on its receiving node is intentionally absent from the allowlist. No services-wide,
 namespace-wide or pod-CIDR allowance is used to keep these paths alive.
 
-The exact trusted-node addresses are r0/r1/r2 LAN 192.168.1.120–122, WG
+The exact trusted-node addresses are r0/r1/r2 lab LAN 10.20.0.120–122, WG
 192.168.2.120–122, and CNI/flannel 10.42.{0,1,2}.{0,1}. NodePort translation
 can replace an external client's source with one of these identities. These
 exceptions **do not enforce the original external-client allowlist**.
@@ -127,7 +127,7 @@ pod selector, with no node/CNI ipBlock. The original unrelated-pod → database
 Service/Pod negative test on all nodes remains mandatory and must pass.
 
 Traefik and its ServiceLB accept only their web ports from the two frontend WG
-addresses, the f0/f1 LAN relay addresses 192.168.1.130/.131 (and CARP VIP .138),
+addresses, the f0/f1 lab relay addresses 10.20.0.130/.131 (and CARP VIP .138),
 and the existing node/CNI paths. Traefik's web allow also admits the narrowly
 selected kube-system ServiceLB pods. Prometheus alone gets its metrics port.
 This is network access permission, **not** HTTP-header trust. The separate
@@ -420,3 +420,18 @@ all eleven are Synced/Healthy without a sync. They remain manual (no
 automated policy) and pinned to an exact commit, as described above. When
 a later change is applied with kubectl, commit and publish it, then
 re-pin the affected Application to that commit after the same comparison.
+
+## Retired old LAN sources removed (task 174, 2026-11-11)
+
+Task i24 retired every lab host's old `192.168.1.x` address and the old CARP
+VIP `192.168.1.138`. The 36 old ipBlock `/32`s (r0–r2 `192.168.1.120–122`
+in twelve policies; f0/f1 `.130/.131` and `.138` in the two kube-system web
+receivers) were removed from cert-manager, infra, kube-system, monitoring
+and services. Each sat in the same rule as its `10.20.0.x` twin, which
+stays, so no receiver loses a current source. Before removal, r0–r2 had no
+old address or route, no conntrack entry and no packet to or from
+`192.168.1.0/24` in a 90 s capture; f0/f1 had no old address or route, and
+no Service, EndpointSlice or Node referenced the old /24. The five
+Applications were re-pinned to the published commit and synced one at a
+time; the other six keep their pin, as their sources did not change. The
+tests now deny the old addresses on every former node and relay path.
