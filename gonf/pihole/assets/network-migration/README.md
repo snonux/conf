@@ -57,7 +57,7 @@ physical-cable and igc1 gates. Retain OLD resolver addresses and current Wi-Fi
 client DNS throughout (staging-era rule; i24 retired the OLD addresses and task
 074 removed their guard trust). Never renumber the only working resolver.
 
-`pihole_firewall_migration_stage` installs only the dormant migration policy.
+`pihole_firewall_migration_stage` (removed in 774) installed only the dormant migration policy.
 It owns only `inet f3s_guard`. The old-LAN `192.168.1.0/24` client trust kept
 during staging was removed in task 074 (2026-11-11), after i24 retired the
 resolvers' old addresses. NEW lab/ULA DNS is allowed. Both known wg2 identities receive TCP/UDP53 only
@@ -76,7 +76,7 @@ Canonical `pihole_firewall_stage` now stages that same migration policy.
 Pi-hole's original `LOCAL` mode rejects routed wg2 clients, even when the host
 guard permits them. Canonical compose uses `SINGLE` on `eth0` (plus Pi-hole's
 automatic loopback listener), leaving source authorization to the scoped guard.
-`pihole_migration_service` stages this compose outside the live directory.
+`pihole_migration_service` (removed in 774) staged this compose outside the live directory.
 When that candidate exists, the existing resolver network transaction snapshots
 both compose and private `pihole.toml` before mutation, then applies the candidate
 and recreates only that resolver. Timed rollback restores compose and TOML;
@@ -86,7 +86,7 @@ waits for Docker before restoring the service. There is no second controller.
 Prove application restoration through native expiry and unconfirmed boot before
 accepting the changed service. Do not deploy a candidate during a pending trial.
 
-`pihole_migration_dns` stages the future VIP wildcard under
+`pihole_migration_dns` (removed in 774) staged the future VIP wildcard under
 `/var/lib/f3s-pihole-migration/`, outside active bind mounts and dnsmasq includes.
 Since i24 the live wildcard is 10.20.0.138 (OLD VIP .138 retired). Do not place even a renamed candidate
 in an active include directory. Activate 10.20.0.138 only with accepted storage
