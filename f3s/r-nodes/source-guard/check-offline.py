@@ -103,7 +103,8 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
     for port in [22, 80, 443, 6443, 30001, 32200]:
         probe('10.99.0.2', destinations[0], port, port in [22, 80, 443, 32200])
         probe('10.99.0.3', destinations[0], port, port == 443)
-        probe('10.99.0.2', destinations[2], port, port == 22)
+        # j24: the retired recovery alias admits nothing, not even laptop SSH.
+        probe('10.99.0.2', destinations[2], port, False)
         probe('10.99.0.3', destinations[2], port, False)
     probe('10.99.0.2', destinations[1], 32200, False)
     for source in ['10.99.0.4', '192.168.1.50', '10.30.0.2']:
@@ -117,13 +118,15 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         probe('10.42.0.2', target, 9999, True)
     # Trace the independent guard counters for remote aliases before routing.
     mac = json.loads(run('ip', '-j', 'link', 'show', 'enp0s5').stdout)[0]['address']
-    for target in ['10.20.0.121', '10.98.0.122', '192.168.2.121']:
+    # j24: a remote node's retired recovery alias is no longer a node
+    # address, so the node set no longer counts it (no node holds it).
+    for target, guarded in [('10.20.0.121', True), ('10.98.0.122', False), ('192.168.2.121', True)]:
         run(*ns, 'ip', 'neigh', 'replace', target, 'lladdr', mac, 'dev', 'client0')
         before = run('nft', 'list', 'chain', 'inet', 'f3s_nodeport_guard', 'from_pod').stdout
         probe('10.42.0.2', target, 30001, False)
         after = run('nft', 'list', 'chain', 'inet', 'f3s_nodeport_guard', 'from_pod').stdout
-        assert before != after, target
-    print('PASS: native syntax, atomic replacement, retired old /24 denied, wg2/recovery scope (incl. n44 32200), ULA, independent local/remote pod guard')
+        assert (before != after) == guarded, target
+    print('PASS: native syntax, atomic replacement, retired old /24 and recovery aliases denied, wg2 scope (incl. n44 32200), ULA, independent local/remote pod guard')
 finally:
     if server:
         server.terminate()

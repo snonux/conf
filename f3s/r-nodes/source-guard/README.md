@@ -27,9 +27,10 @@ RA/DHCPv6 receive no service exception. Host RA suppression remains n14's job.
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
-phone 10.99.0.3 TCP443, to lab addresses only. Recovery aliases
-10.98.0.120–122 accept only laptop TCP22. Recovery filtering precedes lab and
-old-source trust; it is not a general service subnet. Existing established
+phone 10.99.0.3 TCP443, to lab addresses only. The igc1 recovery aliases
+10.98.0.120–122 and their laptop-only TCP22 chain were retired in task j24
+(the nodes no longer carry them; laptop replies use the 10.20.0.1 default).
+Existing established
 traffic may finish. Additional direct wg2 services require a scoped matching
 router/host/pod review; no direct SMTP/IMAP/DTail/NodePort exception is implied.
 Public wg0 transport UDP56709 stays available. No wg0 identity, IPv6, peers,
@@ -37,8 +38,8 @@ AllowedIPs, node/advertise-address, pod or Service CIDR changes are made.
 
 The independent `inet f3s_nodeport_guard` retains its -151 pod-source check,
 receiver port list, pod CIDR and fib-local catch. Its migration candidate adds
-all three lab and recovery IPv4 destinations alongside the wg0 addresses (the
-old physical 192.168.1.12x were removed in task 074). This prevents a pod targeting another node's future alias from
+all three lab IPv4 destinations alongside the wg0 addresses (the old physical
+192.168.1.12x were removed in task 074, the recovery 10.98.0.12x in j24). This prevents a pod targeting another node's future alias from
 escaping the receiver-port restriction before DNAT/Flannel source NAT. Never
 combine the tables or flush kube-proxy/CNI tables. They have separate loaders,
 confirmation state and rollback timers.
@@ -56,11 +57,10 @@ only at that approved policy transition so a routine stage cannot overwrite a
 selected migration candidate. Native expiry, reboot and fresh reconnect
 acceptance remain unperformed by this preparation.
 
-During shared-wire staging n14 uses the reachable 192.168.1.2 gateway for the
-laptop /32 return route. Do not activate the igc1 recovery route while still
-on shared igc0. Recovery aliases/return routing become usable only through
-the later human cable and fresh igc1 recovery gates. The host candidate is
-safe to prepare before either address exists; preparation proves no path.
+History: during shared-wire staging n14 used the 192.168.1.2 gateway for the
+laptop /32 return route, after the cable move the igc1 recovery gateway
+10.98.0.1. Task j24 retired both the recovery aliases and that /32 route
+(`retire-recovery`), so the nodes answer the laptop through their default.
 
 Flannel has one configuration owner: n14's guarded Promote writes
 `/etc/rancher/k3s/config.yaml.d/60-network-migration.yaml` with

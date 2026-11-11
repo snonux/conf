@@ -33,7 +33,7 @@ boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
 non-k3s runtime unit and legacy non-k3s snapshot marker avoid all k3s/Flannel
 resources. All actions are Operational and excluded from routine aggregates.
 
-| Host | OLD (retired in i24) | NEW | Dedicated recovery | Native ULA |
+| Host | OLD (retired in i24) | NEW | Dedicated recovery (retired in j24) | Native ULA |
 | --- | --- | --- | --- | --- |
 | pi2 | 192.168.1.127 | 10.20.0.127 | 10.98.0.127 | fd02:ca0b:f1cb:20::127 |
 | pi3 | 192.168.1.128 | 10.20.0.128 | 10.98.0.128 | fd02:ca0b:f1cb:20::128 |
@@ -49,7 +49,7 @@ It owns only `inet f3s_guard`. The old-LAN `192.168.1.0/24` client trust kept
 during staging was removed in task 074 (2026-11-11), after i24 retired the
 resolvers' old addresses. NEW lab/ULA DNS is allowed. Both known wg2 identities receive TCP/UDP53 only
 to the resolver pair; laptop SSH/web and phone HTTPS follow router permissions.
-Recovery aliases accept only laptop TCP22, before general LAN trust. New Wi-Fi
+The recovery aliases and their laptop-only TCP22 chain were retired in j24. New Wi-Fi
 and camera subnets receive no service trust. Existing diagnostics and old-mode
 IPv6 recovery are preserved; the NM profile owns new-mode RA suppression.
 

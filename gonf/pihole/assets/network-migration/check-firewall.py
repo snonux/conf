@@ -105,7 +105,8 @@ assert ok==(expected=='True'),sys.argv[1:]
         for target in targets[3:5]:
             probe(source, target, 53, False)
             probe(source, target, 53, False, 'udp')
-            probe(source, target, 22, source == '10.99.0.2')
+            # j24: the retired recovery aliases admit nothing, not even SSH.
+            probe(source, target, 22, False)
     probe('10.20.0.130', targets[3], 22, False)
     for port in (22,80,443):
         probe('10.99.0.2', targets[0], port, True)
@@ -113,7 +114,7 @@ assert ok==(expected=='True'),sys.argv[1:]
     for transport in ('tcp', 'udp'):
         probe('fd02:ca0b:f1cb:20::130', 'fd02:ca0b:f1cb:20::127', 53, True, transport)
     print('PASS: native atomic rules, retired OLD /24 denied, NEW/ULA DNS, '
-          'scoped two-peer TCP/UDP DNS, recovery SSH and denied Wi-Fi/camera sources')
+          'scoped two-peer TCP/UDP DNS, retired recovery SSH and denied Wi-Fi/camera sources')
 finally:
     if server:
         server.terminate()

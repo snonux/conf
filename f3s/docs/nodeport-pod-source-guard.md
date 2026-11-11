@@ -16,8 +16,8 @@ can lose its pod identity before it reaches another node. A receiving-node-only
 pod-source filter would therefore miss part of the observed bypass.
 
 All three current pod CIDRs are IPv4 subnets of 10.42.0.0/16. Node LAN addresses
-were 192.168.1.120–122 at the time (lab 10.20.0.120–122 and recovery
-10.98.0.120–122 since triggerfish; the old ones were retired in i24) and WG
+were 192.168.1.120–122 at the time (lab 10.20.0.120–122 since triggerfish;
+the old ones were retired in i24, the interim recovery 10.98.0.120–122 in j24) and WG
 addresses 192.168.2.120–122; native interface
 inventory found no uncovered non-loopback, non-pod IPv4 address. All five
 NodePorts still use `externalTrafficPolicy: Cluster`.
@@ -38,7 +38,7 @@ with old node addresses was removed in task 074) owns only the inet table
 kube-proxy destination NAT and Flannel source NAT. For a pod source in
 10.42.0.0/16 and one of the five TCP ports, it drops traffic to:
 
-- Any node lab/recovery/WG address, including another node's address.
+- Any node lab/WG address, including another node's address.
 - Any locally routed address, including local CNI gateways.
 
 The first condition catches cross-node traffic at its source. The second

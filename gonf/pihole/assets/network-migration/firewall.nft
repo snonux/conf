@@ -8,8 +8,8 @@ table inet f3s_guard {
     }
     chain from_lan {
         ct state established,related return
-        # Dedicated recovery is SSH-only, before any shared-wire trust.
-        ip daddr { 10.98.0.127, 10.98.0.128 } goto recovery
+        # Task j24 retired the igc1 recovery aliases 10.98.0.127/.128 and
+        # their laptop-only SSH chain: such destinations fall to the drop.
         # Task 074: the old 192.168.1.0/24 resolver addresses were retired in
         # i24 and the router never forwards that subnet to the lab, so no old
         # IPv4 source or destination is trusted any more.
@@ -26,10 +26,6 @@ table inet f3s_guard {
         # The migration profile owns RA suppression/manual ULA in new mode.
         meta l4proto { icmp, ipv6-icmp } return
         ip6 saddr fe80::/10 udp sport 547 udp dport 546 return
-        counter drop
-    }
-    chain recovery {
-        ip saddr 10.99.0.2 tcp dport 22 return
         counter drop
     }
 }

@@ -9,8 +9,8 @@ table inet f3s_guard {
     }
     chain from_lan {
         ct state established,related return
-        # Recovery aliases are management-only, even for trusted lab sources.
-        ip daddr { 10.98.0.120, 10.98.0.121, 10.98.0.122 } goto recovery
+        # Task j24 retired the igc1 recovery aliases 10.98.0.120-122 and
+        # their laptop-only SSH chain: such destinations fall to the drop.
         # Homelab-local service trust; no trust of Wi-Fi/camera/wg2 subnets.
         # Task 074: the old 192.168.1.0/24 host addresses (and the old CARP
         # VIP .138) were retired in i24, so no old IPv4 source or destination
@@ -33,10 +33,6 @@ table inet f3s_guard {
         meta l4proto ipv6-icmp icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-neighbor-solicit, nd-neighbor-advert } return
         # Preserve authenticated wg0 transport, including public gateway peers.
         udp dport 56709 return
-        counter drop
-    }
-    chain recovery {
-        ip saddr 10.99.0.2 tcp dport 22 return
         counter drop
     }
 }
