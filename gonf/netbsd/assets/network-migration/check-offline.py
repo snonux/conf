@@ -32,7 +32,8 @@ with tempfile.TemporaryDirectory(prefix='netbsd-network-fixture-') as directory:
                      ('/usr/local/etc/gonf-network-migration.npf', candidate),
                      ('/etc/npf.conf', npf),
                      ('/etc/rc.d/gonf_network_migration', root / 'bootrc'),
-                     ('/etc/rc.conf.d/gonf_network_migration', root / 'bootflag')]:
+                     ('/etc/rc.conf.d/gonf_network_migration', root / 'bootflag'),
+                     ('/etc/rc.conf', root / 'rc.conf')]:
         text = text.replace(old, str(new))
     text = text.replace('PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/pkg/sbin:/usr/pkg/bin:/usr/local/sbin',
                         f'PATH={commands}:/usr/bin:/bin')
@@ -265,6 +266,100 @@ else:raise AssertionError(name)
     assert set(booted['v4']) == set(isolated['v4'])
     assert booted['gateway'] == '10.20.0.1' and booted['return'] == '10.98.0.1'
     assert (state / 'accepted').read_text().strip() == 'promote isolated'
+
+    # i24 retire: an accepted promote isolated profile drops OLD for good,
+    # at runtime and in rc.conf's base primary/defaultroute lines.
+    rcfile = root / 'rc.conf'
+    rc_old = ('hostname="controller"\ndhcpcd=NO\n'
+              'ifconfig_mue0="inet 192.0.2.125 netmask 0xffffff00"\ndefaultroute="192.0.2.1"\n')
+    rc_new = ('hostname="controller"\ndhcpcd=NO\n'
+              'ifconfig_mue0="inet 198.51.100.125 netmask 0xffffff00"\ndefaultroute="10.20.0.1"\n')
+    rcfile.write_text(rc_old)
+    edit(npf_active=True, loaded_npf=npf.read_text())  # NPF loads after the boot hook.
+    booted = model()
+    for leftover in ('retire-approved', 'confirm-approved'):
+        (state / leftover).unlink(missing_ok=True)
+
+    def unchanged(before):
+        assert not pending.exists() and model() == before and rcfile.read_text() == rc_old
+        assert (state / 'accepted').read_text().strip() == 'promote isolated'
+
+    request('retire', success=False)  # The retire gate is closed by default.
+    unchanged(booted)
+    gate('retire-approved'); (state / 'igc1-approved').unlink()
+    request('retire', success=False)
+    unchanged(booted)
+    gate('igc1-approved')
+    for bad in ('ifconfig_mue0="inet 192.0.2.99 netmask 0xffffff00"\ndefaultroute="192.0.2.1"\n',
+                'ifconfig_mue0="inet 192.0.2.125 netmask 0xffffff00"\n',
+                rc_old + 'ifconfig_mue0="inet 192.0.2.125 netmask 0xffffff00"\n',
+                rc_old + 'static_routes="x"\nroute_x="-net 172.16.0.0/12 192.0.2.1"\n'):
+        rcfile.write_text(bad)
+        request('retire', success=False)
+        assert not pending.exists() and model() == booted and rcfile.read_text() == bad, bad
+    rcfile.write_text(rc_old)
+    for field, value in (('gateway', '192.0.2.1'), ('return', '192.0.2.2')):
+        edit(**{field: value})
+        request('retire', success=False)
+        assert not pending.exists() and rcfile.read_text() == rc_old, field
+        edit(**{field: booted[field]})
+    edit(v4=['192.0.2.125/24', '198.51.100.125/24', '203.0.113.125/24'])
+    request('retire', success=False)  # OLD is still the primary.
+    edit(v4=booted['v4'])
+    unchanged(booted)
+
+    def retired_model(m):
+        assert m['v4'] == ['198.51.100.125/24', '203.0.113.125/24'], m
+        assert m['gateway'] == '10.20.0.1' and m['return'] == '10.98.0.1' and m['ula'], m
+
+    def restored_model(m):
+        assert m['v4'][0] == '198.51.100.125/24' and set(m['v4']) == set(booted['v4']), m
+        assert m['gateway'] == '10.20.0.1' and m['return'] == '10.98.0.1' and m['ula'], m
+        assert rcfile.read_text() == rc_old
+        assert (state / 'accepted').read_text().strip() == 'promote isolated'
+        assert not pending.exists()
+
+    request('retire')
+    retired_model(model())
+    assert rcfile.read_text() == rc_new, rcfile.read_text()
+    assert not (state / "retire-approved").exists()
+    request('rollback')
+    restored_model(model())
+    # Expiry through the independent watchdog.
+    gate('retire-approved'); request('retire'); edit(clock=10901)
+    run('confirm', success=False)
+    run('watchdog'); edit(clock=10000)
+    restored_model(model())
+    # Unconfirmed boot: base networking applied the retired rc.conf first.
+    gate('retire-approved'); request('retire')
+    edit(v4=['198.51.100.125/24'], ula=False, npf_active=False, **{'return': 'absent'})
+    run('boot')
+    edit(npf_active=True)
+    restored_model(model())
+    # Another owner's rc.conf edit keeps the journal instead of overwriting it.
+    gate('retire-approved'); request('retire')
+    rcfile.write_text(rc_new + 'foreign="edit"\n')
+    edit(clock=10901)
+    run('watchdog', success=False)
+    assert pending.exists() and 'foreign' in rcfile.read_text()
+    rcfile.write_text(rc_new)
+    run('watchdog'); edit(clock=10000)
+    restored_model(model())
+    # Confirmation persists retire isolated; boots never re-add OLD.
+    gate('retire-approved'); request('retire'); confirm()
+    assert (state / 'accepted').read_text().strip() == 'retire isolated'
+    assert rcfile.read_text() == rc_new
+    edit(v4=['198.51.100.125/24'], ula=False, npf_active=False, **{'return': 'absent'})
+    run('boot')
+    edit(npf_active=True)
+    retired_model(model())
+    retired = model()
+    request('rollback')  # Nothing pending: a no-op.
+    gate('promote-approved'); request('promote', success=False, topology='isolated')
+    gate('retire-approved'); request('retire', success=False)
+    assert model() == retired and not pending.exists() and rcfile.read_text() == rc_new
+    print('PASS: retire gates/preconditions/rc.conf shape, OLD-free runtime and rc.conf, '
+          'rollback/expiry/unconfirmed boot/foreign rc.conf edit, confirmed boots stay retired')
 
     # The new transition is narrow: a claimed prior promotion cannot replace
     # the required staged lab address or accept an unrelated profile state.

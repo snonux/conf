@@ -22,6 +22,7 @@ func (NetworkMigration) OptsPromote() TaskOptions  { return TaskOptions{Operatio
 func (NetworkMigration) OptsConfirm() TaskOptions  { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsRollback() TaskOptions { return TaskOptions{Operational()} }
 func (NetworkMigration) OptsStatus() TaskOptions   { return TaskOptions{Operational()} }
+func (NetworkMigration) OptsRetire() TaskOptions   { return TaskOptions{Operational()} }
 
 // Prepare installs dormant transactions, a no-op watchdog and ordered boot recovery.
 func (NetworkMigration) Prepare() {
@@ -68,6 +69,14 @@ func (NetworkMigration) Stage() { Sh("/usr/local/sbin/gonf-network-migration req
 // Promote dispatches NEW primary selection while retaining OLD access.
 func (NetworkMigration) Promote() {
 	Sh("/usr/local/sbin/gonf-network-migration request promote shared")
+}
+
+// Retire dispatches the guarded removal of the retained OLD IPv4 (task i24).
+// It needs the accepted promote isolated profile and the activation, igc1 and
+// single-use retire gates; it rewrites rc.conf's OLD primary/defaultroute to
+// the lab primary and 10.20.0.1 under the same 900-second journal.
+func (NetworkMigration) Retire() {
+	Sh("/usr/local/sbin/gonf-network-migration request retire isolated")
 }
 
 // Confirm accepts independently verified network and service state.

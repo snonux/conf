@@ -34,6 +34,10 @@ func (NetworkMigration) DescPromote() string {
 	return "Dispatches NEW primary selection while retaining OLD access"
 }
 
+func (NetworkMigration) DescRetire() string {
+	return "Dispatches the guarded removal of the retained OLD IPv4 (task i24)"
+}
+
 func (NetworkMigration) DescRollback() string {
 	return "Dispatches restoration independently of the SSH origin"
 }

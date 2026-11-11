@@ -7,6 +7,8 @@ umask 077
 state=/var/db/gonf-network-migration
 helper=/usr/local/sbin/gonf-network-migration
 candidate=/usr/local/etc/gonf-network-migration.npf
+# Base network settings (ifconfig_mue0, defaultroute); only retire edits them.
+rcconf=/etc/rc.conf
 [ "$(id -u)" = 0 ] && [ "$(uname -s)" = NetBSD ] || exit 1
 # shellcheck source=/dev/null
 . /usr/local/etc/gonf-network-migration.conf
@@ -102,7 +104,8 @@ select_primary() {
 }
 runtime() {
     mode=$1 topology=$2
-    has4 "$old" || ifconfig "$iface" inet "$old/24" alias
+    # Every mode but retire keeps the OLD address (the i24 retirement drops it).
+    [ "$mode" = retire ] || has4 "$old" || ifconfig "$iface" inet "$old/24" alias
     has4 "$lab" || ifconfig "$iface" inet "$lab/24" alias
     has6 || ifconfig "$iface" inet6 "$ula/64" alias
     if [ "$topology" = isolated ]; then
@@ -113,6 +116,10 @@ runtime() {
     if [ "$mode" = promote ]; then
         select_primary "$lab"
         has4 "$old" || ifconfig "$iface" inet "$old/24" alias
+        set_default 10.20.0.1
+    elif [ "$mode" = retire ]; then
+        select_primary "$lab"
+        if has4 "$old"; then ifconfig "$iface" inet "$old" delete; fi
         set_default 10.20.0.1
     fi
     # NetBSD deletes routes associated with an IPv4 address when it is removed.
@@ -143,8 +150,17 @@ restore() {
     [ -d "$pending" ] || return 0
     cmp -s /etc/npf.conf "$pending/npf.conf" ||
         cmp -s /etc/npf.conf "$pending/applied.npf" || fail 'NPF config changed outside this transaction'
+    if [ -f "$pending/rc.conf" ]; then
+        # Retire rewrote the base network lines; refuse another owner's edit.
+        cmp -s "$rcconf" "$pending/rc.conf" ||
+            cmp -s "$rcconf" "$pending/rc.conf.applied" || fail 'rc.conf changed outside this transaction'
+    fi
     cp -p "$pending/npf.conf" /etc/npf.conf.gonf-next
     mv /etc/npf.conf.gonf-next /etc/npf.conf
+    if [ -f "$pending/rc.conf" ]; then
+        cp -p "$pending/rc.conf" "$rcconf.gonf-next"
+        mv "$rcconf.gonf-next" "$rcconf"
+    fi
     if [ -f "$pending/accepted" ]; then
         cp -p "$pending/accepted" "$state/accepted.next"
         mv "$state/accepted.next" "$accepted"
@@ -166,9 +182,70 @@ restore() {
     set_return "$(cat "$pending/return")"
     reload_filter
     archive rolled-back
-    rm -f "$state/stage-approved" "$state/promote-approved" "$state/confirm-approved"
+    rm -f "$state/stage-approved" "$state/promote-approved" "$state/retire-approved" "$state/confirm-approved"
     sync
 }
+# Recovery needs the independent cron watchdog and the boot hook.
+prerequisites() {
+    crontab -l | grep -Fq "$helper watchdog" || fail 'independent cron missing'
+    pgrep -f '^/usr/sbin/cron($|[[:space:]])' >/dev/null || fail 'cron is not running'
+    [ -x /etc/rc.d/gonf_network_migration ] || fail 'boot hook missing'
+    grep -qx 'gonf_network_migration=YES' /etc/rc.conf.d/gonf_network_migration || fail 'boot hook disabled'
+    npfctl validate "$candidate"
+}
+
+# The retire candidate replaces exactly one ifconfig_<iface>= line (the OLD
+# primary) and one defaultroute= line with the lab primary and 10.20.0.1.
+# Any other rc.conf mention of the old /24 refuses: its owner retires it.
+rc_retire_candidate() {
+    awk -v key="ifconfig_$iface=" -v old="inet $old netmask 0xffffff00" -v lab="$lab" '
+        index($0, key) == 1 {
+            n++
+            if ($0 != key "\"" old "\"") exit 2
+            print key "\"inet " lab " netmask 0xffffff00\""; next
+        }
+        index($0, "defaultroute=") == 1 { d++; print "defaultroute=\"10.20.0.1\""; next }
+        { print }
+        END { if (n != 1 || d != 1) exit 3 }' "$rcconf"
+}
+
+# Retire (i24) drops the retained OLD IPv4 for good. The accepted
+# `promote isolated` profile becomes `retire isolated`, and rc.conf's OLD
+# primary/default (the base configuration the boot hook overrides) becomes
+# the lab primary and 10.20.0.1, so the host boots on the lab address even
+# without the hook; the hook still adds recovery, ULA and the return route.
+# The ordinary 900 s snapshot plus a private rc.conf copy restore the prior
+# accepted mode, OLD address, routes and rc.conf on expiry, unconfirmed
+# boot or rollback. NPF is unchanged ($host4 still lists OLD; harmless).
+retire_apply() {
+    gate activation-approved
+    gate retire-approved
+    gate igc1-approved
+    if [ ! -f "$accepted" ] || ! grep -qx 'promote isolated' "$accepted"; then
+        fail 'retire requires the accepted promote isolated profile'
+    fi
+    [ "$(v4 | awk 'NR==1 {print $1}')" = "$lab" ] || fail 'retire requires the lab primary'
+    has4 "$recovery" || fail 'retire requires the recovery address'
+    [ "$(default_gateway)" = 10.20.0.1 ] || fail 'retire requires the 10.20.0.1 default'
+    [ "$(return_gateway)" = 10.98.0.1 ] || fail 'retire requires the 10.98.0.1 return route'
+    prerequisites
+    # Not "rows": v4/return_gateway (via snapshot) reuse that global.
+    rc_rows=$(rc_retire_candidate) || fail 'rc.conf lacks the expected OLD primary/defaultroute lines'
+    if printf '%s\n' "$rc_rows" | grep -qF "${old%.*}."; then
+        fail 'rc.conf still references the old /24 elsewhere'
+    fi
+    snapshot
+    cp -p "$rcconf" "$pending/rc.conf"
+    printf '%s\n' "$rc_rows" > "$pending/rc.conf.applied"
+    printf 'retire isolated\n' > "$pending/next"
+    sync
+    cp -p "$rcconf" "$rcconf.gonf-next"
+    cat "$pending/rc.conf.applied" > "$rcconf.gonf-next"
+    mv "$rcconf.gonf-next" "$rcconf"
+    runtime retire isolated
+    rm -f "$state/retire-approved"
+}
+
 apply() {
     action=$1 topology=$2
     case "$action:$topology" in stage:shared|stage:isolated|promote:shared|promote:isolated) ;; *) fail 'invalid action';; esac
@@ -188,11 +265,7 @@ apply() {
     elif [ -f "$accepted" ] && grep -q '^promote ' "$accepted"; then
         fail 'already promoted; use status rather than downgrading Stage'
     fi
-    crontab -l | grep -Fq "$helper watchdog" || fail 'independent cron missing'
-    pgrep -f '^/usr/sbin/cron($|[[:space:]])' >/dev/null || fail 'cron is not running'
-    [ -x /etc/rc.d/gonf_network_migration ] || fail 'boot hook missing'
-    grep -qx 'gonf_network_migration=YES' /etc/rc.conf.d/gonf_network_migration || fail 'boot hook disabled'
-    npfctl validate "$candidate"
+    prerequisites
     snapshot
     printf '%s %s\n' "$action" "$topology" > "$pending/next"
     cp "$pending/applied.npf" /etc/npf.conf.gonf-next
@@ -205,7 +278,9 @@ apply() {
 case ${1:-} in
     request)
         action=${2:-} topology=${3:-shared}
-        case "$action" in stage|promote|rollback) ;; *) fail 'invalid request';; esac
+        case "$action" in stage|promote|retire|rollback) ;; *) fail 'invalid request';; esac
+        # Retire is defined for the isolated topology only.
+        [ "$action" != retire ] || topology=isolated
         [ ! -f "$state/worker.pid" ] || fail 'inspect existing worker before a new request'
         request=$(mktemp -d "$state/request.XXXXXX")
         printf '%s\n' "$action $topology" > "$request/action"
@@ -221,7 +296,8 @@ case ${1:-} in
         result=0
         trap 'result=$?; rm -f "$state/worker.pid"; printf "%s\n" "$result" > "$request/result"' 0
         trap 'exit 143' TERM
-        case "$action" in stage|promote) apply "$action" "$topology";; rollback) restore;; *) fail 'invalid worker';; esac
+        case "$action" in stage|promote) apply "$action" "$topology";; retire) retire_apply;;
+            rollback) restore;; *) fail 'invalid worker';; esac
         ;;
     watchdog)
         if [ -d "$pending" ] && [ "$(date +%s)" -ge "$(cat "$pending/deadline")" ]; then restore; fi
@@ -234,7 +310,8 @@ case ${1:-} in
         elif [ -f "$accepted" ]; then
             read -r mode topology extra < "$accepted"
             [ -z "${extra:-}" ] || fail 'invalid accepted profile'
-            case "$mode:$topology" in stage:shared|stage:isolated|promote:shared|promote:isolated) ;; *) fail 'invalid accepted profile';; esac
+            case "$mode:$topology" in stage:shared|stage:isolated|promote:shared|promote:isolated|retire:isolated) ;;
+                *) fail 'invalid accepted profile';; esac
             runtime "$mode" "$topology"
         fi
         ;;

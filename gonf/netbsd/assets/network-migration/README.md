@@ -96,3 +96,21 @@ request/flock independence, fixed deadlines, expiry/restoration, partial failure
 unconfirmed/confirmed boot and foreign-edit refusal. Native NPF validation and
 rcorder receipts are private in `~/.local/state/conf/624-netbsd-20261107/`.
 Fixtures and other OS canaries do not replace this task's native recovery proof.
+
+## Old-address retirement (i24)
+
+`request retire` (task `pis_netbsd_network_retire`) drops the retained OLD
+IPv4 for good. It needs the accepted `promote isolated` profile, the lab
+primary, recovery address, default 10.20.0.1 and return route via 10.98.0.1,
+and the `activation-approved`, `igc1-approved` and single-use
+`retire-approved` gates. rc.conf must hold exactly one OLD
+`ifconfig_mue0="inet OLD netmask 0xffffff00"` line and one `defaultroute=`
+line and no other old-/24 reference; both are rewritten to the lab primary
+and 10.20.0.1, so the host boots on the lab address even without the boot
+hook. The ordinary 900 s snapshot additionally keeps a private rc.conf copy:
+expiry, rollback and an unconfirmed boot restore rc.conf, the OLD address,
+routes and the prior `promote isolated` mode (a foreign rc.conf edit keeps
+the journal). Confirmation persists `retire isolated`; its boot override
+adds recovery, ULA and the return route and never re-adds OLD. NPF is not
+changed (`$host4` still lists OLD, which matches nothing). Like the other
+requests, the result is in `request.*/result`, not the dispatch exit code.
