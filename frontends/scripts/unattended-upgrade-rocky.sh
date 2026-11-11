@@ -75,11 +75,11 @@ note() {
 # Standalone rocky has no redundancy partner: packages update independently,
 # while reboot_window_open always refuses an automatic reboot there.
 case $(hostname -s) in
-pi2) PARTNERS="192.168.1.128" ;;
-pi3) PARTNERS="192.168.1.127" ;;
-r0)  PARTNERS="192.168.1.121 192.168.1.122" ;;
-r1)  PARTNERS="192.168.1.120 192.168.1.122" ;;
-r2)  PARTNERS="192.168.1.120 192.168.1.121" ;;
+pi2) PARTNERS="10.20.0.128" ;;
+pi3) PARTNERS="10.20.0.127" ;;
+r0)  PARTNERS="10.20.0.121 10.20.0.122" ;;
+r1)  PARTNERS="10.20.0.120 10.20.0.122" ;;
+r2)  PARTNERS="10.20.0.120 10.20.0.121" ;;
 rocky) PARTNERS= ;;
 *)   PARTNERS= ;;
 esac

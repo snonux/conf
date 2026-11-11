@@ -420,7 +420,7 @@ r_node_case
 run_script || fail "r0 stale: script failed"
 expect_no_reboot "r0 stale"
 expect_no_pi_kernel_query "r0 stale"
-for ip in 192.168.1.121 192.168.1.122; do
+for ip in 10.20.0.121 10.20.0.122; do
 	grep -qx "$ip" "$work/ping.log" || fail "r0 stale: partner $ip not pinged"
 done
 
@@ -440,7 +440,7 @@ expect_no_reboot "r0 off-day"
 
 r_node_case
 sed -i "s/^glibc $BEFORE/glibc $AFTER/" "$work/rpmdb"
-fake_ping=192.168.1.122
+fake_ping=10.20.0.122
 run_script || fail "r0 one sibling down: script failed"
 expect_no_reboot "r0 one sibling down"
 grep -q 'reboot check deferred: partner(s) not reachable' "$state/log" \
