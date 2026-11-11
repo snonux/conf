@@ -22,36 +22,16 @@ func (HostFile) DescConfig() string {
 	return "Merges accepted fleet names while retaining local and loopback rows"
 }
 
-func (NetworkMigration) DescConfirm() string {
-	return "Accepts independently verified network and service state"
+func (Network) DescNPF() string {
+	return "Installs the validated /etc/npf.conf and reloads it when it changed"
 }
 
-func (NetworkMigration) DescPrepare() string {
-	return "Installs dormant transactions, a no-op watchdog and ordered boot recovery"
+func (Network) DescRcConf() string {
+	return "Writes the lab IPv4, the ULA and the default route to rc.conf"
 }
 
-func (NetworkMigration) DescPromote() string {
-	return "Dispatches NEW primary selection while retaining OLD access"
-}
-
-func (NetworkMigration) DescRetire() string {
-	return "Dispatches the guarded removal of the retained OLD IPv4 (task i24)"
-}
-
-func (NetworkMigration) DescRetireRecovery() string {
-	return "Dispatches the guarded removal of the igc1 recovery address, the laptop's 10.99.0.2 host route via 10.98.0.1 and their NPF rules (task j24): the accepted retire isolated profile becomes retire lab under the same 900-second journal"
-}
-
-func (NetworkMigration) DescRollback() string {
-	return "Dispatches restoration independently of the SSH origin"
-}
-
-func (NetworkMigration) DescStage() string {
-	return "Dispatches a guarded shared-wire dual-address transaction"
-}
-
-func (NetworkMigration) DescStatus() string {
-	return "Reports pending and accepted modes without exposing WireGuard keys"
+func (Network) DescRetireMigration() string {
+	return "Removes the network-migration watchdog, boot hook and state"
 }
 
 func (Periodic) DescArchive() string {

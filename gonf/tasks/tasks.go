@@ -55,7 +55,7 @@ func Register() {
 	RegisterMethods(netbsd.Unattended{}, WithPrefix("pis_netbsd_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Periodic{}, WithPrefix("pis_netbsd_periodic_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterOnCluster(cluster.NameNetBSDPis, netbsd.Goprecords{})
-	RegisterMethods(netbsd.NetworkMigration{}, WithPrefix("pis_netbsd_network_"), OnCluster(cluster.NameNetBSDPis))
+	RegisterMethods(netbsd.Network{}, WithPrefix("pis_netbsd_network_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.ShellyEndpoints{}, WithPrefix("pis_netbsd_shelly_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.HostFile{}, WithPrefix("pis_netbsd_hosts_"), OnCluster(cluster.NameNetBSDPis))
 	RegisterMethods(netbsd.Resolver{}, WithPrefix("pis_netbsd_resolver_"), OnCluster(cluster.NameNetBSDPis))
