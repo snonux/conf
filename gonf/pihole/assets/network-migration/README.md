@@ -33,7 +33,7 @@ boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
 non-k3s runtime unit and legacy non-k3s snapshot marker avoid all k3s/Flannel
 resources. All actions are Operational and excluded from routine aggregates.
 
-| Host | Retained OLD | NEW | Dedicated recovery | Native ULA |
+| Host | OLD (retired in i24) | NEW | Dedicated recovery | Native ULA |
 | --- | --- | --- | --- | --- |
 | pi2 | 192.168.1.127 | 10.20.0.127 | 10.98.0.127 | fd02:ca0b:f1cb:20::127 |
 | pi3 | 192.168.1.128 | 10.20.0.128 | 10.98.0.128 | fd02:ca0b:f1cb:20::128 |
@@ -41,7 +41,8 @@ resources. All actions are Operational and excluded from routine aggregates.
 Shared-wire transactions persist the controller 10.99.0.2/32 return route via
 192.168.1.2. Dedicated aliases/10.98.0.1 return routing remain behind the later
 physical-cable and igc1 gates. Retain OLD resolver addresses and current Wi-Fi
-client DNS throughout. Never renumber the only working resolver.
+client DNS throughout (staging-era rule; i24 retired the OLD addresses and task
+074 removed their guard trust). Never renumber the only working resolver.
 
 `pihole_firewall_migration_stage` installs only the dormant migration policy.
 It owns only `inet f3s_guard`. The old-LAN `192.168.1.0/24` client trust kept

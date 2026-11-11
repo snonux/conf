@@ -68,7 +68,8 @@ not claim all LAN IPv6 DNS is preserved. The inspected controller currently
 uses IPv4 DNS 192.168.1.101; tracked client guidance uses .127/.128 and the
 AP's LAN advertisement was not administratively changed. Before approving a
 Pi rollout, inspect affected clients' resolver/source selection and use
-192.168.1.127/.128 or the Pis' ULA addresses. Link-local service access is
+192.168.1.127/.128 or the Pis' ULA addresses (historical: since task 074 the
+guard trusts only lab 10.20.0.127/.128; the old addresses were retired in i24). Link-local service access is
 also outside the trusted service ranges. If clients must retain global
 endpoints, stop and review an explicit source policy; do not accept the
 whole globally routed internet or silently change ISP/AP configuration.

@@ -14,8 +14,9 @@ func (Firewall) OptsStage() TaskOptions { return TaskOptions{Operational()} }
 
 // Stage installs a candidate and guarded firewall activation tools without loading rules.
 func (Firewall) Stage() {
-	// Migration keeps OLD management while allowing the accepted NEW LAN and
-	// individual recovery identities. Routine staging must retain this policy.
+	// The migration policy trusts the lab LAN and individual wg2/recovery
+	// identities; its old 192.168.1.x trust was removed after i24 retired
+	// those addresses (task 074). Routine staging must retain this policy.
 	hostfirewall.Stage(hostfirewall.Profile{Interface: "enp0s5", EnableWireGuard: true, WireGuardPort: 56709,
 		Rules: paths.RNodeAsset("source-guard/migration.nft")})
 }
