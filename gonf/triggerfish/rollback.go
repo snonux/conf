@@ -163,7 +163,7 @@ func trialCommand(action string, profile bool) {
 		args := List(action, t.Token)
 		if profile {
 			if !trialProfile(t.Profile) {
-				Refuse("Command", action, fmt.Errorf("a retained-recovery migration profile is required"))
+				Refuse("Command", action, fmt.Errorf("a supported migration profile is required"))
 				return
 			}
 			if t.WindowSeconds < 180 || t.WindowSeconds > 1800 {

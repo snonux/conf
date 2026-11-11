@@ -33,8 +33,9 @@ const (
 	labOldManagement = "isp-uplink-only"
 )
 
-// labStages lists the c24 stage: lab igc1, Wi-Fi igc2, cameras igc3, all
-// three zones on their final ports, recovery retained on igc1.
+// labStages lists the stages after b24: lab igc1, Wi-Fi igc2, cameras igc3,
+// all three zones on their final ports. c24's lab-igc1 retains the recovery
+// subnet on igc1; j24's lab-final drops it.
 func labStages() []routerStage {
 	return []routerStage{
 		{labProfileName, labPort, "igc2", cameraPort, true, true},
@@ -72,8 +73,9 @@ func oldManagementReceipt(profile string) string {
 	return "fresh-authenticated"
 }
 
-// validateLabProof requires lab-igc1's "new" and "recovery" receipts to come
-// from a lab host: 10.20.0.0/24 to 10.20.0.1 and 10.98.0.0/24 to 10.98.0.1.
+// validateLabProof requires the lab-port profiles' "new" receipt (and
+// lab-igc1's "recovery" receipt; lab-final has no recovery address, so it
+// refuses that role) to come from a lab host: 10.20.0.0/24 to 10.20.0.1 and 10.98.0.0/24 to 10.98.0.1.
 // PF admits both source prefixes only on igc1, so these sessions prove the
 // moved lab port itself; the laptop's wg2 sessions to those addresses never
 // touch igc1. router-rollback's proof checks the same.
@@ -89,8 +91,11 @@ func validateLabProof(t RouterTrial, client netip.Addr) error {
 	if prefix == "" {
 		return nil
 	}
+	if t.ProofRole == "recovery" && t.Profile == labFinalProfileName {
+		return errors.New("lab-final has no recovery address; no recovery receipt")
+	}
 	if !netip.MustParsePrefix(prefix).Contains(client) || client == netip.MustParseAddr(server) {
-		return errors.New("lab-igc1 new and recovery receipts must come from a lab host")
+		return errors.New("lab-port new and recovery receipts must come from a lab host")
 	}
 	return nil
 }
@@ -156,8 +161,8 @@ Differences from lab-igc1: no 10.98.0.1 on igc1, no wg2 or igc1 permit and no
 anti-spoofing line for 10.98.0.0/24, a plain lab DHCP subnet (no recovery
 subnet, no shared-network). Activate only after every host answers the laptop
 through its 10.20.0.1 default (retire-recovery).
-%s with the JetKVM MAC reservations. Confirmation needs a fresh new receipt from a lab host and the
-VPN receipt. A timed or boot restore returns the snapshot (lab-igc1 with
+%s with the JetKVM MAC reservations.
+Confirmation needs a fresh new receipt from a lab host and the VPN receipt. A timed or boot restore returns the snapshot (lab-igc1 with
 recovery the first time). Activate only through router-rollback.
 `, s.name, s.lab, s.wifi, s.camera, "DHCP: "+dhcpState(s))
 }

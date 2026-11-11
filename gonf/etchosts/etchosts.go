@@ -1,5 +1,6 @@
 // Package etchosts is the one inventory of the homelab /etc/hosts rows the
-// f3s hosts share: accepted LAN names with their new/recovery/lan6 aliases, and
+// f3s hosts share: accepted LAN names with their new/lan6 aliases (the .recovery ones were
+// retired in j24), and
 // wg0 mesh names. The .old aliases of the hosts retired from 192.168.1.x in i24
 // are gone (task 274); router, AP and the stopped freebsd VM keep theirs.
 // The f-host recipe (freebsd.Base.Hosts) and the r-node recipe

@@ -1091,8 +1091,10 @@ END
  # (validateLabProof in lab.go checks the same).
  if lab_port_profile "$(cat "$STATE/profile")"; then
   case $role in
-  new) [[ $client == 10.20.0.+([0-9]) && $client != 10.20.0.1 ]] || fail 'lab-igc1 new and recovery receipts must come from a lab host';;
-  recovery) [[ $client == 10.98.0.+([0-9]) && $client != 10.98.0.1 ]] || fail 'lab-igc1 new and recovery receipts must come from a lab host';;
+  new) [[ $client == 10.20.0.+([0-9]) && $client != 10.20.0.1 ]] || fail 'lab-port new and recovery receipts must come from a lab host';;
+  recovery)
+   recovery_profile "$(cat "$STATE/profile")" || fail 'profile has no recovery address; no recovery receipt'
+   [[ $client == 10.98.0.+([0-9]) && $client != 10.98.0.1 ]] || fail 'lab-port new and recovery receipts must come from a lab host';;
   esac
  fi
  # Verify a currently ESTABLISHED socket matching the submitted 4-tuple.

@@ -771,7 +771,8 @@ path, and the router's igc1 recovery subnet last.
   `new vpn`; `validate` refuses any `10.98.` leftover in it and still requires
   the recovery address in every other profile; activation keeps `10.98.0.1`
   across the drain only if the candidate does; `ready` skips the
-  current-cabling recovery check for it alone. Fixtures cover refusals,
+  current-cabling recovery check for it (as before for shared-igc0) and
+  lab-final refuses a recovery receipt. Fixtures cover refusals,
   activation, receipts, timed restore to lab-igc1, confirmation, lab-igc1
   refusing to arm without live recovery and a boot restore; a mutant that
   always keeps `10.98.0.1` fails them.

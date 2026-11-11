@@ -1379,7 +1379,7 @@ grep -q 'no active boot canary' "$fixture/failure.log"
 print '' > "$base/router-state/preexisting-connections"
 print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47211 ESTABLISHED' > "$base/sockets"
 expect_fail proof new c24lab01 '10.99.0.2 47211 10.20.0.1 22'
-grep -q 'lab-igc1 new and recovery receipts must come from a lab host' "$fixture/failure.log"
+grep -q 'lab-port new and recovery receipts must come from a lab host' "$fixture/failure.log"
 [[ ! -e $base/router-state/proof.new ]]
 print 'tcp 0 0 10.20.0.1.22 10.20.0.125.47212 ESTABLISHED' > "$base/sockets"
 "$fixture/run" proof new c24lab01 '10.20.0.125 47212 10.20.0.1 22'
@@ -1387,7 +1387,7 @@ expect_fail confirm c24lab01 services-checked
 grep -q 'fresh igc1 recovery receipt missing' "$fixture/failure.log"
 print 'tcp 0 0 10.98.0.1.22 10.99.0.2.47213 ESTABLISHED' > "$base/sockets"
 expect_fail proof recovery c24lab01 '10.99.0.2 47213 10.98.0.1 22'
-grep -q 'lab-igc1 new and recovery receipts must come from a lab host' "$fixture/failure.log"
+grep -q 'lab-port new and recovery receipts must come from a lab host' "$fixture/failure.log"
 [[ ! -e $base/router-state/proof.recovery ]]
 print 'tcp 0 0 10.98.0.1.22 10.98.0.125.47214 ESTABLISHED' > "$base/sockets"
 "$fixture/run" proof recovery c24lab01 '10.98.0.125 47214 10.98.0.1 22'
@@ -1480,7 +1480,7 @@ for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.c
 print '' > "$base/router-state/preexisting-connections"
 print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47231 ESTABLISHED' > "$base/sockets"
 expect_fail proof new j24fin01 '10.99.0.2 47231 10.20.0.1 22'
-grep -q 'lab-igc1 new and recovery receipts must come from a lab host' "$fixture/failure.log"
+grep -q 'lab-port new and recovery receipts must come from a lab host' "$fixture/failure.log"
 cat > "$base/sockets" <<'SOCKETS'
 tcp 0 0 10.20.0.1.22 10.20.0.125.47232 ESTABLISHED
 tcp 0 0 10.99.0.1.22 10.99.0.2.47233 ESTABLISHED
@@ -1505,8 +1505,15 @@ cat > "$base/sockets" <<'SOCKETS'
 tcp 0 0 10.20.0.1.22 10.20.0.125.47241 ESTABLISHED
 tcp 0 0 10.99.0.1.22 10.99.0.2.47242 ESTABLISHED
 SOCKETS
-"$fixture/run" proof new j24fin02 '10.20.0.125 47241 10.20.0.1 22'
+# Neither receipt alone confirms; a recovery receipt is refused outright.
 "$fixture/run" proof vpn j24fin02 '10.99.0.2 47242 10.99.0.1 22'
+expect_fail confirm j24fin02 services-checked
+grep -q 'fresh old/new receipts missing' "$fixture/failure.log"
+print 'tcp 0 0 10.98.0.1.22 10.98.0.125.47243 ESTABLISHED' >> "$base/sockets"
+expect_fail proof recovery j24fin02 '10.98.0.125 47243 10.98.0.1 22'
+grep -q 'profile has no recovery address; no recovery receipt' "$fixture/failure.log"
+[[ ! -e $base/router-state/proof.recovery ]]
+"$fixture/run" proof new j24fin02 '10.20.0.125 47241 10.20.0.1 22'
 "$fixture/run" confirm j24fin02 services-checked
 [[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
 if grep -q ' inet 10.98.0.1 ' "$base/interfaces/igc1"; then exit 1; fi
