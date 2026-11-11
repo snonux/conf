@@ -26,6 +26,11 @@ type migrationHost struct {
 	recovery bool
 	ula      string
 	hold     bool // Canonical DHCP device address waits for its measured lease.
+	// oldRetired marks an endpoint that no longer holds its old 192.168.1.x
+	// address (i24, 2026-11-11; Shelly and JetKVM moved off the ISP LAN), so
+	// the accepted profile renders no <host>.old alias for it. ip stays the
+	// suffix source for the derived target and recovery addresses.
+	oldRetired bool
 }
 
 // MigrationCandidate contains inactive fragments, never complete /etc/hosts
@@ -44,20 +49,23 @@ type MigrationCandidate struct {
 // Device-ID names deliberately live outside the service wildcard namespace.
 // h24 (2026-11-10): each JetKVM was rebooted, took its reserved lease from
 // triggerfish on igc1 and answered with its device ID on the target, so the
-// canonical names are no longer held at the ISP lease (old aliases remain).
+// canonical names are no longer held at the ISP lease. 274 (2026-11-11)
+// dropped their .old aliases: a former ISP lease may now belong to anyone.
 var migrationDevices = []lanHost{
 	{name: "openwrt", ip: "192.168.1.101", migration: migrationHost{zone: apZone, target: "10.30.0.2"}},
-	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", migration: migrationHost{zone: labZone, target: "10.20.0.151"}},
-	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", migration: migrationHost{zone: labZone, target: "10.20.0.158"}},
-	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", migration: migrationHost{zone: labZone, target: "10.20.0.191"}},
-	{name: "jetkvm-cee6ab4df2f88754", ip: "192.168.1.245", migration: migrationHost{zone: labZone, target: "10.20.0.198"}},
+	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", migration: migrationHost{zone: labZone, target: "10.20.0.151", oldRetired: true}},
+	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", migration: migrationHost{zone: labZone, target: "10.20.0.158", oldRetired: true}},
+	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", migration: migrationHost{zone: labZone, target: "10.20.0.191", oldRetired: true}},
+	{name: "jetkvm-cee6ab4df2f88754", ip: "192.168.1.245", migration: migrationHost{zone: labZone, target: "10.20.0.198", oldRetired: true}},
 }
 
 // RenderMigration prepares a mapping view. staging keeps canonical old
 // addresses; target promotes lab/Wi-Fi endpoints but holds AP management old;
 // ap-target additionally promotes the AP, for use only after d24 acceptance.
 // accepted promotes verified endpoints while holding AP management and any
-// device still marked hold (none since the h24 JetKVM leases).
+// device still marked hold (none since the h24 JetKVM leases), and omits the
+// .old alias of every endpoint marked oldRetired (task 274). The historical
+// staging/target/ap-target previews keep all .old aliases.
 // routerView is upstream, lab, wifi or vpn; it controls only the canonical router
 // name. Nothing here installs a file, registers a task or claims acceptance.
 func RenderMigration(profile, routerView string) (MigrationCandidate, error) {
@@ -119,7 +127,11 @@ func migrationRows(h lanHost, profile, routerView string) ([]string, error) {
 		(profile == "accepted" && h.migration.hold) {
 		canonical = h.ip
 	}
-	rows := []string{canonical + " " + strings.Join(names, " "), migrationAlias(h.ip, h.name, "old"), migrationAlias(target, h.name, "new")}
+	rows := []string{canonical + " " + strings.Join(names, " ")}
+	if profile != "accepted" || !h.migration.oldRetired {
+		rows = append(rows, migrationAlias(h.ip, h.name, "old"))
+	}
+	rows = append(rows, migrationAlias(target, h.name, "new"))
 	if h.migration.recovery {
 		suffix := old.As4()[3]
 		if h.migration.zone == routerZone {

@@ -6,7 +6,12 @@ The normal hosts owners now use the `accepted` renderer: verified lab/Shelly
 addresses are canonical, while AP management retains its current address.
 The four JetKVM canonical names moved to their reserved 10.20.0.x leases on
 2026-11-10 (h24: each rebooted, leased from triggerfish on igc1 and verified
-by device ID); their old ISP-lease addresses remain as `.old` aliases. Old aliases remain; recovery aliases
+by device ID). Task 274 (2026-11-11) dropped the accepted `.old` aliases of
+every endpoint that no longer holds its old 192.168.1.x address (`oldRetired`):
+f0–f3, the storage VIP, r0–r2, rocky, pi0–pi3 (i24), the Shellys and the
+JetKVMs. Only the router (upstream 192.168.1.2), the held AP and the stopped
+freebsd VM (old address still configured) keep `.old` names; the historical
+staging/target/ap-target previews still render all of them. Recovery aliases
 reserve the later physical recovery network and do not prove it is connected.
 Native Pi ULA addresses are explicit `lan6` aliases only. WG rows are unchanged.
 
@@ -73,7 +78,8 @@ the explicit zone addresses. Staging requires the upstream canonical view.
 The misspelled existing `triggrefish.lan.buetow.org` alias is preserved.
 
 Moved endpoints have explicit `<host>.old.lan` and `<host>.new.lan` names,
-also under `.lan.buetow.org`. Allocated management recovery names are
+also under `.lan.buetow.org` (the accepted profile has since dropped `.old`
+for retired endpoints, see above). Allocated management recovery names are
 `<host>.recovery.lan`; the VIP, AP, Shelly and JetKVM devices have no invented
 recovery aliases. These are planned mappings, not proof of connectivity.
 In particular, host recovery addresses belong to the later igc1 path and
@@ -101,7 +107,7 @@ dated 2026-11-04 and must be rechecked before rollout.
 | blowfish/fishfinger `/etc/hosts` | `frontends.Maintenance.WireGuardHosts` owns wg0 rows only; snapshot administrator-owned LAN rows and update only affected entries, preserve public IPv4/AAAA and frontend-local names |
 | earth laptop/controller `/etc/hosts` | `workstation.System.Hosts` owns `# BEGIN GONF fleet`; `EarthHostsBlock`, `earthLAN`, shared inventory; replace that block at acceptance, preserve wg1/hyperstack and outside-marker entries |
 | zen / other configuration controllers | `zen` is an unchanged explicit LAN inventory row; there is no managed workstation hosts block for it. Enumerate actual additional controllers and any static rows at deployment; preserve old-IP/AP reachability and do not infer their renumbering |
-| pi2/pi3 dnsmasq | `pihole.Deployment.Compose` installs `f3s/pihole/docker-pi/dnsmasq.d/99-f3s-lan-wildcard.conf`; inactive `PiHoleDNSMasq` is the replacement candidate, not yet wired to that task |
+| pi2/pi3 dnsmasq | `pihole.Deployment.Compose` installs `f3s/pihole/docker-pi/dnsmasq.d/99-f3s-lan-wildcard.conf` and the accepted/lab `PiHoleDNSMasq` host records as `99-f3s-lan-hosts.conf` |
 | Authoritative buetow.org DNS | `frontends/var/nsd/zones/master/buetow.org.zone.tpl` → `frontends.MailDNS.NSD` → sole publisher blowfish; fishfinger is a zone-transfer secondary. Merge `AuthoritativeLAN` records into publisher input, never replace the complete zone or edit the secondary |
 
 This is a repository source audit, not a claim that deployed hosts files were
