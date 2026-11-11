@@ -853,3 +853,15 @@ The previous helper fails the new label, tag, anchor, supernet, range,
 negation, table and NAT fixtures. The harness's `pfctl -f` mock recognises
 lab-final's CPE router-advertisement permit with its if-bound state.
 
+
+Live 2026-11-11 under `live-rollout.lock`: trial `l24-ifbound-20261111-a`
+(conf da0e470; every staged profile equal to the render, helper equal to
+HEAD, live files equal to the previous lab-final render, candidate vs live
+exactly `pf.conf`) passed the gate (fresh new receipt via pi0, VPN receipt,
+router/cluster/DNS/Wi-Fi IPv4+IPv6/DHCP on igc1 and igc2/lab gateways) and
+the l24 checks (81 loaded pass rules all `(if-bound)`, no state bound to
+`all` after the activation flush, the VPN SSH state on wg2, 12/12 fresh
+host SSH) and was confirmed at 14:16:31Z. A router ping to 10.40.0.11 still
+hits the camera deny. No reboot test: only `pf.conf` changed, which boot
+loads with the same `pfctl -f` the activation used. Receipts:
+`~/.local/state/conf/l24-20261111/`.
