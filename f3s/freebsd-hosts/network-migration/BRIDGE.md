@@ -75,8 +75,10 @@ boot-trial and failed steps. It is not a native FreeBSD test.
 
 ## Per-host procedure
 
-Hold `~/.local/state/conf/live-rollout.lock`. Receipts:
-`~/.local/state/conf/764-20261111/<host>/`. Serial: f3, f2, f1 (BACKUP), f0.
+Hold `~/.local/state/conf/live-rollout.lock` (a directory) per host. Receipts:
+`~/.local/state/conf/764-YYYYMMDD/<host>/`. Serial: f3, f2, f1 (BACKUP), f0.
+f0/f1 are blocked: a CARP member promoted itself while booting on the
+bridge (2026-11-12 record below).
 
 0. Once, before the first move: push `freebsd_firewall_config` (pf.conf on
    both interfaces; reload keeps states), `freebsd_carp_devd_hook` (f0/f1)
@@ -98,11 +100,12 @@ Hold `~/.local/state/conf/live-rollout.lock`. Receipts:
 6. `freebsd_bridge_migration_confirm`; f0/f1: switch `CarpNode.Interface`
    to `freebsd.LabBridge`, then `freebsd_carp_rc_conf` must report no change.
 
-## Live record (2026-11-11, paused by the user)
+## Live record
+
+### 2026-11-11 (paused by the user)
 
 Receipts in `~/.local/state/conf/764-20261111/`. Step 0 is live on f0–f3
 (pf.conf on both interfaces, states kept; devd rule on f0/f1; resolver).
-Helper prepared on **f3 only**.
 
 - f3 move 16:29:46Z: 0/100 IPv4 pings lost; fresh SSH from the laptop (wg2)
   and ULA TCP 22 from r0–r2, pi0 and f2; the rocky guest now reaches f3 over
@@ -112,8 +115,33 @@ Helper prepared on **f3 only**.
 - Native explicit rollback: exact (rc.conf, system.conf, re0 link-local), 0/60 lost.
 - Re-move, `boot-trial`, reboot 16:31:51Z: the trial boot created
   `bridge0`, renamed it `vm-public` (clean shutdown and boot). It was not
-  confirmed before the 16:51:48Z deadline, so the watchdog restored re0 at
-  16:52 (`rolled-back-1794415920`). **f3 is on re0, nothing pending.**
+  confirmed before the 16:51:48Z deadline (the SSH wait used the bare IP
+  and failed host-key checks), so the watchdog restored re0 at 16:52.
 
-Next: redo f3 (move, boot-trial, reboot, checks incl. services, confirm in
-the window), then f2, f1, f0; prepare each host first.
+### 2026-11-12
+
+Receipts in `~/.local/state/conf/764-20261112/`. Wait for fresh SSH with
+`-oHostKeyAlias=fN.lan` (or the hostname), not the bare IP.
+
+- **f3 moved and confirmed.** Move 06:41:21Z (0/150 lost), boot-trial
+  reboot 06:42:22Z, SSH back 06:44Z on vm-public (members tap0, re0; switch
+  `public` manual), cluster checks clean, confirmed 06:45:32Z.
+- **f2 moved and confirmed.** Move 06:51:59Z (0/150 lost); r2 (f2's guest)
+  → f2 ULA works now, the goal of this task. Boot-trial reboot 06:53:05Z
+  (reboots guest r2 too), confirmed 06:57:16Z. The rc.conf bridge keeps its
+  MAC across boots but differs from the vm-bhyve bridge's, so a neighbour
+  can hold a FAILED entry for the ULA on its first try (NUD re-resolves on
+  the next packet).
+- **f1 rolled back; CARP hosts blocked.** Move 07:09Z as BACKUP was clean
+  (0/150 lost on the host and the VIP). The trial boot was not: the bridge
+  came up before re0 had link, f1 heard no advertisements and went
+  `BACKUP -> MASTER (master timed out)` at 07:13:01Z for one second. Its
+  announcement taught the switch the CARP MAC `00:00:5e:00:01:01` on f1's
+  port. f0's advertisements leave with re0's own MAC, so nothing taught it
+  back. r1/r2 SYNs and ARPs for 10.20.0.138 reached f1 (BACKUP), their NFS
+  mounts failed and public services returned 502/503. The explicit
+  rollback at 07:17:45Z restored f1 exactly and the VIP answered again.
+  **f0/f1 stay on re0** (f0's helper was never prepared; `CarpNode.Interface`
+  stays `re0`). Before a CARP member moves, its boot must not promote on
+  the bridge (for example `net.inet.carp.allow=0` until re0 has link), or
+  the VIP stays on re0 while only the host addresses move. Needs a decision.
