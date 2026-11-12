@@ -2,10 +2,6 @@
 
 package freebsd
 
-func (Apcupsd) DescRetireCandidate() string {
-	return "Removes the inactive triggerfish UPS configuration candidate"
-}
-
 func (Base) DescDoas() string {
 	return "Installs doas.conf (nopass :wheel + f3sctl agent rules), validated with doas -C first"
 }
@@ -60,10 +56,6 @@ func (Debug) DescGdb() string { return "Installs gdb (kgdb for /var/crash/vmcore
 
 func (F3sctl) DescPackage() string {
 	return "Installs the f3sctl package (the agent binary /usr/local/bin/f3sctl) from the custom pkg repo"
-}
-
-func (F3sctl) DescRetireCandidate() string {
-	return "Removes the inactive triggerfish f3sctl key candidate"
 }
 
 func (F3sctl) DescSSHD() string {
@@ -144,10 +136,6 @@ func (Resolver) DescConf() string {
 
 func (RootMail) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
-}
-
-func (ShellyFans) DescRetireCandidate() string {
-	return "Removes the inactive triggerfish fan helper and rc.conf.d candidates"
 }
 
 func (ShellyFans) DescScripts() string {

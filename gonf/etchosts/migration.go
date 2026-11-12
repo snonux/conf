@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/snonux/conf/gonf/frontends"
-	"github.com/snonux/conf/gonf/migrationaddress"
 )
 
 type migrationZone uint8
@@ -175,7 +174,7 @@ func migrationTarget(h lanHost, view string) (string, error) {
 			return h.ip, nil
 		}
 	}
-	target, err := migrationaddress.Lab(h.ip)
+	target, err := labAddress(h.ip)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", h.name, err)
 	}
@@ -183,6 +182,22 @@ func migrationTarget(h lanHost, view string) (string, error) {
 		target = strings.Replace(target, "10.20.", "10.30.", 1)
 	}
 	return target, nil
+}
+
+// labAddress maps an inventory host's old 192.168.1.x LAN address to the
+// same suffix in the lab subnet 10.20.0.0/24 (the accepted fleet view still
+// derives lab rows from it). It replaces migrationaddress.Lab here (task
+// 974): that package's other callers were dead migration candidates.
+func labAddress(address string) (string, error) {
+	ip, err := netip.ParseAddr(address)
+	if err != nil || !netip.MustParsePrefix("192.168.1.0/24").Contains(ip) {
+		return "", fmt.Errorf("lab mapping requires an old 192.168.1.0/24 address: %q", address)
+	}
+	octets := ip.As4()
+	if octets[3] == 0 || octets[3] == 255 {
+		return "", fmt.Errorf("lab mapping requires a host address: %q", address)
+	}
+	return fmt.Sprintf("10.20.0.%d", octets[3]), nil
 }
 
 func migrationAlias(ip, name, suffix string) string {

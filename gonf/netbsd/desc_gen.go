@@ -6,10 +6,6 @@ func (Controller) DescConfig() string {
 	return "Preserves custom configuration and installs the accepted inventory"
 }
 
-func (Controller) DescMigrationCandidate() string {
-	return "Stages the full overlay and its recognized legacy input"
-}
-
 func (Goprecords) DescUpload() string {
 	return "Installs the goprecords upload client, token and hourly root cron (output to syslog) and retires the duplicate legacy root uploader"
 }

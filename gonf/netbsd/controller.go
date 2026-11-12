@@ -24,16 +24,12 @@ const (
 	controllerOwned = "/var/db/gonf-endpoint-migration/controller-owned"
 )
 
-func (Controller) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
-
-// MigrationCandidate stages the full overlay and its recognized legacy input.
-func (Controller) MigrationCandidate() {
-	installShellyCA()
-	InstallFile("/usr/local/etc/f3sctl.json.triggerfish-candidate", paths.GonfAsset("netbsd", "controller.json"), RootOwned)
-	InstallFile("/usr/local/etc/f3sctl.json.triggerfish-legacy", paths.GonfAsset("netbsd", "shelly-endpoints.json"), RootOwned)
-}
-
 // Config preserves custom configuration and installs the accepted inventory.
+//
+// The legacy input and the candidate (f3sctl.json.triggerfish-{legacy,
+// candidate}) are this task's live staging files: apply publishes the
+// candidate to f3sctl.json, so both stay on the Pis (task 974 removed only
+// the separate staging-only MigrationCandidate task).
 //
 // The endpoint helper refuses a live f3sctl.json that is not an owned file
 // (legacy input, current candidate, or the copy adopt recorded). adopt runs
