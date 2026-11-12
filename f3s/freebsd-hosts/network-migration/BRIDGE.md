@@ -77,8 +77,9 @@ boot-trial and failed steps. It is not a native FreeBSD test.
 
 Hold `~/.local/state/conf/live-rollout.lock` (a directory) per host. Receipts:
 `~/.local/state/conf/764-YYYYMMDD/<host>/`. Serial: f3, f2, f1 (BACKUP), f0.
-f0/f1 are blocked: a CARP member promoted itself while booting on the
-bridge (2026-11-12 record below).
+All four hosts are on vm-public since 2026-11-12. A CARP member needs the
+boot gate (`freebsd_carp_boot_gate`, "CARP on the bridge" below) before its
+boot-trial reboot.
 
 0. Once, before the first move: push `freebsd_firewall_config` (pf.conf on
    both interfaces; reload keeps states), `freebsd_carp_devd_hook` (f0/f1)
@@ -99,6 +100,40 @@ bridge (2026-11-12 record below).
    same checks.
 6. `freebsd_bridge_migration_confirm`; f0/f1: switch `CarpNode.Interface`
    to `freebsd.LabBridge`, then `freebsd_carp_rc_conf` must report no change.
+
+f0/f1 reboots follow the IQ safe-reboot procedure (`vm stopall`, then
+`doas reboot`) with the r-node NFS monitors fenced (timers stopped,
+fail-count 0, the host's own guest's timer disabled). f0 first hands the
+VIP to f1 (`carp auto-failback disable`, f0 `carp backup` + f1
+`carp master`) and re-enables auto-failback once it is BACKUP again. While
+f1 serves, existing NFS mounts on the r-nodes stall (f1's replica is
+another server); pods that hit I/O errors need a restart afterwards.
+
+## CARP on the bridge
+
+- **Boot gate** (`gonf/freebsd/carp.go` `BootGate`,
+  `f3s/freebsd-hosts/carp/carp-gate`): loader.conf
+  `net.inet.carp.allow="0"` (an `ip_carp` tunable read at module load)
+  keeps the vhid INIT through boot. rc.d `gonf_carp_gate` (before netif)
+  pre-mutes TXCSUM/TSO on re0 and starts a waiter that allows CARP once
+  the guest tap joined, re0 stayed active 10 s and a vhid 1 advertisement
+  arrived on re0 (after 180 s it allows CARP anyway). Log:
+  `/var/log/gonf-carp-gate.log`, `gonf-carp-gate status`.
+- **Why**: a bridge's link is up while any member is. When vm-bhyve adds
+  the guest's tap, if_bridge mutes TXCSUM/TSO on re0 and re(4) resets its
+  link for ~4 s, but tap0 keeps vm-public up, so CARP on the bridge does
+  not go INIT and its 3 s master-down timer fires. With re0 pre-muted the
+  tap neither joins nor leaves with a link reset (also true at `vm stop`).
+- **Virtual MAC**: `ether_output` hands a bridge member's frames to
+  if_bridge before `carp_output` sets the CARP source MAC, so with the VIP
+  on re0 f0's advertisements and ARP replies left with re0's MAC
+  (e8:ff:1e:d7:1c:ac) and the switch flooded VIP traffic to every port. On
+  vm-public (`IFT_BRIDGE`) the advertisements carry 00:00:5e:00:01:01, so
+  the switch learns the VIP's port and every failover re-teaches it within
+  one advertisement. Residual risk: a member that briefly promotes on a
+  live wire can steal the CARP MAC for up to one advertisement interval
+  (1 s); a mixed pair (one member on re0, one on the bridge) cannot
+  recover that way and must not exist outside a move.
 
 ## Live record
 
@@ -141,7 +176,22 @@ Receipts in `~/.local/state/conf/764-20261112/`. Wait for fresh SSH with
   back. r1/r2 SYNs and ARPs for 10.20.0.138 reached f1 (BACKUP), their NFS
   mounts failed and public services returned 502/503. The explicit
   rollback at 07:17:45Z restored f1 exactly and the VIP answered again.
-  **f0/f1 stay on re0** (f0's helper was never prepared; `CarpNode.Interface`
-  stays `re0`). Before a CARP member moves, its boot must not promote on
-  the bridge (for example `net.inet.carp.allow=0` until re0 has link), or
-  the VIP stays on re0 while only the host addresses move. Needs a decision.
+  f0/f1 stayed on re0 until the boot gate existed (afternoon, below).
+- **Boot gate** (conf 7462672, 4f498af): msgbuf showed the cause: at the
+  tap join re0 reset ([18] DOWN, [22] UP) while tap0 kept vm-public up.
+  Deployed on f1, reboot on re0 at 12:44Z: CARP INIT until
+  "vhid 1 advertisement heard on re0" (12:46:59Z), tap0 joined with no re0
+  reset, no MASTER transition.
+- **f1 moved and confirmed.** Move 12:48:59Z (0/106 lost on the host and
+  the VIP), boot-trial reboot 12:50:31Z: gate allowed CARP 12:53:44Z,
+  INIT -> BACKUP, no promotion, 0/201 VIP and NFS probes lost from r0;
+  confirmed 12:54:52Z, `CarpNode.Interface` vm-public (c1be560).
+- **f0 moved in place and confirmed.** Move 12:56:06Z as MASTER (0/114
+  lost); its advertisements now carry the CARP MAC and VIP traffic is no
+  longer flooded to f2/f3. Boot trial: controlled failover to f1 12:58:31Z,
+  reboot, gate allowed CARP 13:02:11Z after f1's advertisement (BACKUP),
+  auto-failback reclaimed MASTER 13:03:00Z. Existing NFS mounts stalled
+  while f1 served (12:58:34-13:03:00Z); the Prometheus pod needed a
+  restart (I/O error on its NFS volume). Confirmed 13:06:32Z,
+  `CarpNode.Interface` vm-public (69e474e). Guest -> own host ULA works
+  on r0, r1 and r2.
