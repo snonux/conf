@@ -27,18 +27,19 @@ import (
 //	NameRockyAll     → rocky / rocky_*
 //	NameRockyPis     → rocky_kernel_audit / rocky_kernel_audit_* (also in rocky)
 //	NameFreeBSD      → freebsd / freebsd_*
+//	NameFreeBSDGuest → freebsd_guest_* (normally stopped; push by name; also in freebsd, guarded)
 const (
-	NameFrontends             = "frontends"
-	NameNetBSDPis             = "netbsd-pis"
-	NameRockyPis              = "rocky-pis"
-	NamePis                   = "pis"
-	NameRockyK3s              = "rocky-k3s"
-	NameRockyAll              = "rocky-all"
-	NameRockyDtail            = "rocky-dtail"
-	NameFreeBSDGuestMigration = "freebsd-guest-migration"
-	NameFreeBSD               = "freebsd-hosts"
-	NameGarage                = "garage"
-	NameTriggerfish           = "triggerfish"
+	NameFrontends    = "frontends"
+	NameNetBSDPis    = "netbsd-pis"
+	NameRockyPis     = "rocky-pis"
+	NamePis          = "pis"
+	NameRockyK3s     = "rocky-k3s"
+	NameRockyAll     = "rocky-all"
+	NameRockyDtail   = "rocky-dtail"
+	NameFreeBSDGuest = "freebsd-guest"
+	NameFreeBSD      = "freebsd-hosts"
+	NameGarage       = "garage"
+	NameTriggerfish  = "triggerfish"
 )
 
 // Per-host recipe data is attached with WithData, one small struct type per
@@ -88,9 +89,8 @@ func RegisterWithRouterTrial(trial triggerfish.RouterTrial) {
 	// Guest stays out of hypervisor aggregates and vm_list (normally stopped).
 	// Use its trusted SSH alias; plain-IP inventory must not bypass host keys.
 	guest := Host("freebsd", lan("paul"), WithPrivilege(PrivilegeDoas), WithPlatform("freebsd/amd64"),
-		WithSSHHost("freebsd.lan"),
-		WithData(freebsd.MigrationHost{Interface: "vtnet0", OldIPv4: "192.168.1.139", LabIPv4: "10.20.0.139", RecoveryIPv4: "10.98.0.139", SharedGateway: "192.168.1.2", Standalone: true, IPv6Policy: "disabled"}))
-	Cluster(NameFreeBSDGuestMigration, guest)
+		WithSSHHost("freebsd.lan"))
+	Cluster(NameFreeBSDGuest, guest)
 }
 
 // lan bundles the SSH settings every LAN host (piN, rN, fN) shares. The port
@@ -255,7 +255,6 @@ func registerFreeBSD() {
 		WithPlatform("freebsd/amd64"),
 	)
 	f0 := Host("f0", fhost,
-		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.130", LabIPv4: "10.20.0.130", RecoveryIPv4: "10.98.0.130", ULA: "fd02:ca0b:f1cb:20::130", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.130", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "5"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "13"}),
@@ -272,7 +271,6 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
-		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.131", LabIPv4: "10.20.0.131", RecoveryIPv4: "10.98.0.131", ULA: "fd02:ca0b:f1cb:20::131", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.131", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "25"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "14"}),
@@ -286,7 +284,6 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
 	f2 := Host("f2", fhost,
-		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.132", LabIPv4: "10.20.0.132", RecoveryIPv4: "10.98.0.132", ULA: "fd02:ca0b:f1cb:20::132", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.132", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "45"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "15"}),
@@ -299,7 +296,6 @@ func registerFreeBSD() {
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
 	f3 := Host("f3", fhost,
-		WithData(freebsd.MigrationHost{Interface: "re0", OldIPv4: "192.168.1.133", LabIPv4: "10.20.0.133", RecoveryIPv4: "10.98.0.133", ULA: "fd02:ca0b:f1cb:20::133", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.133", Platform: "freebsd"}),
 		WithData(freebsd.UnattendedSchedule{Minute: "15"}),
 		WithData(freebsd.PeriodicSchedule{Hour: "16"}),

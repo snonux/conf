@@ -13,10 +13,10 @@ import (
 //
 // Deliberately NOT managed here:
 //   - hostname, ifconfig_*, cloned_interfaces, defaultrouter: network
-//     identity, set at install time and changed only by the journaled
-//     migration helpers (NetworkMigration, BridgeMigration for the move
-//     onto vm-public in task 764); a wrong value would cut the host off
-//     the LAN.
+//     identity, set at install time and changed since only by the journaled
+//     migration helpers of the router migration and the task 764 move onto
+//     vm-public (removed in task d74; layout in network.go); a wrong value
+//     would cut the host off the LAN. Uplink.RcConf owns ifconfig_re0.
 //   - ifconfig_<if>_alias0 (the CARP VIP): Carp.RcConf.
 //   - NFS, zfskeys, zrepl, node_exporter, uptimed, apcupsd *_enable and
 //     flags: NFS, ZfsKeys, Zrepl, Monitoring, Base and Apcupsd.

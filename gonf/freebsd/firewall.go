@@ -14,8 +14,9 @@ import (
 // Bridge forwarding must bypass PF: re0 and tap interfaces carry the bhyve
 // guests, whose firewall is managed separately. Disabling bridge/member hooks
 // does not disable filtering of packets delivered to the host's IP stack.
-// The host addresses move from re0 onto the bridge vm-public in task 764
-// (BridgeMigration), so pf.conf filters on both; host-destined frames from the local
+// The host addresses moved from re0 onto the bridge vm-public in task 764;
+// pf.conf still filters on both (one ruleset for either layout, see
+// network.go); host-destined frames from the local
 // guest can still arrive on tap0 when the guest cached the tap MAC, so
 // pf.conf admits the guest's wg0 handshake on the tap group as well.
 // Never use "service pf start/restart": its start flushes states. Load the

@@ -80,25 +80,18 @@ func Register() {
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Firewall{})
 
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
-	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
-	RegisterOnCluster(cluster.NameFreeBSD, freebsd.BridgeMigration{})
-	// One-shot (task d74): removes both migration helpers' host artifacts;
-	// deleted with them once every host ran it.
-	RegisterMethods(freebsd.NetworkRetirement{}, WithPrefix("freebsd_network_helpers_"), OnCluster(cluster.NameFreeBSD))
-	RegisterMethods(freebsd.NetworkRetirement{}, WithPrefix("freebsd_guest_network_helpers_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
 	// One Resolver recipe, two clusters: private_interfaces names each
 	// cluster's LAN interfaces (the bridge vm-public, which carries the
 	// f-host addresses after the task 764 move, and its member re0; vtnet0 on the guest).
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.Resolver{Interface: freebsd.LabBridge + " re0", Owner: "freebsd_resolver_conf, tasks u54 and 764"})
 	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_endpoints_"), OnCluster(cluster.NameFreeBSD))
-	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuestMigration))
-	RegisterMethods(freebsd.GuestHosts{}, WithPrefix("freebsd_guest_hosts_"), OnCluster(cluster.NameFreeBSDGuestMigration))
-	RegisterMethods(freebsd.NetworkMigration{}, WithPrefix("freebsd_guest_network_"), OnCluster(cluster.NameFreeBSDGuestMigration))
+	RegisterMethods(endpointfiles.Retirement{Platform: "freebsd"}, WithPrefix("freebsd_guest_endpoints_"), OnCluster(cluster.NameFreeBSDGuest))
+	RegisterMethods(freebsd.GuestHosts{}, WithPrefix("freebsd_guest_hosts_"), OnCluster(cluster.NameFreeBSDGuest))
 	// The normally stopped guest is pushed by name when it next runs (v54);
 	// freebsd_guest_resolver_conf also joins the freebsd aggregate, where its
 	// hostname guard skips the f-hosts.
-	RegisterMethods(freebsd.Resolver{Interface: "vtnet0", Owner: "freebsd_guest_resolver_conf, task v54"}, WithPrefix("freebsd_guest_resolver_"), OnCluster(cluster.NameFreeBSDGuestMigration))
+	RegisterMethods(freebsd.Resolver{Interface: "vtnet0", Owner: "freebsd_guest_resolver_conf, task v54"}, WithPrefix("freebsd_guest_resolver_"), OnCluster(cluster.NameFreeBSDGuest))
 	RegisterMethods(freebsd.ZfsKeys{}, WithPrefix("freebsd_zfskeys_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.ShellyFans{}, WithPrefix("freebsd_shellyfans_"), OnCluster(cluster.NameFreeBSD))
 	RegisterMethods(freebsd.RootMail{}, WithPrefix("freebsd_rootmail_"), OnCluster(cluster.NameFreeBSD))

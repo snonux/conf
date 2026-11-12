@@ -23,17 +23,17 @@ WireGuard, running Rocky VM and bridge settings. Other hosts retain their
 previous deployed trusted table until a separately scoped apply. The existing
 f3 new-source guard remains; a separate f1 guard protects old-only referring
 peers while their new return paths are pending. Neither guard changes keys,
-endpoints or bridge forwarding. New physical addresses are added only by the
-separate guarded network-migration task.
+endpoints or bridge forwarding. New physical addresses were added only by the
+separate guarded network-migration helper (removed in d74).
 
 Inbound defaults to block; outbound keeps state. `lo0` stays skipped for S7.
 The current candidate trusts `10.20.0.0/24` (the old `192.168.1.0/24` left in
 task i24),
 `fd22:c702:acb7::/64`, `fd02:ca0b:f1cb:20::/64` and `fe80::/10` on the LAN
 interfaces `$lan_if` = `{ re0, vm-public }` to the host addresses
-`$lan_addr` = `{ (re0), (vm-public) }`. Task 764 moves the host addresses
-from re0 onto the bridge vm-public (see
-[BRIDGE.md](../network-migration/BRIDGE.md)); listing both lets one ruleset
+`$lan_addr` = `{ (re0), (vm-public) }`. Task 764 moved the host addresses
+from re0 onto the bridge vm-public (IQ
+`topics/infra/f3s/network/fhost-bridge.md`); listing both let one ruleset
 fit a host on either side of that move and its rollback.
 LAN trust deliberately includes stunnel TCP 2323
 from r0–r2, Garage TCP 3900/3901/3903 from f-hosts/r-nodes and UPS TCP 3551.
@@ -87,8 +87,8 @@ a PF matter: the guest's neighbour solicitation arrives on `tap0`, whose
 IPv6 is disabled (`ndp -i tap0`), and the IPv6 stack discards it before PF
 (`netstat -s -6 -I tap0` "input datagrams discarded" grows, pflog stays
 silent). IPv6 ND, unlike ARP, never answers for an address on another
-bridge member. Task 764 fixes it by moving the host addresses from `re0`
-to `vm-public` ([BRIDGE.md](../network-migration/BRIDGE.md)).
+bridge member. Task 764 fixed it by moving the host addresses from `re0`
+to `vm-public` (IQ `topics/infra/f3s/network/fhost-bridge.md`).
 
 Deployed to f0, f1 and f2 on 2026-11-09 with `./gonf.sh push
 -privilege=doas -- -p22 … paul@fN.lan.buetow.org freebsd_firewall_config`

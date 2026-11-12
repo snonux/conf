@@ -26,9 +26,11 @@ import (
 //   - disk images, ISOs, VM creation and OS install.
 //   - the vm switch "public" (/zroot/bhyve/.config/system.conf). Before
 //     task 764 it was a standard switch whose bridge vm-bhyve created with
-//     re0 as port; BridgeMigration turns it into a manual switch on the
-//     bridge vm-public that rc.conf creates (it carries the host's
-//     addresses), together with the rc.conf keys, in one journal.
+//     re0 as port; the 764 move made it a manual switch on the bridge
+//     vm-public that rc.conf creates (it carries the host's addresses, see
+//     network.go): type_public="manual", bridge_public="vm-public", no
+//     ports_public. A standard switch would fail to create the existing
+//     vm-public at "vm init" and start no guest.
 //   - the /bhyve -> /zroot/bhyve symlink (f3's target carries a trailing
 //     slash; both work, the link only exists for the blog's command lines).
 //   - guests not listed in BhyveHost.Guests: the stopped "fedora" VM on f0

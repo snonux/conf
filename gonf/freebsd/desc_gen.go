@@ -18,28 +18,6 @@ func (Base) DescUptimed() string {
 	return "Installs uptimed, its config (LOG_MAXIMUM_ENTRIES=0), enables and runs it; restarts on config change"
 }
 
-func (BridgeMigration) DescBootTrial() string {
-	return "Lets the next boot keep the pending move once, within 1200 s"
-}
-
-func (BridgeMigration) DescConfirm() string {
-	return "Accepts a pending move after separate fresh access and service checks"
-}
-
-func (BridgeMigration) DescMove() string {
-	return "Arms a 900-second journal and moves the addresses onto the bridge"
-}
-
-func (BridgeMigration) DescPrepare() string {
-	return "Installs the dormant bridge-move helper, its boot hook and watchdog"
-}
-
-func (BridgeMigration) DescRollback() string {
-	return "Restores a pending move to re0 without restarting netif or guests"
-}
-
-func (BridgeMigration) DescStatus() string { return "Reports a pending move and its deadline" }
-
 func (Carp) DescBootGate() string {
 	return "Holds CARP at boot until re0 carries the peer's advertisements, so a booting member never promotes itself on a dead wire (task 764)"
 }
@@ -89,42 +67,6 @@ func (NFS) DescMigrationCandidate() string {
 }
 
 func (NFS) DescStunnelPackage() string { return "Installs stunnel on f0/f1" }
-
-func (NetworkMigration) DescConfirm() string {
-	return "Accepts a transaction after separate fresh management/service checks"
-}
-
-func (NetworkMigration) DescPrepare() string {
-	return "Installs dormant rollback tooling without changing network state"
-}
-
-func (NetworkMigration) DescPromote() string {
-	return "Selects the lab primary and gateway while retaining old management"
-}
-
-func (NetworkMigration) DescRetire() string {
-	return "Removes the retained old IPv4 (alias200) under a 900-second journal"
-}
-
-func (NetworkMigration) DescRetireRecovery() string {
-	return "Removes the igc1 recovery alias202 and the 10.99.0.2 return route via 10.98.0.1 under a 900-second journal, so wg2 replies follow the 10.20.0.1 default (task j24)"
-}
-
-func (NetworkMigration) DescRollback() string {
-	return "Restores the pending transaction without restarting netif or guests"
-}
-
-func (NetworkMigration) DescStage() string {
-	return "Adds the lab address and applies the reviewed native IPv6 policy"
-}
-
-func (NetworkMigration) DescStatus() string {
-	return "Reports the persistent rollback deadline and current transaction"
-}
-
-func (NetworkRetirement) DescRetire() string {
-	return "Removes the network- and bridge-migration watchdogs, boot hooks, helpers and journals"
-}
 
 func (Periodic) DescTimes() string {
 	return "Runs periodic daily/weekly/monthly in each host's afternoon hour (hosts are off at night)"

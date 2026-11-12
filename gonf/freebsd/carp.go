@@ -52,10 +52,9 @@ type Carp struct {
 // CarpNode is a CARP member's per-host setting (host data, see gonf/cluster).
 // AdvSkew is the advskew of the vhid: 0 (omitted from the line, the kernel
 // default) wins the election, so f0 has 0 and f1, the standby, 100.
-// Interface carries the VIP: LabBridge ("vm-public") once the host's
-// addresses moved onto the bridge (task 764, BridgeMigration), "re0"
-// before. It must match the host's rc.conf: the move rewrites the line
-// itself, and this field is switched after the move is confirmed.
+// Interface carries the VIP: LabBridge ("vm-public"), where the host's
+// addresses sit since task 764, or "re0" (labMember), where they sat
+// before. It must match the interface of the host's rc.conf addresses.
 type CarpNode struct {
 	AdvSkew   int
 	Interface string
@@ -307,12 +306,12 @@ func (Carp) DescRcConf() string {
 //
 // The same line on the other interface (re0 or vm-public) is removed by its
 // exact content too: two alias0 lines would create the vhid twice at boot.
-// Moving the line between interfaces is BridgeMigration's job; this task
-// only follows CarpNode.Interface once the move is confirmed. A guard
-// refuses the write while a bridge move is pending or while rc.conf still
-// carries the other interface's alias0 key, i.e. while the inventory and
-// the host disagree: rewriting the live line back would put the VIP on an
-// interface without the lab address at the next boot (split brain).
+// This task never moves the line between interfaces (the task 764 move did
+// that together with the host addresses): a guard refuses the write while
+// rc.conf carries the other interface's alias0 key, i.e. while the
+// inventory and the host disagree. Rewriting the line onto the other
+// interface would put the VIP on an interface without the lab address at
+// the next boot (split brain).
 func (Carp) RcConf() {
 	pass := MustSecret(CarpPassSecret())
 	EachHostWith(func(n CarpNode) {
@@ -324,8 +323,8 @@ func (Carp) RcConf() {
 		line := carpAliasLine(n.Interface, n, pass)
 		compat := strings.Replace(carpAliasLine(labMember, n, pass), "alias0=", "alias1=", 1)
 		compat = strings.ReplaceAll(compat, carpVIP, carpCompatVIP)
-		guard := Command("sh", List("-c", `test ! -d `+bridgeState+`/pending && ! grep -q '^`+carpAliasKey(other)+`=' `+rcConf+
-			` || { echo 'bridge move pending, or CarpNode.Interface not switched to match rc.conf' >&2; exit 1; }`),
+		guard := Command("sh", List("-c", `! grep -q '^`+carpAliasKey(other)+`=' `+rcConf+
+			` || { echo 'rc.conf carries the VIP on `+other+`: CarpNode.Interface does not match the host' >&2; exit 1; }`),
 			WithName("rc-conf-carp-interface-guard"))
 		File(rcConf, WithKeyedLine(carpAliasKey(n.Interface)+"=", line),
 			WithoutLine(carpAliasLine(other, n, pass)),
