@@ -2,12 +2,8 @@
 
 package freebsd
 
-func (Apcupsd) DescMigrationCandidate() string {
-	return "Stages UPS configuration without rebinding or restarting"
-}
-
-func (Apcupsd) DescMigrationCompatibleServer() string {
-	return "Stages both-address NIS access during client handoff"
+func (Apcupsd) DescRetireCandidate() string {
+	return "Removes the inactive triggerfish UPS configuration candidate"
 }
 
 func (Base) DescDoas() string {
@@ -62,12 +58,12 @@ func (Carp) DescMigrationCandidate() string {
 
 func (Debug) DescGdb() string { return "Installs gdb (kgdb for /var/crash/vmcore.N)" }
 
-func (F3sctl) DescMigrationCandidate() string {
-	return "Staged additive Pi source pins, retaining old LAN and wg0"
-}
-
 func (F3sctl) DescPackage() string {
 	return "Installs the f3sctl package (the agent binary /usr/local/bin/f3sctl) from the custom pkg repo"
+}
+
+func (F3sctl) DescRetireCandidate() string {
+	return "Removes the inactive triggerfish f3sctl key candidate"
 }
 
 func (F3sctl) DescSSHD() string {
@@ -150,8 +146,8 @@ func (RootMail) DescArchive() string {
 	return "Archives /var/mail/root to a dated .gz and empties it when above 1 MiB"
 }
 
-func (ShellyFans) DescMigrationCandidate() string {
-	return "Stages the boot fan address override without running it"
+func (ShellyFans) DescRetireCandidate() string {
+	return "Removes the inactive triggerfish fan helper and rc.conf.d candidates"
 }
 
 func (ShellyFans) DescScripts() string {

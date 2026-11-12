@@ -6,6 +6,6 @@ func (Deployment) DescConfig() string {
 	return "Installs the protected key cache and host-specific log access"
 }
 
-func (Deployment) DescMigrationCandidate() string {
-	return "Stages dserver's new LAN bind without touching the daemon"
+func (Deployment) DescRetireCandidate() string {
+	return "Removes the inactive triggerfish dserver bind candidate"
 }

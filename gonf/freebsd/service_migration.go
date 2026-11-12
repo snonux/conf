@@ -1,100 +1,32 @@
 package freebsd
 
 import (
-	"fmt"
-	"net"
-	"os"
-	"strings"
-
-	"github.com/snonux/conf/gonf/migrationaddress"
-	"github.com/snonux/conf/gonf/paths"
 	. "github.com/snonux/gonf/api"
 )
 
-// OptsMigrationCandidate keeps UPS candidate preparation out of aggregates.
-func (Apcupsd) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
+// candidateSuffix names the inactive copies the retired service-migration
+// MigrationCandidate tasks staged next to the live files. Nothing reads them:
+// the daemons use the live paths and sshd only the exact f3sctl key file.
+// The RetireCandidate one-shots below remove them (task 974) and are deleted
+// in a later commit together with this file.
+const candidateSuffix = ".triggerfish-candidate"
 
-// MigrationCandidate stages UPS configuration without rebinding or restarting.
-// The master must be promoted and accepted before any network client changes.
-func (Apcupsd) MigrationCandidate() {
-	EachHostWith(func(s UPSServer) {
-		address, err := migrationaddress.Lab(s.NISIP)
-		if err != nil {
-			Refuse("UPS candidate", apcupsdConf, err)
-			return
-		}
-		s.NISIP = address
-		upsCandidate(serverConfData(s))
-	})
-	EachHostWith(func(c UPSClient) {
-		host, port, err := net.SplitHostPort(c.Server)
-		if err != nil || port != "3551" {
-			Refuse("UPS candidate", apcupsdConf, fmt.Errorf("expected UPS server host:3551"))
-			return
-		}
-		address, err := migrationaddress.Lab(host)
-		if err != nil {
-			Refuse("UPS candidate", apcupsdConf, err)
-			return
-		}
-		c.Server = net.JoinHostPort(address, port)
-		upsCandidate(clientConfData(c))
-	})
+// OptsRetireCandidate keeps the one-shot out of aggregates.
+func (Apcupsd) OptsRetireCandidate() TaskOptions { return TaskOptions{Operational()} }
+
+// RetireCandidate removes the inactive triggerfish UPS configuration candidate.
+func (Apcupsd) RetireCandidate() { NoFile(apcupsdConf + candidateSuffix) }
+
+// OptsRetireCandidate keeps the one-shot out of aggregates.
+func (ShellyFans) OptsRetireCandidate() TaskOptions { return TaskOptions{Operational()} }
+
+// RetireCandidate removes the inactive triggerfish fan helper and rc.conf.d candidates.
+func (ShellyFans) RetireCandidate() {
+	NoFile(List("/usr/local/etc/rc.conf.d/shellyfans"+candidateSuffix, shellyFansScript+candidateSuffix))
 }
 
-func (Apcupsd) OptsMigrationCompatibleServer() TaskOptions { return TaskOptions{Operational()} }
+// OptsRetireCandidate keeps the one-shot out of aggregates.
+func (F3sctl) OptsRetireCandidate() TaskOptions { return TaskOptions{Operational()} }
 
-// MigrationCompatibleServer stages both-address NIS access during client handoff.
-func (Apcupsd) MigrationCompatibleServer() {
-	EachHostWith(func(s UPSServer) {
-		s.NISIP = "0.0.0.0"
-		upsCandidate(serverConfData(s))
-	})
-}
-
-// OptsMigrationCandidate keeps the fan override out of normal aggregates.
-func (ShellyFans) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
-
-// MigrationCandidate stages the boot fan address override without running it.
-// Promotion needs device recovery acceptance and the exact router path (TCP443
-// since p34; the helper itself now carries the 10.30.0.28 default).
-func (ShellyFans) MigrationCandidate() {
-	EnsureDir("/usr/local/etc/rc.conf.d", RootOwned)
-	File("/usr/local/etc/rc.conf.d/shellyfans.triggerfish-candidate",
-		WithContent("# Inactive: merge after Shelly address/recovery acceptance.\nshellyfans_ip=\"10.30.0.28\"\n"), RootOwned)
-	raw, err := os.ReadFile(paths.FHostAsset("shelly-fans/shelly-fans-on"))
-	if err != nil {
-		Refuse("fan helper candidate", shellyFansScript, err)
-		return
-	}
-	// The helper already defaults to 10.30.0.28; the old 192.168.1.28 rewrite is gone.
-	File(shellyFansScript+".triggerfish-candidate", WithContent(string(raw)), Perm(0o555, Root),
-		WithValidation("/bin/sh", List("-n", CandidatePath)))
-}
-
-func upsCandidate(data apcupsdConfData) {
-	InstallFile(apcupsdConf+".triggerfish-candidate", paths.FHostAsset("apcupsd/apcupsd.conf.tmpl"),
-		RootOwned, WithTemplateData(data))
-}
-
-// OptsMigrationCandidate keeps restricted-key candidates out of aggregates.
-func (F3sctl) OptsMigrationCandidate() TaskOptions { return TaskOptions{Operational()} }
-
-// MigrationCandidate staged additive Pi source pins, retaining old LAN and wg0.
-// Since task i24 removed the old Pi addresses from the key, it refuses on the
-// current asset (the old from= string is gone); kept only as migration history.
-func (F3sctl) MigrationCandidate() {
-	raw, err := os.ReadFile(paths.FHostAsset("f3sctl/authorized_keys"))
-	if err != nil {
-		Refuse("f3sctl candidate", f3sctlKeyFile, err)
-		return
-	}
-	const old = `from="192.168.1.125,192.168.1.126,192.168.2.203,192.168.2.204"`
-	if strings.Count(string(raw), old) != 1 {
-		Refuse("f3sctl candidate", f3sctlKeyFile, fmt.Errorf("unexpected source pins; review key before migration"))
-		return
-	}
-	content := strings.Replace(string(raw), old,
-		`from="192.168.1.125,192.168.1.126,10.20.0.125,10.20.0.126,192.168.2.203,192.168.2.204"`, 1)
-	File(f3sctlKeyFile+".triggerfish-candidate", WithContent(content), RootOwned)
-}
+// RetireCandidate removes the inactive triggerfish f3sctl key candidate.
+func (F3sctl) RetireCandidate() { NoFile(f3sctlKeyFile + candidateSuffix) }
