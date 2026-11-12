@@ -40,10 +40,6 @@ func (Periodic) DescLogs() string {
 
 func (Resolver) DescConf() string { return "Writes /etc/resolv.conf with the lab resolver" }
 
-func (ShellyEndpoints) DescRetireState() string {
-	return "Removes the Shelly endpoint candidate and the f3sctl rollback copies"
-}
-
 func (ShellyTLS) DescAccount() string {
 	return "Creates the unprivileged _shellytls account (no login) that runs the probe, with its state directory as home"
 }
