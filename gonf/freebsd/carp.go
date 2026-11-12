@@ -41,8 +41,9 @@ import (
 // on start, and a restart neither changes the CARP state nor replays a
 // transition.
 //
-// Register with OnCluster(cluster.NameFreeBSD); the bodies narrow further to
-// the CARP members with WhenHostname, since f2/f3 carry no CARP interface.
+// Register with OnCluster(cluster.NameFreeBSD); each task narrows further to
+// the CARP members (or the failback host) in its WhenX companion, since f2/f3
+// carry no CARP interface.
 // Each member carries a CarpNode (gonf/cluster).
 type Carp struct {
 	RequiresRoot
@@ -356,6 +357,12 @@ func (Carp) WhenBootGate() TaskOption { return WhenHostnameIn(carpMembers...) }
 // uplink whether the VIP sits on it or on the bridge (CarpNode.Interface).
 // The loader line is written last, so the hold never exists without its
 // waiter; to remove the gate, drop that line first. Next boot only.
+//
+// Boot behaviour that changes with it: the vhid's INIT -> BACKUP event (and
+// carpcontrol.sh BACKUP) now comes after rc started nfsd/mountd/stunnel, so
+// the BACKUP stops them instead of leaving them running; f0 starts them
+// again when carp-auto-failback promotes it. After a cold start of both
+// members the VIP waits for the deadline, as neither hears the other.
 func (Carp) BootGate() {
 	EnsureDir("/usr/local/libexec", RootOwned)
 	EnsureDir("/usr/local/etc", RootOwned)
