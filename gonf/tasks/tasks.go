@@ -82,6 +82,10 @@ func Register() {
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.NetworkMigration{})
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.BridgeMigration{})
+	// One-shot (task d74): removes both migration helpers' host artifacts;
+	// deleted with them once every host ran it.
+	RegisterMethods(freebsd.NetworkRetirement{}, WithPrefix("freebsd_network_helpers_"), OnCluster(cluster.NameFreeBSD))
+	RegisterMethods(freebsd.NetworkRetirement{}, WithPrefix("freebsd_guest_network_helpers_"), OnCluster(cluster.NameFreeBSDGuestMigration))
 	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
 	// One Resolver recipe, two clusters: private_interfaces names each
 	// cluster's LAN interfaces (the bridge vm-public, which carries the

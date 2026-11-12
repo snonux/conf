@@ -122,6 +122,10 @@ func (NetworkMigration) DescStatus() string {
 	return "Reports the persistent rollback deadline and current transaction"
 }
 
+func (NetworkRetirement) DescRetire() string {
+	return "Removes the network- and bridge-migration watchdogs, boot hooks, helpers and journals"
+}
+
 func (Periodic) DescTimes() string {
 	return "Runs periodic daily/weekly/monthly in each host's afternoon hour (hosts are off at night)"
 }
