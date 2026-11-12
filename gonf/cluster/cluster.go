@@ -265,7 +265,8 @@ func registerFreeBSD() {
 		WithData(f01Baseline),
 		// CARP MASTER by default (advskew 0). Interface: the VIP's rc.conf
 		// line follows the host's addresses (re0 until the task 764 bridge
-		// move is confirmed on the host, then freebsd.LabBridge).
+		// move is confirmed on the host, then freebsd.LabBridge; f1 switched
+		// on 2026-11-12).
 		WithData(freebsd.CarpNode{Interface: "re0"}),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSServer{NISIP: "10.20.0.130"}),
@@ -280,7 +281,7 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.131:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f1"}),
 		WithData(f01Baseline),
-		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: "re0"}), // CARP standby, loses to f0
+		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: freebsd.LabBridge}), // CARP standby, loses to f0; VIP on vm-public since 764 (2026-11-12)
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
