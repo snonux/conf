@@ -30,10 +30,6 @@ func (KernelAudit) DescUnits() string {
 	return "Installs rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
 }
 
-func (NetworkRetirement) DescRetire() string {
-	return "Removes the network-migration watchdog, restore units, drop-in and helper"
-}
-
 func (Resolver) DescConf() string {
 	return "Installs the NetworkManager global DNS drop-in for the lab resolver and reloads NetworkManager's configuration"
 }

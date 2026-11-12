@@ -66,8 +66,6 @@ func Register() {
 	RegisterMethods(rocky.HostFile{}, WithPrefix("rocky_hosts_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.Resolver{}, WithPrefix("rocky_resolver_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(endpointfiles.Retirement{Platform: "linux"}, WithPrefix("rocky_endpoints_"), OnCluster(cluster.NameRockyAll))
-	// One-shot (c74): run by name on each Rocky host, then delete.
-	RegisterMethods(rocky.NetworkRetirement{}, WithPrefix("rocky_network_migration_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;
 	// rocky_kernel_audit_packages installs its own ksh interpreter, so it
