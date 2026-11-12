@@ -350,7 +350,9 @@ func (Carp) WhenBootGate() TaskOption { return WhenHostnameIn(carpMembers...) }
 //
 // The gate (f3s/freebsd-hosts/carp/carp-gate): loader.conf keeps CARP off
 // from module load; the rc.d hook, before netif, pre-mutes TXCSUM/TSO on re0
-// so no tap join or leave resets it, and detaches a waiter that sets
+// so no tap join or leave resets it (rc.conf ifconfig_re0, Uplink.RcConf,
+// does the same on all f-hosts; the gate also covers a host before that line
+// exists), and detaches a waiter that sets
 // net.inet.carp.allow=1 after the guest tap joined, re0 stayed active for
 // carpGateSettle seconds and one vhid advertisement arrived on re0, or at
 // carpGateDeadline. re0 is watched in both layouts: it is the physical

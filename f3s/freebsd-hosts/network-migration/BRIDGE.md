@@ -21,8 +21,14 @@ ifconfig_bridge0_name="vm-public"
 ifconfig_vm_public="inet 10.20.0.13N/24 addm re0 up"
 ifconfig_vm_public_ipv6="inet6 fd02:ca0b:f1cb:20::13N prefixlen 64 auto_linklocal -accept_rtadv"
 ifconfig_vm_public_alias0="inet vhid 1 [advskew 100] pass … alias 10.20.0.138/32"   # f0/f1
-ifconfig_re0="up"          # no ifconfig_re0_ipv6: netif sets re0 ifdisabled
+ifconfig_re0="-txcsum -tso up"   # no ifconfig_re0_ipv6: netif sets re0 ifdisabled
 ```
+
+`bridge.sh` writes `ifconfig_re0="up"` at a move; after the confirm gonf
+`freebsd_uplink_rc_conf` (gonf/freebsd/uplink.go) owns the line and adds
+`-txcsum -tso`. re0 then joins the bridge with TXCSUM/TSO already off, so a
+guest tap joining or leaving no longer makes if_bridge change re0's
+capabilities, which reset its link for about 4 s (2026-11-12, all four hosts).
 
 vm-bhyve `/zroot/bhyve/.config/system.conf`: `type_public="manual"`,
 `bridge_public="vm-public"`, no `ports_public`. A standard switch would try

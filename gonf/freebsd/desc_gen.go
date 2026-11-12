@@ -218,6 +218,10 @@ func (Unattended) DescServices() string {
 
 func (Unattended) DescStampDir() string { return "Ensures /var/lib/unattended-upgrade stamp directory" }
 
+func (Uplink) DescRcConf() string {
+	return "Keeps re0 an address-less bridge member with TXCSUM/TSO off in rc.conf (next boot)"
+}
+
 func (ZfsKeys) DescScripts() string {
 	return "Installs f3s-mount-keys, f3s-load-zfs-keys and /etc/rc.d/f3skeys (0555 root:wheel; not run)"
 }
