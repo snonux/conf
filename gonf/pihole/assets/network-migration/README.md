@@ -41,10 +41,10 @@ History: the wildcard pointed at OLD VIP 192.168.1.138 until task i24
 dormant, outside active mounts/includes. Activation remains coordinated with
 storage/ingress acceptance and the canonical mapping step, task 924.
 
-`pihole_network_prepare` reuses the existing Linux snapshot/PID1 watchdog and
+`pihole_network_prepare` (removed in c74, 2026-11-12, together with the Rocky
+helper and its units on both Pis) reused the Linux snapshot/PID1 watchdog and
 boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
-non-k3s runtime unit and legacy non-k3s snapshot marker avoid all k3s/Flannel
-resources. All actions are Operational and excluded from routine aggregates.
+NetworkManager profile alone now carries the lab IPv4, gateway and ULA.
 
 | Host | OLD (retired in i24) | NEW | Dedicated recovery (retired in j24) | Native ULA |
 | --- | --- | --- | --- | --- |

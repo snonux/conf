@@ -30,40 +30,8 @@ func (KernelAudit) DescUnits() string {
 	return "Installs rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
 }
 
-func (NetworkMigration) DescConfirm() string {
-	return "Accepts independently verified fresh management and service checks"
-}
-
-func (NetworkMigration) DescDiagnostics() string {
-	return "Installs tcpdump for migration packet diagnostics"
-}
-
-func (NetworkMigration) DescPrepare() string {
-	return "Installs dormant NetworkManager transaction and PID1 rollback tools"
-}
-
-func (NetworkMigration) DescPromote() string {
-	return "Selects the lab primary, refreshing k3s only for k3s hosts"
-}
-
-func (NetworkMigration) DescRetire() string {
-	return "Requests the guarded PID1-owned removal of the retained old IPv4"
-}
-
-func (NetworkMigration) DescRetireRecovery() string {
-	return "Requests the guarded PID1-owned removal of the igc1 recovery address and the laptop's 10.99.0.2/32 return route via 10.98.0.1, so wg2 replies follow the 10.20.0.1 default (task j24)"
-}
-
-func (NetworkMigration) DescRollback() string {
-	return "Requests restoration through PID1 independently of the SSH session"
-}
-
-func (NetworkMigration) DescStage() string {
-	return "Requests a guarded PID1-owned shared-wire dual-address transaction"
-}
-
-func (NetworkMigration) DescStatus() string {
-	return "Reports pending state without exposing NetworkManager credentials"
+func (NetworkRetirement) DescRetire() string {
+	return "Removes the network-migration watchdog, restore units, drop-in and helper"
 }
 
 func (Resolver) DescConf() string {

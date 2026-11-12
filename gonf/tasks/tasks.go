@@ -66,6 +66,8 @@ func Register() {
 	RegisterMethods(rocky.HostFile{}, WithPrefix("rocky_hosts_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.Resolver{}, WithPrefix("rocky_resolver_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(endpointfiles.Retirement{Platform: "linux"}, WithPrefix("rocky_endpoints_"), OnCluster(cluster.NameRockyAll))
+	// One-shot (c74): run by name on each Rocky host, then delete.
+	RegisterMethods(rocky.NetworkRetirement{}, WithPrefix("rocky_network_migration_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;
 	// rocky_kernel_audit_packages installs its own ksh interpreter, so it
@@ -73,12 +75,9 @@ func Register() {
 	RegisterOnCluster(cluster.NameRockyPis, rocky.KernelAudit{}, rocky.Goprecords{})
 	RegisterMethods(pihole.Deployment{}, WithPrefix("pihole_"), OnCluster(cluster.NameRockyPis))
 	RegisterOnCluster(cluster.NameRockyPis, pihole.Firewall{})
-	RegisterMethods(rocky.NetworkMigration{}, WithPrefix("pihole_network_"), OnCluster(cluster.NameRockyPis))
 
 	RegisterMethods(rnodes.Maintenance{}, WithPrefix("rnodes_"), OnCluster(cluster.NameRockyK3s))
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Base{}, rnodes.K3s{}, rnodes.WireGuard{})
-	RegisterOnCluster(cluster.NameRockyK3s, rocky.NetworkMigration{})
-	RegisterMethods(rocky.NetworkMigration{}, WithPrefix("rocky_guest_network_"), OnCluster(cluster.NameRockyGuestMigration))
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.NodePortGuard{})
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Firewall{})
 

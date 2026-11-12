@@ -35,7 +35,6 @@ const (
 	NameRockyK3s              = "rocky-k3s"
 	NameRockyAll              = "rocky-all"
 	NameRockyDtail            = "rocky-dtail"
-	NameRockyGuestMigration   = "rocky-guest-migration"
 	NameFreeBSDGuestMigration = "freebsd-guest-migration"
 	NameFreeBSD               = "freebsd-hosts"
 	NameGarage                = "garage"
@@ -185,14 +184,12 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 		WithPlatform("linux/arm64"),
 	)
 	pi2 = Host("pi2", rockyPi,
-		WithData(rocky.MigrationHost{Interface: "eth0", OldIPv4: "192.168.1.127", LabIPv4: "10.20.0.127", RecoveryIPv4: "10.98.0.127", ULA: "fd02:ca0b:f1cb:20::127", SharedGateway: "192.168.1.2", Role: "resolver"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.127", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:15:00"}),
 		WithData(goprecords.ClientHost{Host: "pi2"}),
 	)
 	pi3 = Host("pi3", rockyPi,
-		WithData(rocky.MigrationHost{Interface: "eth0", OldIPv4: "192.168.1.128", LabIPv4: "10.20.0.128", RecoveryIPv4: "10.98.0.128", ULA: "fd02:ca0b:f1cb:20::128", SharedGateway: "192.168.1.2", Role: "resolver"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.128", Platform: "linux"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:35:00"}),
 		WithData(rocky.KernelAuditCalendar{OnCalendar: "*-*-* 06:45:00"}),
@@ -213,19 +210,16 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 		WithPlatform("linux/amd64"),
 	)
 	r0 := Host("r0", rnode,
-		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.120", LabIPv4: "10.20.0.120", RecoveryIPv4: "10.98.0.120", ULA: "fd02:ca0b:f1cb:20::120", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.120", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.120"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
 	)
 	r1 := Host("r1", rnode,
-		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.121", LabIPv4: "10.20.0.121", RecoveryIPv4: "10.98.0.121", ULA: "fd02:ca0b:f1cb:20::121", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.121", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.121"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
 	)
 	r2 := Host("r2", rnode,
-		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.122", LabIPv4: "10.20.0.122", RecoveryIPv4: "10.98.0.122", ULA: "fd02:ca0b:f1cb:20::122", SharedGateway: "192.168.1.2"}),
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.122", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
@@ -233,10 +227,8 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 	// Root access is documented for the standalone VM; validate sudo and
 	// bootstrap gonf when it becomes reachable before approving a deploy.
 	standalone := Host("rocky", rnode,
-		WithData(rocky.MigrationHost{Interface: "enp0s5", OldIPv4: "192.168.1.123", LabIPv4: "10.20.0.123", RecoveryIPv4: "10.98.0.123", SharedGateway: "192.168.1.2", Role: "standalone", IPv6Policy: "disabled"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:55:00"}),
 	)
-	Cluster(NameRockyGuestMigration, standalone)
 	Cluster(NameRockyK3s, r0, r1, r2).Parallel(3)
 	Cluster(NameRockyDtail, pi2, pi3, r0, r1, r2)
 	Cluster(NameRockyAll, pi2, pi3, r0, r1, r2, standalone)
