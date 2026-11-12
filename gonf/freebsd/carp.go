@@ -21,7 +21,10 @@ import (
 //     ifconfig_<if>_alias0, whose password comes from the vault (task gk2).
 //     <if> is the interface carrying the host's lab addresses: re0, or
 //     vm_public (the bridge vm-public) after the task 764 move;
-//     CarpNode.Interface.
+//     CarpNode.Interface;
+//   - the boot gate (task 764): loader.conf net.inet.carp.allow="0" and the
+//     rc.d hook that allows CARP once re0 carries the peer's advertisements
+//     (BootGate).
 //
 // All of it used to be hand-installed; the sources now live in
 // f3s/freebsd-hosts/carp. The live files matched them byte for byte when
@@ -64,6 +67,26 @@ const (
 	carpDevdDir        = "/usr/local/etc/devd"
 	carpDevdHook       = carpDevdDir + "/carp.conf"
 	devdConf           = "/etc/devd.conf"
+	carpGateHelper     = "/usr/local/libexec/gonf-carp-gate"
+	carpGateRC         = "/etc/rc.d/gonf_carp_gate"
+	carpGateConf       = "/usr/local/etc/gonf-carp-gate.conf"
+)
+
+// carpGateLoaderLine holds every vhid in INIT from module load until the
+// gate's waiter sets net.inet.carp.allow=1. ip_carp.c (FreeBSD 15.0/15.1)
+// fetches net.inet.carp.allow as a tunable in its VNET sysinit, "to postpone
+// carp start after module load"; carp_load in loader.conf loads the module
+// before the kernel starts, so the hold is in place before netif.
+const carpGateLoaderLine = `net.inet.carp.allow="0"` + "\t" +
+	`# CARP held until gonf_carp_gate hears the peer on re0 (task 764); remove only together with the gate`
+
+// carpGateSettle and carpGateDeadline are the gate's timings in seconds: the
+// uplink must stay active this long before an advertisement counts (a re(4)
+// link reset lasts ~4 s), and after the deadline CARP is allowed anyway so
+// a sole survivor still takes the VIP.
+const (
+	carpGateSettle   = 10
+	carpGateDeadline = 180
 )
 
 // carpMembers are the hosts that share the storage VIP; carpFailbackHost is
@@ -308,6 +331,40 @@ func (Carp) RcConf() {
 			WithoutLine(compat),
 			RootOwned, WithName("rc-conf-carp"), DependsOn(guard))
 	})
+}
+
+// WhenBootGate narrows the task to the CARP members.
+func (Carp) WhenBootGate() TaskOption { return WhenHostnameIn(carpMembers...) }
+
+// BootGate holds CARP at boot until re0 carries the peer's advertisements, so
+// a booting member never promotes itself on a dead wire (task 764).
+//
+// On 2026-11-12 f1 booted with the VIP on the bridge vm-public. The bridge
+// stays up while any member is, and when vm-bhyve added the guest's tap0,
+// if_bridge muted TXCSUM/TSO on re0, whose link then reset for ~4 s. f1
+// heard nothing for 3 x advbase, went MASTER for a second and its
+// announcement taught the switch the CARP MAC on f1's port (f0's adverts
+// carried re0's own MAC: ether_output hands a bridge member's frames to
+// if_bridge before carp_output can set the virtual source MAC).
+//
+// The gate (f3s/freebsd-hosts/carp/carp-gate): loader.conf keeps CARP off
+// from module load; the rc.d hook, before netif, pre-mutes TXCSUM/TSO on re0
+// so no tap join or leave resets it, and detaches a waiter that sets
+// net.inet.carp.allow=1 after the guest tap joined, re0 stayed active for
+// carpGateSettle seconds and one vhid advertisement arrived on re0, or at
+// carpGateDeadline. re0 is watched in both layouts: it is the physical
+// uplink whether the VIP sits on it or on the bridge (CarpNode.Interface).
+// The loader line is written last, so the hold never exists without its
+// waiter; to remove the gate, drop that line first. Next boot only.
+func (Carp) BootGate() {
+	EnsureDir("/usr/local/libexec", RootOwned)
+	EnsureDir("/usr/local/etc", RootOwned)
+	conf := File(carpGateConf, WithContent(fmt.Sprintf("uplink='%s'\nvhid='%s'\nsettle='%d'\ndeadline='%d'\n",
+		labMember, carpVhid, carpGateSettle, carpGateDeadline)), RootOwned)
+	helper := InstallFile(carpGateHelper, paths.FHostAsset("carp/carp-gate"), RootExec, DependsOn(conf))
+	hook := InstallFile(carpGateRC, paths.FHostAsset("carp/rc-carp-gate"), RootExec, DependsOn(helper))
+	File(loaderConf, WithKeyedLine("net.inet.carp.allow=", carpGateLoaderLine),
+		RootOwned, WithName("loader-conf-carp-gate"), DependsOn(hook))
 }
 
 // carpOtherInterface returns the interface that must not carry the line.

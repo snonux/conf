@@ -1,0 +1,20 @@
+#!/bin/sh
+# PROVIDE: gonf_carp_gate
+# REQUIRE: FILESYSTEMS
+# BEFORE: netif
+# KEYWORD: nojail
+#
+# Boot hook of gonf-carp-gate (task 764, f3s/freebsd-hosts/carp/carp-gate):
+# while loader.conf holds CARP (net.inet.carp.allow="0"), pre-mute the
+# uplink's TXCSUM/TSO before netif and detach the waiter that allows CARP
+# once the uplink carries the peer's advertisements. Does nothing when the
+# hold is not active, so a manual start never touches a running vhid.
+# shellcheck source=/dev/null
+. /etc/rc.subr
+# shellcheck disable=SC2034
+name=gonf_carp_gate
+# shellcheck disable=SC2034
+start_cmd='/usr/local/libexec/gonf-carp-gate start'
+# shellcheck disable=SC2034
+stop_cmd=':'
+run_rc_command "$1"

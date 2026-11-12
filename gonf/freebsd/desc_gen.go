@@ -48,6 +48,10 @@ func (BridgeMigration) DescRollback() string {
 
 func (BridgeMigration) DescStatus() string { return "Reports a pending move and its deadline" }
 
+func (Carp) DescBootGate() string {
+	return "Holds CARP at boot until re0 carries the peer's advertisements, so a booting member never promotes itself on a dead wire (task 764)"
+}
+
 func (Carp) DescFailbackNewsyslog() string {
 	return "Rotates /var/log/carp-auto-failback.log on f0 via /etc/newsyslog.conf"
 }

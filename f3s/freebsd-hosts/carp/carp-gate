@@ -1,0 +1,140 @@
+#!/bin/sh
+# gonf-carp-gate (task 764): hold CARP at boot until the physical uplink
+# really carries the peer's advertisements. Installed on the CARP members
+# f0/f1 by gonf freebsd_carp_boot_gate (gonf/freebsd/carp.go); source
+# f3s/freebsd-hosts/carp/carp-gate in the conf repo.
+#
+# Why (f1, 2026-11-12, VIP on the bridge vm-public): CARP follows the link
+# state of the interface carrying the vhid. A bridge is "up" while any member
+# is, so when vm-bhyve added the guest's tap0, the bridge stayed up although
+# re0, the only real uplink, reset for ~4 s (if_bridge mutes TXCSUM/TSO on
+# every member when a tap without them joins, and re(4) renegotiates the link
+# on that change). f1 heard no advertisement for 3 x advbase, went
+# BACKUP -> MASTER for a second, and its announcement moved the CARP MAC on
+# the switch to f1's port.
+#
+# How:
+#   - loader.conf sets net.inet.carp.allow="0". ip_carp.c reads it as a
+#     tunable when the module loads ("to postpone carp start"), so every vhid
+#     stays INIT through netif and the rest of rc: no adverts sent, none
+#     accepted, no master-down timer.
+#   - "start" (rc.d gonf_carp_gate, before netif) pre-mutes TXCSUM/TSO on the
+#     uplink while it is still down, so no later bridge membership change
+#     (tap joins at guest start, leaves at guest stop) alters its capabilities
+#     and resets its link. The bridge mutes exactly these at runtime anyway.
+#     Then it detaches the waiter.
+#   - "wait" waits for the guest tap to join the uplink's bridge (when guests
+#     autostart), for the uplink link to stay active for $settle seconds, and
+#     for one vhid advertisement on the uplink, then sets allow=1: the vhid
+#     goes INIT -> BACKUP with a working wire and hears the MASTER at once.
+#     After $deadline seconds it allows CARP anyway, so a sole survivor
+#     (peer down, cold start) still takes the VIP.
+#
+# Never lowers allow: a manual "start" on a running host (allow=1, or the
+# loader did not ask for the hold) does nothing, so it cannot drop a VIP.
+# The gonf-storage-migration "held" fence (allow=0 by that helper) wins.
+# Remove the loader.conf line before this script, or CARP never starts.
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+export PATH
+self=/usr/local/libexec/gonf-carp-gate
+logfile=/var/log/gonf-carp-gate.log
+storage_held=/var/db/gonf-storage-migration/held
+# shellcheck source=/dev/null
+. /usr/local/etc/gonf-carp-gate.conf
+: "${uplink:?}" "${vhid:?}" "${settle:?}" "${deadline:?}"
+
+log() {
+    printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$logfile"
+    # syslogd starts after netif: early lines only reach the file.
+    logger -t gonf-carp-gate -- "$*" 2>/dev/null || :
+}
+
+link_active() { ifconfig "$uplink" 2>/dev/null | grep -q 'status: active'; }
+
+# The uplink stays active for $settle one-second samples. A re(4) reset
+# keeps the link down for seconds, so a sample catches it.
+stable() {
+    i=0
+    while [ "$i" -lt "$settle" ]; do
+        link_active || { sleep 1; return 1; }
+        sleep 1
+        i=$((i + 1))
+    done
+    link_active
+}
+
+# One advertisement of our vhid (byte 1 of the CARP header) to 224.0.0.18
+# on the uplink. allow=0 keeps this host silent, so it is the peer's.
+heard() {
+    timeout 4 tcpdump -c 1 -n -i "$uplink" \
+        "ip proto 112 and dst host 224.0.0.18 and ip[((ip[0] & 0xf) << 2) + 1] = $vhid" \
+        >/dev/null 2>&1
+}
+
+# With autostarting guests, wait for a tap on the uplink's bridge: before
+# the move vm-bhyve creates that bridge, after it rc.conf does; either way
+# the tap joins when the guest starts.
+wait_tap() {
+    case "$(sysrc -n vm_enable 2>/dev/null)" in [Yy][Ee][Ss]) ;; *) return 0 ;; esac
+    [ -n "$(sysrc -n vm_list 2>/dev/null)" ] || return 0
+    while [ "$(date +%s)" -lt "$end" ]; do
+        for b in $(ifconfig -g bridge 2>/dev/null); do
+            members=$(ifconfig "$b" 2>/dev/null)
+            case "$members" in *"member: $uplink "*)
+                case "$members" in *"member: tap"*) log "guest tap joined $b"; return 0 ;; esac ;;
+            esac
+        done
+        sleep 1
+    done
+}
+
+allow() {
+    trap - HUP INT TERM
+    if [ -e "$storage_held" ]; then
+        log "storage migration holds CARP ($storage_held); allow stays 0 ($1)"
+        return 0
+    fi
+    if sysctl net.inet.carp.allow=1 >/dev/null; then
+        log "CARP allowed: $1"
+    else
+        log "FAILED to allow CARP ($1)"
+    fi
+}
+
+waiter() {
+    end=$(($(date +%s) + deadline))
+    trap 'allow "waiter stopped by a signal"; exit 0' HUP INT TERM
+    log "holding CARP until $uplink is stable for ${settle}s and carries a vhid $vhid advertisement (deadline ${deadline}s)"
+    wait_tap
+    while [ "$(date +%s)" -lt "$end" ]; do
+        if stable && heard; then
+            allow "vhid $vhid advertisement heard on $uplink"
+            return 0
+        fi
+    done
+    allow "no vhid $vhid advertisement on $uplink within ${deadline}s; peer down?"
+}
+
+start() {
+    if [ "$(kenv -q net.inet.carp.allow)" != 0 ] || [ "$(sysctl -n net.inet.carp.allow 2>/dev/null)" != 0 ]; then
+        log 'loader.conf hold not active (kenv or sysctl allow != 0); nothing to do'
+        return 0
+    fi
+    # Only while the uplink is down: on a running NIC the change would reset it.
+    if ifconfig "$uplink" 2>/dev/null | head -1 | grep -q '[<,]UP[,>]'; then
+        log "$uplink already up; capabilities left as they are"
+    else
+        ifconfig "$uplink" -txcsum -tso || log "could not pre-mute TXCSUM/TSO on $uplink"
+    fi
+    daemon -f -t gonf-carp-gate "$self" wait
+}
+
+case "${1:-}" in
+    start) start ;;
+    wait) waiter ;;
+    status)
+        echo "allow=$(sysctl -n net.inet.carp.allow) loader=$(kenv -q net.inet.carp.allow)"
+        tail -n 5 "$logfile" 2>/dev/null
+        ;;
+    *) echo 'usage: gonf-carp-gate start | wait | status' >&2; exit 1 ;;
+esac
