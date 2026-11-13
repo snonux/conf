@@ -19,17 +19,19 @@ const (
 	shellyCAFile = shellyCADir + "/shelly-ca.pem"
 
 	liveController      = "/usr/local/etc/f3sctl.json"
-	controllerCandidate = liveController + ".triggerfish-candidate"
+	controllerCandidate = liveController + ".gonf-candidate"
+	controllerLegacy    = liveController + ".gonf-legacy"
 	// controllerOwned is the endpoint helper's adopted copy (NetBSD state dir).
 	controllerOwned = "/var/db/gonf-endpoint-migration/controller-owned"
 )
 
 // Config preserves custom configuration and installs the accepted inventory.
 //
-// The legacy input and the candidate (f3sctl.json.triggerfish-{legacy,
-// candidate}) are this task's live staging files: apply publishes the
-// candidate to f3sctl.json, so both stay on the Pis (task 974 removed only
-// the separate staging-only MigrationCandidate task).
+// The legacy input and the candidate (f3sctl.json.gonf-{legacy,candidate},
+// named .triggerfish-{legacy,candidate} until task f74) are this task's
+// staging files: apply publishes the candidate to f3sctl.json, and the
+// helper counts a live file equal to either as owned. Their names are
+// compiled into the endpoint helper (endpointfiles/assets/apply).
 //
 // The endpoint helper refuses a live f3sctl.json that is not an owned file
 // (legacy input, current candidate, or the copy adopt recorded). adopt runs
@@ -41,12 +43,28 @@ func (Controller) Config() {
 	helper := endpointfiles.InstallHelper("/usr/local/sbin")
 	adopt := Command(endpointfiles.Helper, List("adopt", "controller"), DependsOn(helper),
 		Unless("cmp", List("-s", liveController, controllerOwned)))
-	legacy := InstallFile("/usr/local/etc/f3sctl.json.triggerfish-legacy", paths.GonfAsset("netbsd", "shelly-endpoints.json"), RootOwned, DependsOn(adopt))
+	legacy := InstallFile(controllerLegacy, paths.GonfAsset("netbsd", "shelly-endpoints.json"), RootOwned, DependsOn(adopt))
 	candidate := InstallFile(controllerCandidate, paths.GonfAsset("netbsd", "controller.json"), RootOwned, DependsOn(adopt))
 	// The CA is in place before a configuration that requires it is applied.
 	ca := installShellyCA()
 	Command(endpointfiles.Helper, List("apply", "controller"), DependsOn(legacy, candidate, ca),
 		Unless("cmp", List("-s", liveController, controllerCandidate)))
+}
+
+// OptsRetireTriggerfishFiles runs Config first, so the renamed staging files
+// and the helper that reads them are in place before the old ones go.
+func (Controller) OptsRetireTriggerfishFiles() TaskOptions {
+	return TaskOptions{Operational(), Needs(Controller.Config)}
+}
+
+// RetireTriggerfishFiles removes f3sctl.json.triggerfish-{candidate,legacy} (one-shot, f74).
+//
+// Config stages the same bytes as f3sctl.json.gonf-{candidate,legacy}
+// since task f74, and the updated helper no longer reads the old names;
+// f3sctl itself reads only f3sctl.json. Delete this task once pi0 and pi1
+// ran it.
+func (Controller) RetireTriggerfishFiles() {
+	NoFile(List(liveController+".triggerfish-candidate", liveController+".triggerfish-legacy"))
 }
 
 // installShellyCA installs the public CA certificate that f3sctl pins for the

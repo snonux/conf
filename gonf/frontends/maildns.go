@@ -464,9 +464,11 @@ func renderZoneTemplate(zone string, f3sHosts []string) (string, error) {
 		// Generated from the shared inventory by go generate ./etchosts.
 		// Keeping the immutable fragment avoids a frontends↔etchosts import
 		// cycle and leaves the separately cache-gated wildcard in its owner.
-		lan, err := os.ReadFile(legacyFrontendAsset("var/nsd/zones/master/accepted-lan.inc"))
+		// The "Accepted LAN" heading predates the fragment's rename (f74);
+		// it stays so the published zone does not change.
+		lan, err := os.ReadFile(legacyFrontendAsset("var/nsd/zones/master/fleet-lan.inc"))
 		if err != nil {
-			return "", fmt.Errorf("read accepted LAN records: %w", err)
+			return "", fmt.Errorf("read fleet LAN records: %w", err)
 		}
 		content = strings.TrimRight(content, "\n") + "\n\n; Accepted LAN records (generated)\n" + string(lan)
 	}

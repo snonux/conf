@@ -15,8 +15,8 @@ repo = pathlib.Path(sys.argv[1])
 # that file's bytes. Hashing the asset (instead of a pinned digest, which went
 # stale when staging switched to the migration files) keeps the oracle exact.
 cases = [
-    ('pihole_firewall_stage', 'gonf/pihole/assets/network-migration/firewall.nft', False),
-    ('rnodes_firewall_stage', 'f3s/r-nodes/source-guard/migration.nft', True),
+    ('pihole_firewall_stage', 'gonf/pihole/assets/firewall/f3s-guard.nft', False),
+    ('rnodes_firewall_stage', 'f3s/r-nodes/source-guard/f3s-guard.nft', True),
 ]
 with tempfile.TemporaryDirectory(prefix='gonf-firewall-render-') as directory:
     for task, asset, wireguard in cases:

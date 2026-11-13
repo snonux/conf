@@ -1,4 +1,6 @@
-# Dormant migration candidate: keep the independent co3 pod guard owner.
+# r-node NodePort pod-source guard (co3): the live policy, staged as
+# candidate.nft by rnodes_node_port_guard_stage and loaded by
+# f3s-nodeport-guard apply/confirm, independently of the source guard.
 # Own-table replacement is atomic; never flush kube-proxy/kube-router.
 add table inet f3s_nodeport_guard
 delete table inet f3s_nodeport_guard

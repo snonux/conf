@@ -1,18 +1,21 @@
-# Physical-source and pod-source migration candidates (o14)
+# r-node source guard and NodePort pod-source guard (o14)
 
-The initial o14 preparation was dormant. During the approved r-node migration
-on 2026-11-06, canonical `rnodes_firewall_stage` and
-`rnodes_node_port_guard_stage` were switched to these migration files.
-Activation still requires each existing loader's guarded apply and fresh SSH
-confirmation; staging alone never loads rules. Native acceptance is recorded
-in the individual 224/324/424 reports. Packet checks load rules only in
-disposable network namespaces.
-`rnodes_firewall_migration_stage` installs `/etc/f3s-firewall/migration.nft`;
-`rnodes_node_port_guard_migration_stage` installs
-`/etc/f3s-nodeport-guard/migration.nft`. Both tasks are Operational and validate
-the dormant files with native `nft -c`. These dormant-file tasks leave `candidate.nft` files and
-confirmed boot policies remain unchanged. Neither task installs or activates
-a loader, changes systemd state, or requests a restart.
+`f3s-guard.nft` (here) and `../nodeport-guard/f3s-nodeport-guard.nft` are the
+live policies of the r-nodes. The initial o14 preparation was dormant; during
+the approved r-node migration on 2026-11-06, canonical `rnodes_firewall_stage`
+and `rnodes_node_port_guard_stage` were switched to these files (then named
+`migration.nft`). Each stage task installs its file as `candidate.nft`;
+activation still requires each loader's guarded apply and fresh SSH
+confirmation, which persists it as `confirmed.nft` (the boot policy); staging
+alone never loads rules. Native acceptance is recorded in the individual
+224/324/424 reports. Packet checks load rules only in disposable network
+namespaces.
+
+Task f74 (2026-11-13) renamed the files, removed the Operational tasks
+`rnodes_firewall_migration_stage` and `rnodes_node_port_guard_migration_stage`
+and, with a one-shot retire, their dormant on-host copies
+`/etc/f3s-firewall/migration.nft` and `/etc/f3s-nodeport-guard/migration.nft`
+(byte copies of `candidate.nft` that no loader read).
 
 The host policy owns only `inet f3s_guard`, at prerouting -150 before DNAT.
 It preserves homelab-local service trust for 10.20.0.0/24 and native
@@ -37,25 +40,19 @@ Public wg0 transport UDP56709 stays available. No wg0 identity, IPv6, peers,
 AllowedIPs, node/advertise-address, pod or Service CIDR changes are made.
 
 The independent `inet f3s_nodeport_guard` retains its -151 pod-source check,
-receiver port list, pod CIDR and fib-local catch. Its migration candidate adds
+receiver port list, pod CIDR and fib-local catch. Its policy lists
 all three lab IPv4 destinations alongside the wg0 addresses (the old physical
 192.168.1.12x were removed in task 074, the recovery 10.98.0.12x in j24). This prevents a pod targeting another node's future alias from
 escaping the receiver-port restriction before DNAT/Flannel source NAT. Never
 combine the tables or flush kube-proxy/CNI tables. They have separate loaders,
 confirmation state and rollback timers.
 
-Later activation is a separate guarded operation, one node at a time. First
-verify the existing `f3s-firewall` and `f3s-nodeport-guard` tools and confirmed
-boot policies, native rollback expiry/boot proof, fresh old-IP SSH, intended
-listener/return routes and actual source inventory. Archive each current
-candidate. After review explicitly copy each dormant migration file to its own
-loader's `candidate.nft`; run that loader's `check`, then `apply` with the
-actual SSH connection tuple. Follow each loader's existing independent fresh
-connection/confirm/rollback procedure. Do not load these files with bare
-`nft -f` on a production host. Update the repository's canonical stage source
-only at that approved policy transition so a routine stage cannot overwrite a
-selected migration candidate. Native expiry, reboot and fresh reconnect
-acceptance remain unperformed by this preparation.
+A policy change is a guarded operation, one node at a time: run the stage
+task (it installs `candidate.nft` only), then on the node the loader's
+`check`, `apply "$SSH_CONNECTION"` with two independent SSH sessions open,
+and `confirm "$SSH_CONNECTION"` from a fresh connection before its five-minute
+rollback timer fires. Never load these files with bare `nft -f` on a
+production host.
 
 History: during shared-wire staging n14 used the 192.168.1.2 gateway for the
 laptop /32 return route, after the cable move the igc1 recovery gateway

@@ -62,7 +62,7 @@ while True:
    data,peer=key.fileobj.recvfrom(256);key.fileobj.sendto(data,peer)
 '''])
     time.sleep(.15)
-    rules = str(Path(__file__).with_name('firewall.nft'))
+    rules = str(Path(__file__).with_name('f3s-guard.nft'))
     run('nft', 'add', 'table', 'inet', 'unrelated_fixture')
     untouched = run('nft', 'list', 'table', 'inet', 'unrelated_fixture')
     for _ in range(2):

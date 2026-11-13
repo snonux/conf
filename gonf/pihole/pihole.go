@@ -23,33 +23,22 @@ type Deployment struct {
 
 const piholeDir = "/home/paul/pihole"
 
-func hostDNSRows() (string, error) {
-	candidate, err := etchosts.RenderMigration("accepted", "lab")
-	if err != nil {
-		return "", err
-	}
-	var rows []string
-	for _, row := range candidate.PiHoleDNSMasq {
-		if !strings.HasPrefix(row, "#") && !strings.HasPrefix(row, "address=") {
-			rows = append(rows, row)
-		}
-	}
-	return strings.Join(rows, "\n") + "\n", nil
+// hostDNSRows is the content of 99-f3s-lan-hosts.conf: the fleet's host
+// records in the lab view, from the shared etchosts inventory.
+func hostDNSRows() string {
+	return strings.Join(etchosts.PiHoleHostRecords(), "\n") + "\n"
 }
 
 // Compose installs ~paul/pihole/docker-compose.yml and the LAN wildcard,
 // recreates on change.
 //
-// Compose installs the compose file and the dnsmasq wildcard
-// (*.f3s.lan.buetow.org -> the storage VIP), and runs `docker compose up -d`
-// when either changes. DNS on the LAN depends on these two Pis, so deploy
+// Compose installs the compose file, the dnsmasq wildcard
+// (*.f3s.lan.buetow.org -> the storage VIP) and the fleet host records
+// (99-f3s-lan-hosts.conf, validated first), and runs `docker compose up -d`
+// when any of them changes. DNS on the LAN depends on these two Pis, so deploy
 // them one at a time when the image tag changes (the compose file pins it).
 func (Deployment) Compose() {
-	rows, err := hostDNSRows()
-	if err != nil {
-		Refuse("Pi-hole hosts", piholeDir, err)
-		return
-	}
+	rows := hostDNSRows()
 	compose := InstallFile(piholeDir+"/docker-compose.yml",
 		paths.PiholeAsset("docker-compose.yml"), Perm(0o644, "paul:paul"))
 	wildcard := InstallFile(piholeDir+"/etc-dnsmasq.d/99-f3s-lan-wildcard.conf",

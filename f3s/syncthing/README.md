@@ -65,7 +65,7 @@ connects directly over the lab:
 |---|---|
 | Service `syncthing-lan` | NodePort **32200** -> pod 22000, `externalTrafficPolicy: Local` |
 | NetworkPolicy `syncthing-web` | second rule: `10.99.0.2/32` -> TCP 22000 |
-| r-node `f3s_guard` | `ip saddr 10.99.0.2 ip daddr 10.20.0.0/24 tcp dport 32200` (`f3s/r-nodes/source-guard/migration.nft`) |
+| r-node `f3s_guard` | `ip saddr 10.99.0.2 ip daddr 10.20.0.0/24 tcp dport 32200` (`f3s/r-nodes/source-guard/f3s-guard.nft`) |
 | triggerfish PF | `pass in on wg2 ... from 10.99.0.2 to { r0, r1, r2 } port 32200` (`gonf/triggerfish/profiles.go`) |
 
 `Local` keeps the client's real source address: the receiving node DNATs to

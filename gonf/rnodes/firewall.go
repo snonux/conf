@@ -14,22 +14,25 @@ func (Firewall) OptsStage() TaskOptions { return TaskOptions{Operational()} }
 
 // Stage installs a candidate and guarded firewall activation tools without loading rules.
 func (Firewall) Stage() {
-	// The migration policy trusts the lab LAN and individual wg2/recovery
-	// identities; its old 192.168.1.x trust was removed after i24 retired
-	// those addresses (task 074). Routine staging must retain this policy.
+	// The policy trusts the lab LAN and individual wg2 identities; its old
+	// 192.168.1.x trust was removed after i24 retired those addresses (task
+	// 074). Routine staging must retain this policy.
 	hostfirewall.Stage(hostfirewall.Profile{Interface: "enp0s5", EnableWireGuard: true, WireGuardPort: 56709,
-		Rules: paths.RNodeAsset("source-guard/migration.nft")})
+		Rules: paths.RNodeAsset("source-guard/f3s-guard.nft")})
 }
 
-// OptsMigrationStage keeps future source permissions out of routine deployments.
-func (Firewall) OptsMigrationStage() TaskOptions { return TaskOptions{Operational()} }
+// OptsRetireMigrationFiles keeps the one-shot cleanup an explicitly named operation.
+func (Firewall) OptsRetireMigrationFiles() TaskOptions { return TaskOptions{Operational()} }
 
-// MigrationStage installs a dormant physical-source migration policy without loading rules.
-func (Firewall) MigrationStage() {
-	EnsureDir("/etc/f3s-firewall", RootPrivate)
-	InstallFile("/etc/f3s-firewall/migration.nft",
-		paths.RNodeAsset("source-guard/migration.nft"), RootPrivate,
-		WithValidation("/usr/sbin/nft", List("-c", "-f", CandidatePath)))
+// RetireMigrationFiles removes the dormant migration.nft copies of both guards (one-shot, f74).
+//
+// The former rnodes_firewall_migration_stage and
+// rnodes_node_port_guard_migration_stage installed them; they were byte
+// copies of each guard's candidate.nft and no loader, unit or boot hook
+// reads them (f3s-firewall and f3s-nodeport-guard load only candidate.nft
+// and confirmed.nft). Delete this task once r0-r2 ran it.
+func (Firewall) RetireMigrationFiles() {
+	NoFile(List("/etc/f3s-firewall/migration.nft", "/etc/f3s-nodeport-guard/migration.nft"))
 }
 
 // OptsRpcbindOff keeps the NFS-adjacent cleanup an explicitly named operation.

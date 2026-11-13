@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise actual migration nft files only in disposable network namespaces."""
+"""Exercise the actual guard nft files only in disposable network namespaces."""
 import os
 import json
 from pathlib import Path
@@ -66,8 +66,8 @@ while True:
         conn, _ = key.fileobj.accept(); conn.close()
 '''])
     time.sleep(.15)
-    host = root / 'r-nodes/source-guard/migration.nft'
-    pod = root / 'r-nodes/nodeport-guard/migration.nft'
+    host = root / 'r-nodes/source-guard/f3s-guard.nft'
+    pod = root / 'r-nodes/nodeport-guard/f3s-nodeport-guard.nft'
     run('nft', 'add', 'table', 'inet', 'unrelated_fixture')
     for path in [host, pod, host, pod]:
         run('nft', '-c', '-f', str(path))

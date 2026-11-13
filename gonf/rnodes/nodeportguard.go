@@ -9,17 +9,6 @@ import (
 // NodePortGuard stages the pod-source guard independently of Kubernetes rules.
 type NodePortGuard struct{ RequiresRoot }
 
-// OptsMigrationStage excludes future alias protection from routine deployments.
-func (NodePortGuard) OptsMigrationStage() TaskOptions { return TaskOptions{Operational()} }
-
-// MigrationStage installs a dormant pod-source policy covering migration aliases.
-func (NodePortGuard) MigrationStage() {
-	EnsureDir("/etc/f3s-nodeport-guard", RootPrivate)
-	InstallFile("/etc/f3s-nodeport-guard/migration.nft",
-		paths.RNodeAsset("nodeport-guard/migration.nft"), RootPrivate,
-		WithValidation("/usr/sbin/nft", List("-c", "-f", CandidatePath)))
-}
-
 // OptsStage keeps staging out of ordinary parallel r-node deployments.
 func (NodePortGuard) OptsStage() TaskOptions {
 	return TaskOptions{Operational()}
@@ -31,7 +20,7 @@ func (NodePortGuard) Stage() {
 	EnsureDir("/etc/f3s-nodeport-guard", RootPrivate)
 	EnsureDir("/usr/local/sbin", RootOwned)
 	rules := InstallFile("/etc/f3s-nodeport-guard/candidate.nft",
-		paths.RNodeAsset(assets+"migration.nft"), RootPrivate,
+		paths.RNodeAsset(assets+"f3s-nodeport-guard.nft"), RootPrivate,
 		WithValidation("/usr/sbin/nft", List("-c", "-f", CandidatePath)))
 	helper := InstallFile("/usr/local/sbin/f3s-nodeport-guard",
 		paths.RNodeAsset(assets+"f3s-nodeport-guard"), RootExec,

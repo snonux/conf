@@ -9,7 +9,7 @@ fi
 [[ $(readlink /proc/self/ns/net) != "$(readlink /proc/1/ns/net)" ]]
 repo=$(cd -- "$(dirname -- "$0")/../.." && pwd)
 declare -r repo
-declare -r rules=$repo/f3s/r-nodes/nodeport-guard/migration.nft
+declare -r rules=$repo/f3s/r-nodes/nodeport-guard/f3s-nodeport-guard.nft
 scratch=$(mktemp -d)
 declare -r scratch
 declare -a children=()

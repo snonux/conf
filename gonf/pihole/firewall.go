@@ -16,6 +16,6 @@ func (Firewall) OptsStage() TaskOptions { return TaskOptions{Operational()} }
 func (Firewall) Stage() {
 	hostfirewall.Stage(hostfirewall.Profile{
 		Interface: "eth0",
-		Rules:     paths.GonfAsset("pihole", "network-migration/firewall.nft"),
+		Rules:     paths.GonfAsset("pihole", "firewall/f3s-guard.nft"),
 	})
 }

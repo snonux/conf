@@ -4,7 +4,7 @@
 # The existing gonf owners call this after they publish a candidate:
 #   apply hosts         merge /usr/local/etc/gonf-fleet-hosts into /etc/hosts
 #   adopt controller    record that the live f3sctl.json is still owned
-#   apply controller    publish f3sctl.json.triggerfish-candidate
+#   apply controller    publish f3sctl.json.gonf-candidate
 #
 # Task a74 retired the migration-era trial machinery (arm/confirm/rollback
 # leases, the every-minute watchdog cron and the boot restore hooks). "boot"
@@ -21,8 +21,10 @@ action=${1:-}
 profile=${2:-}
 
 controller=/usr/local/etc/f3sctl.json
-candidate=$controller.triggerfish-candidate
-legacy=$controller.triggerfish-legacy
+# The owner's staging files (named .triggerfish-{candidate,legacy} until
+# task f74): the candidate it publishes and the pre-gonf legacy input.
+candidate=$controller.gonf-candidate
+legacy=$controller.gonf-legacy
 # Copy of the live controller file taken while it was still an owned
 # candidate (adopt), so that apply accepts it after the owner has published
 # a newer candidate. A hand-edited file is never recorded, so it stays refused.

@@ -85,7 +85,7 @@ exec "$F3S_TEST_NFT" "$@"
 SH
 chmod +x "$scratch/bin/"*
 
-python3 - "$repo/f3s/r-nodes/nodeport-guard/migration.nft" <<'PY'
+python3 - "$repo/f3s/r-nodes/nodeport-guard/f3s-nodeport-guard.nft" <<'PY'
 from pathlib import Path
 import sys
 rules = Path(sys.argv[1]).read_text().replace('{{.Interface}}', 'enp0s5')

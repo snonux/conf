@@ -1,4 +1,6 @@
-# Dormant r-node migration candidate. Own only f3s_guard, never pod/CNI tables.
+# r-node source guard: the live policy, staged as candidate.nft by
+# rnodes_firewall_stage and loaded by f3s-firewall apply/confirm.
+# Own only f3s_guard, never pod/CNI tables.
 add table inet f3s_guard
 delete table inet f3s_guard
 table inet f3s_guard {

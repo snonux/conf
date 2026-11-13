@@ -32,7 +32,7 @@ NodePorts still use `externalTrafficPolicy: Cluster`.
 
 ## Candidate
 
-`f3s/r-nodes/nodeport-guard/migration.nft` (the original co3 `candidate.nft`
+`f3s/r-nodes/nodeport-guard/f3s-nodeport-guard.nft` (the original co3 `candidate.nft`
 with old node addresses was removed in task 074) owns only the inet table
 `f3s_nodeport_guard`. Its prerouting filter runs at priority -151, before both
 kube-proxy destination NAT and Flannel source NAT. For a pod source in

@@ -101,7 +101,7 @@ nft list table inet f3s_guard > "$scratch/prior.nft"
 nft list table inet unrelated > "$scratch/unrelated.nft"
 # co3 is already deployed. Exercise its actual candidate in the same kernel
 # namespace, and require every source-firewall operation to preserve it.
-nft -f "$repo/f3s/r-nodes/nodeport-guard/migration.nft"
+nft -f "$repo/f3s/r-nodes/nodeport-guard/f3s-nodeport-guard.nft"
 nft list table inet f3s_nodeport_guard > "$scratch/nodeport-before.nft"
 _helper() {
     local helper_status=0

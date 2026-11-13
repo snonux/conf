@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix='conf-endpoint-test-') as directory:
 
     # Controller ownership.
     etc = base / 'local/etc'
-    live, candidate, legacy = etc / 'f3sctl.json', etc / 'f3sctl.json.triggerfish-candidate', etc / 'f3sctl.json.triggerfish-legacy'
+    live, candidate, legacy = etc / 'f3sctl.json', etc / 'f3sctl.json.gonf-candidate', etc / 'f3sctl.json.gonf-legacy'
     owned = state / 'controller-owned'
     put(legacy, '{"v":"legacy"}\n')
     put(candidate, '{"v":1}\n')

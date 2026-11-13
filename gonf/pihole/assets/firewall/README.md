@@ -10,8 +10,9 @@ recovery route describe the migration. For the current state, see IQ `topics/inf
 Task 774 (2026-11-11) removed the staging tasks `pihole_migration_{dns,
 dns_canary,current_dns,service}` and `pihole_firewall_migration_stage`, and
 on both Pis `/var/lib/f3s-pihole-migration/` and the dormant
-`/etc/f3s-firewall/migration.nft`. `firewall.nft` here is the live guard
-policy that `pihole_firewall_stage` stages.
+`/etc/f3s-firewall/migration.nft`. `f3s-guard.nft` here is the live guard
+policy that `pihole_firewall_stage` stages (this directory was
+`network-migration/` and the file `firewall.nft` until task f74).
 
 Both resolvers completed shared-wire acceptance on 2026-11-07: NEW-primary
 10.20.0.127/.128, default gateway 10.20.0.1, retained OLD addresses, native ULA

@@ -1,4 +1,6 @@
-# Dormant Pi-hole migration policy. Replace only this owner's table atomically.
+# Pi-hole source guard: the live policy, staged as candidate.nft by
+# pihole_firewall_stage and loaded by f3s-firewall apply/confirm.
+# Replace only this owner's table atomically.
 add table inet f3s_guard
 delete table inet f3s_guard
 table inet f3s_guard {
@@ -23,7 +25,7 @@ table inet f3s_guard {
         ip saddr 10.99.0.2 ip daddr { 10.20.0.127, 10.20.0.128 } tcp dport { 22, 80, 443 } return
         ip saddr 10.99.0.3 ip daddr { 10.20.0.127, 10.20.0.128 } tcp dport 443 return
         # Preserve existing diagnostics and old-mode IPv6 boot recovery.
-        # The migration profile owns RA suppression/manual ULA in new mode.
+        # The NetworkManager profile owns RA suppression and the manual ULA.
         meta l4proto { icmp, ipv6-icmp } return
         ip6 saddr fe80::/10 udp sport 547 udp dport 546 return
         counter drop

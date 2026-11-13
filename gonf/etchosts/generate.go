@@ -1,4 +1,3 @@
 package etchosts
 
-//go:generate sh -c "go run ../cmd/hosts-migration -profile accepted -router-view upstream -format authoritative-hosts > ../../frontends/var/nsd/zones/master/accepted-lan.inc"
-//go:generate sh -c "go run ../cmd/hosts-migration -profile accepted -router-view upstream -format hosts > ../../frontends/etc/hosts-fleet.inc"
+//go:generate go run ./gen -hosts ../../frontends/etc/hosts-fleet.inc -nsd ../../frontends/var/nsd/zones/master/fleet-lan.inc

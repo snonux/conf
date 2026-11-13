@@ -8,12 +8,15 @@ that use it, through `InstallHelper`:
   `apply hosts`, which merges `/usr/local/etc/gonf-fleet-hosts` into
   `/etc/hosts` with `gonf-fleet-hosts`.
 - `netbsd.Controller.Config` (pi0/pi1) runs `adopt controller` before it
-  installs a new `f3sctl.json.triggerfish-candidate`, then
+  installs a new `f3sctl.json.gonf-candidate`, then
   `apply controller`. Apply publishes the candidate only while the live
   `f3sctl.json` is an owned file: the legacy input, the current candidate,
   or the copy `adopt` recorded in the state directory
   (`/var/db/gonf-endpoint-migration/controller-owned`). A hand-edited file
-  is never adopted and stays refused.
+  is never adopted and stays refused. The owner's two staging files,
+  `f3sctl.json.gonf-candidate` and the legacy input
+  `f3sctl.json.gonf-legacy`, were `f3sctl.json.triggerfish-{candidate,legacy}`
+  until task f74.
 
 The helper never prints configuration contents.
 
