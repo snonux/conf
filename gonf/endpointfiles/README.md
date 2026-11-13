@@ -34,10 +34,10 @@ plus the WireGuard endpoint rollback watchdog and boot hooks that
 wireguardmeshgenerator's endpoint tooling installed without a gonf owner
 (`gonf-endpoint-rollback*` units on r0-r2; `gonf_endpoint_rollback` /
 `gonf_endpoint_runtime` rc.d hooks and the `/etc/crontab` watchdog line on
-f0-f3). It is
-one-shot: delete `retire.go` and its registrations once every host has run
-it (the normally stopped FreeBSD guest runs `freebsd_guest_endpoints_retire`
-when it is next up). Left on hosts on purpose: the old journals under
+f0-f3). It is one-shot and every host has run it (the stopped FreeBSD
+guest in d74, 2026-11-12), so `retire.go`, its registrations in
+`tasks/tasks.go` and its `check-offline.py` part can be deleted next (conf
+task p74). Left on hosts on purpose: the old journals under
 `/var/{db,lib}/gonf-endpoint-migration` and the orphan
 `/usr/local/sbin/gonf-endpoint-rollback` with `/var/{db,lib}/gonf-endpoint`.
 

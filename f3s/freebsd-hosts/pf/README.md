@@ -16,15 +16,11 @@ deploy the whole `freebsd` aggregate for this change.
 
 ## Policy and evidence
 
-**Shared-LAN migration, 2026-11-06:** the approved staged migration adds
-`10.20.0.0/24` and `fd02:ca0b:f1cb:20::/64` to the candidate's trusted LAN
-sources. This revision was deployed only to f1, preserving its old management,
-WireGuard, running Rocky VM and bridge settings. Other hosts retain their
-previous deployed trusted table until a separately scoped apply. The existing
-f3 new-source guard remains; a separate f1 guard protects old-only referring
-peers while their new return paths are pending. Neither guard changes keys,
-endpoints or bridge forwarding. New physical addresses were added only by the
-separate guarded network-migration helper (removed in d74).
+History: the lab sources `10.20.0.0/24` and `fd02:ca0b:f1cb:20::/64` were
+added during the router migration (first on f1, 2026-11-06); since 374 and 764
+(2026-11-11/12) f0-f3 all run the same `pf.conf` from the repo. The host
+addresses came from the guarded network-migration helper, removed in d74;
+rc.conf alone carries them now.
 
 Inbound defaults to block; outbound keeps state. `lo0` stays skipped for S7.
 The current candidate trusts `10.20.0.0/24` (the old `192.168.1.0/24` left in
@@ -311,7 +307,7 @@ ssh -oBatchMode=yes -oConnectTimeout=5 -p22 "paul@$host.lan.buetow.org" \
 ```
 
 After both CARP members pass, perform the **explicitly approved** failover
-test using the f3s skill's `references/storage/carp.md` procedure: disable
+test using IQ's `topics/infra/f3s/storage/carp.md` procedure: disable
 f0 auto-failback, demote the current MASTER, verify peer becomes MASTER,
 then repeat NFS **reads** and VIP 80/443 application checks. The CARP hook
 intentionally keeps f1's replica `readonly=on` while MASTER; confirm writes

@@ -120,7 +120,7 @@ systemd `unattended-upgrade-rocky.timer`: `OnBootSec=10min`, hourly
 
 1. Stamp `/var/lib/unattended-upgrade/last-daily` is today: skip to the
    reboot check.
-2. Partner gate (ping): pi2 needs pi3 (192.168.1.128), pi3 needs pi2
+2. Partner gate (ping): pi2 needs pi3 (10.20.0.128), pi3 needs pi2
    (.127), each r-node needs both others. Miss: no stamp, retry next hour.
    Standalone rocky has no redundant partner and explicitly bypasses this
    package-update gate; it never automatically reboots.

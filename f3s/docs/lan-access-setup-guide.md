@@ -59,7 +59,7 @@ ifconfig re0 | grep carp                      # MASTER/BACKUP
 doas relayctl show hosts                      # backend health
 doas relayd -n                                # config check
 doas grep relayd /var/log/daemon.log | tail -50
-curl -k -H "Host: navidrome.f3s.lan.buetow.org" https://192.168.1.120   # Traefik direct
+curl -k -H "Host: navidrome.f3s.lan.buetow.org" https://10.20.0.120    # Traefik direct
 kubectl get pods -n kube-system -l app.kubernetes.io/name=traefik
 kubectl get ingress -n services | grep lan
 ```

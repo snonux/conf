@@ -30,7 +30,7 @@ landed upstream after v3.5.0). So:
 - New bucket hostname: add it to `garageBuckets` in `gonf/frontends/data.go`,
   then `./gonf.sh cluster frontends frontends`.
 - Path style still works (the `watchos-app` consumer uses it). An IP endpoint
-  such as `http://192.168.1.130:3900` gets path style automatically, LAN only.
+  such as `http://10.20.0.130:3900` gets path style automatically, LAN only.
 
 `taskrc` holds no secrets; it expands `$GARAGE_*` and `$TASK_SYNC_SECRET`.
 

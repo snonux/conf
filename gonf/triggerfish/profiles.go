@@ -109,6 +109,12 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	return profiles, nil
 }
 
+// routerStages lists the six shared-wire migration stages. They have been
+// historical since j24 activated lab-final, but stay renderable until the
+// camera tasks (l24, n24) are done: task g74 (IQ openbsdrouter-plan
+// CLEANUP.md item 10a) then prunes them, wifi-ipv6-uplink and the
+// vpn-bootstrap candidate, keeping the chain wifi-ipv6-nat66 -> camera-igc3
+// -> lab-igc1 -> lab-final that router-rollback builds on.
 func routerStages() []routerStage {
 	return []routerStage{
 		{"shared-igc0", "igc0", "igc0", "igc0", true, true},

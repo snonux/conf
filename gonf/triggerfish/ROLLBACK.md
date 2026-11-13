@@ -7,6 +7,9 @@ bootstrap. Statements below about retained old addresses, the `10.98.0.0/24`
 recovery subnet, `192.168.11.2`, the k34 tunnel or the laptop's recovery
 routes refer to their date. Those items are retired. The accepted deployment
 is described in IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
+The historical stage profiles (`shared-igc0` … `final`, `wifi-ipv6-uplink`,
+`vpn-bootstrap`) and their copies on the router stay until the camera tasks
+(l24, n24); pruning them is task g74 (IQ `CLEANUP.md` item 10a).
 
 The recovery controller and wg2 bootstrap were deployed on 2026-11-05.
 Two unconfirmed 180-second trials expired through native root cron; fresh old-LAN

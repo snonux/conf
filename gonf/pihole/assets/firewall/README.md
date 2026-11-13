@@ -1,114 +1,49 @@
-# Resolver migration — task 524
+# Pi-hole source guard (pi2/pi3)
 
-**History (2026-11-11).** The migration is complete. On pi2/pi3, i24
-used the Rocky NetworkManager helper's `retire` verb
-(`gonf/rocky/assets/network-migration/`, deleted in c74; see git history) to remove the old `192.168.1.127/.128`.
-j24 used its `retire-recovery` verb to remove the `10.98.0.x` recovery
-aliases and the laptop return route. Paths below that mention a retained old address or the
-recovery route describe the migration. For the current state, see IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
+`f3s-guard.nft` is the live host policy of both resolvers (pi2
+`10.20.0.127`, pi3 `10.20.0.128`, `eth0`). It owns only `inet f3s_guard`,
+hooked at prerouting -150, and leaves firewalld and Docker alone.
 
-Task 774 (2026-11-11) removed the staging tasks `pihole_migration_{dns,
-dns_canary,current_dns,service}` and `pihole_firewall_migration_stage`, and
-on both Pis `/var/lib/f3s-pihole-migration/` and the dormant
-`/etc/f3s-firewall/migration.nft`. `f3s-guard.nft` here is the live guard
-policy that `pihole_firewall_stage` stages (this directory was
-`network-migration/` and the file `firewall.nft` until task f74).
+- Trusted: lab `10.20.0.0/24` and lab ULA `fd02:ca0b:f1cb:20::/64` to the
+  host's own lab addresses, and the old physical ULA `fd22:c702:acb7::/64`
+  (IPv6 compatibility).
+- wg2 (routed by triggerfish): laptop `10.99.0.2` and phone `10.99.0.3` get
+  TCP/UDP 53; the laptop also TCP 22/80/443, the phone TCP 443. These match
+  the router's own wg2 permits.
+- ICMP/ICMPv6 and DHCPv6 replies pass; everything else new from `eth0` to a
+  local address is dropped. Wi-Fi and camera subnets get no trust.
 
-Both resolvers completed shared-wire acceptance on 2026-11-07: NEW-primary
-10.20.0.127/.128, default gateway 10.20.0.1, retained OLD addresses, native ULA
-and the controller /32 return route through 192.168.1.2. Each separately
-confirmed Stage and Promote after fresh OLD/NEW management, UDP/TCP DNS and
-admin HTTP checks, then passed an actual confirmed NEW boot. Both former
-transaction deadlines elapsed without changing the accepted state.
+Pi-hole's `LOCAL` listening mode rejects routed wg2 clients, so the compose
+file (`f3s/pihole/docker-pi/docker-compose.yml`) uses `SINGLE` on `eth0` and
+leaves source authorisation to this guard.
 
-Pi2 proved the common recovery controller with actual 900-second expiry and
-an unconfirmed normal boot. NetworkManager, compose and private TOML were
-restored to their exact saved hashes; OLD management and both resolvers' DNS
-passed afterwards. Pi3 used that reviewed common proof after matching native
-interface, image, healthcheck and Compose preflight. One resolver stayed healthy
-through each serial service change and boot. No power cycle or console was used.
+## Changing the policy
 
-Owned approval gates are removed and no network/firewall transaction remains
-pending. Source reapply changed no managed file or service and preserved the
-boot, container identity/start/restarts, NM fields and protected hashes. Its raw
-summary reports one changed resource because the read-only pending-state test
-is an executed Command; Docker, daemon reload and restorecon were skipped.
-Private reproducible evidence is under
-`524-pis-20261107/native-20261107T1050/`, particularly each
-`piN-final-acceptance-accepted.json` and the Pi2 expiry/boot receipts.
+A change is a guarded operation, one Pi at a time, never both resolvers at
+once:
 
-History: the wildcard pointed at OLD VIP 192.168.1.138 until task i24
-(2026-11-11) retired that VIP; it is now 10.20.0.138. The future VIP file was
-dormant, outside active mounts/includes. Activation remains coordinated with
-storage/ingress acceptance and the canonical mapping step, task 924.
+1. `./gonf.sh cluster rocky-pis pihole_firewall_stage` installs the file as
+   `/etc/f3s-firewall/candidate.nft` (Operational; it loads nothing).
+2. On the Pi, with two independent SSH sessions open: `f3s-firewall check`,
+   `f3s-firewall apply "$SSH_CONNECTION"`, then `f3s-firewall confirm
+   "$SSH_CONNECTION"` from a fresh connection before the rollback timer
+   fires. Confirm persists it as `confirmed.nft`, the boot policy.
+3. Check UDP/TCP DNS on that Pi before moving to the other one.
 
-`pihole_network_prepare` (removed in c74, 2026-11-12, together with the Rocky
-helper and its units on both Pis) reused the Linux snapshot/PID1 watchdog and
-boot restoration, with role `resolver`, reviewed `eth0`, and native ULA. The
-NetworkManager profile alone now carries the lab IPv4, gateway and ULA.
+Never load the file with bare `nft -f` on a host.
 
-| Host | OLD (retired in i24) | NEW | Dedicated recovery (retired in j24) | Native ULA |
-| --- | --- | --- | --- | --- |
-| pi2 | 192.168.1.127 | 10.20.0.127 | 10.98.0.127 | fd02:ca0b:f1cb:20::127 |
-| pi3 | 192.168.1.128 | 10.20.0.128 | 10.98.0.128 | fd02:ca0b:f1cb:20::128 |
+`python3 check-firewall.py` runs packet checks against the real file in
+disposable user/network namespaces; it contacts no host.
 
-Shared-wire transactions persist the controller 10.99.0.2/32 return route via
-192.168.1.2. Dedicated aliases/10.98.0.1 return routing remain behind the later
-physical-cable and igc1 gates. Retain OLD resolver addresses and current Wi-Fi
-client DNS throughout (staging-era rule; i24 retired the OLD addresses and task
-074 removed their guard trust). Never renumber the only working resolver.
+## History
 
-`pihole_firewall_migration_stage` (removed in 774) installed only the dormant migration policy.
-It owns only `inet f3s_guard`. The old-LAN `192.168.1.0/24` client trust kept
-during staging was removed in task 074 (2026-11-11), after i24 retired the
-resolvers' old addresses. NEW lab/ULA DNS is allowed. Both known wg2 identities receive TCP/UDP53 only
-to the resolver pair; laptop SSH/web and phone HTTPS follow router permissions.
-The recovery aliases and their laptop-only TCP22 chain were retired in j24. New Wi-Fi
-and camera subnets receive no service trust. Existing diagnostics and old-mode
-IPv6 recovery are preserved; the NM profile owns new-mode RA suppression.
-
-Native activation must use the existing `f3s-firewall` check/apply/fresh-confirm
-loader, two independent OLD SSH sessions and its own rollback timer. Preserve
-old candidate/confirmed state and unrelated Docker/firewalld rules. Never load
-the candidate directly with `nft -f` on a host. Since the accepted policy
-transition, canonical `pihole_firewall_stage` stages that policy, now
-`f3s-guard.nft`, the live one.
-
-Pi-hole's original `LOCAL` mode rejects routed wg2 clients, even when the host
-guard permits them. Canonical compose uses `SINGLE` on `eth0` (plus Pi-hole's
-automatic loopback listener), leaving source authorization to the scoped guard.
-`pihole_migration_service` (removed in 774) staged this compose outside the live directory.
-When that candidate exists, the existing resolver network transaction snapshots
-both compose and private `pihole.toml` before mutation, then applies the candidate
-and recreates only that resolver. Timed rollback restores compose and TOML;
-runtime restoration stops FTL and restores TOML again after its shutdown write.
-Boot persistent restoration precedes networking, and the resolver runtime hook
-waits for Docker before restoring the service. There is no second controller.
-Prove application restoration through native expiry and unconfirmed boot before
-accepting the changed service. Do not deploy a candidate during a pending trial.
-
-`pihole_migration_dns` (removed in 774) staged the future VIP wildcard under
-`/var/lib/f3s-pihole-migration/`, outside active bind mounts and dnsmasq includes.
-Since i24 the live wildcard is 10.20.0.138 (OLD VIP .138 retired). Do not place even a renamed candidate
-in an active include directory. Activate 10.20.0.138 only with accepted storage
-and ingress, including the authoritative public-zone update and cache handling.
-
-For each Pi, record synchronized time, persistent NM profile/runtime, Docker
-identity/image/state, live DNS configuration and private backup before mutation.
-Fresh native baselines confirm eth0, aarch64, healthy pinned Pi-hole and no wg0
-on both resolvers. Each has private root-owned pre-mutation backups.
-Keep one resolver serving DNS while proving native timed restoration, fresh
-OLD/NEW/recovery SSH and actual UDP/TCP DNS, then confirm separately. Check both
-resolvers and existing Wi-Fi behavior between hosts. Do not change task914's
-schedules or infer writer inactivity from an update stamp.
-
-Verification completed locally: Go build/vet/errcheck, ARM64 cross-build, real
-helper dispatch fixtures (including eth0/ULA expiry and boot restoration with no
-k3s/Flannel operations, private service-state recovery and unhealthy-restore
-journal retention), shell syntax/shellcheck and native nft packet tests in
-disposable namespaces. Actual laptop wg2 identity 10.99.0.2 passed management
-and DNS on both NEW endpoints. The dormant phone identity's rules have namespace
-coverage; no actual phone handshake is claimed. A single OLD Pi3 TCP DNS timeout
-during post-router refresh did not reproduce in subsequent complete matrices or
-the deadline monitor; the failed observation is retained without assigning a
-cause. All 68 deadline-monitor endpoint observations passed UDP and TCP.
+The guard and the resolvers' move to the lab were task 524 (accepted
+2026-11-07). i24 and j24 retired the old `192.168.1.127/.128` addresses and
+the `10.98.0.127/.128` recovery aliases (2026-11-11), 074 dropped the old
+`192.168.1.0/24` trust. The staging tasks (`pihole_migration_*`,
+`pihole_firewall_migration_stage`) went in 774, the NetworkManager migration
+helper in c74; this directory was `network-migration/` (file `firewall.nft`)
+until f74. The full shared-wire record, with its receipts under
+`524-pis-20261107/`, is in conf history
+(`git log -- gonf/pihole/assets/network-migration/README.md`) and in IQ
+`topics/infra/openbsdrouter-plan/HANDOFF.md`.

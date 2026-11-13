@@ -8,12 +8,22 @@ live NetBSD node.
 
 | | pi0 | pi1 |
 |---|---|---|
-| LAN (`mue0`) | 192.168.1.125 | 192.168.1.126 |
+| LAN (`mue0`) | 10.20.0.125 | 10.20.0.126 |
+| Lab ULA (`mue0`) | fd02:ca0b:f1cb:20::125 | fd02:ca0b:f1cb:20::126 |
 | WireGuard (`tun0`) | 192.168.2.203 | 192.168.2.204 |
 | Hostname | pi0.lan.buetow.org | pi1.lan.buetow.org |
 | Role | static content source of truth | pulls pi0's docroot hourly (paul crontab) |
 
-Gateway/DNS 192.168.1.1. 909 MiB RAM. SD `/dev/mmcblk0` (30 GB).
+Gateway and DNS: triggerfish `10.20.0.1`. gonf owns the addressing
+(`pis_netbsd_network_rc_conf`), NPF (`pis_netbsd_network_npf`) and
+`/etc/resolv.conf` (`pis_netbsd_resolver_conf`). 909 MiB RAM. SD
+`/dev/mmcblk0` (30 GB).
+
+**Before a rebuild:** `bake/bake-golden.sh` and `bake/setup.sh` still render
+the pre-migration `192.168.1.12N` with gateway/DNS `192.168.1.1`, which the
+lab cannot reach (conf task q74). Change them to `10.20.0.12N` and
+`10.20.0.1` first, and run `./gonf.sh cluster netbsd-pis pis_netbsd` once
+the node is up.
 
 Live services: bozohttpd (vhosts `f3s.buetow.org`, `www.f3s.buetow.org`,
 `standby.f3s.buetow.org`, `snonux.foo`, `www.snonux.foo`), WireGuard, NPF
@@ -122,7 +132,7 @@ same command with `real` instead of `dryrun`.
 ## Verify
 
 ```sh
-ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null paul@192.168.1.12N '
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null paul@10.20.0.12N '
   uname -a; hostname; id; ifconfig mue0
   netstat -rn -f inet | grep default
   host cdn.netbsd.org; df -h /'

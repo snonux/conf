@@ -1,7 +1,7 @@
 # Pi-hole
 
-DNS and ad blocking. Production runs on pi2 (192.168.1.127) and pi3
-(192.168.1.128), port 53 UDP/TCP, admin UI on port 80
+DNS and ad blocking. Production runs on pi2 (10.20.0.127) and pi3
+(10.20.0.128), port 53 UDP/TCP, admin UI on port 80
 (`http://piN.lan.buetow.org/admin/`, also `pihole.f3s.buetow.org` and
 `pihole.f3s.lan.buetow.org`).
 
@@ -62,15 +62,15 @@ Its root-private archive is
 Tracked here:
 
 - `docker-pi/dnsmasq.d/99-f3s-lan-wildcard.conf`: `*.f3s.lan.buetow.org` ->
-  CARP VIP 192.168.1.138. On the Pis it goes into `~/pihole/etc-dnsmasq.d/`
+  CARP VIP 10.20.0.138. On the Pis it goes into `~/pihole/etc-dnsmasq.d/`
   (bind-mounted to `/etc/dnsmasq.d`), then `docker compose restart`.
 - `docker-pi/docker-compose.yml`: the live compose file, deployed with the
   wildcard to `~/pihole` on pi2/pi3 by gonf (`./gonf.sh cluster rocky-pis pihole`).
 
 ```sh
 cd ~/pihole && docker compose ps | logs | restart
-dig @192.168.1.127 google.com +short
-dig @192.168.1.127 doubleclick.net +short     # 0.0.0.0
+dig @10.20.0.127 google.com +short
+dig @10.20.0.127 doubleclick.net +short     # 0.0.0.0
 curl -fsI http://pi2.lan.buetow.org/admin/    # 302
 ```
 
@@ -83,13 +83,17 @@ or by hand:
 
 ```sh
 nmcli connection show --active
-nmcli con mod "<conn>" ipv4.dns "192.168.1.127 192.168.1.128 192.168.1.1"
+nmcli con mod "<conn>" ipv4.dns "10.20.0.127 10.20.0.128"
 nmcli con mod "<conn>" ipv4.ignore-auto-dns yes
 nmcli con up "<conn>"
 ```
 
 Firefox: DNS over HTTPS off (or Default Protection), else it bypasses
-Pi-hole. Router DHCP: hand out 192.168.1.127 and 192.168.1.128.
+Pi-hole. Who can reach the Pi-holes: triggerfish's DHCP hands Wi-Fi
+clients the router's own unbound (`10.30.0.1`), and the router denies Wi-Fi
+to the lab, so in practice only the wg2 clients (laptop `10.99.0.2`, phone
+`10.99.0.3`) use them; the router and the Pi-hole host guard
+(`gonf/pihole/assets/firewall/`) permit DNS from both.
 
 The lab hosts themselves (f0-f3, r0-r2, rocky, pi0-pi3, including pi2/pi3)
 do not use Pi-hole: gonf `*_resolver_conf` (task u54) points them at the

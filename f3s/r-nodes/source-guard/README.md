@@ -1,21 +1,14 @@
 # r-node source guard and NodePort pod-source guard (o14)
 
 `f3s-guard.nft` (here) and `../nodeport-guard/f3s-nodeport-guard.nft` are the
-live policies of the r-nodes. The initial o14 preparation was dormant; during
-the approved r-node migration on 2026-11-06, canonical `rnodes_firewall_stage`
-and `rnodes_node_port_guard_stage` were switched to these files (then named
-`migration.nft`). Each stage task installs its file as `candidate.nft`;
-activation still requires each loader's guarded apply and fresh SSH
-confirmation, which persists it as `confirmed.nft` (the boot policy); staging
-alone never loads rules. Native acceptance is recorded in the individual
-224/324/424 reports. Packet checks load rules only in disposable network
-namespaces.
-
-Task f74 (2026-11-13) renamed the files, removed the Operational tasks
-`rnodes_firewall_migration_stage` and `rnodes_node_port_guard_migration_stage`
-and, with a one-shot retire, their dormant on-host copies
-`/etc/f3s-firewall/migration.nft` and `/etc/f3s-nodeport-guard/migration.nft`
-(byte copies of `candidate.nft` that no loader read).
+live policies of the r-nodes, staged by `rnodes_firewall_stage` and
+`rnodes_node_port_guard_stage`. Each stage task installs its file as
+`candidate.nft`; activation requires each loader's guarded apply and fresh
+SSH confirmation, which persists it as `confirmed.nft` (the boot policy);
+staging alone never loads rules. Packet checks load rules only in disposable
+network namespaces. (Both files were named `migration.nft` from the r-node
+migration on 2026-11-06 until task f74 renamed them and removed the
+migration stage tasks and their dormant on-host copies.)
 
 The host policy owns only `inet f3s_guard`, at prerouting -150 before DNAT.
 It preserves homelab-local service trust for 10.20.0.0/24 and native
@@ -26,7 +19,8 @@ the controller's old 192.168.1.236 SSH permission and the old destination
 /24. Old IPv4 sources now fall through to the drop. The old physical ULA /64 remains
 a temporary compatibility permission until all physical IPv6 moves are accepted;
 it grants no new global-prefix trust. Native ICMPv6 errors and NDP are allowed;
-RA/DHCPv6 receive no service exception. Host RA suppression remains n14's job.
+RA/DHCPv6 receive no service exception. Host RA suppression is in the
+NetworkManager profile (set by n14; its helper was removed in c74).
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
@@ -59,16 +53,15 @@ laptop /32 return route, after the cable move the igc1 recovery gateway
 10.98.0.1. Task j24 retired both the recovery aliases and that /32 route
 (`retire-recovery`), so the nodes answer the laptop through their default.
 
-Flannel has one configuration owner: n14's guarded Promote writes
-`/etc/rancher/k3s/config.yaml.d/60-network-migration.yaml` with
-`flannel-iface: enp0s5`, promotes the intended 10.20.0.12N primary while keeping
-the old secondary, and requests a serial k3s restart under its existing gate.
-No alternate selector is added to the routine k3s template. Before activation,
-inspect startup flags/environment and later drop-ins for overrides. Verify the
-actual primary, VXLAN local address, annotations/FDB endpoints, quorum,
-cross-node pod TCP/DNS, Services, ingress and NFS after each node. A file or
-Node Ready alone does not establish correct transport. Rollback of a promotion
-must restore the physical primary and selector and refresh k3s serially.
+Flannel's interface comes from
+`/etc/rancher/k3s/config.yaml.d/60-network-migration.yaml`
+(`flannel-iface: enp0s5`) on r0-r2. n14's network-migration helper wrote it;
+the helper went in task c74 and the file has no gonf owner now (kept on
+purpose, rename or adopt later; IQ `openbsdrouter-plan/CLEANUP.md` item 1).
+No alternate selector is in the routine k3s template. After a change that
+touches it, verify the VXLAN local address, FDB endpoints, quorum,
+cross-node pod TCP/DNS, Services, ingress and NFS on each node: Node Ready
+alone does not prove the transport.
 
 `python3 check-offline.py` runs packet checks against the real candidate bytes
 only in disposable user/network namespaces. It does not contact lab hosts.

@@ -9,7 +9,7 @@ volumes are NFS hostPath; shared music PVC with
 | Ingress | Path |
 |---|---|
 | `https://navidrome.f3s.buetow.org` | OpenBSD relayd, WireGuard, Let's Encrypt |
-| `https://navidrome.f3s.lan.buetow.org` | CARP VIP 192.168.1.138, self-signed LAN CA ([LAN access](../../docs/lan-access-setup-guide.md)) |
+| `https://navidrome.f3s.lan.buetow.org` | CARP VIP 10.20.0.138, self-signed LAN CA ([LAN access](../../docs/lan-access-setup-guide.md)) |
 
 | Volume | Size | Mount |
 |---|---|---|
