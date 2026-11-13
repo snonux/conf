@@ -30,7 +30,14 @@
 #     After $deadline seconds it allows CARP anyway, so a sole survivor
 #     (peer down, cold start) still takes the VIP. The budget counts the
 #     seconds the waiter spent, not wall-clock time, so an ntpd step at
-#     boot neither shortens nor stretches it.
+#     boot neither shortens nor stretches it. It is checked every second
+#     while waiting for the tap (a tap that never joins ends the wait at the
+#     deadline without a listen) and then between stable+heard rounds
+#     (settle + 4 s each), so the release can come up to one round late.
+#   - The deadline is per host (gonf CarpNode.GateDeadline, task s74): on a
+#     cold start of both members neither hears the other, so the preferred
+#     MASTER (f0, 60 s) gives up first and the standby (f1, 180 s) hears
+#     it and comes up BACKUP.
 #
 # Never lowers allow: "start" does nothing when allow is 1 or the loader did
 # not ask for the hold, so a manual run cannot drop a VIP. It does release a

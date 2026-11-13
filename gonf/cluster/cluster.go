@@ -272,7 +272,24 @@ func registerFreeBSD() {
 		// CARP MASTER by default (advskew 0). Interface: the VIP's rc.conf
 		// line follows the host's addresses: freebsd.LabBridge since the
 		// task 764 bridge move was confirmed on f0 and f1 (2026-11-12).
-		WithData(freebsd.CarpNode{Interface: freebsd.LabBridge}),
+		//
+		// GateDeadline 60 (task s74; f1 keeps the 180 s default): after a
+		// cold start of both members f0 gives up first and takes the VIP
+		// (~70 s after its gate starts instead of ~195 s), and f1, still
+		// held, hears f0 and comes up BACKUP. Measured in
+		// /var/log/gonf-carp-gate.log: guest tap joined 9-11 s after the
+		// waiter started, and with the peer MASTER the advert was heard
+		// 18-21 s after it (f0 2026-11-12 13:01Z with f1 MASTER: 21 s;
+		// f1 12:46Z/12:53Z: 19 s/18 s). 60 s leaves ~3x that, i.e. four
+		// 10 s-stable + 4 s-listen rounds where the first one sufficed.
+		// Residual risk: if f0 reboots alone while f1 is MASTER and re0
+		// still does not forward at 60 s, f0 goes MASTER too; once frames
+		// pass, the member with the higher effective advskew (normally f1:
+		// 100 vs 0, unless a demotion raised f0's) steps down on the other's
+		// first advert and, as both send from the virtual MAC on vm-public,
+		// the switch re-learns the port within 1 s. A brief dual master, no
+		// lasting split brain.
+		WithData(freebsd.CarpNode{Interface: freebsd.LabBridge, GateDeadline: 60}),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSServer{NISIP: "10.20.0.130"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
@@ -285,7 +302,10 @@ func registerFreeBSD() {
 		WithData(freebsd.NodeExporterHost{ListenAddress: "192.168.2.131:9100"}),
 		WithData(freebsd.GoprecordsClient{Host: "f1"}),
 		WithData(f01Baseline),
-		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: freebsd.LabBridge}), // CARP standby, loses to f0; VIP on vm-public since 764 (2026-11-12)
+		// CARP standby, loses to f0; VIP on vm-public since 764 (2026-11-12).
+		// No GateDeadline: f1 keeps the 180 s default, so on a cold start
+		// it hears f0 (60 s) and never promotes while f0 is coming up.
+		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: freebsd.LabBridge}),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),

@@ -55,9 +55,17 @@ type Carp struct {
 // Interface carries the VIP: LabBridge ("vm-public"), where the host's
 // addresses sit since task 764, or "re0" (labMember), where they sat
 // before. It must match the interface of the host's rc.conf addresses.
+// GateDeadline is the boot gate's deadline in seconds (BootGate): how long
+// the member waits for the peer's advertisement before it allows CARP
+// anyway. 0 means carpGateDeadline (180 s), the conservative value for a
+// standby; the preferred MASTER sets a shorter one (task s74), so that
+// after a cold start of both members it gives up first and takes the VIP
+// while the standby is still waiting. Values below carpGateMinDeadline
+// (other than 0) are refused.
 type CarpNode struct {
-	AdvSkew   int
-	Interface string
+	AdvSkew      int
+	Interface    string
+	GateDeadline int
 }
 
 const (
@@ -83,10 +91,19 @@ const carpGateLoaderLine = `net.inet.carp.allow="0"` + "\t" +
 // carpGateSettle and carpGateDeadline are the gate's timings in seconds: the
 // uplink must stay active this long before an advertisement counts (a re(4)
 // link reset lasts ~4 s), and after the deadline CARP is allowed anyway so
-// a sole survivor still takes the VIP.
+// a sole survivor still takes the VIP. carpGateDeadline is the default for
+// a member without CarpNode.GateDeadline (the standby f1).
+//
+// carpGateMinDeadline is the shortest deadline a CarpNode may set: the
+// guest tap joined 9-11 s after the waiter started in every logged boot
+// (2026-11-12/13), and one stable+heard round then costs settle (10 s) plus
+// the 4 s capture window; 30 s leaves room for a second round if the first
+// one misses. It guards against a typo, not a tuned value; see cluster.go
+// for why f0 uses 60.
 const (
-	carpGateSettle   = 10
-	carpGateDeadline = 180
+	carpGateSettle      = 10
+	carpGateDeadline    = 180
+	carpGateMinDeadline = 30
 )
 
 // carpMembers are the hosts that share the storage VIP; carpFailbackHost is
@@ -354,25 +371,62 @@ func (Carp) WhenBootGate() TaskOption { return WhenHostnameIn(carpMembers...) }
 // exists), and detaches a waiter that sets
 // net.inet.carp.allow=1 after the guest tap joined, re0 stayed active for
 // carpGateSettle seconds and one vhid advertisement arrived on re0, or at
-// carpGateDeadline. re0 is watched in both layouts: it is the physical
-// uplink whether the VIP sits on it or on the bridge (CarpNode.Interface).
+// the host's deadline (CarpNode.GateDeadline, see carpGateDeadlineFor). re0
+// is watched in both layouts: it is the physical uplink whether the VIP
+// sits on it or on the bridge (CarpNode.Interface).
 // The loader line is written last, so the hold never exists without its
 // waiter; to remove the gate, drop that line first. Next boot only.
 //
 // Boot behaviour that changes with it: the vhid's INIT -> BACKUP event (and
 // carpcontrol.sh BACKUP) now comes after rc started nfsd/mountd/stunnel, so
 // the BACKUP stops them instead of leaving them running; f0 starts them
-// again when carp-auto-failback promotes it. After a cold start of both
-// members the VIP waits for the deadline, as neither hears the other.
+// again when carp-auto-failback promotes it.
+//
+// Cold start of both members: neither sends while held, so neither hears
+// the other and each waits for its own deadline. With one deadline (180 s)
+// for both, the VIP was down ~3 min on 2026-11-13. The deadline is
+// therefore per host (task s74): the preferred MASTER f0 gives up first,
+// goes MASTER, and the standby f1, still held, hears f0 and comes up
+// BACKUP; f1 keeps 180 s so it never promotes early. A short f0 deadline
+// is safe when f0 reboots alone while f1 is MASTER as long as f0 hears
+// f1 before it: that took 21 s in the logged boot (cluster.go has the
+// numbers and the residual risk).
 func (Carp) BootGate() {
 	EnsureDir("/usr/local/libexec", RootOwned)
 	EnsureDir("/usr/local/etc", RootOwned)
-	conf := File(carpGateConf, WithContent(fmt.Sprintf("uplink='%s'\nvhid='%s'\nsettle='%d'\ndeadline='%d'\n",
-		labMember, carpVhid, carpGateSettle, carpGateDeadline)), RootOwned)
-	helper := InstallFile(carpGateHelper, paths.FHostAsset("carp/carp-gate"), RootExec, DependsOn(conf))
-	hook := InstallFile(carpGateRC, paths.FHostAsset("carp/rc-carp-gate"), RootExec, DependsOn(helper))
-	File(loaderConf, WithKeyedLine("net.inet.carp.allow=", carpGateLoaderLine),
-		RootOwned, WithName("loader-conf-carp-gate"), DependsOn(hook))
+	EachHostWith(func(n CarpNode) {
+		deadline, err := carpGateDeadlineFor(n)
+		if err != nil {
+			Refuse("Carp", carpGateConf, err)
+			return
+		}
+		conf := File(carpGateConf, WithContent(carpGateConfContent(deadline)), RootOwned)
+		helper := InstallFile(carpGateHelper, paths.FHostAsset("carp/carp-gate"), RootExec, DependsOn(conf))
+		hook := InstallFile(carpGateRC, paths.FHostAsset("carp/rc-carp-gate"), RootExec, DependsOn(helper))
+		File(loaderConf, WithKeyedLine("net.inet.carp.allow=", carpGateLoaderLine),
+			RootOwned, WithName("loader-conf-carp-gate"), DependsOn(hook))
+	})
+}
+
+// carpGateDeadlineFor returns n's boot gate deadline in seconds: the
+// default carpGateDeadline when unset, else n.GateDeadline, which must be
+// at least carpGateMinDeadline (a negative or too short value is refused
+// rather than rendered).
+func carpGateDeadlineFor(n CarpNode) (int, error) {
+	switch {
+	case n.GateDeadline == 0:
+		return carpGateDeadline, nil
+	case n.GateDeadline < carpGateMinDeadline:
+		return 0, fmt.Errorf("CarpNode.GateDeadline %d is below the minimum of %d s", n.GateDeadline, carpGateMinDeadline)
+	}
+	return n.GateDeadline, nil
+}
+
+// carpGateConfContent renders /usr/local/etc/gonf-carp-gate.conf, which
+// the gate sources as shell assignments.
+func carpGateConfContent(deadline int) string {
+	return fmt.Sprintf("uplink='%s'\nvhid='%s'\nsettle='%d'\ndeadline='%d'\n",
+		labMember, carpVhid, carpGateSettle, deadline)
 }
 
 // carpOtherInterface returns the interface that must not carry the line.
