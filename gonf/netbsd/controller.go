@@ -51,22 +51,6 @@ func (Controller) Config() {
 		Unless("cmp", List("-s", liveController, controllerCandidate)))
 }
 
-// OptsRetireTriggerfishFiles runs Config first, so the renamed staging files
-// and the helper that reads them are in place before the old ones go.
-func (Controller) OptsRetireTriggerfishFiles() TaskOptions {
-	return TaskOptions{Operational(), Needs(Controller.Config)}
-}
-
-// RetireTriggerfishFiles removes f3sctl.json.triggerfish-{candidate,legacy} (one-shot, f74).
-//
-// Config stages the same bytes as f3sctl.json.gonf-{candidate,legacy}
-// since task f74, and the updated helper no longer reads the old names;
-// f3sctl itself reads only f3sctl.json. Delete this task once pi0 and pi1
-// ran it.
-func (Controller) RetireTriggerfishFiles() {
-	NoFile(List(liveController+".triggerfish-candidate", liveController+".triggerfish-legacy"))
-}
-
 // installShellyCA installs the public CA certificate that f3sctl pins for the
 // plugs' HTTPS (world-readable: the CGI runs as _httpd).
 func installShellyCA() Dependency {

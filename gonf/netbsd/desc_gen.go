@@ -6,10 +6,6 @@ func (Controller) DescConfig() string {
 	return "Preserves custom configuration and installs the accepted inventory"
 }
 
-func (Controller) DescRetireTriggerfishFiles() string {
-	return "Removes f3sctl.json.triggerfish-{candidate,legacy} (one-shot, f74)"
-}
-
 func (Goprecords) DescUpload() string {
 	return "Installs the goprecords upload client, token and hourly root cron (output to syslog) and retires the duplicate legacy root uploader"
 }

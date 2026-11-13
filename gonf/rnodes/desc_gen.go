@@ -22,10 +22,6 @@ func (Base) DescSelinuxWireguard() string {
 	return "Keeps SELinux enforcing with only wireguard_t permissive (semanage permissive -a)"
 }
 
-func (Firewall) DescRetireMigrationFiles() string {
-	return "Removes the dormant migration.nft copies of both guards (one-shot, f74)"
-}
-
 func (Firewall) DescRpcbindOff() string {
 	return "Stops and masks rpcbind only after checking every NFS mount uses NFSv4"
 }

@@ -21,20 +21,6 @@ func (Firewall) Stage() {
 		Rules: paths.RNodeAsset("source-guard/f3s-guard.nft")})
 }
 
-// OptsRetireMigrationFiles keeps the one-shot cleanup an explicitly named operation.
-func (Firewall) OptsRetireMigrationFiles() TaskOptions { return TaskOptions{Operational()} }
-
-// RetireMigrationFiles removes the dormant migration.nft copies of both guards (one-shot, f74).
-//
-// The former rnodes_firewall_migration_stage and
-// rnodes_node_port_guard_migration_stage installed them; they were byte
-// copies of each guard's candidate.nft and no loader, unit or boot hook
-// reads them (f3s-firewall and f3s-nodeport-guard load only candidate.nft
-// and confirmed.nft). Delete this task once r0-r2 ran it.
-func (Firewall) RetireMigrationFiles() {
-	NoFile(List("/etc/f3s-firewall/migration.nft", "/etc/f3s-nodeport-guard/migration.nft"))
-}
-
 // OptsRpcbindOff keeps the NFS-adjacent cleanup an explicitly named operation.
 func (Firewall) OptsRpcbindOff() TaskOptions { return TaskOptions{Operational()} }
 
