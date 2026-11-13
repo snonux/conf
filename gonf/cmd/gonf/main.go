@@ -57,7 +57,6 @@ func main() {
 // (task gk2) and rotated the same day (task 1l2); it has no file fallback.
 func setSecretProvider() error {
 	items, err := foostore.Items(map[secret.Ref]foostore.Item{
-		secret.Ref(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")):     foostore.Field("Infra/nsd-tsig-key", "Password"),
 		secret.Ref(paths.GarageSecret("rpc_secret")):                    foostore.Field("Infra/garage-rpc", "Password"),
 		secret.Ref(garage.MetricsTokenSecret()):                         foostore.Field("Infra/garage-metrics", "Password"),
 		secret.Ref(goprecordsToken("blowfish")):                         foostore.Field("Infra/goprecords-token-blowfish", "Password"),

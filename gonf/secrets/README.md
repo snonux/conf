@@ -12,7 +12,6 @@ from the vault; everything else comes from files below this directory.
 
 | Logical path | Vault entry (Password field) | File fallback / legacy copy |
 |---|---|---|
-| `paths.FrontendSecret("var/nsd/etc/nsd_key.txt")` | `Infra/nsd-tsig-key` | `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` |
 | `paths.GarageSecret("rpc_secret")` | `Infra/garage-rpc` | `gonf/secrets/garage/rpc_secret` |
 | `garage.MetricsTokenSecret()` (`garage/metrics_token`) | `Infra/garage-metrics` | none; enrolled out of Git on 2026-10-24 (cn3) |
 | `paths.FrontendSecret("etc/goprecords/<host>.token")`, blowfish and fishfinger | `Infra/goprecords-token-<host>` | `gonf/secrets/frontends/etc/goprecords/<host>.token` |

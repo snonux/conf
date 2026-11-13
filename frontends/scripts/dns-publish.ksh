@@ -12,7 +12,6 @@ set -eu
 
 readonly INPUT_DIR=/var/nsd/etc/gonf-publisher
 readonly INPUT_ZONES=$INPUT_DIR/zones
-readonly INPUT_KEY=$INPUT_DIR/key.conf
 readonly STATE_DIR=/var/nsd/gonf-publisher
 readonly STATE=$STATE_DIR/state
 readonly JOURNAL=$STATE_DIR/journal
@@ -23,7 +22,6 @@ readonly ZONE_DIR=/var/nsd/zones/master
 # above the one it last served (serial_for).
 readonly SLAVE_ZONE_DIR=/var/nsd/zones/slave
 readonly STAGE_DIR=/var/nsd/zones/gonf-publisher
-readonly LIVE_KEY=/var/nsd/etc/key.conf
 readonly LIVE_CONFIG=/var/nsd/etc/nsd.conf
 readonly GONF=/usr/local/bin/gonf
 # A Gonf-driven (role-less) publication waits this many seconds for a running
@@ -47,7 +45,6 @@ shift $((OPTIND - 1))
 
 [ -r "$INPUT_DIR/publisher.conf" ] || { print -u2 "missing publisher inputs"; exit 1; }
 [ -r "$INPUT_DIR/nsd.conf" ] || { print -u2 "missing publisher NSD configuration"; exit 1; }
-[ -r "$INPUT_KEY" ] || { print -u2 "missing publisher NSD key"; exit 1; }
 # shellcheck disable=SC1091 # controller-installed immutable publisher input
 . "$INPUT_DIR/publisher.conf"
 : "${DEFAULT_ROLE:?missing default role}"
@@ -345,7 +342,6 @@ render_zone() {
 
 render_candidate_config() {
     sed \
-        -e "s|$LIVE_KEY|$STAGE_DIR/key.conf|g" \
         -e 's|zonefile: "master/|zonefile: "gonf-publisher/|g' \
         "$INPUT_DIR/nsd.conf" >"$STAGE_DIR/nsd.conf"
 }
@@ -402,7 +398,6 @@ create_journal() {
     for zone in $(all_zone_names); do
         snapshot_zone "$zone" "$temporary" || return 1
     done
-    snapshot_file "$LIVE_KEY" key "$temporary" || return 1
     snapshot_file "$LIVE_CONFIG" config "$temporary" || return 1
     snapshot_file "$STATE" state "$temporary" || return 1
     # Whether NSD ran before this commit decides whether the commit and any
@@ -434,10 +429,9 @@ rollback() {
         [ "$field" = zone ] && valid_zone_name "$zone" || return 1
         restore_file "$JOURNAL/zones/$zone.zone" "$ZONE_DIR/$zone.zone" "$JOURNAL/present/zone.$zone" || return 1
     done <"$JOURNAL/manifest"
-    restore_file "$JOURNAL/files/key" "$LIVE_KEY" "$JOURNAL/present/key" || return 1
     restore_file "$JOURNAL/files/config" "$LIVE_CONFIG" "$JOURNAL/present/config" || return 1
     restore_file "$JOURNAL/files/state" "$STATE" "$JOURNAL/present/state" || return 1
-    # The failed commit may have installed a new key or nsd.conf, and a failed
+    # The failed commit may have installed a new nsd.conf, and a failed
     # restart may have left NSD stopped. If NSD ran before the commit, it is
     # (re)started on the restored set and must be running afterwards; if not,
     # the rollback is incomplete and the journal is kept, so every later run
@@ -464,9 +458,8 @@ nsd_running() {
 
 # apply_nsd makes the running daemon serve the committed files. "reload" is
 # enough when only zone files changed: `nsd-control reload` rereads zone
-# files but not nsd.conf or the TSIG key include. "restart" is required when
-# the key or nsd.conf changed (added/removed zones, notify/provide-xfr, key
-# rotation, server options), as in the Rex recipe; `nsd-control reconfig`
+# files but not nsd.conf. "restart" is required when nsd.conf changed
+# (added/removed zones, server options), as in the Rex recipe; `nsd-control reconfig`
 # would miss server: options, so it is not used. A failed reload or restart,
 # or NSD not running afterwards, fails the commit and triggers the rollback.
 apply_nsd() {
@@ -534,10 +527,6 @@ commit() {
     for zone in $REMOVED_ZONES; do
         [ ! -f "$STAGE_DIR/.remove-$zone" ] || rm -f "$ZONE_DIR/$zone.zone" || return 1
     done
-    if [ -f "$STAGE_DIR/.changed-key" ]; then
-        install_atomic "$INPUT_KEY" "$LIVE_KEY" 0640 _nsd || return 1
-        apply=restart
-    fi
     if [ -f "$STAGE_DIR/.changed-config" ]; then
         install_atomic "$INPUT_DIR/nsd.conf" "$LIVE_CONFIG" 0640 _nsd || return 1
         apply=restart
@@ -559,7 +548,6 @@ main() {
 
     rm -rf "$STAGE_DIR"
     mkdir -p "$STAGE_DIR"
-    cp "$INPUT_KEY" "$STAGE_DIR/key.conf"
     for zone in $ZONES; do
         serial=$(serial_for "$zone") || { print -u2 "invalid apex SOA serial in $zone"; exit 1; }
         render_zone "$zone" "$serial" "$STAGE_DIR/$zone.zone"
@@ -576,7 +564,6 @@ main() {
     for zone in $REMOVED_ZONES; do
         [ ! -f "$ZONE_DIR/$zone.zone" ] || { changed=1; : >"$STAGE_DIR/.remove-$zone"; }
     done
-    cmp -s "$INPUT_KEY" "$LIVE_KEY" || { changed=1; : >"$STAGE_DIR/.changed-key"; }
     render_candidate_config
     cmp -s "$INPUT_DIR/nsd.conf" "$LIVE_CONFIG" || { changed=1; : >"$STAGE_DIR/.changed-config"; }
     [ "$role" = "$previous" ] && [ "$changed" -eq 0 ] && exit 0

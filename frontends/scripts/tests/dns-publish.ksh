@@ -9,7 +9,7 @@
 # scripts use print; bash cannot run them); the harness itself avoids
 # ksh93-only syntax.
 #
-# Covers: first publication and a key or nsd.conf change restart NSD; a
+# Covers: first publication and an nsd.conf change restart NSD; a
 # zone-only change reloads it; an unchanged run does nothing; a failed
 # install rolls back and restarts; a restart that leaves NSD stopped rolls
 # back and starts NSD on the restored set; a rollback that cannot start NSD
@@ -100,14 +100,14 @@ exit 0
 EOF
 
 # install -m mode -o owner -g group source destination; ownership is ignored
-# because the test does not run as root. FAIL_INSTALL makes the key install
-# fail, so the commit has to roll back.
+# because the test does not run as root. FAIL_INSTALL makes the nsd.conf
+# install fail, so the commit has to roll back.
 cat >"$fake/install" <<'EOF'
 #!/bin/sh
 while getopts "m:o:g:" option; do :; done
 shift $((OPTIND - 1))
 case $1 in
-*/key.conf) [ -z "${FAIL_INSTALL:-}" ] || exit 1 ;;
+*/nsd.conf) [ -z "${FAIL_INSTALL:-}" ] || exit 1 ;;
 esac
 cp "$1" "$2"
 EOF
@@ -144,8 +144,7 @@ PUBLISHER_FQDN="blowfish.example.org"
 ZONES="example.org"
 REMOVED_ZONES=""
 EOF
-printf 'key:\n\tname: k1\n' >"$inputs/key.conf"
-printf 'include: "%s/etc/key.conf"\n' "$root" >"$inputs/nsd.conf"
+printf 'server:\n\thide-version: yes\n' >"$inputs/nsd.conf"
 printf 'serial @SERIAL@\nwww A @MASTER_IPV4@\n' >"$inputs/zones/example.org.zone.tpl"
 
 failures=0
@@ -202,13 +201,12 @@ printf 'serial @SERIAL@\nwww A @STANDBY_IPV4@\n' >"$inputs/zones/example.org.zon
 run_case "zone-only change reloads" 0 "nsd-control reload"
 printf '\nzone:\n\tname: "example.org"\n' >>"$inputs/nsd.conf"
 run_case "nsd.conf change restarts" 0 "rcctl restart nsd"
-printf 'key:\n\tname: k2\n' >"$inputs/key.conf"
-run_case "key change restarts" 0 "rcctl restart nsd"
-printf 'key:\n\tname: k3\n' >"$inputs/key.conf"
+cp "$inputs/nsd.conf" "$work/v2-nsd.conf"
+print '# v3' >>"$inputs/nsd.conf"
 run_case "failed install rolls back with a restart" 1 "rcctl restart nsd" FAIL_INSTALL=1
-check "rollback restored the previous key" grep -q 'name: k2' "$root/etc/key.conf"
+check "rollback restored the previous nsd.conf" test "$(grep -c '# v3' "$root/etc/nsd.conf")" -eq 0
 check "a complete rollback drops its journal" test ! -e "$journal"
-printf 'key:\n\tname: k2\n' >"$inputs/key.conf"
+cp "$work/v2-nsd.conf" "$inputs/nsd.conf"
 
 # A restart that stops NSD and cannot start it on the new configuration.
 cp "$inputs/nsd.conf" "$work/good-nsd.conf"
@@ -232,11 +230,11 @@ check "NSD runs again" running
 check "the recovered journal is gone" test ! -e "$journal"
 
 print stopped >"$state"
-printf 'key:\n\tname: k4\n' >"$inputs/key.conf"
+print '# v4' >>"$inputs/nsd.conf"
 run_case "stopped NSD is left alone" 0 ""
 check "stopped NSD stays stopped" stopped
 print running >"$state"
-run_case "published key is now current" 0 ""
+run_case "published nsd.conf is now current" 0 ""
 check "a finished run releases its lock" test ! -e "$lock"
 
 # A lock owned by a live process (this test's shell) must stop a publication

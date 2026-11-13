@@ -29,8 +29,8 @@ in this order:
 
 1. Controller inputs: the secrets, read from the foostore/KeePass vault
    with a file fallback under `gonf/secrets/frontends` (see
-   `gonf/secrets/README.md`; the NSD TSIG key is required, the goprecords
-   token optional and needs a vault entry or token file for the new host) and the controller checkouts `~/git/shuriken.sh`
+   `gonf/secrets/README.md`; the goprecords
+   token is optional and needs a vault entry or token file for the new host) and the controller checkouts `~/git/shuriken.sh`
    (`check_shuriken_age` for Gogios, required) and `~/git/foostats`
    (optional; `scripts/` holds a fallback copy). `GONF_SHURIKEN_ROOT` and
    `GONF_FOOSTATS_ROOT` point elsewhere.

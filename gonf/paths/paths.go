@@ -79,8 +79,8 @@ func RNodeAsset(relativePath string) string {
 
 // FrontendSecret returns the logical path passed to api.MustSecret or
 // api.OptionalSecret. Secret helpers resolve it beneath ./secrets, not beneath
-// the source asset directory: FrontendSecret("var/nsd/etc/nsd_key.txt")
-// resolves to ./secrets/frontends/var/nsd/etc/nsd_key.txt.
+// the source asset directory: FrontendSecret("etc/rsync/shuriken.password")
+// resolves to ./secrets/frontends/etc/rsync/shuriken.password.
 func FrontendSecret(relativePath string) string {
 	return path.Join("frontends", relativePath)
 }

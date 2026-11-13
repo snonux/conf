@@ -12,7 +12,7 @@ import (
 // template dialect: gonf's helper functions (join, lower, upper, trim,
 // replace) and no conf-local extras. There is deliberately no "quote" func:
 // a value that needs Go's %q quoting is pre-quoted with strconv.Quote by its
-// data builder instead (renderNSDKey, renderNSDConfig,
+// data builder instead (renderNSDConfig,
 // renderDNSPublisherConfig), so moving a stanza between assets never breaks
 // on a function only one renderer defines.
 //

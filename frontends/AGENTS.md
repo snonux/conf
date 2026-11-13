@@ -85,15 +85,10 @@ and the other is healthy, both frontends publish the other role; failover
 and failback each took about 1 minute in the 2026-11-13 test, plus up to 300
 s record TTL. A partition can make both promote themselves; that is
 accepted. SOA serials and MNAMEs differ between the two masters by design
-(each names itself). The TSIG key is still installed but unused. The
+(each names itself). There is no TSIG key (removed 2026-11-13). The
 2026-09-20 single-publisher design (blowfish publisher, fishfinger AXFR
 secondary, no rotation) could not fail over when blowfish was down and let
 fishfinger's apex certificates expire.
-
-NSD TSIG key: controller secret
-`gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` (0600, vault-mapped, see
-`../gonf/secrets/README.md`). Use the gonf secret helper; never put the value
-in a resource name, description, command argument, log line or stdout plan.
 
 Cron jobs adopt an identical unmarked crontab line (same schedule and exact
 command, no `NAME=value` line after it): it is replaced by the gonf block.
