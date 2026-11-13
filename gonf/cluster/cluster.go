@@ -329,8 +329,9 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f2"}),
 		WithData(f2Baseline),
 		WithData(k3sBhyve),
-		// In-tree re(4) for now (t74 order: f3, f1, f2, f0). See f3's RealtekNIC.
-		WithData(freebsd.RealtekNIC{}),
+		// Realtek vendor driver since 2026-11-13 (t74, after f3 and f1).
+		// See f3's RealtekNIC.
+		WithData(freebsd.RealtekNIC{VendorDriver: true}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
