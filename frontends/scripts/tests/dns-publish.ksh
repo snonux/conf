@@ -18,7 +18,11 @@
 # a live publisher's lock makes a Gonf (role-less) run wait and fail, a
 # failover (-r) run exit 0, and is never stolen; a zone that fails
 # nsd-checkzone refuses publication instead of installing the broken zone
-# (fb2), and the same change publishes once nsd-checkzone passes.
+# (fb2), and the same change publishes once nsd-checkzone passes; without a
+# state file the role follows the weekly preferred role (Standby in odd UTC
+# weeks), and a former NSD secondary's first serial continues from its
+# transferred zone. date(1) is faked for `+%U` so the role does not depend on
+# the real calendar week (FAKE_WEEK, default an even week: the Master role).
 
 set -eu
 
@@ -44,6 +48,14 @@ sed \
 cat >"$fake/hostname" <<'EOF'
 #!/bin/sh
 echo blowfish
+EOF
+
+cat >"$fake/date" <<'EOF'
+#!/bin/sh
+case "$*" in
+*%U*) echo "${FAKE_WEEK:-02}" ;;
+*) exec /bin/date "$@" ;;
+esac
 EOF
 
 cat >"$fake/sleep" <<'EOF'
@@ -252,6 +264,21 @@ check "the rejected zone is not installed" grep -q 'A 192.0.2.1' "$root/zones/ma
 check "the rejected journal is not left behind" test ! -e "$journal"
 run_case "the same change publishes once nsd-checkzone passes" 0 "nsd-control reload"
 check "the previously rejected zone is now installed" grep -q 'A 192.0.2.2' "$root/zones/master/example.org.zone"
+
+# A host without a state file publishes the weekly preferred role: week 45
+# is odd, so the Standby role (blowfish), which renders @STANDBY_IPV4@ as the
+# Master address. A former secondary (no master zone, a transferred copy in
+# zones/slave) continues from the transferred serial instead of restarting
+# at 1.
+rm -f "$root/gonf-publisher/state" "$root/zones/master/example.org.zone"
+mkdir -p "$root/zones/slave"
+printf 'serial 500\nwww A 192.0.2.9\n' >"$root/zones/slave/example.org.zone"
+run_case "a first publication without state reloads" 0 "nsd-control reload" FAKE_WEEK=45
+check "it commits the odd week's Standby role" grep -qx 'role=blowfish' "$root/gonf-publisher/state"
+check "it renders the Standby role's addresses" grep -q 'A 192.0.2.1' "$root/zones/master/example.org.zone"
+check "its serial continues from the secondary copy" grep -qx 'serial 501' "$root/zones/master/example.org.zone"
+run_case "an even week does not move a committed role" 0 "" FAKE_WEEK=08
+check "the committed role is kept" grep -qx 'role=blowfish' "$root/gonf-publisher/state"
 
 # The publisher's own messages are shown only on failure.
 if [ "$failures" -ne 0 ]; then

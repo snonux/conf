@@ -73,6 +73,23 @@ stage controller-rendered candidates and validate before touching live files:
 is deliberate: aliases only run `newaliases`; smtpd restarts for config or
 tables; nsd for key, config, zones or flags.
 
+DNS HA (KISS design, restored 2026-11-13; foo.zone post "KISS high
+availability with OpenBSD"): both frontends are independent NSD masters for
+every zone, with no NOTIFY or zone transfer. Each runs `dns-publish.ksh`
+(gonf `frontends_nsd`) and the every-minute `dns-failover.ksh` cron. The
+preferred role alternates weekly by UTC week number (odd: blowfish, even:
+fishfinger), so each frontend serves the apex/www names every other week and
+its daily `acme.sh` renews their certificates. If the preferred host fails
+its `https://<host>.buetow.org/index.txt` check over IPv4 or IPv6 (3 tries)
+and the other is healthy, both frontends publish the other role; failover
+and failback each took about 1 minute in the 2026-11-13 test, plus up to 300
+s record TTL. A partition can make both promote themselves; that is
+accepted. SOA serials and MNAMEs differ between the two masters by design
+(each names itself). The TSIG key is still installed but unused. The
+2026-09-20 single-publisher design (blowfish publisher, fishfinger AXFR
+secondary, no rotation) could not fail over when blowfish was down and let
+fishfinger's apex certificates expire.
+
 NSD TSIG key: controller secret
 `gonf/secrets/frontends/var/nsd/etc/nsd_key.txt` (0600, vault-mapped, see
 `../gonf/secrets/README.md`). Use the gonf secret helper; never put the value
@@ -190,8 +207,9 @@ fstab filesystems in order and the base sets never touch that path (7.9
 upgrade, 2026-09-26). Check `/`, `/usr` (>= 1.1G) and `/home` (the sets land
 in `/home/_sysupgrade`) free space first.
 
-Procedure (one gateway at a time; blowfish is the nsd primary, fishfinger
-keeps serving while it reboots):
+Procedure (one gateway at a time, the inactive one first: the active role is
+`role=` in `/var/nsd/gonf-publisher/state`; rebooting the active one fails DNS
+over to the other within about a minute, see DNS HA above):
 
 1. Back up `/etc`, `/var/nsd/{etc,zones}`, `/var/www/conf` to
    `/home/pre<rel>-backup` (0700: `etc.tgz` holds secrets).
@@ -212,9 +230,15 @@ keeps serving while it reboots):
    -D installed dtail gogios`, then `rcctl restart dserver` (host key in
    `/var/db/dserver` survives). Both packages carry `pkgpath=local/<name>`
    (dtail since 2026-09-26, task 7l2), so pkg_add -u matches them.
-7. Verify services, `relayd -n`/`httpd -n`/`nsd-checkconf`, the SOA serial
-   on both, wg handshakes, a gonf dry-run of the frontends aggregate, and a
-   green Gogios run.
+7. Verify services, `relayd -n`/`httpd -n`/`nsd-checkconf`, the same role
+   and apex records on both nameservers, wg handshakes, a gonf dry-run of the
+   frontends aggregate, and a green Gogios run.
+
+7.9 -> 8.0 (2026-11-13): fishfinger, then blowfish, 19 syspatches each;
+`sysmerge -b` left login.conf, mail/aliases, sshd_config, nsd.conf (all kept
+local) and cert.pem (stock installed, no local CA). dtail and gogios still
+run the 7.9 builds; no `openbsd/8.0/` tree yet. Details in IQ
+(`topics/infra/f3s/network/frontends-openbsd-upgrade.md`).
 
 7.8 -> 7.9 (2026-09-26): both gateways upgraded (fishfinger 08:49-09:16,
 blowfish 10:13-10:21 CEST), 21 syspatches each; `sysmerge -b` touched only

@@ -21,11 +21,17 @@ const (
 	dnsPublishCommand        = "/usr/local/bin/dns-publish.ksh"
 	dnsPublisherDir          = "/var/nsd/etc/gonf-publisher"
 	dnsPublisherZones        = dnsPublisherDir + "/zones"
-	// nsdKeyName is the TSIG key both NSD configurations share: the
-	// publisher names it next to the secondary's address in notify and
-	// provide-xfr, the secondary next to the publisher's address in
-	// allow-notify and request-xfr.
-	nsdKeyName = DNSPublisher + "." + Domain
+	// nsdSlaveZoneDir is where the retired NSD secondary (fishfinger until
+	// the KISS HA restore) received its transferred zones. The directory
+	// itself is part of OpenBSD's base layout and stays; only the stale
+	// transferred zone files are pruned (nsdPublisher).
+	nsdSlaveZoneDir = "/var/nsd/zones/slave"
+	// nsdKeyName is the TSIG key name in key.conf. No zone uses the key
+	// since both frontends became independent masters (no notify or zone
+	// transfer); NSD still includes it so the publisher's key handling and
+	// a future transfer setup stay unchanged. The historical name keeps the
+	// installed key.conf byte-identical.
+	nsdKeyName = Standby + "." + Domain
 )
 
 // MailDNS contains the frontend SMTP and authoritative-DNS recipes. The
@@ -73,11 +79,11 @@ func (MailDNS) DescNSD() string {
 	return "Render, validate, and converge frontend authoritative NSD zones"
 }
 
-// NSD installs immutable publisher inputs and invokes the sole publisher on
-// blowfish (DNSPublisher), and configures fishfinger (the Master service host)
-// as the NSD secondary that receives the effective zones by zone transfer.
-// Each host block declares its own nsd_flags line, so the task records one
-// scope per host inside the task's frontends guard.
+// NSD installs immutable publisher inputs and invokes the publisher on every
+// frontend: each one is an independent NSD master for all zones (KISS HA, no
+// zone transfer), and dns-failover.ksh picks the role both publish. Each
+// host block declares its own nsd_flags line, so the task records one scope
+// per host inside the task's frontends guard.
 //
 // The logical reference paths.FrontendSecret("var/nsd/etc/nsd_key.txt")
 // resolves through the provider cmd/gonf/main.go configures
@@ -91,15 +97,15 @@ func (MailDNS) DescNSD() string {
 func (MailDNS) NSD() {
 	key := strings.TrimSpace(MustSecret(paths.FrontendSecret("var/nsd/etc/nsd_key.txt")))
 	data := TemplateData()
-	WhenHostname(DNSPublisher, func() { nsdPublisher(data, key) })
-	WhenHostname(Master, func() { nsdSecondary(data, key) })
+	EachHost(func(server Server) { nsdPublisher(data, key, server) })
 }
 
 // DNSFailover installs the frontend DNS failover script and root cron entry.
 //
-// DNSFailover installs the health decision client. It never writes an effective
-// zone: successful role changes are handed to dns-publish.ksh, which shares the
-// same lock and transaction as ordinary Gonf publication.
+// DNSFailover installs the health decision client on both frontends. It never
+// writes an effective zone: role changes are handed to the local
+// dns-publish.ksh, which shares the same lock and transaction as ordinary
+// Gonf publication.
 func (MailDNS) DNSFailover() {
 	script := InstallFile(dnsFailoverCommand, legacyFrontendAsset("scripts/dns-failover.ksh"),
 		Perm(0o500, Root))
@@ -117,15 +123,21 @@ func nsdFlags() Resource {
 	return rcConfLocalLine("nsd_flags=", "rc-conf-nsd-flags")
 }
 
-// nsdPublisher declares blowfish's publisher. The publisher, not this task,
+// nsdPublisher declares server's publisher. The publisher, not this task,
 // owns effective zones, SOA serials, failover state, validation, locking, and
 // rollback, and it makes the running NSD pick up each commit: a zone reload
 // for zone-only changes, a restart when its nsd.conf or TSIG key changed (the
 // Service below only watches the flags). Every publisher input is rendered
 // first (renderPublisherFiles): a render failure refuses the host's publisher
 // declarations instead of declaring an input with empty content.
-func nsdPublisher(data Data, key string) {
-	files, ok := renderPublisherFiles(data, key)
+//
+// The retired secondary's transferred zone files are pruned only after the
+// publisher ran: by then the live nsd.conf names the master zones, so NSD
+// never loses a zone file it is configured to serve. The files are absent on
+// a host that was never a secondary, which makes this a no-op there. The
+// publisher reads them once before (serial_for) to keep serials monotonic.
+func nsdPublisher(data Data, key string, server Server) {
+	files, ok := renderPublisherFiles(data, key, server)
 	if !ok {
 		return
 	}
@@ -135,34 +147,10 @@ func nsdPublisher(data Data, key string) {
 	inputs := dnsPublisherInputs(data.DNSZones, files)
 	deps := append([]Dependency{flags, publisherScript}, inputs...)
 	publisher := Sh(dnsPublishCommand, DependsOn(deps...), WithName("publish-nsd-zones"))
-	Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
-}
-
-// nsdSecondary declares fishfinger's NSD secondary. It has no source
-// templates and no zone-writing command: its slave zone files are solely NSD's
-// transfer destination. The key include and the configuration are validated
-// together with nsd-checkconf, staged inside NSD's chroot, before either is
-// live, and a published change restarts NSD. Both
-// members are rendered before anything is declared, so a render failure
-// refuses the host's secondary declarations (renderBatch).
-func nsdSecondary(data Data, key string) {
-	var batch renderBatch
-	keyConf := batch.render("/var/nsd/etc/key.conf", func() (string, error) { return renderNSDKey(key) })
-	nsdConf := batch.render("/var/nsd/etc/nsd.conf", func() (string, error) {
-		return renderNSDSlaveConfig(MemberPath("key.conf"), data.DNSZones)
-	})
-	if batch.refused() {
-		return
+	service := Service("nsd", WithRestart, DependsOn(publisher), OnChange(flags))
+	for _, zone := range data.DNSZones {
+		NoFile(filepath.Join(nsdSlaveZoneDir, zone+".zone"), DependsOn(publisher, service))
 	}
-	flags := nsdFlags()
-	config := ConfigSet("nsd",
-		ConfigFile("key.conf", "/var/nsd/etc/key.conf", WithContent(keyConf),
-			Perm(0o640, "root:_nsd")),
-		ConfigFile("nsd.conf", "/var/nsd/etc/nsd.conf", WithContent(nsdConf),
-			Perm(0o640, "root:_nsd")),
-		WithChroot("/var/nsd"),
-		WithSetValidation("nsd-checkconf", List(MemberPath("nsd.conf"))))
-	Service("nsd", WithRestart, OnChange(flags, config))
 }
 
 // publisherFiles is the rendered content of the publisher's immutable
@@ -180,19 +168,20 @@ func publisherZonePath(zone string) string {
 	return filepath.Join(dnsPublisherZones, zone+".zone.tpl")
 }
 
-// renderPublisherFiles renders every publisher input on the controller. On
-// a render failure it reports the declaration error (renderBatch.refused)
-// and returns false, so nsdPublisher declares none of the host's resources.
-func renderPublisherFiles(data Data, key string) (publisherFiles, bool) {
+// renderPublisherFiles renders every publisher input of server on the
+// controller. On a render failure it reports the declaration error
+// (renderBatch.refused) and returns false, so nsdPublisher declares none of
+// the host's resources.
+func renderPublisherFiles(data Data, key string, server Server) (publisherFiles, bool) {
 	var batch renderBatch
 	files := publisherFiles{zones: make([]string, 0, len(data.DNSZones))}
 	for _, zone := range data.DNSZones {
 		files.zones = append(files.zones, batch.render(publisherZonePath(zone), func() (string, error) {
-			return renderZoneTemplate(zone, data.F3SHosts)
+			return renderZoneTemplate(zone, data.F3SHosts, server)
 		}))
 	}
 	files.publisherConf = batch.render(filepath.Join(dnsPublisherDir, "publisher.conf"), func() (string, error) {
-		return renderDNSPublisherConfig(data.DNSZones, data.DNSZonesRemove)
+		return renderDNSPublisherConfig(data.DNSZones, data.DNSZonesRemove, server)
 	})
 	files.keyConf = batch.render(filepath.Join(dnsPublisherDir, "key.conf"), func() (string, error) {
 		return renderNSDKey(key)
@@ -307,75 +296,43 @@ func renderNSDKey(key string) (string, error) {
 	return renderControllerTemplate(frontendAsset("key.conf.tmpl"), data)
 }
 
-// nsdZoneRecord is one zone's row in a rendered nsd.conf: master and
-// secondary configurations both key each zone by name, its zonefile path,
-// and the one peer address+TSIG-key pair NSD needs for notify/provide-xfr
-// (master) or allow-notify/request-xfr (secondary). Name and ZoneFile already
-// carry Go's %q quoting (strconv.Quote, see nsdZoneRecords) because the
-// templates interpolate them verbatim; Peer is emitted unquoted.
+// nsdZoneRecord is one zone's row in the rendered nsd.conf: its name and
+// zonefile path. Both already carry Go's %q quoting (strconv.Quote, see
+// nsdZoneRecords) because the template interpolates them verbatim.
 type nsdZoneRecord struct {
 	Name     string
 	ZoneFile string
-	Peer     string
 }
 
-// nsdConfigData is the explicit, typed data shared by assets/nsd-master.conf.tmpl
-// and assets/nsd-slave.conf.tmpl. Include is the complete, already-quoted
-// operand of the "include:" line: each role's renderer decides how its key
-// path is quoted (see renderNSDConfig and renderNSDSlaveConfig), so both
-// templates just interpolate it.
+// nsdConfigData is the explicit, typed data for assets/nsd-master.conf.tmpl.
+// Include is the complete, already-quoted operand of the "include:" line.
 type nsdConfigData struct {
 	Include string
 	Zones   []nsdZoneRecord
 }
 
 // nsdZoneRecords builds one pre-quoted nsdZoneRecord per zone, with its
-// zonefile below zoneDir and the shared peer ("<IPv4> <TSIG key name>").
-func nsdZoneRecords(zones []string, zoneDir, peer string) []nsdZoneRecord {
+// zonefile below zoneDir.
+func nsdZoneRecords(zones []string, zoneDir string) []nsdZoneRecord {
 	records := make([]nsdZoneRecord, 0, len(zones))
 	for _, zone := range zones {
 		records = append(records, nsdZoneRecord{
 			Name:     strconv.Quote(zone),
 			ZoneFile: strconv.Quote(filepath.Join(zoneDir, zone+".zone")),
-			Peer:     peer,
 		})
 	}
 	return records
 }
 
-// renderNSDConfig renders the publisher's (blowfish's) NSD master
-// configuration from assets/nsd-master.conf.tmpl. Every zone notifies the NSD
-// secondary (the Master service host, fishfinger) and allows it to transfer
-// the zone, both authenticated with the shared TSIG key nsdKeyName: without
-// provide-xfr NSD refuses the secondary's request-xfr, and without notify the
-// secondary only picks up a new serial at the zone's SOA refresh. The
-// secondary's IPv4 mirrors its own allow-notify/request-xfr
-// (renderNSDSlaveConfig), which name the publisher's IPv4, so notifies and
-// transfers both run over IPv4. keyPath here is a fixed live path, not a
-// ConfigSet placeholder, so it is quoted with strconv.Quote like the zone
-// names and zonefile paths.
+// renderNSDConfig renders a frontend's NSD master configuration from
+// assets/nsd-master.conf.tmpl. Both frontends are independent masters (KISS
+// HA): no zone notifies or transfers to the peer, because each frontend
+// renders its own zones and dns-failover.ksh keeps their roles in step.
+// keyPath is a fixed live path, quoted with strconv.Quote like the zone names
+// and zonefile paths.
 func renderNSDConfig(keyPath string, zones []string, zoneDir string) (string, error) {
-	secondary := MustServer(Master).IPv4 + " " + nsdKeyName
-	data := nsdConfigData{Include: strconv.Quote(keyPath), Zones: nsdZoneRecords(zones, zoneDir, secondary)}
+	data := nsdConfigData{Include: strconv.Quote(keyPath), Zones: nsdZoneRecords(zones, zoneDir)}
 	return renderControllerTemplate(frontendAsset("nsd-master.conf.tmpl"), data)
-}
-
-// renderNSDSlaveConfig renders the NSD secondary's (fishfinger's)
-// configuration from assets/nsd-slave.conf.tmpl. keyPath is a ConfigSet
-// member placeholder, which contains NUL bytes: it is wrapped in literal
-// quotes instead of strconv.Quote, because quoting would escape the NUL
-// bytes and break the placeholder gonf substitutes.
-//
-// NSD's allow-notify and request-xfr take an address followed by a TSIG key
-// name (or NOKEY); a bare hostname does not parse. The address is the DNS
-// publisher's IPv4 from the frontend inventory and the key is nsdKeyName,
-// matching the retired Rex nsd.conf.slave.tpl ("23.88.35.144
-// blowfish.buetow.org"; removed in conf task v42, see git history).
-// The explicit AXFR transfer type is kept from the earlier gonf port.
-func renderNSDSlaveConfig(keyPath string, zones []string) (string, error) {
-	master := MustServer(DNSPublisher).IPv4 + " " + nsdKeyName
-	data := nsdConfigData{Include: `"` + keyPath + `"`, Zones: nsdZoneRecords(zones, "slave", master)}
-	return renderControllerTemplate(frontendAsset("nsd-slave.conf.tmpl"), data)
 }
 
 // publisherConfigData is the explicit, typed data for assets/publisher.conf.tmpl.
@@ -396,9 +353,10 @@ type publisherConfigData struct {
 	RemovedZones  string
 }
 
-// renderDNSPublisherConfig renders the publisher's shell-sourced identity and
-// zone-list file from assets/publisher.conf.tmpl.
-func renderDNSPublisherConfig(zones, removedZones []string) (string, error) {
+// renderDNSPublisherConfig renders server's shell-sourced publisher identity
+// and zone-list file from assets/publisher.conf.tmpl. dns-failover.ksh
+// sources the same file for the two role names.
+func renderDNSPublisherConfig(zones, removedZones []string, server Server) (string, error) {
 	master := MustServer(Master)
 	standby := MustServer(Standby)
 	q := strconv.Quote
@@ -410,7 +368,7 @@ func renderDNSPublisherConfig(zones, removedZones []string) (string, error) {
 		StandbyName:   q(standby.Name),
 		StandbyIPv4:   q(standby.IPv4),
 		StandbyIPv6:   q(standby.IPv6),
-		PublisherFQDN: q(DNSPublisher + "." + Domain),
+		PublisherFQDN: q(server.FQDN),
 		Zones:         q(strings.Join(zones, " ")),
 		RemovedZones:  q(strings.Join(removedZones, " ")),
 	}
@@ -440,16 +398,15 @@ type zoneTemplateData struct {
 // (not Go template actions): they are the target-local publisher's contract
 // (dns-publish.ksh's `sed -e "s|@SERIAL@|$serial|g" ...`), resolved only
 // there from failover state gonf does not have, never by this controller
-// render. The SOA MNAME override to DNSPublisher is likewise not a template
-// variable: the plan's DNS publication contract fixes the stable publisher
-// identity regardless of what a template's own SOA line names, so it stays a
-// deliberate post-render replacement here rather than something a template
-// edit could accidentally change.
+// render. The SOA MNAME override to server (the frontend that publishes this
+// copy, since both are independent masters) is likewise not a template
+// variable: it is a deliberate post-render replacement here rather than
+// something a template edit could accidentally change.
 //
 // A render failure, or a leftover legacy Rex "<%" directive in the result (a
 // template not fully ported to Go's text/template), is returned for the
 // caller to report (see renderPublisherFiles).
-func renderZoneTemplate(zone string, f3sHosts []string) (string, error) {
+func renderZoneTemplate(zone string, f3sHosts []string, server Server) (string, error) {
 	hosts := make([]f3sZoneHost, 0, len(f3sHosts))
 	for _, host := range f3sHosts {
 		family := SiteFor(host).Family
@@ -473,7 +430,7 @@ func renderZoneTemplate(zone string, f3sHosts []string) (string, error) {
 		content = strings.TrimRight(content, "\n") + "\n\n; Accepted LAN records (generated)\n" + string(lan)
 	}
 	content = strings.ReplaceAll(content,
-		"fishfinger.buetow.org. hostmaster.buetow.org.", DNSPublisher+"."+Domain+". hostmaster."+Domain+".")
+		"fishfinger.buetow.org. hostmaster.buetow.org.", server.FQDN+". hostmaster."+Domain+".")
 	if strings.Contains(content, "<%") {
 		return "", fmt.Errorf("unrendered legacy NSD template directive in %q", zone)
 	}

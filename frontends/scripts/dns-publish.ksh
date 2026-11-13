@@ -1,14 +1,15 @@
 #!/bin/ksh
 
-# The sole writer for effective frontend DNS zones. Gonf installs immutable
-# inputs below /var/nsd/etc/gonf-publisher and invokes this command without a
-# role; dns-failover.ksh invokes it with a health-verified role. A publication
+# The sole writer for this frontend's effective DNS zones. Both frontends run
+# it: each is an independent NSD master (KISS HA, see dns-failover.ksh), with
+# no zone transfer between them. Gonf installs immutable inputs below
+# /var/nsd/etc/gonf-publisher and invokes this command without a role;
+# dns-failover.ksh invokes it with a health-verified role. A publication
 # snapshots every affected live input before a single change, so an interrupted
 # run can restore a complete known-good set before accepting more work.
 
 set -eu
 
-readonly PUBLISHER=blowfish
 readonly INPUT_DIR=/var/nsd/etc/gonf-publisher
 readonly INPUT_ZONES=$INPUT_DIR/zones
 readonly INPUT_KEY=$INPUT_DIR/key.conf
@@ -17,6 +18,10 @@ readonly STATE=$STATE_DIR/state
 readonly JOURNAL=$STATE_DIR/journal
 readonly LOCK=$STATE_DIR/lock
 readonly ZONE_DIR=/var/nsd/zones/master
+# Transfer destination of the retired NSD secondary (fishfinger before the
+# KISS HA restore). Only read, to keep a former secondary's first serial
+# above the one it last served (serial_for).
+readonly SLAVE_ZONE_DIR=/var/nsd/zones/slave
 readonly STAGE_DIR=/var/nsd/zones/gonf-publisher
 readonly LIVE_KEY=/var/nsd/etc/key.conf
 readonly LIVE_CONFIG=/var/nsd/etc/nsd.conf
@@ -40,7 +45,6 @@ done
 shift $((OPTIND - 1))
 [ $# -eq 0 ] || usage
 
-[ "$(hostname -s)" = "$PUBLISHER" ] || exit 0
 [ -r "$INPUT_DIR/publisher.conf" ] || { print -u2 "missing publisher inputs"; exit 1; }
 [ -r "$INPUT_DIR/nsd.conf" ] || { print -u2 "missing publisher NSD configuration"; exit 1; }
 [ -r "$INPUT_KEY" ] || { print -u2 "missing publisher NSD key"; exit 1; }
@@ -279,8 +283,24 @@ acquire_lock() {
     return 2
 }
 
+# preferred_role prints the role both frontends serve while both are healthy:
+# the Standby host in odd UTC weeks, the Master host in even ones. It must
+# match dns-failover.ksh's preferred_role: a host publishing for the first
+# time (no state) then starts on the role its peer already serves instead of
+# DEFAULT_ROLE, which would split the two masters until the next failover run.
+preferred_role() {
+    typeset week
+    week=$(date -u +%U)
+    week=${week#0}
+    if [ $((week % 2)) -eq 1 ]; then
+        print -r -- "$STANDBY_NAME"
+    else
+        print -r -- "$MASTER_NAME"
+    fi
+}
+
 committed_role() {
-    [ -f "$STATE" ] || { print "$DEFAULT_ROLE"; return; }
+    [ -f "$STATE" ] || { preferred_role; return; }
     awk -F= -v master="$MASTER_NAME" -v standby="$STANDBY_NAME" '
         /^[[:space:]]*$/ { next }
         $1 == "role" { if (++n != 1 || ($2 != master && $2 != standby)) exit 1; role = $2; next }
@@ -289,8 +309,13 @@ committed_role() {
     ' "$STATE"
 }
 
+# serial_for prints the next SOA serial of zone: the live master zone's serial
+# plus one. A host without a master zone falls back to its retired secondary
+# copy (SLAVE_ZONE_DIR), so the first publication on a former secondary never
+# serves a lower serial than before; only a host with neither starts at 1.
 serial_for() {
     typeset zone=$1 file=$ZONE_DIR/$1.zone serial
+    [ -f "$file" ] || file=$SLAVE_ZONE_DIR/$1.zone
     [ -f "$file" ] || { print 1; return; }
     serial=$("$GONF" dns-zone-serial "$zone" "$file") || return 1
     if [ "$serial" -eq 4294967295 ]; then

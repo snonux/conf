@@ -11,15 +11,13 @@ const (
 	// Domain is the DNS suffix for the two public OpenBSD frontend hosts.
 	Domain = "buetow.org"
 
-	// Master and Standby name the active and failover frontend roles used by
-	// public service records. They do not select the DNS publication host.
+	// Master and Standby name the two frontend roles used by public service
+	// records. Which one is active is not fixed: both frontends are
+	// independent NSD masters, and dns-failover.ksh alternates the active
+	// role weekly (Standby in odd UTC weeks) and fails over to the healthy
+	// one (KISS HA). Master is also the publisher's DEFAULT_ROLE.
 	Master  = "fishfinger"
 	Standby = "blowfish"
-
-	// DNSPublisher is the d52 contract's sole stable host for publishing
-	// effective NSD zone files and SOA serials. It is independent of
-	// Master/Standby service-routing roles; e52 enforces the contract.
-	DNSPublisher = "blowfish"
 )
 
 // Server is the stable per-frontend data that Rex previously derived from its
@@ -267,7 +265,7 @@ func ServerFor(name string) (Server, bool) {
 // MustServer returns one frontend's stable addressing data. An unknown name
 // is a programmer error in static consumer inventory, so it panics rather
 // than reporting a declaration error: servers is a compile-time map and
-// every caller passes a package constant (Master, Standby, DNSPublisher) or
+// every caller passes a package constant (Master, Standby) or
 // a literal server name (gonf/cluster), never recipe or input data, so no
 // recipe run or input file can reach the panic (see gonf's AGENTS.md,
 // "Registration-time contract"). A lookup driven by input data would use
