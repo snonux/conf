@@ -38,7 +38,11 @@ import (
 // The unit is only enabled (WithEnableOnly), never started by an apply: on
 // a running guest the counter may still hold presses from its own boot
 // (the 2026-11-13 reproduction left it at 2), and starting the unit would
-// power the guest off.
+// power the guest off. The same holds until the guest's next boot for a
+// later start of multi-user.target (not an isolate): the unit has not run
+// in that boot yet, so RemainAfterExit does not cover it. A guest in steady
+// state reads 0 (a press logind sees powers it off), so check the counter
+// before enabling the unit on a running guest (r0-r2 read 0 on 2026-11-13).
 //
 // Hosts opt in with WithData(BhyveGuest{}) in gonf/cluster; others are
 // skipped (EachHostWith). Register with OnCluster(cluster.NameRockyAll).

@@ -204,6 +204,9 @@ func registerRockyPiHosts() (pi2, pi3 HostRef) {
 // registerPis) fold into rocky-all, which is every Rocky unattended host
 // (Pis + k3s + the standalone VM). Dtail remains limited to its existing
 // Pis/k3s role; adding unattended coverage must not add a server to rocky.
+// r0-r2 and the standalone VM all carry rocky.BhyveGuest: all four are
+// vm-bhyve guests ("rocky" on f0-f3), and a vm stop during the guest's boot
+// must still power it off (rocky.PowerButton, task j74; r0-r2 since n74).
 func registerRockyK3s(pi2, pi3 HostRef) {
 	rnode := HostDefaults(lan("root"),
 		WithPrivilege(PrivilegeSudo),
@@ -213,22 +216,22 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.120", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.120"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:05:00"}),
+		WithData(rocky.BhyveGuest{}),
 	)
 	r1 := Host("r1", rnode,
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.121", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.121"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:25:00"}),
+		WithData(rocky.BhyveGuest{}),
 	)
 	r2 := Host("r2", rnode,
 		WithData(dtail.ServerHost{BindAddress: "10.20.0.122", Platform: "linux"}),
 		WithData(rnodes.K3sNode{IP: "192.168.2.122"}),
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:45:00"}),
+		WithData(rocky.BhyveGuest{}),
 	)
 	// Root access is documented for the standalone VM; validate sudo and
 	// bootstrap gonf when it becomes reachable before approving a deploy.
-	// BhyveGuest: f3's vm stop during the guest's boot must still power it
-	// off (rocky.PowerButton, task j74). r0-r2 are bhyve guests too but do
-	// not carry it yet: the k3s nodes need their own one-at-a-time rollout.
 	standalone := Host("rocky", rnode,
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:55:00"}),
 		WithData(rocky.BhyveGuest{}),
