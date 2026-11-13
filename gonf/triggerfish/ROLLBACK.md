@@ -562,7 +562,7 @@ The six migration stages render the local-only IPv6 policy as two lines
 the same `ifconfig` calls netstart makes at boot.
 
 Port wiring is a closed table in router-rollback (`wiring`, mirroring
-`routerStages`, `ipv6Stages` and `cameraStages`). Stage checks that each zone
+`routerStages` (pruned in g74), `ipv6Stages` and `cameraStages`). Stage checks that each zone
 gateway sits on its wiring port and that the zone's PF macro names the same
 port: `10.20.0.1`/`lab_if` (with the lab ULA), `10.30.0.1`/`wifi_if` (igc2 from
 wifi-prepare on) and `10.40.0.1`/`cam_if`. A profile missing from the table
