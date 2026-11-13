@@ -39,6 +39,13 @@ not in the set. Keep the set equal to the Cluster NodePorts of `kubectl get
 svc -A` and to `receiver_ports` of `f3s_nodeport_guard`. Other mesh peers that
 reach a node over wg0 (measured from f0) still have the cross-node SNAT
 path; closing it would need a wg0 rule, which this task did not add.
+Rolled out on 2026-11-13 to r2, r1, r0, one node at a time under the live
+rollout lock, through `f3s-firewall check/apply/confirm` (candidate =
+confirmed SHA256 `72ce4fc0d0a4bf0b8a00b369f5d4f4780e70cb3e7349240dee4c02e5cc2a186f`);
+`f3s_nodeport_guard` stayed byte-identical. Afterwards f0 timed out on all
+five ports on every node, rocky reached 30001 on every node (and nothing
+else), the frontends over wg0 and every node to itself and its peers kept
+their access, and the `from_lan` drop counter stayed 0.
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
