@@ -13,6 +13,7 @@ import (
 	"github.com/snonux/conf/gonf/pihole"
 	"github.com/snonux/conf/gonf/rnodes"
 	"github.com/snonux/conf/gonf/rocky"
+	"github.com/snonux/conf/gonf/storagemigration"
 	"github.com/snonux/conf/gonf/triggerfish"
 	"github.com/snonux/conf/gonf/wireguard"
 	"github.com/snonux/conf/gonf/workstation"
@@ -32,6 +33,8 @@ import (
 func Register() {
 	workstation.Register()
 	RegisterMethods(endpointfiles.Retirement{Platform: "linux"}, WithPrefix("system_endpoints_"), WhenHostnameContains("earth"))
+	// One-shot (874): run by name on earth, then delete.
+	RegisterMethods(storagemigration.ClientRetirement{}, WithPrefix("system_nfs_client_migration_"), WhenHostnameContains("earth"))
 	RegisterMethods(triggerfish.Base{}, WithPrefix("triggerfish_"), OnCluster(cluster.NameTriggerfish))
 	RegisterMethods(endpointfiles.Retirement{Platform: "openbsd"}, WithPrefix("triggerfish_endpoints_"), OnCluster(cluster.NameTriggerfish))
 	RegisterOnCluster(cluster.NameTriggerfish, triggerfish.Unattended{})
@@ -78,9 +81,12 @@ func Register() {
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Base{}, rnodes.K3s{}, rnodes.WireGuard{})
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.NodePortGuard{})
 	RegisterOnCluster(cluster.NameRockyK3s, rnodes.Firewall{})
+	// One-shot (874): run by name on each r-node, then delete.
+	RegisterMethods(storagemigration.ClientRetirement{}, WithPrefix("rnodes_nfs_client_migration_"), OnCluster(cluster.NameRockyK3s))
 
 	RegisterMethods(freebsd.Unattended{}, WithPrefix("freebsd_"), OnCluster(cluster.NameFreeBSD))
-	RegisterOnCluster(cluster.NameFreeBSD, freebsd.StorageMigration{})
+	// One-shot (874): run by name on f0 and f1, then delete.
+	RegisterMethods(freebsd.StorageRetirement{}, WithPrefix("freebsd_storage_migration_"), OnCluster(cluster.NameFreeBSD))
 	// One Resolver recipe, two clusters: private_interfaces names each
 	// cluster's LAN interfaces (the bridge vm-public, which carries the
 	// f-host addresses after the task 764 move, and its member re0; vtnet0 on the guest).

@@ -26,10 +26,6 @@ func (Carp) DescFailbackNewsyslog() string {
 	return "Rotates /var/log/carp-auto-failback.log on f0 via /etc/newsyslog.conf"
 }
 
-func (Carp) DescMigrationCandidate() string {
-	return "Stages a CARP alias template without reading its password"
-}
-
 func (Debug) DescGdb() string { return "Installs gdb (kgdb for /var/crash/vmcore.N)" }
 
 func (F3sctl) DescPackage() string {
@@ -62,18 +58,10 @@ func (Monitoring) DescKernelRebootMetrics() string {
 
 func (Monitoring) DescPackage() string { return "Installs node_exporter" }
 
-func (NFS) DescMigrationCandidate() string {
-	return "Stages the new server listener using existing TLS paths"
-}
-
 func (NFS) DescStunnelPackage() string { return "Installs stunnel on f0/f1" }
 
 func (Periodic) DescTimes() string {
 	return "Runs periodic daily/weekly/monthly in each host's afternoon hour (hosts are off at night)"
-}
-
-func (Relayd) DescMigrationCandidate() string {
-	return "Stages VIP listeners and LAN backends without reloading"
 }
 
 func (Resolver) DescConf() string {
@@ -88,44 +76,8 @@ func (ShellyFans) DescScripts() string {
 	return "Installs the fan helper, its pinned CA, rc service and managed address override without running them"
 }
 
-func (StorageMigration) DescArm() string {
-	return "Saves the existing owned configuration with a fifteen-minute deadline"
-}
-
-func (StorageMigration) DescConfirm() string {
-	return "Archives the transaction after native acceptance on both members"
-}
-
-func (StorageMigration) DescEnable() string {
-	return "Advertises the shared address set after a fresh matching-pair audit"
-}
-
-func (StorageMigration) DescHold() string {
-	return "Fences CARP and stops storage hooks and listeners without stopping cron"
-}
-
-func (StorageMigration) DescPrepare() string {
-	return "Installs dormant native deadline and pre-netif boot recovery"
-}
-
-func (StorageMigration) DescReconcile() string {
-	return "Applies the existing CARP hook after the election settles"
-}
-
-func (StorageMigration) DescReleaseOld() string {
-	return "Enables restored CARP only after both old address sets match"
-}
-
-func (StorageMigration) DescRollback() string {
-	return "Restores old owned configuration while retaining the CARP fence"
-}
-
-func (StorageMigration) DescStage() string {
-	return "Installs dual endpoints only after both members are attested fenced"
-}
-
-func (StorageMigration) DescStatus() string {
-	return "Reports pending and fenced state without reading secret values"
+func (StorageRetirement) DescRetire() string {
+	return "Removes the storage-migration watchdog, boot hooks, helper and candidates"
 }
 
 func (Unattended) DescNewsyslog() string {

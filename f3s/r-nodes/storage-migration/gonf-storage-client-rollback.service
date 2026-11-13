@@ -1,7 +1,0 @@
-[Unit]
-Description=Restore an expired unconfirmed storage transport
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/gonf-storage-client watchdog
-TimeoutStartSec=90

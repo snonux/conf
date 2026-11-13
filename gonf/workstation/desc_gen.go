@@ -20,34 +20,6 @@ func (System) DescFishShell() string {
 
 func (System) DescHosts() string { return "Manages the fleet block of /etc/hosts (earth)" }
 
-func (System) DescNFSClientMigrationArm() string {
-	return "Saves Earth's existing transport with a bounded deadline"
-}
-
-func (System) DescNFSClientMigrationCandidate() string {
-	return "Stages earth's existing mutual-TLS client path"
-}
-
-func (System) DescNFSClientMigrationConfirm() string {
-	return "Accepts Earth's verified new TLS transport"
-}
-
-func (System) DescNFSClientMigrationPrepare() string {
-	return "Installs dormant Earth deadline and boot recovery"
-}
-
-func (System) DescNFSClientMigrationRollback() string {
-	return "Restores Earth's original TLS transport"
-}
-
-func (System) DescNFSClientMigrationStage() string {
-	return "Moves Earth's endpoint after its NFS mounts are released"
-}
-
-func (System) DescNFSClientMigrationStatus() string {
-	return "Reports Earth's pending endpoint transaction"
-}
-
 func (System) DescNFSClientStunnel() string {
 	return "Manages Earth's accepted NFS TLS endpoint without restarting transport"
 }

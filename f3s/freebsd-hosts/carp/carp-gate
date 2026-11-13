@@ -34,16 +34,14 @@
 #
 # Never lowers allow: "start" does nothing when allow is 1 or the loader did
 # not ask for the hold, so a manual run cannot drop a VIP. It does release a
-# hand-set allow=0, except the gonf-storage-migration "held" fence, which
-# wins. A SIGTERM (shutdown during the window) exits without allowing: a
-# host going down must not promote on a dead wire; release by hand with
-# "sysctl net.inet.carp.allow=1". Remove the loader.conf line before this
-# script, or CARP never starts.
+# hand-set allow=0. A SIGTERM (shutdown during the window) exits without
+# allowing: a host going down must not promote on a dead wire; release by
+# hand with "sysctl net.inet.carp.allow=1". Remove the loader.conf line
+# before this script, or CARP never starts.
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
 export PATH
 self=/usr/local/libexec/gonf-carp-gate
 logfile=/var/log/gonf-carp-gate.log
-storage_held=/var/db/gonf-storage-migration/held
 # shellcheck source=/dev/null
 . /usr/local/etc/gonf-carp-gate.conf
 : "${uplink:?}" "${vhid:?}" "${settle:?}" "${deadline:?}"
@@ -99,10 +97,6 @@ wait_tap() {
 
 allow() {
     trap - HUP INT TERM
-    if [ -e "$storage_held" ]; then
-        log "storage migration holds CARP ($storage_held); allow stays 0 ($1)"
-        return 0
-    fi
     if sysctl net.inet.carp.allow=1 >/dev/null; then
         log "CARP allowed: $1"
     else

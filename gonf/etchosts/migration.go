@@ -186,10 +186,9 @@ func migrationTarget(h lanHost, view string) (string, error) {
 
 // labAddress maps an inventory host's old 192.168.1.x LAN address to the
 // same suffix in the lab subnet 10.20.0.0/24. migrationTarget uses it for
-// every profile; the accepted one is the live fleet view. It copies
-// migrationaddress.Lab (task 974 removed the service candidates that also
-// called it); that package stays only for storagemigration (task 874) and
-// can be deleted with it.
+// every profile; the accepted one is the live fleet view. It is the former
+// migrationaddress.Lab, whose other callers (the service candidates, task
+// 974, and the storage candidates, task 874) are gone with that package.
 func labAddress(address string) (string, error) {
 	ip, err := netip.ParseAddr(address)
 	if err != nil || !netip.MustParsePrefix("192.168.1.0/24").Contains(ip) {

@@ -82,10 +82,12 @@ var nfsSysctls = List(
 // liveCheckCommand is f0's zrepl replication canary (f3s-storage skill,
 // references/zrepl.md): every 10 minutes it writes the epoch into
 // /data/nfs/nfs.LIVE_CHECK, and the replicated copy on f1 shows how far
-// zrepl lags. The text is the hand-added crontab line, byte for byte (% is
-// escaped for cron), so gonf adopts it. f0 only: on f1 /data/nfs is the
-// read-only zrepl sink and the touch would fail.
-const liveCheckCommand = `test ! -d /var/db/gonf-storage-migration/pending && test ! -e /var/db/gonf-storage-migration/held && test -f /data/nfs/nfs.DO_NOT_REMOVE && /usr/bin/touch /data/nfs/nfs.LIVE_CHECK && /bin/date +\%s > /data/nfs/nfs.LIVE_CHECK`
+// zrepl lags (% is escaped for cron). gonf adopted the hand-added crontab
+// line; task 874 dropped its storage-migration guards (no pending
+// transaction, no "held" fence) together with that helper, and gonf updates
+// its managed block in place. f0 only: on f1 /data/nfs is the read-only
+// zrepl sink and the touch would fail.
+const liveCheckCommand = `test -f /data/nfs/nfs.DO_NOT_REMOVE && /usr/bin/touch /data/nfs/nfs.LIVE_CHECK && /bin/date +\%s > /data/nfs/nfs.LIVE_CHECK`
 
 // DescRcConf returns the description for the rc.conf keys.
 func (NFS) DescRcConf() string {
@@ -186,7 +188,7 @@ func (NFS) DescLiveCheckCron() string {
 // WhenLiveCheckCron narrows the task to the failback host.
 func (NFS) WhenLiveCheckCron() TaskOption { return WhenHostnameIn(carpFailbackHost) }
 
-// LiveCheckCron adopts f0's canary job (see liveCheckCommand).
+// LiveCheckCron manages f0's canary job (see liveCheckCommand).
 func (NFS) LiveCheckCron() {
 	CronAt("nfs-live-check", "*/10 * * * *", liveCheckCommand)
 }
