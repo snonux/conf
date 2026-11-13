@@ -67,6 +67,17 @@ the fixture node's own 192.168.2.122, which it cannot probe); the
 o74 file fails it, as it admits every mesh peer. Before the change a
 5-minute SYN capture on wg0 of all three nodes saw no source other than
 .110/.111 on these ports.
+Rolled out on 2026-11-13 to r2, r1, r0 (09:44-09:52Z), one node at a time
+under the live rollout lock, through `f3s-firewall check/apply/confirm`
+(candidate = confirmed SHA256
+`4f9e52db217fa7fac36882a8839e3462b1dea475eedb260796e1352471bf26a2`);
+`f3s_nodeport_guard` stayed byte-identical. Afterwards f0's wg0 address timed
+out on all five ports on every node (before: open on every non-hosting node),
+its IPv6 got an instant reset, the frontends over wg0 kept 30001/30222/30800
+on every node and lost Bridge 30143/30025 everywhere (before: open on the
+non-hosting nodes), the nodes reached each other's wg0 addresses on all five
+ports, and the registry mirror, rocky on 30001, the laptop's wg2 path to
+32200 and the relayd host states stayed as before.
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
