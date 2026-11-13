@@ -29,7 +29,10 @@ if [ ! -f "$ISO" ]; then
 fi
 
 echo "Creating ${DISK}..."
+# The disk will hold the package signing key (provision.sh), so it must not
+# be readable by others: qemu-img creates it 0644 under the default umask.
 qemu-img create -f qcow2 "$DISK" 4G
+chmod 600 "$DISK"
 
 echo ""
 echo "Starting automated OpenBSD install (takes ~5 minutes)..."
