@@ -13,12 +13,12 @@ import (
 )
 
 // customOpenBSDPackages is shared by both frontends and must name the
-// release they run (both 7.9 since 2026-09-26). It has to match `uname -r`:
+// release they run (both 8.0 since 2026-11-13). It has to match `uname -r`:
 // the unattended-upgrade audit builds the same URL from it. Bump it after
 // the next release upgrade, once dtail/gogios are rebuilt into the new tree
 // (packages/Makefile OPENBSD_VERSION).
 const (
-	customOpenBSDPackages = "https://pkgrepo.f3s.buetow.org/openbsd/7.9/packages/amd64/"
+	customOpenBSDPackages = "https://pkgrepo.f3s.buetow.org/openbsd/8.0/packages/amd64/"
 	gogiosPluginDir       = "/usr/local/libexec/nagios"
 	f3sTakenDown          = "/var/db/f3s/monitoring/f3s_taken_down"
 )

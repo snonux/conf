@@ -11,7 +11,7 @@ set -e
 
 VMDIR="$(cd "$(dirname "$0")" && pwd)"
 DISK="$VMDIR/openbsd-build.qcow2"
-OBSD_VERSION="7.9"
+OBSD_VERSION="8.0"
 ISO="$VMDIR/install${OBSD_VERSION//./}.iso"
 SSH_PORT=2222
 RAM=1024

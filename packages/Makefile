@@ -74,7 +74,7 @@ PV_BASE         := /data/nfs/k3svolumes/pkgrepo
 FREEBSD_REPO    := freebsd/FreeBSD:15:amd64/latest
 # Must match the frontends' release and customOpenBSDPackages in
 # gonf/frontends/monitoring.go (the build VM runs the same release).
-OPENBSD_VERSION := 7.9
+OPENBSD_VERSION := 8.0
 OPENBSD_REPO    := openbsd/$(OPENBSD_VERSION)/packages/amd64
 NETBSD_VERSION  := 11.0
 NETBSD_REPO     = netbsd/$(NETBSD_VERSION)/packages/aarch64
