@@ -5,6 +5,13 @@ metadata:
   namespace: services
 spec:
   replicas: 1
+  # Pod swaps must not reach a pod that cannot answer (task r74). With one
+  # replica the default RollingUpdate (25% surge rounds up to 1, 25%
+  # unavailable rounds down to 0) already starts the new pod before the
+  # old one goes; minReadySeconds keeps the old pod until the new one has
+  # been Ready for 10 s, long enough for Traefik to add the new endpoint
+  # before it drops the old one, so it never has zero backends.
+  minReadySeconds: 10
   selector:
     matchLabels:
       app: webdav
@@ -43,6 +50,9 @@ spec:
         # digest. setup copies this image's conf/ tree into the shared
         # apache-conf emptyDir that the webdav container then runs with, so
         # both containers must always use the same image: bump them together.
+        # httpd.conf keeps the image's User/Group www-data lines: they only
+        # apply when httpd starts as root, and the webdav container runs as
+        # UID/GID 65534 from its securityContext, so they are ignored.
         image: docker.io/library/httpd:2.4.71@sha256:07e4ec0094d8bca9765fae74ce33d2be5341884048f265ff9dc1d1177a4256c9
         command:
         - /bin/bash
@@ -52,8 +62,6 @@ spec:
           cp -r /usr/local/apache2/logs /apache-logs-init/
           echo "Include conf/extra/httpd-dav.conf" >> /apache-conf/httpd.conf
           sed -i 's/Listen 80/Listen 8080/' /apache-conf/httpd.conf
-          sed -i 's/User daemon/User #65534/' /apache-conf/httpd.conf
-          sed -i 's/Group daemon/Group #65534/' /apache-conf/httpd.conf
           mkdir -p /lock-dir/apache2
           chown -R 65534:65534 /apache-conf /apache-logs-init /lock-dir
         volumeMounts:
@@ -78,6 +86,20 @@ spec:
           runAsGroup: 65534
         ports:
         - containerPort: 8080
+        # Readiness gates the Service endpoint on httpd accepting connections
+        # (task r74). Without it the pod counted as Ready as soon as the
+        # container started, and the first requests after the l54 rollouts got
+        # 502 or hung. tcpSocket, not httpGet: every path answers an anonymous
+        # request with 401, which httpGet counts as a failure, and the probe
+        # must not carry credentials.
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+        # Liveness stays on the NFS sentinel only: restart the pod when the
+        # NFS mount vanished and the local-XFS shadow shows through.
         livenessProbe:
           exec:
             command: ["test", "-f", "/var/www/webdav/.nfs-sentinel"]
@@ -85,6 +107,15 @@ spec:
           periodSeconds: 30
           failureThreshold: 3
           timeoutSeconds: 5
+        # On deletion the EndpointSlice marks the pod terminating (not ready)
+        # at once, but Traefik drops it from its backend list a moment later.
+        # Keep httpd serving for 10 s so requests routed in that window still
+        # get an answer; only then does the kubelet send the image's STOPSIGNAL
+        # (SIGWINCH, a graceful httpd stop that finishes running requests).
+        lifecycle:
+          preStop:
+            sleep:
+              seconds: 10
         volumeMounts:
         - name: webdav-data
           mountPath: /var/www/webdav
@@ -100,6 +131,9 @@ spec:
           mountPath: /usr/local/apache2/conf
         - name: apache-logs
           mountPath: /usr/local/apache2/logs
+      # 10 s preStop sleep plus the former 30 s default for httpd's graceful
+      # stop to finish running transfers before the kubelet kills it.
+      terminationGracePeriodSeconds: 40
       volumes:
       - name: webdav-data
         persistentVolumeClaim:

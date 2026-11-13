@@ -6,6 +6,13 @@ Serves File Browser's data: it mounts `filebrowser-data-pvc`
 (`/data/nfs/k3svolumes/filebrowser/data`) at `/var/www/webdav`, so File
 Browser must be deployed first. Runs as UID 65534 (fsGroup 65534).
 
+Rolling updates (chart changes, `rollout restart`) are hitless: a tcpSocket
+readinessProbe on 8080 (an anonymous HTTP probe would get 401),
+`minReadySeconds: 10` and a 10 s preStop sleep before httpd's graceful
+SIGWINCH stop. A drain or eviction still drops requests until the new pod is
+Ready: one replica, no PodDisruptionBudget. Liveness only checks the NFS
+sentinel.
+
 Auth comes from secret `webdav-htpasswd` (key `webdav.htpasswd`), not in git:
 
 ```sh
