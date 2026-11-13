@@ -344,14 +344,11 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f3"}),
 		WithData(f3Baseline),
 		WithData(f3Bhyve),
-		// Realtek vendor driver (realtek-re-kmod) instead of the in-tree re(4),
-		// whose RTL8168H transmit stalls ("re0: watchdog timeout") flapped
-		// CARP on f1 (task t74). f3 is the pilot: it had a reset on
-		// 2026-11-09 and carries no CARP or k3s node. VendorDriver false
-		// (and a reboot) is the rollback, the JetKVM loader prompt when the
-		// host has no network; before a 15.x minor upgrade see
-		// freebsd.Realtek.
-		WithData(freebsd.RealtekNIC{VendorDriver: true}),
+		// Back on the in-tree re(4) since 2026-11-13 (task x74): the user
+		// rejected the Realtek vendor driver (realtek-re-kmod, t74) because
+		// it has to be rebuilt and checked at every FreeBSD update. f1 and
+		// f2 follow one at a time; then the vendor-driver code goes.
+		WithData(freebsd.RealtekNIC{}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
