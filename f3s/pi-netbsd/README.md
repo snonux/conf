@@ -19,11 +19,10 @@ Gateway and DNS: triggerfish `10.20.0.1`. gonf owns the addressing
 `/etc/resolv.conf` (`pis_netbsd_resolver_conf`). 909 MiB RAM. SD
 `/dev/mmcblk0` (30 GB).
 
-**Before a rebuild:** `bake/bake-golden.sh` and `bake/setup.sh` still render
-the pre-migration `192.168.1.12N` with gateway/DNS `192.168.1.1`, which the
-lab cannot reach (conf task q74). Change them to `10.20.0.12N` and
-`10.20.0.1` first, and run `./gonf.sh cluster netbsd-pis pis_netbsd` once
-the node is up.
+**Rebuild:** the bake renders the node's lab address, ULA and gateway/DNS
+from the same gonf sources (task q74), so a rebuilt Pi boots where gonf
+keeps it. Run `./gonf.sh cluster netbsd-pis pis_netbsd` once the node is up
+(NPF, the managed `resolv.conf` and the rest of the node's config).
 
 Live services: bozohttpd (vhosts `f3s.buetow.org`, `www.f3s.buetow.org`,
 `standby.f3s.buetow.org`, `snonux.foo`, `www.snonux.foo`), WireGuard, NPF
@@ -78,20 +77,32 @@ free on `/`. Keep the twin up so the static backend stays served.
 
 ```sh
 cd f3s/pi-netbsd/bake
+./bake-golden.sh --render pi1   # optional: print the rendered setup.sh only
 ./bake-golden.sh pi1        # or pi0
 ```
 
 Downloads `arm64.img.gz` (NetBSD-11.0 evbarm-aarch64 gzimg, SHA-512 pinned,
-then `gzip -t`; a bad cache fails closed), renders `HOSTNAME`/`IPADDR` into
-`setup.sh`, boots it in qemu, drives the console with `config.exp`, verifies,
-syncs, powers off and writes `netbsd-piN-golden.img.gz`. The random backup
-password is printed and saved to `piN-cred.txt`; the SSH key is the real
-login.
+then `gzip -t`; a bad cache fails closed), renders `HOSTNAME`, `IPADDR`,
+`ULA`, `GW` and `DNS` into `setup.sh`, boots it in qemu, drives the console
+with `config.exp`, verifies, syncs, powers off and writes
+`netbsd-piN-golden.img.gz`. The random backup password is printed and saved
+to `piN-cred.txt`; the SSH key is the real login.
 
-`setup.sh` sets `sshd=YES`, hostname, `ifconfig_mue0`, `defaultroute`,
+The values come from this checkout's gonf config, not from the bake:
+`IPADDR`/`ULA` from the node's `netbsd.LANAddress` in
+`gonf/cluster/cluster.go`, `GW` from `labGateway` in `gonf/netbsd/network.go`,
+`DNS` from `labdns.Resolver`. A node without a `LANAddress` row needs
+`IPADDR` and `ULA` in the environment. A value that does not parse stops
+the bake before the download, a template line that did not render before
+qemu starts. `python3 -m unittest discover -s f3s/pi-netbsd/tests -p
+test_bake_render.py` (from the repo root) checks the rendered rc.conf lines
+against `pis_netbsd_network_rc_conf` without qemu.
+
+`setup.sh` sets `sshd=YES`, hostname, `ifconfig_mue0` (lab IPv4 plus the
+ULA alias, the line `pis_netbsd_network_rc_conf` writes), `defaultroute`,
 `dhcpcd=NO`, `resolv.conf`, user `paul` in `wheel` with key and argon2id
 password (root too), pubkey+password sshd, and an `rc.local` fallback that
-puts the static IP on the first ethernet interface if it isn't `mue0`.
+puts the static addresses on the first ethernet interface if it isn't `mue0`.
 
 Only update the pinned digest after verifying a formal replacement release.
 
@@ -212,6 +223,7 @@ wildcard `mv`.
 bake/bake-golden.sh        earth: qemu bake orchestrator
 bake/setup.sh              image customization template (rendered per node)
 bake/config.exp            expect console driver
+tests/test_bake_render.py  earth: offline render check against gonf (no qemu)
 flash/build-flasher.sh     Pi: builds /boot/flasher.img
 flash/95netbsdflash/       dracut module "netbsdflash" (module-setup.sh, flash.sh hook)
 ```

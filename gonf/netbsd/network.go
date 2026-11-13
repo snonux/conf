@@ -21,6 +21,9 @@ type Network struct{ RequiresRoot }
 // LANAddress is a controller's address on the lab segment. Interface is the
 // wired NIC (mue0 on the Pi 3B+), IPv4 the /24 lab address and ULA the /64
 // unique-local address; router advertisements stay off (ip6mode default).
+// f3s/pi-netbsd/bake/bake-golden.sh reads the row (kept on one line of the
+// Host call) from cluster.go, so a rebuilt Pi bakes the same addresses
+// (task q74).
 type LANAddress struct {
 	Interface, IPv4, ULA string
 }
@@ -29,6 +32,7 @@ const (
 	rcConf  = "/etc/rc.conf"
 	npfConf = "/etc/npf.conf"
 	// labGateway is triggerfish's lab address, the only default route.
+	// f3s/pi-netbsd/bake/bake-golden.sh reads it by name (task q74).
 	labGateway = "10.20.0.1"
 )
 
@@ -38,8 +42,9 @@ func (Network) RcConf() {
 		a.mustValidate()
 		// rc.d/network splits ifconfig_<if> at ';' into separate ifconfig
 		// calls: the primary IPv4 first, then the ULA as an inet6 alias.
-		// RootOwned resets rc.conf to the stock 0644 (it was 0600, likely
-		// from the bake script's mktemp/mv); it holds no secrets.
+		// RootOwned resets rc.conf to the stock 0644 (it was 0600 from the
+		// bake script's mktemp/mv, which chmods it since task q74); it holds
+		// no secrets.
 		File(rcConf, WithShellVars(
 			"ifconfig_"+a.Interface, "inet "+a.IPv4+" netmask 0xffffff00;inet6 "+a.ULA+" prefixlen 64 alias",
 			"defaultroute", labGateway,

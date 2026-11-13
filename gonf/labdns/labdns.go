@@ -20,4 +20,6 @@ package labdns
 //     so pods would get ad-blocked answers some of the time. Pi-hole also
 //     forwards public names through the router, so a fallback would only
 //     help when unbound alone is down.
+//
+// f3s/pi-netbsd/bake/bake-golden.sh reads this constant by name (task q74).
 const Resolver = "10.20.0.1"

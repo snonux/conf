@@ -5,16 +5,17 @@ import (
 	. "github.com/snonux/gonf/api"
 )
 
-// Resolver owns pi0/pi1's /etc/resolv.conf (task u54). The bake script wrote
-// it once with the ISP CPE 192.168.1.1, which the lab cannot reach after the
-// b24 cable move.
+// Resolver owns pi0/pi1's /etc/resolv.conf (task u54). The bake script used
+// to write it once with the ISP CPE 192.168.1.1, which the lab cannot reach
+// after the b24 cable move; since task q74 the bake renders labdns.Resolver
+// too, so only this file's comment changes on a rebuilt Pi's first push.
 //
 // The file is static: rc.conf has dhcpcd=NO and there is no
 // /etc/resolvconf.conf, so nothing regenerates it. Enabling dhcpcd would
 // overwrite it with whatever DHCP hands out. libc and Go reread a changed
 // resolv.conf, so nothing needs a restart.
 //
-// Rollback on one host: write "nameserver 192.168.1.1" back. A later
+// Rollback on one host: write the previous nameserver line back. A later
 // pis_netbsd aggregate run re-applies this file.
 type Resolver struct{ RequiresRoot }
 
