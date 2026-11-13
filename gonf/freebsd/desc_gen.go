@@ -76,10 +76,6 @@ func (ShellyFans) DescScripts() string {
 	return "Installs the fan helper, its pinned CA, rc service and managed address override without running them"
 }
 
-func (StorageRetirement) DescRetire() string {
-	return "Removes the storage-migration watchdog, boot hooks, helper and candidates"
-}
-
 func (Unattended) DescNewsyslog() string {
 	return "Appends unattended-upgrade log rotation to /etc/newsyslog.conf"
 }
