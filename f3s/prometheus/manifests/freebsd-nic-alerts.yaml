@@ -1,0 +1,70 @@
+# re(4) NIC watchdog resets on the FreeBSD bhyve hosts f0-f3 (task t74).
+#
+# All four f-hosts have the same Realtek RTL8168H/8111H (chip rev
+# 0x54000000, PCI rev 0x15) as re0, an address-less member of the bridge
+# vm-public. When the chip stalls, re(4) logs "re0: watchdog timeout" about
+# 5 s after the last transmit, resets the chip and the link stays down for
+# ~4 s. On f1 (CARP BACKUP) the stall itself is enough for a CARP
+# BACKUP -> MASTER flap: after 3.4 s without f0's advertisements f1
+# declares the master down, before the reset, while tap0 keeps vm-public
+# up (seen 2026-11-13 07:54:28-38Z; IQ
+# topics/infra/f3s/hosts/re0-watchdog.md).
+#
+# Metric: node_network_transmit_errs_total{device="re0"} is the interface's
+# Oerrs. re_watchdog() adds one per reset ("watchdog timeout"; the
+# "missed Tx interrupts -- recovering" path adds none), and re_txeof() adds
+# one per descriptor with the TX error summary bit, which full-duplex GbE
+# does not produce (the chip's own "Tx errors" counter was 0 on f1-f3 on
+# 2026-11-13). So each increase is, in practice, one watchdog reset. The
+# Oerrs of the bridge vm-public (failed member enqueues, 10^5 on f0) are
+# not NIC faults, hence the device filter.
+#
+# The counter starts at 0 on every boot. increase() treats the drop as a
+# counter reset and compensates for it, so a reboot alone does not fire,
+# while a reset soon after a short reboot does (0 -> boot -> 1). Missed:
+# a post-boot value equal to the pre-boot one (1 -> boot -> 1), or a
+# reset right after a boot that followed more than 30m of downtime; the
+# host's messages still have those.
+#
+# Gogios surfaces every firing alert as "Prometheus: <alertname>" (warning
+# -> WARNING), muted by /tmp/f3s_taken_down like all Prometheus-derived
+# checks. The 30m window keeps the alert firing long enough for several
+# Gogios runs to see it, then it resolves by itself; there is nothing to
+# acknowledge on the host.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freebsd-nic-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: freebsd-nic
+      interval: 30s
+      rules:
+        # node_uname_info adds the short host name (f0..f3) for the summary;
+        # the raw series is labelled only by the WireGuard instance address.
+        - alert: FreebsdNicWatchdogReset
+          expr: |
+            (increase(node_network_transmit_errs_total{os="freebsd",device=~"re[0-9]+"}[30m]) > 0)
+              * on (instance) group_left(nodename) node_uname_info{os="freebsd"}
+          for: 0s
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "{{ $labels.device }} watchdog reset on {{ $labels.nodename }} in the last 30m"
+            description: >
+              The {{ $labels.device }} transmit error counter of
+              {{ $labels.nodename }} ({{ $labels.instance }}) rose in the last
+              30 minutes: the Realtek NIC stalled and re(4) reset it (link down
+              ~4 s). On f1 this flaps CARP BACKUP -> MASTER for a few seconds
+              and r-node NFS can stall until f0's advertisement wins again.
+            action: >
+              ssh -p 22 paul@{{ $labels.nodename }}.lan.buetow.org "sh -c 'bzgrep -hE \"re[0-9]|carp\" /var/log/messages.0.bz2; grep -E \"re[0-9]|carp\" /var/log/messages'"
+              (messages rotates at 1 MB, five archives; the current file plus
+              .0 cover the alert's 30m) and add the time to
+              the incident list in IQ topics/infra/f3s/hosts/re0-watchdog.md,
+              which also lists the fix options (vendor driver
+              net/realtek-re-kmod, offloads, MSI).

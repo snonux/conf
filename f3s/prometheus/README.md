@@ -62,6 +62,13 @@ Current values worth knowing:
   for more than 36h, or absent for 3h. Gogios shows them as
   `Prometheus: ShellyTLS*`. `tests/test_shelly_tls_alerts.py` checks every
   threshold on both sides with promtool.
+- Realtek NIC resets on f0-f3 (task t74): `manifests/freebsd-nic-alerts.yaml`
+  fires `FreebsdNicWatchdogReset` (warning, `component=network`) for 30
+  minutes after an f-host's `re*` transmit error counter rises, which re(4)
+  does once per `re0: watchdog timeout` reset. On f1 such a reset flaps
+  CARP for a few seconds; history and fix options are in IQ
+  `topics/infra/f3s/hosts/re0-watchdog.md`.
+  `tests/test_freebsd_nic_alerts.py` checks it with promtool.
 - Alertmanager routes: `component=argocd`, `component=nfs` (30m repeat),
   `component=trivy`; Watchdog to `null`. All receivers are UI-only (no
   mail/webhook).
