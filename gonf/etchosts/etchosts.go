@@ -15,6 +15,8 @@
 // retired in j24. The staging/target/ap-target previews of the router
 // migration and their hosts-migration command were deleted in task f74
 // (see conf history); the live fleet view is the only one left.
+// check-offline.py checks that the generated frontends files are current
+// and asserts the main facts of that view.
 //
 // The f-host recipe (freebsd.Base.Hosts) and the r-node recipe
 // (rnodes.Base.Hosts) render the rows from here into their own OS-specific

@@ -70,9 +70,9 @@ IPv6 recovery are preserved; the NM profile owns new-mode RA suppression.
 Native activation must use the existing `f3s-firewall` check/apply/fresh-confirm
 loader, two independent OLD SSH sessions and its own rollback timer. Preserve
 old candidate/confirmed state and unrelated Docker/firewalld rules. Never load
-the candidate directly with `nft -f` on a host. At accepted policy transition,
-update canonical staging so it cannot overwrite the selected migration policy.
-Canonical `pihole_firewall_stage` now stages that same migration policy.
+the candidate directly with `nft -f` on a host. Since the accepted policy
+transition, canonical `pihole_firewall_stage` stages that policy, now
+`f3s-guard.nft`, the live one.
 
 Pi-hole's original `LOCAL` mode rejects routed wg2 clients, even when the host
 guard permits them. Canonical compose uses `SINGLE` on `eth0` (plus Pi-hole's

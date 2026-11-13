@@ -15,7 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory(prefix='conf-hosts-test-') as directory:
     base = Path(directory)
     hosts, candidate, helper = (base / n for n in ('hosts', 'candidate', 'merge'))
-    helper.write_text((ROOT / 'gonf/fleetfiles/assets/merge-hosts').read_text().replace('target=/etc/hosts', 'target=' + str(hosts)))
+    source = (ROOT / 'gonf/fleetfiles/assets/merge-hosts').read_text()
+    # Never let the merger touch the real /etc/hosts.
+    assert 'target=/etc/hosts\n' in source, 'merge-hosts target line changed'
+    helper.write_text(source.replace('target=/etc/hosts', 'target=' + str(hosts)))
     helper.chmod(0o755)
     original = '# local\n127.0.0.1 localhost f0\n192.168.1.130 f0 unrelated\n2001:db8::1 public.example\n'
     hosts.write_text(original)
