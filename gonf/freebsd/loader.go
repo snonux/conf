@@ -6,8 +6,10 @@ import (
 
 // Loader owns individual lines of /boot/loader.conf on the f-hosts. The file
 // itself stays hand-managed: the install-time kern.geom.label.* and zfs_load
-// lines stay as they are, and carp_load belongs to Carp.LoaderConf (f0/f1
-// only), so this recipe never renders the whole file. Each managed setting is a
+// lines stay as they are, carp_load belongs to Carp.LoaderConf (f0/f1
+// only), the Realtek vendor driver lines (if_re_load, if_re_name,
+// hw.re.s5wol) to Realtek.LoaderConf, so this recipe never renders the
+// whole file. Each managed setting is a
 // WithKeyedLine: the line starting with the setting's name is replaced in
 // place (a changed value or comment converges, a duplicate is dropped), and
 // appended when missing.

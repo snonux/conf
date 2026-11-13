@@ -292,6 +292,12 @@ func registerFreeBSD() {
 		WithData(freebsd.CarpNode{Interface: freebsd.LabBridge, GateDeadline: 60}),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSServer{NISIP: "10.20.0.130"}),
+		// In-tree re(4) until f1 has run a week on the vendor driver without
+		// a re0 stall (task v74). The _2 build has no TX watchdog, so
+		// FreebsdNicWatchdogReset cannot see one: judge by f1 staying
+		// reachable and CARP BACKUP. f0's reboot is a controlled CARP
+		// failover. See f3's RealtekNIC.
+		WithData(freebsd.RealtekNIC{}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
@@ -307,6 +313,8 @@ func registerFreeBSD() {
 		// it hears f0 (60 s) and never promotes while f0 is coming up.
 		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: freebsd.LabBridge}),
 		WithData(k3sBhyve),
+		// In-tree re(4) for now (t74 order: f3, f1, f2, f0). See f3's RealtekNIC.
+		WithData(freebsd.RealtekNIC{}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
@@ -319,6 +327,8 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f2"}),
 		WithData(f2Baseline),
 		WithData(k3sBhyve),
+		// In-tree re(4) for now (t74 order: f3, f1, f2, f0). See f3's RealtekNIC.
+		WithData(freebsd.RealtekNIC{}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
@@ -331,6 +341,14 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f3"}),
 		WithData(f3Baseline),
 		WithData(f3Bhyve),
+		// Realtek vendor driver (realtek-re-kmod) instead of the in-tree re(4),
+		// whose RTL8168H transmit stalls ("re0: watchdog timeout") flapped
+		// CARP on f1 (task t74). f3 is the pilot: it had a reset on
+		// 2026-11-09 and carries no CARP or k3s node. VendorDriver false
+		// (and a reboot) is the rollback, the JetKVM loader prompt when the
+		// host has no network; before a 15.x minor upgrade see
+		// freebsd.Realtek.
+		WithData(freebsd.RealtekNIC{VendorDriver: true}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)

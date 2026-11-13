@@ -7,7 +7,8 @@
 #
 # Cron-driven (per-host minute offsets). Partner ping gates reboots only
 # (not pkg) so a sibling powered off on purpose does not block patches.
-# f3 never auto-reboots. Companion:
+# f3 never auto-reboots. A kernel reboot waits while the Realtek vendor NIC
+# module does not match the new kernel (gonf-realtek-kmod-check). Companion:
 # frontends/docs/unattended-upgrades.md (plan record:
 # docs/archive/frontends/docs/unattended-upgrades-freebsd.plan.md)
 #
@@ -98,6 +99,24 @@ kernel_reboot_pending() {
 	[ -n "$installed" ] && [ -n "$running" ] && [ "$installed" != "$running" ]
 }
 
+# Realtek vendor NIC driver guard (conf task t74, gonf freebsd_realtek_*):
+# realtek-re-kmod is built per FreeBSD minor release, but the loader would
+# load a 15.1 module into a 15.2 kernel, which can leave the host without
+# network. The check passes where loader.conf does not load the module.
+# Absent check (host not yet deployed) = no vendor driver = nothing to guard.
+REALTEK_CHECK=/usr/local/libexec/gonf-realtek-kmod-check
+
+realtek_module_ok() {
+	typeset out
+	typeset -i rc
+	[ -x "$REALTEK_CHECK" ] || return 0
+	out=$("$REALTEK_CHECK" 2>&1)
+	rc=$?
+	[ $rc -eq 0 ] && return 0
+	log "$out"
+	return 1
+}
+
 # Whole-job lock. Steal locks older than 2 h.
 if ! mkdir "$LOCK" 2>/dev/null; then
 	if [ -n "$(find "$LOCK" -mmin +120 2>/dev/null)" ]; then
@@ -154,6 +173,7 @@ maybe_reboot() {
 	if [ "$ALLOW_REBOOT" -ne 1 ]; then
 		if kernel_reboot_pending; then
 			log "kernel reboot pending (installed=$(freebsd-version -k), running=$(freebsd-version -r)) — f3 never auto-reboots"
+			realtek_module_ok || log "WARNING: realtek-re-kmod does not match the new kernel; fix it before the manual reboot (IQ re0-watchdog.md)"
 		fi
 		return 0
 	fi
@@ -161,6 +181,10 @@ maybe_reboot() {
 		return 0
 	fi
 	if ! kernel_reboot_pending; then
+		return 0
+	fi
+	if ! realtek_module_ok; then
+		log "REFUSING kernel reboot: realtek-re-kmod does not match the new kernel $(freebsd-version -k); see IQ re0-watchdog.md (upgrade guard)"
 		return 0
 	fi
 	if [ -n "$PARTNERS" ] && ! partners_up; then

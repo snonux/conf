@@ -1,0 +1,144 @@
+#!/bin/sh
+# gonf-realtek-kmod-check (conf task t74): is it safe to boot the Realtek
+# vendor driver (net/realtek-re-kmod, /boot/modules/if_re.ko) for re0?
+# Installed on f0-f3 by gonf freebsd_realtek_check (gonf/freebsd/realtek.go);
+# source f3s/freebsd-hosts/realtek/realtek-kmod-check in the conf repo.
+#
+# Why: the kmod is built for one minor release (its pkg annotation
+# FreeBSD_version, e.g. 1501000 = 15.1; the FreeBSD-ports-kmods repo is
+# kmods_*_<minor>). Its kernel dependency (DECLARE_MODULE) accepts any
+# 15.x kernel, so after freebsd-update installs a 15.2 kernel the loader
+# would still load the 15.1 module, and a KBI change there can leave the
+# host without network (JetKVM only). Patch levels (15.1-pN) keep the KBI.
+#
+# Usage:
+#   gonf-realtek-kmod-check      next boot: OK when the loader (loader.conf,
+#                                loader.conf.local, loader.conf.d/*.conf) does
+#                                not load the vendor module, or when it
+#                                does and the module matches the kernel that
+#                                boots next (freebsd-version -k).
+#                                unattended-upgrade-freebsd runs this before
+#                                a kernel reboot; run it by hand before any
+#                                reboot after freebsd-update.
+#   gonf-realtek-kmod-check -r   ready: the module must be installed, intact
+#                                and match both the installed (next boot) and
+#                                the running kernel, whatever loader.conf
+#                                says. gonf runs this before it writes the
+#                                loader.conf lines.
+#
+# Exit 0: safe. Exit 1: not safe; the reason goes to stderr and to syslog
+# (daemon.err, tag gonf-realtek-kmod-check). Exit 64: usage.
+
+set -u
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+# Offline test hooks (f3s/tests/realtek-kmod-check.sh): fake pkg,
+# freebsd-version and logger first in PATH, and fixture paths. Unset on
+# the hosts.
+if [ -n "${REALTEK_CHECK_TEST_PATH:-}" ]; then
+	PATH="$REALTEK_CHECK_TEST_PATH:$PATH"
+fi
+export PATH
+
+readonly pkgname=realtek-re-kmod
+readonly module="${REALTEK_CHECK_TEST_MODULE:-/boot/modules/if_re.ko}"
+readonly loader_conf="${REALTEK_CHECK_TEST_LOADER_CONF:-/boot/loader.conf}"
+readonly tag=gonf-realtek-kmod-check
+
+fail() {
+	echo "$tag: $*" >&2
+	logger -p daemon.err -t "$tag" "$*" 2>/dev/null
+	exit 1
+}
+
+# release_key 15.1-RELEASE-p2 -> 1501 (major * 100 + minor).
+release_key() {
+	echo "$1" | sed -nE 's/^([0-9]+)\.([0-9]+)-.*/\1 \2/p' | {
+		read -r major minor || exit 1
+		printf '%d\n' $((major * 100 + minor))
+	}
+}
+
+# kmod_osversion prints the FreeBSD_version the installed package was built
+# for: its FreeBSD_version annotation (poudriere sets it on kmod packages),
+# else the third dotted field of the version (1102.01.1501000_2 -> 1501000).
+kmod_osversion() {
+	v=$(pkg query '%At %Av' "$pkgname" 2>/dev/null |
+		awk '$1 == "FreeBSD_version" { print $2; exit }')
+	if [ -z "$v" ]; then
+		v=$(pkg query '%v' "$pkgname" 2>/dev/null |
+			awk -F. '{ sub(/_.*/, "", $3); print $3 }')
+	fi
+	case $v in
+	''|*[!0-9]*) return 1 ;;
+	esac
+	echo "$v"
+}
+
+# loader_files lists the files the loader reads settings from that exist:
+# loader.conf, loader.conf.local and loader.conf.d/*.conf next to it, plus
+# /dev/null, so grep always gets a file argument (FreeBSD xargs runs no
+# command on empty input and exits 0, which would read as a match).
+loader_files() {
+	echo /dev/null
+	for f in "$loader_conf" "$loader_conf.local" "${loader_conf%/*}"/loader.conf.d/*.conf; do
+		[ -f "$f" ] && echo "$f"
+	done
+}
+
+# loader_loads_vendor succeeds when any loader file enables if_re_load
+# (any case, quoted or not, indented or not).
+loader_loads_vendor() {
+	loader_files | xargs grep -Eiq '^[[:space:]]*if_re_load[[:space:]]*=[[:space:]]*"?yes"?([[:space:]]|$)'
+}
+
+# loader_names_module succeeds when a loader file points if_re_name at
+# the package's module.
+loader_names_module() {
+	loader_files | xargs grep -Eq "^[[:space:]]*if_re_name[[:space:]]*=[[:space:]]*\"?$module\"?([[:space:]]|$)"
+}
+
+# check_module verifies the package and its module file against the kernel
+# release(s) given as arguments (freebsd-version output).
+check_module() {
+	pkg query '%n' "$pkgname" >/dev/null 2>&1 ||
+		fail "$pkgname is not installed"
+	[ -f "$module" ] || fail "$module is missing"
+	owner=$(pkg which -q "$module" 2>/dev/null)
+	case $owner in
+	"$pkgname"-[0-9]*) ;;
+	*) fail "$module does not belong to $pkgname (owner: ${owner:-none})" ;;
+	esac
+	pkg check -s -q "$pkgname" >/dev/null 2>&1 ||
+		fail "$pkgname files fail their checksums (pkg check -s)"
+	osv=$(kmod_osversion) || fail "cannot read the FreeBSD_version $pkgname was built for"
+	built=$((osv / 1000))
+	for release in "$@"; do
+		key=$(release_key "$release") || fail "cannot parse kernel release '$release'"
+		[ "$key" -eq "$built" ] ||
+			fail "$pkgname was built for FreeBSD_version $osv, kernel is $release: before rebooting, set gonf RealtekNIC.VendorDriver false and deploy freebsd_realtek_loader_conf (drops the if_re_* lines); once the new userland is in, pkg upgrade and set it true again"
+	done
+}
+
+installed=$(freebsd-version -k) || fail "freebsd-version -k failed"
+
+case ${1:-} in
+'')
+	if ! loader_loads_vendor; then
+		echo "$tag: the loader does not load the vendor driver; in-tree re(4) boots"
+		exit 0
+	fi
+	loader_names_module ||
+		fail "the loader loads if_re but if_re_name is not $module"
+	check_module "$installed"
+	echo "$tag: OK, $pkgname matches the next kernel $installed"
+	;;
+-r)
+	running=$(freebsd-version -r) || fail "freebsd-version -r failed"
+	check_module "$installed" "$running"
+	echo "$tag: ready, $pkgname matches kernel $installed (running $running)"
+	;;
+*)
+	echo "usage: $tag [-r]" >&2
+	exit 64
+	;;
+esac

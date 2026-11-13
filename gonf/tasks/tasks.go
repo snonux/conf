@@ -96,7 +96,7 @@ func Register() {
 		freebsd.Bhyve{}, freebsd.Debug{}, freebsd.Microcode{}, freebsd.Loader{},
 		freebsd.Base{}, freebsd.Baseline{}, freebsd.Goprecords{},
 		freebsd.Monitoring{}, freebsd.F3sctl{}, freebsd.WireGuard{},
-		freebsd.Uplink{})
+		freebsd.Uplink{}, freebsd.Realtek{})
 
 	RegisterMethods(garage.Deployment{}, WithPrefix("garage_"), OnCluster(cluster.NameGarage))
 	// Controller-local and Operational: wireguard_mesh_install runs
