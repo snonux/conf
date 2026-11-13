@@ -313,8 +313,10 @@ func registerFreeBSD() {
 		// it hears f0 (60 s) and never promotes while f0 is coming up.
 		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: freebsd.LabBridge}),
 		WithData(k3sBhyve),
-		// In-tree re(4) for now (t74 order: f3, f1, f2, f0). See f3's RealtekNIC.
-		WithData(freebsd.RealtekNIC{}),
+		// Realtek vendor driver since 2026-11-13 (t74, after the f3 pilot):
+		// f1 had four re0 TX stalls in ten days, each a ~6 s CARP flap.
+		// See f3's RealtekNIC.
+		WithData(freebsd.RealtekNIC{VendorDriver: true}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
