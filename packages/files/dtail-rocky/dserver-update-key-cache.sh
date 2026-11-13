@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/sh
 # Refresh dserver keys without following daemon-controlled destinations.
 # Keep this portable body identical in the four package variants.
 set -eu

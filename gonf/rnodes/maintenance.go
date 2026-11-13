@@ -96,7 +96,11 @@ func activateNFSMountMonitorUnits(inputs []Resource) {
 //
 // PersistentJournal creates persistent journal storage and installs its
 // journald drop-in. A changed drop-in creates journal state and restarts
-// journald before the unconditional journal flush.
+// journald, then the runtime journal is flushed to /var/log/journal. The
+// flush is gated on the drop-in like the restart: once storage is
+// persistent, journald writes there itself (systemd-journal-flush at boot),
+// so an every-run flush did nothing but keep the rnodes preview from ever
+// reaching 0 would-change.
 func (Maintenance) PersistentJournal() {
 	EnsureDir("/etc/systemd/journald.conf.d", RootOwned)
 	EnsureDir("/var/log/journal", Perm(0o2755, "root:systemd-journal"))
@@ -106,7 +110,7 @@ func (Maintenance) PersistentJournal() {
 		RootOwned)
 	tmpfiles := Sh("systemd-tmpfiles --create --prefix /var/log/journal", OnChange(dropIn))
 	journald := Sh("systemctl restart systemd-journald", OnChange(dropIn))
-	Sh("journalctl --flush", DependsOn(tmpfiles, journald))
+	Sh("journalctl --flush", OnChange(dropIn), DependsOn(tmpfiles, journald))
 }
 
 // nfsUnderlyingCheck runs its argument against the directory the NFS mount
