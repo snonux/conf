@@ -66,7 +66,8 @@ Current values worth knowing:
   fires `FreebsdNicWatchdogReset` (warning, `component=network`) for 30
   minutes after an f-host's `re*` transmit error counter rises, which re(4)
   does once per `re0: watchdog timeout` reset. On f1 such a reset flaps
-  CARP for a few seconds; history and fix options are in IQ
+  CARP for a few seconds; history, the driver decision (in-tree re(4)) and
+  the remaining options are in IQ
   `topics/infra/f3s/hosts/re0-watchdog.md`.
   `tests/test_freebsd_nic_alerts.py` checks it with promtool.
 - Alertmanager routes: `component=argocd`, `component=nfs` (30m repeat),

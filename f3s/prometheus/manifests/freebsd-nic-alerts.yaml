@@ -66,5 +66,5 @@ spec:
               (messages rotates at 1 MB, five archives; the current file plus
               .0 cover the alert's 30m) and add the time to
               the incident list in IQ topics/infra/f3s/hosts/re0-watchdog.md,
-              which also lists the fix options (vendor driver
-              net/realtek-re-kmod, offloads, MSI).
+              which also records the driver decision (in-tree re(4); the
+              vendor driver was tried and dropped) and the remaining options.

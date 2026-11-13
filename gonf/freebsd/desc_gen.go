@@ -64,16 +64,6 @@ func (Periodic) DescTimes() string {
 	return "Runs periodic daily/weekly/monthly in each host's afternoon hour (hosts are off at night)"
 }
 
-func (Realtek) DescCheck() string {
-	return "Removes gonf-realtek-kmod-check, the vendor driver's upgrade guard"
-}
-
-func (Realtek) DescLoaderConf() string {
-	return "Removes the vendor driver lines from /boot/loader.conf, so the in-tree re(4) claims re0 at the next boot"
-}
-
-func (Realtek) DescPackage() string { return "Removes realtek-re-kmod (/boot/modules/if_re.ko)" }
-
 func (Resolver) DescConf() string {
 	return "Writes /etc/resolvconf.conf with the lab resolver and regenerates /etc/resolv.conf"
 }
