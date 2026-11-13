@@ -17,13 +17,28 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 echo "Starting build VM..."
 "$VMDIR/start.sh"
 
-# Set up SSH key — use sshpass if available, fall back to manual prompt
+# Set up SSH key access with a password-only login. ssh-copy-id first offers
+# every agent key, and the fresh OpenBSD sshd (PerSourcePenalties) then
+# penalises this source and closes further connections ("Not allowed at this
+# time"), which is how the 8.0 reinstall failed. The first boot (host key
+# generation, kernel relink) also outlasts start.sh's 60 s wait, so retry the
+# login every 20 s for up to 5 minutes; the pause also lets a penalty expire.
 echo "Setting up SSH key access..."
+PASSWORD_OPTS="-o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive -o ConnectTimeout=10"
+install_keys() {
+    { ssh-add -L 2>/dev/null; cat "$HOME"/.ssh/id_*.pub 2>/dev/null; } | sort -u |
+        "$@" ssh $SSH_OPTS $PASSWORD_OPTS -p $SSH_PORT pbuild@localhost \
+            'umask 077; mkdir -p .ssh; cat >> .ssh/authorized_keys'
+}
 if command -v sshpass &>/dev/null; then
-    sshpass -p build123 ssh-copy-id $SSH_OPTS -p $SSH_PORT pbuild@localhost 2>/dev/null
+    for attempt in $(seq 1 15); do
+        install_keys sshpass -p build123 && break
+        [ "$attempt" -eq 15 ] && { echo "SSH key setup failed"; exit 1; }
+        sleep 20
+    done
 else
     echo "sshpass not found. Enter the build user password (build123) when prompted:"
-    ssh-copy-id $SSH_OPTS -p $SSH_PORT pbuild@localhost
+    install_keys env
 fi
 
 SSH="ssh $SSH_OPTS -p $SSH_PORT pbuild@localhost"
