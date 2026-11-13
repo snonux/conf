@@ -9,6 +9,7 @@ table inet f3s_guard {
     # that does not host the pod masquerades a NodePort connection to its
     # flannel address 10.42.N.0, which every one of these receivers admits,
     # so without this restriction any lab host bypassed the receiver policy.
+    # u74 applies the same restriction to wg0 mesh peers.
     # Keep in sync with the receiver_ports of f3s_nodeport_guard and with
     # `kubectl get svc -A` (Local NodePorts keep the client source and are
     # filtered by their own policy, so they are not listed).
@@ -20,6 +21,9 @@ table inet f3s_guard {
         type filter hook prerouting priority -150; policy accept;
         # Preserve original host/NodePort destination before kube-proxy DNAT.
         iifname "enp0s5" fib daddr type local jump from_lan
+        # u74: the same Cluster NodePort bypass over the wg0 mesh. Every other
+        # wg0 port stays uninspected (etcd, API, kubelet, NFS, monitoring).
+        iifname "wg0" fib daddr type local tcp dport @cluster_nodeports jump wg0_cluster_nodeport
     }
     chain from_lan {
         ct state established,related return
@@ -59,7 +63,25 @@ table inet f3s_guard {
         # registry-nodeport admits 10.20.0.123/32 for the same-node path.
         ip saddr 10.20.0.123 ip daddr 10.20.0.0/24 tcp dport 30001 return
         # Every other enp0s5 source, incl. f-hosts, Pis and wg2. The frontends
-        # (relayd) reach these ports over wg0, which never enters this table.
+        # (relayd) reach these ports over wg0: see wg0_cluster_nodeport.
+        counter drop
+    }
+    chain wg0_cluster_nodeport {
+        # u74: a node that does not host the pod masquerades the connection to
+        # 10.42.N.0 (see cluster_nodeports), so admit here exactly the wg0
+        # ipBlocks of the receiver NetworkPolicies registry-nodeport, forgejo,
+        # anki-sync-server and protonbridge-nodeport; check-offline.py derives
+        # its expectations from those policies, so a change there fails it.
+        ct state established,related return
+        # The r-nodes (node-to-node probes) and the laptop/phone wg0 peers
+        # .200/.201 (via the gateways): all five ports.
+        ip saddr { 192.168.2.120, 192.168.2.121, 192.168.2.122, 192.168.2.200, 192.168.2.201 } return
+        # The frontends' relayd (blowfish .110, fishfinger .111) forwards only
+        # registry 30001, Forgejo SSH 30222 and Anki 30800; Bridge 30143/30025
+        # does not admit them (its clients use a kubectl port-forward).
+        ip saddr { 192.168.2.110, 192.168.2.111 } tcp dport { 30001, 30222, 30800 } return
+        # Every other mesh peer (f-hosts, Pis, rocky via a gateway) and all
+        # IPv6, as those Services are IPv4-only and no policy admits IPv6.
         counter drop
     }
 }

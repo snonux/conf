@@ -37,8 +37,8 @@ enter this table. The Local NodePorts 30090/30091/32200 and Traefik's
 31637/30154 keep the client source, so their own policies decide and they are
 not in the set. Keep the set equal to the Cluster NodePorts of `kubectl get
 svc -A` and to `receiver_ports` of `f3s_nodeport_guard`. Other mesh peers that
-reach a node over wg0 (measured from f0) still have the cross-node SNAT
-path; closing it would need a wg0 rule, which this task did not add.
+reached a node over wg0 (measured from f0) kept the cross-node SNAT path
+until task u74, below.
 Rolled out on 2026-11-13 to r2, r1, r0, one node at a time under the live
 rollout lock, through `f3s-firewall check/apply/confirm` (candidate =
 confirmed SHA256 `72ce4fc0d0a4bf0b8a00b369f5d4f4780e70cb3e7349240dee4c02e5cc2a186f`);
@@ -46,6 +46,21 @@ confirmed SHA256 `72ce4fc0d0a4bf0b8a00b369f5d4f4780e70cb3e7349240dee4c02e5cc2a18
 five ports on every node, rocky reached 30001 on every node (and nothing
 else), the frontends over wg0 and every node to itself and its peers kept
 their access, and the `from_lan` drop counter stayed 0.
+
+Task u74 (2026-11-13) closes the same bypass for wg0 mesh peers. New wg0
+TCP to a local address on a `cluster_nodeports` port jumps into chain
+`wg0_cluster_nodeport`, which admits exactly the wg0 ipBlocks of the receiver
+policies: the r-nodes 192.168.2.120-122 and the laptop/phone .200/.201 on all
+five ports, the frontends .110/.111 (relayd) only on 30001/30222/30800, the
+ports relayd forwards; `protonbridge-nodeport` does not admit them. Every
+other mesh peer (f-hosts, Pis, rocky routed through a gateway) and all IPv6
+(the Services are IPv4-only, no policy admits IPv6) is counted and dropped.
+Established flows and every other wg0 port (etcd, API, kubelet, NFS,
+monitoring) are not inspected. `check-offline.py` derives the wg0
+expectations from the four policies in `f3s/network-policies/namespaces`
+(map `NODEPORT_POLICIES`), so a policy change fails the check until the
+guard follows it; the o74 file fails it, as it admits every mesh peer. Before the change a 5-minute SYN capture on wg0 of all
+three nodes saw no source other than .110/.111 on these ports.
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),

@@ -75,7 +75,8 @@ git clone ssh://git@r0.wg0.wan.buetow.org:30222/<user>/<repo>.git # wg0 mesh, di
 
 The direct NodePort is not open to the lab LAN: since task o74 the r-node
 source guard admits 30222 on enp0s5 only from the r-nodes themselves, and the
-`forgejo` receiver policy admits the frontends, laptop/phone wg0 and node paths.
+`forgejo` receiver policy admits the frontends, laptop/phone wg0 and node paths;
+since task u74 the guard drops every other wg0 mesh peer on it too.
 
 SSH is on 2022 because 22 draws scanners and 2222 is dserver on the gateways.
 Gateway admin SSH stays on port 2. For the short form:

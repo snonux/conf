@@ -10,8 +10,10 @@ OpenBSD frontends forwards `registry.f3s.buetow.org` to NodePort 30001
 ## Push from a workstation
 
 On the lab LAN only rocky (10.20.0.123) and the r-nodes reach NodePort 30001
-(task o74: the r-node source guard and `registry-nodeport` both admit rocky);
-from another host push over wg0, e.g. `r0.wg0.wan.buetow.org:30001`.
+(task o74: the r-node source guard and `registry-nodeport` both admit rocky).
+Over wg0 only the laptop/phone (192.168.2.200/.201), the frontends and the
+r-nodes do (task u74), e.g. a roaming push to `r0.wg0.wan.buetow.org:30001`;
+other mesh peers such as the f-hosts are dropped.
 
 ```sh
 sudo bash -c 'echo "{ \"insecure-registries\": [\"r0.lan.buetow.org:30001\",\"r1.lan.buetow.org:30001\",\"r2.lan.buetow.org:30001\"] }" > /etc/docker/daemon.json'

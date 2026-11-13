@@ -457,5 +457,10 @@ frontends over wg0 (192.168.2.110/.111 via relayd), from each node itself and,
 for the registry, from rocky. The r-node source guard `f3s_guard` now drops
 new enp0s5 connections to these five ports from every source but the r-nodes
 and (30001 only) rocky, so a lab host is refused on every node, not just on
-the hosting one (`f3s/r-nodes/source-guard/README.md`). Over wg0 the
-cross-node SNAT path remains for other mesh peers (measured from f0).
+the hosting one (`f3s/r-nodes/source-guard/README.md`). Task u74 does the
+same for wg0: there the guard admits exactly the 192.168.2.x ipBlocks of
+these four policies per port (r-nodes, laptop/phone; the frontends only on
+the relayd ports 30001/30222/30800) and drops every other mesh peer, so f0
+over wg0 is refused on every node as well. A wg0 ipBlock added to one of
+these receivers needs the matching guard change: the guard's offline check
+derives its wg0 matrix from these files and fails until then.
