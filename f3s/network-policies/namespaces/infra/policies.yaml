@@ -73,6 +73,12 @@ spec:
         cidr: 10.20.0.121/32
     - ipBlock:
         cidr: 10.20.0.122/32
+    # o74: the rocky build VM pushes images to r0.lan.buetow.org:30001. While
+    # the registry pod runs on the receiving node the NodePort keeps rocky's
+    # source address, so rocky needs its own /32 here; the other nodes' path
+    # arrives masqueraded as 10.42.N.0. No other receiver admits rocky.
+    - ipBlock:
+        cidr: 10.20.0.123/32
     ports:
     - protocol: TCP
       port: 5000

@@ -253,6 +253,31 @@ class Policies(unittest.TestCase):
         for database in ['immich-postgres', 'miniflux-postgres']:
             self.assert_path({'ip': '10.99.0.2'}, 'services', {'app': database}, 5432, False)
 
+    def test_rocky_build_vm_pushes_only_to_the_registry(self):
+        # o74: rocky (10.20.0.123) pushes images through NodePort 30001; when
+        # the registry pod is on the receiving node its source is preserved,
+        # so the receiver admits exactly that /32 on TCP 5000.
+        rocky = {'ip': '10.20.0.123'}
+        registry = {'app': 'docker-registry'}
+        self.assert_path(rocky, 'infra', registry, 5000, True)
+        self.assert_path(rocky, 'infra', registry, 5000, False, 'UDP')
+        self.assert_path(rocky, 'infra', registry, 5001, False)
+        # Rocky gains no other NodePort receiver, web backend or database.
+        for namespace, labels, port in [('services', {'app': 'forgejo'}, 2222),
+                                        ('services', {'app': 'anki-sync-server'}, 8080),
+                                        ('services', {'app': 'protonbridge'}, 143),
+                                        ('services', {'app': 'protonbridge'}, 25),
+                                        ('infra', {'app': 'pkgrepo'}, 8080),
+                                        ('services', {'app': 'miniflux-postgres'}, 5432),
+                                        ('monitoring', {'app': 'pushgateway'}, 9091),
+                                        ('monitoring', {NAME: 'prometheus-read-proxy'}, 8080)]:
+            self.assert_path(rocky, namespace, labels, port, False)
+        # Other lab hosts (storage/relay f0, the Pis, adjacent addresses) and
+        # wg2 clients still get no direct registry access.
+        for address in ['10.20.0.124', '10.20.0.125', '10.20.0.127', '10.20.0.130',
+                        '10.20.0.131', '10.20.0.138', '10.99.0.2', '192.168.1.123']:
+            self.assert_path({'ip': address}, 'infra', registry, 5000, False)
+
     def test_controller_pis_push_only_to_the_pushgateway(self):
         # s44: the Local NodePort pushgateway-lan keeps the Pis' lab sources,
         # so the receiver admits exactly 10.20.0.125/.126 on TCP 9091.
