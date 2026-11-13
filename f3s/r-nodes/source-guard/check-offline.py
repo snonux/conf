@@ -52,7 +52,7 @@ def policy_wg0_sources(root):
                     continue  # pod/namespace selectors never match a wg0 host
                 cidr = ipaddress.ip_network(peer['ipBlock']['cidr'])
                 # No receiver admits IPv6 or a wider mesh block; the guard
-                # drops wg0 IPv6 on these ports, so that must stay true.
+                # rejects wg0 IPv6 on these ports, so that must stay true.
                 assert cidr.version == 4, (name, cidr)
                 assert not cidr.overlaps(mesh) or cidr.prefixlen == 32, (name, cidr)
                 if cidr.subnet_of(mesh):

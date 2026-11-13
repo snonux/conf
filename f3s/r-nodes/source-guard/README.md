@@ -62,7 +62,8 @@ every other wg0 port (etcd, API, kubelet, NFS, monitoring) are not
 inspected. `check-offline.py` probes a fixed set of known mesh peers plus
 every policy source and takes each expectation from the four policies in
 `f3s/network-policies/namespaces` (map `NODEPORT_POLICIES`), so adding or
-removing a wg0 ipBlock there fails the check until the guard follows; the
+removing a wg0 ipBlock there fails the check until the guard follows (except
+the fixture node's own 192.168.2.122, which it cannot probe); the
 o74 file fails it, as it admits every mesh peer. Before the change a
 5-minute SYN capture on wg0 of all three nodes saw no source other than
 .110/.111 on these ports.
