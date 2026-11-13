@@ -18,6 +18,14 @@ The stageable chain is `wifi-ipv6-nat66` → `camera-igc3` → `lab-igc1` →
 profiles are history; the fixture suite now runs its generic journal checks
 on `wifi-ipv6-nat66`.
 
+**Task 284 (2026-11-14):** wireguardmeshgenerator owns wg2 (router
+`/etc/hostname.wg2`, laptop `/etc/wireguard/wg2.conf`, keys imported from
+both, no rotation). Its generated `hostname.wg2` is byte-identical to the
+live file, so the router was not changed. The secret copy
+`gonf/secrets/triggerfish/hostname.wg2` and the `paths.TriggerfishSecret`
+references below are history. A wg2 change on the router still goes
+through this helper's guarded path, not the generator's `--install`.
+
 The recovery controller and wg2 bootstrap were deployed on 2026-11-05.
 Two unconfirmed 180-second trials expired through native root cron; fresh old-LAN
 SSH verified restored/no-pending state and absence of wg2's file/interface.
@@ -42,9 +50,10 @@ default reapply (`u14-final-20261105`). Host renumbering, forwarded new-host NAT
 and physical igc1 recovery remain later gates. No AP or cable changes occurred. Task l14 supplies
 the recovery controller; t14/u14 own its bounded native deployment and proof.
 
-`VPN.Candidate`, registered separately as an operational task, reads the private
-logical secret `paths.TriggerfishSecret("hostname.wg2")` and stages only
-`router-profiles/vpn-bootstrap/hostname.wg2`. This candidate contains the router
+Historical (pruned in g74; the secret copy was deleted in task 284):
+`VPN.Candidate`, registered separately as an operational task, read the private
+logical secret `paths.TriggerfishSecret("hostname.wg2")` and staged only
+`router-profiles/vpn-bootstrap/hostname.wg2`. That candidate contained the router
 10.99.0.1/24 address, UDP51822, one private key and distinct authenticated laptop
 10.99.0.2/32 and reserved phone 10.99.0.3/32 peers. The phone remains dormant
 until separately configured and tested. Keys and client configurations stay

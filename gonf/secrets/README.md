@@ -25,6 +25,13 @@ from the vault; everything else comes from files below this directory.
 A frontend added later has no vault row and reads the file. Migrating another
 secret is one more table row; recipes keep the same logical path.
 
+WireGuard keys and configs are not kept here. wireguardmeshgenerator
+(`~/git/wireguardmeshgenerator`) owns wg0 and, since task 284 (2026-11-14),
+the triggerfish wg2 access VPN (`/etc/hostname.wg2`, the laptop's
+`wg2.conf`). The former untracked copy
+`gonf/secrets/triggerfish/hostname.wg2` was deleted after the generator
+reproduced it byte for byte.
+
 The rsync password is one nonempty line without surrounding whitespace (an
 optional final newline is accepted). The approved provisioning step must copy
 the same value into Kubernetes Secret `services/shuriken-rsync-auth`, key
