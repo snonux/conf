@@ -65,12 +65,14 @@ func (Periodic) DescTimes() string {
 }
 
 func (Realtek) DescCheck() string {
-	return "Installs gonf-realtek-kmod-check, the upgrade guard, on every f-host"
+	return "Removes gonf-realtek-kmod-check, the vendor driver's upgrade guard"
 }
 
-func (Realtek) DescPackage() string {
-	return "Installs realtek-re-kmod (/boot/modules/if_re.ko) where RealtekNIC.VendorDriver is set"
+func (Realtek) DescLoaderConf() string {
+	return "Removes the vendor driver lines from /boot/loader.conf, so the in-tree re(4) claims re0 at the next boot"
 }
+
+func (Realtek) DescPackage() string { return "Removes realtek-re-kmod (/boot/modules/if_re.ko)" }
 
 func (Resolver) DescConf() string {
 	return "Writes /etc/resolvconf.conf with the lab resolver and regenerates /etc/resolv.conf"

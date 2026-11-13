@@ -167,12 +167,7 @@ Hourly root cron at f0 `:05`, f1 `:25`, f2 `:45`, f3 `:15`:
    weekday (`date +%u % 3`: f0 2, f1 0, f2 1, offset from the r-nodes), at
    most once a day, after `vm stopall` has stopped every guest (else refuse),
    and with `reboot`, never `shutdown -r`. f3 never reboots (inventory
-   `allow_reboot=false` and hardcoded). A pending kernel reboot is refused
-   (logged every tick, and to syslog) while
-   `/usr/local/libexec/gonf-realtek-kmod-check` fails: loader.conf loads
-   the Realtek vendor NIC module (`realtek-re-kmod`, gonf `freebsd_realtek_*`,
-   task t74) but it was built for another minor release than the new kernel.
-   On f3 the pending-kernel line gets a warning instead.
+   `allow_reboot=false` and hardcoded).
 
 No `freebsd-update` automation; base patches are manual, but a pending kernel
 still triggers the f0-f2 reboot. Roll out in the order f3, f1, f2, f0 (f0 is

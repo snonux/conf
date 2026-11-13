@@ -292,12 +292,6 @@ func registerFreeBSD() {
 		WithData(freebsd.CarpNode{Interface: freebsd.LabBridge, GateDeadline: 60}),
 		WithData(k3sBhyve),
 		WithData(freebsd.UPSServer{NISIP: "10.20.0.130"}),
-		// In-tree re(4) until f1 has run a week on the vendor driver without
-		// a re0 stall (task v74). The _2 build has no TX watchdog, so
-		// FreebsdNicWatchdogReset cannot see one: judge by f1 staying
-		// reachable and CARP BACKUP. f0's reboot is a controlled CARP
-		// failover. See f3's RealtekNIC.
-		WithData(freebsd.RealtekNIC{}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.130:3901", AdminAPIBindAddr: "192.168.2.130:3903"}),
 	)
 	f1 := Host("f1", fhost,
@@ -313,9 +307,6 @@ func registerFreeBSD() {
 		// it hears f0 (60 s) and never promotes while f0 is coming up.
 		WithData(freebsd.CarpNode{AdvSkew: 100, Interface: freebsd.LabBridge}),
 		WithData(k3sBhyve),
-		// Back on the in-tree re(4) since 2026-11-13 (x74). See f3's
-		// RealtekNIC.
-		WithData(freebsd.RealtekNIC{}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.131:3901", AdminAPIBindAddr: "192.168.2.131:3903"}),
 	)
@@ -328,9 +319,6 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f2"}),
 		WithData(f2Baseline),
 		WithData(k3sBhyve),
-		// Back on the in-tree re(4) since 2026-11-13 (x74). See f3's
-		// RealtekNIC.
-		WithData(freebsd.RealtekNIC{}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 		WithData(garage.Node{RPCPublicAddr: "10.20.0.132:3901", AdminAPIBindAddr: "192.168.2.132:3903"}),
 	)
@@ -343,11 +331,6 @@ func registerFreeBSD() {
 		WithData(freebsd.GoprecordsClient{Host: "f3"}),
 		WithData(f3Baseline),
 		WithData(f3Bhyve),
-		// Back on the in-tree re(4) since 2026-11-13 (task x74): the user
-		// rejected the Realtek vendor driver (realtek-re-kmod, t74) because
-		// it has to be rebuilt and checked at every FreeBSD update. f1 and
-		// f2 follow one at a time; then the vendor-driver code goes.
-		WithData(freebsd.RealtekNIC{}),
 		WithData(freebsd.UPSClient{Server: upsServer, NISIP: "127.0.0.1"}),
 	)
 	Cluster(NameFreeBSD, f0, f1, f2, f3)
