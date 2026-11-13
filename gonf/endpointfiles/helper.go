@@ -1,6 +1,6 @@
 // Package endpointfiles installs the plain apply helper through which the
-// fleet's owners publish /etc/hosts and the Pi controller's f3sctl.json, and
-// (one-shot, task a74) retires the migration-era watchdog and boot hooks.
+// fleet's owners publish /etc/hosts and the Pi controller's f3sctl.json.
+// It registers no tasks of its own: the owners call InstallHelper.
 package endpointfiles
 
 import (
@@ -11,9 +11,10 @@ import (
 )
 
 // Helper is the runtime path the owners invoke. It keeps its migration-era
-// name: OpenBSD's /etc/rc and the minute cron called it until the
-// *_endpoints_retire tasks removed them, and the helper still answers those
-// calls with a no-op.
+// name (renaming it would mean a fleet-wide push for no functional gain).
+// Its "boot" and "watchdog" verbs are leftover no-ops: task a74's one-shot
+// retirement removed every caller (/etc/rc block, minute cron, boot units;
+// re-checked read-only in p74) and its code was deleted in p74.
 const Helper = "/usr/local/sbin/gonf-endpoint-migration"
 
 // InstallHelper installs the apply helper into directory: /usr/local/sbin,

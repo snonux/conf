@@ -146,34 +146,4 @@ with tempfile.TemporaryDirectory(prefix='conf-endpoint-test-') as directory:
     run('adopt', 'controller', ok=False)
     assert not list(base.glob('local/etc/*.gonf.*')), 'temporary files left behind'
 
-# OpenBSD /etc/rc retirement: the real script from retire.go against fixtures.
-GO = (ROOT / 'gonf/endpointfiles/retire.go').read_text()
-block = GO.split('const openBSDRcBlock = "', 1)[1].split('"', 1)[0].replace('\\n', '\n').rstrip('\n')
-body = GO.split('script := strings.Join([]string{', 1)[1].split('}, "\\n")', 1)[0]
-lines = [part.split('`')[1] for part in body.splitlines() if part.strip().startswith('`')]
-assert len(lines) == 8, lines
-with tempfile.TemporaryDirectory(prefix='conf-endpoint-rc-') as directory:
-    base = Path(directory)
-    rc = base / 'rc'
-    script = '\n'.join(lines).replace('/etc/rc', str(rc)).replace('/bin/ksh', 'sh')
-
-    def retire(content, ok):
-        put(rc, content)
-        result = subprocess.run(['sh', '-ec', script, 'retire-rc', block], capture_output=True, text=True)
-        assert (result.returncode == 0) == ok, (content, result)
-        assert not list(base.glob('rc.gonf-endpoints.*')), 'temporary file left behind'
-        return rc.read_text()
-
-    head, tail = 'mount -uw /\n', 'rootdisk_nodes\nsysctl_conf\n'
-    assert retire(head + block + '\n' + tail, True) == head + tail
-    assert rc.stat().st_mode & 0o777 == 0o644
-    changed = head + block.replace('exit 1', 'exit 2') + '\n' + tail
-    assert retire(changed, False) == changed
-    twice = head + block + '\n' + block + '\n' + tail
-    assert retire(twice, False) == twice
-    stray = head + block + '\n/usr/local/sbin/gonf-endpoint-migration status\n' + tail
-    assert retire(stray, False) == stray
-    broken = head + block + '\nif then\n' + tail
-    assert retire(broken, False) == broken
-
 print('endpointfiles offline checks passed')

@@ -20,26 +20,30 @@ that use it, through `InstallHelper`:
 
 The helper never prints configuration contents.
 
-## Retired in task a74
+## Retired in task a74 (code removed in p74)
 
 The task924 trial machinery is gone: arm/apply/confirm leases, rollback,
 status, the every-minute `watchdog` cron, the boot restore hooks
 (`gonf-endpoint-boot.service`, `/etc/rc.d/gonf_endpoint_migration`, the
 OpenBSD `/etc/rc` block) and the per-service profiles (garage, ups, dtail,
-dns, pf, fan, pins). `boot` and `watchdog` remain successful no-ops so a
-hook not yet removed cannot fail a boot or mail cron errors.
+dns, pf, fan, pins).
 
-`Retirement.Retire` (`*_endpoints_retire`) removes those host artifacts,
+a74's one-shot `*_endpoints_retire` tasks removed those host artifacts,
 plus the WireGuard endpoint rollback watchdog and boot hooks that
 wireguardmeshgenerator's endpoint tooling installed without a gonf owner
 (`gonf-endpoint-rollback*` units on r0-r2; `gonf_endpoint_rollback` /
 `gonf_endpoint_runtime` rc.d hooks and the `/etc/crontab` watchdog line on
-f0-f3). It is one-shot and every host has run it (the stopped FreeBSD
-guest in d74, 2026-11-12), so `retire.go`, its registrations in
-`tasks/tasks.go` and its `check-offline.py` part can be deleted next (conf
-task p74). Left on hosts on purpose: the old journals under
+f0-f3). Every host ran them (the stopped FreeBSD guest in d74,
+2026-11-12), and task p74 deleted the code (`retire.go` and its
+registrations). Left on hosts on purpose: the old journals under
 `/var/{db,lib}/gonf-endpoint-migration` and the orphan
 `/usr/local/sbin/gonf-endpoint-rollback` with `/var/{db,lib}/gonf-endpoint`.
 
-`check-offline.py` runs the real helper and merger against temporary files,
-and the OpenBSD `/etc/rc` edit from `retire.go` against fixtures.
+`boot` and `watchdog` are still successful no-ops in `assets/apply`. A
+read-only check in p74 (2026-11-13) found no caller left on any reachable
+fleet host (`/etc`, `/usr/local/etc`, root crontab). They stay only because
+editing the helper reinstalls it on every fleet host: drop them, with the
+header comment that explains them, the next time `assets/apply` changes for
+a real reason.
+
+`check-offline.py` runs the real helper and merger against temporary files.
