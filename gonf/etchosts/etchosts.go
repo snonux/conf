@@ -7,8 +7,9 @@
 // Each LAN row renders its canonical lab name, a <host>.new alias, an
 // explicit <host>.lan6 name for its native ULA and, while the endpoint still
 // holds its former 192.168.1.x address, a <host>.old alias. The .old aliases
-// of the hosts that left 192.168.1.x in i24 are gone (task 274); router, AP
-// and the stopped freebsd VM keep theirs. The freebsd VM itself dropped
+// of the hosts that left 192.168.1.x in i24 are gone (task 274) and the
+// OpenWrt AP's since i74 (2026-11-13); the router and the stopped freebsd VM
+// keep theirs. The freebsd VM itself dropped
 // 192.168.1.139 on 2026-11-11 (task 374); its freebsd.old row is stale but
 // unused. It goes once that row is marked oldRetired and every hosts file,
 // Pi-hole and NSD is pushed (not done yet). The .recovery aliases were
@@ -38,13 +39,12 @@ const (
 	noZone lanZone = iota
 	// labZone endpoints moved to the same suffix in 10.20.0.0/24.
 	labZone
-	// wifiZone endpoints (the Shellys) moved to the same suffix in 10.30.0.0/24.
+	// wifiZone endpoints moved to 10.30.0.0/24: the Shellys on the same
+	// suffix, the OpenWrt AP to its explicit target.
 	wifiZone
 	// routerZone is triggerfish: its canonical address depends on the
 	// routerView, and it carries upstream/lab/wifi aliases.
 	routerZone
-	// apZone keeps its canonical name on ip; target is only its .new alias.
-	apZone
 )
 
 // lanHost is one LAN row: "IP name name.lan name.lan.buetow.org" plus its
@@ -61,8 +61,9 @@ type lanHost struct {
 	target string
 	// ula is the native lab ULA, published only as <host>.lan6.
 	ula string
-	// oldRetired marks an endpoint that no longer holds ip (i24, 2026-11-11;
-	// Shelly and JetKVM moved off the ISP LAN), so it gets no .old alias.
+	// oldRetired marks an endpoint that no longer holds ip (i24, 2026-11-11:
+	// Shelly and JetKVM moved off the ISP LAN; i74, 2026-11-13: the AP
+	// dropped 192.168.1.101), so it gets no .old alias.
 	oldRetired bool
 }
 

@@ -27,10 +27,12 @@ const (
 // triggerfish (h24, 2026-11-10: each rebooted and answered with its device
 // ID there); 274 (2026-11-11) dropped their .old aliases, since a former ISP
 // lease may now belong to anyone. Device-ID names deliberately live outside
-// the service wildcard namespace. The AP keeps its canonical name on its old
-// management address (apZone).
+// the service wildcard namespace. The OpenWrt AP's only management address
+// is 10.30.0.2 on the Wi-Fi segment since i74 (2026-11-13) removed
+// 192.168.1.101 from its br-lan, so its canonical name follows target and
+// openwrt.old is gone.
 var lanDevices = []lanHost{
-	{name: "openwrt", ip: "192.168.1.101", zone: apZone, target: "10.30.0.2"},
+	{name: "openwrt", ip: "192.168.1.101", zone: wifiZone, target: "10.30.0.2", oldRetired: true},
 	{name: "jetkvm-46793b0d4c8d45d", ip: "192.168.1.248", zone: labZone, target: "10.20.0.151", oldRetired: true},
 	{name: "jetkvm-e10a0883debf7d4a", ip: "192.168.1.241", zone: labZone, target: "10.20.0.158", oldRetired: true},
 	{name: "jetkvm-f72978d7f87aa969", ip: "192.168.1.244", zone: labZone, target: "10.20.0.191", oldRetired: true},
@@ -75,11 +77,7 @@ func lanRows(h lanHost, view routerView) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	canonical := target
-	if h.zone == apZone {
-		canonical = h.ip
-	}
-	rows := []string{canonical + " " + strings.Join(names, " ")}
+	rows := []string{target + " " + strings.Join(names, " ")}
 	if !h.oldRetired {
 		rows = append(rows, alias(h.ip, h.name, "old"))
 	}

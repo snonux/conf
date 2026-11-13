@@ -51,8 +51,7 @@ zen.lan.buetow.org. 60 IN A 192.168.1.13
 freebsd.lan.buetow.org. 60 IN A 10.20.0.139
 freebsd.old.lan.buetow.org. 60 IN A 192.168.1.139
 freebsd.new.lan.buetow.org. 60 IN A 10.20.0.139
-openwrt.lan.buetow.org. 60 IN A 192.168.1.101
-openwrt.old.lan.buetow.org. 60 IN A 192.168.1.101
+openwrt.lan.buetow.org. 60 IN A 10.30.0.2
 openwrt.new.lan.buetow.org. 60 IN A 10.30.0.2
 jetkvm-46793b0d4c8d45d.lan.buetow.org. 60 IN A 10.20.0.151
 jetkvm-46793b0d4c8d45d.new.lan.buetow.org. 60 IN A 10.20.0.151

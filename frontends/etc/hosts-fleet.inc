@@ -50,8 +50,7 @@ fd02:ca0b:f1cb:20::128 pi3.lan6 pi3.lan6.buetow.org
 10.20.0.139 freebsd freebsd.lan freebsd.lan.buetow.org fbsd
 192.168.1.139 freebsd.old.lan freebsd.old.lan.buetow.org
 10.20.0.139 freebsd.new.lan freebsd.new.lan.buetow.org
-192.168.1.101 openwrt openwrt.lan openwrt.lan.buetow.org
-192.168.1.101 openwrt.old.lan openwrt.old.lan.buetow.org
+10.30.0.2 openwrt openwrt.lan openwrt.lan.buetow.org
 10.30.0.2 openwrt.new.lan openwrt.new.lan.buetow.org
 10.20.0.151 jetkvm-46793b0d4c8d45d jetkvm-46793b0d4c8d45d.lan jetkvm-46793b0d4c8d45d.lan.buetow.org
 10.20.0.151 jetkvm-46793b0d4c8d45d.new.lan jetkvm-46793b0d4c8d45d.new.lan.buetow.org
