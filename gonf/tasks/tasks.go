@@ -65,6 +65,8 @@ func Register() {
 	RegisterMethods(rocky.Unattended{}, WithPrefix("rocky_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.HostFile{}, WithPrefix("rocky_hosts_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(rocky.Resolver{}, WithPrefix("rocky_resolver_"), OnCluster(cluster.NameRockyAll))
+	// Only hosts WithData(rocky.BhyveGuest{}) get the unit (EachHostWith).
+	RegisterMethods(rocky.PowerButton{}, WithPrefix("rocky_power_button_"), OnCluster(cluster.NameRockyAll))
 	RegisterMethods(endpointfiles.Retirement{Platform: "linux"}, WithPrefix("rocky_endpoints_"), OnCluster(cluster.NameRockyAll))
 	// Only the Pis boot the SIG AltArch kernel dnf updateinfo cannot audit.
 	// Its rocky_kernel_audit_ prefix keeps it in the "rocky" aggregate;

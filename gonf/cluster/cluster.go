@@ -226,8 +226,12 @@ func registerRockyK3s(pi2, pi3 HostRef) {
 	)
 	// Root access is documented for the standalone VM; validate sudo and
 	// bootstrap gonf when it becomes reachable before approving a deploy.
+	// BhyveGuest: f3's vm stop during the guest's boot must still power it
+	// off (rocky.PowerButton, task j74). r0-r2 are bhyve guests too but do
+	// not carry it yet: the k3s nodes need their own one-at-a-time rollout.
 	standalone := Host("rocky", rnode,
 		WithData(rocky.UnattendedCalendar{OnCalendar: "*-*-* *:55:00"}),
+		WithData(rocky.BhyveGuest{}),
 	)
 	Cluster(NameRockyK3s, r0, r1, r2).Parallel(3)
 	Cluster(NameRockyDtail, pi2, pi3, r0, r1, r2)

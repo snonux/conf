@@ -30,6 +30,10 @@ func (KernelAudit) DescUnits() string {
 	return "Installs rocky-kernel-audit SystemdTimer (daily, per-host calendar)"
 }
 
+func (PowerButton) DescUnit() string {
+	return "Installs and enables (without starting) the boot-time power-button catch-up unit on the hosts marked BhyveGuest"
+}
+
 func (Resolver) DescConf() string {
 	return "Installs the NetworkManager global DNS drop-in for the lab resolver and reloads NetworkManager's configuration"
 }

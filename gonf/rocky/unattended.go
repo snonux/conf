@@ -2,7 +2,9 @@
 // unattended upgrades for pi2/pi3, k3s nodes r0–r2 and standalone rocky per
 // frontends/docs/unattended-upgrades.md (plan record:
 // docs/archive/frontends/docs/unattended-upgrades-pi.plan.md), plus the pi2/pi3
-// Raspberry Pi kernel CVE audit (kernelaudit.go, plan §13).
+// Raspberry Pi kernel CVE audit (kernelaudit.go, plan §13), the lab DNS
+// drop-in (resolver.go) and the boot-time power-button catch-up of the
+// vm-bhyve guests (powerbutton.go).
 package rocky
 
 import (
