@@ -14,8 +14,9 @@ import (
 // purpose: netstart(8) turns a third word of an "inet6" line into a prefix
 // length, so the former single line "inet6 -autoconf -temporary" ran
 // "ifconfig igc0 inet6 -autoconf prefixlen -temporary" at boot (i44). Each
-// line here reaches ifconfig verbatim. The o34 uplink stages replace both
-// lines with uplinkIPv6Line (ipv6wifi.go), which netstart also passes verbatim.
+// line here reaches ifconfig verbatim. On the uplink igc0 the o34 NAT66
+// stages replace both lines with uplinkIPv6Line (ipv6wifi.go), which netstart
+// also passes verbatim; the lab port keeps them (lab-igc1, lab-final).
 const localOnlyIPv6Policy = "inet6 -autoconf\ninet6 -temporary\n"
 
 // Profiles stages router candidates without installing or activating them.
@@ -23,9 +24,9 @@ type Profiles struct{ RequiresRoot }
 
 // RouterProfiles carries verified migration dependencies from inventory.
 type RouterProfiles struct {
-	// BootCanary adds a fixed, reserved alias only to the shared profile, the
-	// o34 NAT66 profile and the g24 camera-igc3 profile (see bootCanaryStage;
-	// never c24's lab-igc1).
+	// BootCanary adds a fixed, reserved alias only to the o34 NAT66 profile
+	// and the g24 camera-igc3 profile (see bootCanaryStage; never c24's
+	// lab-igc1 or j24's lab-final).
 	BootCanary bool
 	// RetainProvisioningAlias keeps the old 192.168.11.2 alias in every
 	// candidate. This retains its address only: any active provisioning
@@ -34,17 +35,6 @@ type RouterProfiles struct {
 	RetainProvisioningAlias bool
 	// TemporaryFlows are reviewed routed dependencies during mixed-address stages.
 	TemporaryFlows []MigrationFlow
-	// JetKVMManagement admits only independently reserved shared-wire endpoints.
-	// Populate after IQ allocation and native UDP-range inspection, not discovery.
-	JetKVMManagement []JetKVMManagementEndpoint
-}
-
-// JetKVMManagementEndpoint permits laptop management and native ephemeral UDP.
-// Each address needs its own verified device UDP range; no inventory is activated
-// by the zero-value RouterProfiles, and these permits never follow a cable move.
-type JetKVMManagementEndpoint struct {
-	Address        string
-	UDPMin, UDPMax uint16
 }
 
 // MigrationFlow permits one source, destination and transport port while staging.
@@ -87,14 +77,9 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	if err := validateMigrationFlows(data.TemporaryFlows); err != nil {
 		return nil, err
 	}
-	if err := validateJetKVMManagement(data); err != nil {
-		return nil, err
-	}
 	profiles := make(map[string]map[string]string)
-	for _, stage := range routerStages() {
-		profiles[stage.name] = profileFiles(stage, data)
-	}
-	// o34 IPv6 stages (ipv6wifi.go) reuse the wifi-first wiring.
+	// The o34 NAT66 stage (ipv6wifi.go) is the oldest profile kept: lab and
+	// cameras on igc0 with the ISP LAN, Wi-Fi on igc2.
 	for _, stage := range ipv6Stages() {
 		profiles[stage.name] = ipv6Files(stage, data)
 	}
@@ -109,24 +94,11 @@ func RenderProfiles(data RouterProfiles) (map[string]map[string]string, error) {
 	return profiles, nil
 }
 
-// routerStages lists the six shared-wire migration stages. They have been
-// historical since j24 activated lab-final, but stay renderable until the
-// camera tasks (l24, n24) are done: task g74 (IQ openbsdrouter-plan
-// CLEANUP.md item 10a) then prunes them, wifi-ipv6-uplink and the
-// vpn-bootstrap candidate, keeping the chain wifi-ipv6-nat66 -> camera-igc3
-// -> lab-igc1 -> lab-final that router-rollback builds on.
-func routerStages() []routerStage {
-	return []routerStage{
-		{"shared-igc0", "igc0", "igc0", "igc0", true, true},
-		// AP may be moved before the separate lab-switch human gate.
-		{"wifi-prepare", "igc0", "igc2", "igc0", true, true},
-		{"wifi-first", "igc0", "igc2", "igc0", true, true},
-		{"post-rack", "igc1", "igc0", "igc0", true, true},
-		{"post-ap", "igc1", "igc2", "igc3", true, true},
-		{"final", "igc1", "igc2", "igc3", false, false},
-	}
-}
-
+// profileFiles renders the IPv4 and ULA files every profile shares. The
+// callers (ipv6Files and the stages built on it) add the IPv6, NAT66 and
+// stage-specific notes, ACTIVATION.txt included. g74 pruned the historical
+// shared-wire stages (shared-igc0 ... final, wifi-ipv6-uplink) that used
+// this function alone (IQ openbsdrouter-plan CLEANUP.md item 10a).
 func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 	files := map[string]string{
 		"hostname.igc0": "inet 192.168.1.2 255.255.255.0\n",
@@ -134,12 +106,10 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 		"mygate":                   "192.168.1.1\n",
 		"sysctl.conf.fragment":     "net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0\n",
 		"ntpd.conf":                "listen on 10.20.0.1\nlisten on 10.30.0.1\nservers pool.ntp.org\n",
-		"pf.conf":                  profilePF(s, data),
 		"dhcpd.conf":               profileDHCP(s),
 		"jetkvm-reservations.conf": jetKVMReservations(),
 		"unbound.conf":             profileDNS(),
 		"services.conf":            profileServices(s),
-		"ACTIVATION.txt":           profileActivation(s),
 		// Deliberately unusable until the separate VPN task supplies real keys/peers.
 		"hostname.wg2.template": "# INACTIVE: VPN task must supply private key and authenticated /32 peers.\n# inet 10.99.0.1 255.255.255.0\n# wgport 51822\n# Laptop AllowedIPs 10.99.0.2/32; phone 10.99.0.3/32.\n",
 	}
@@ -164,14 +134,15 @@ func profileFiles(s routerStage, data RouterProfiles) map[string]string {
 }
 
 // bootCanaryStage names the profiles whose unconfirmed trial may carry the
-// fixed reboot canary: the shared profile (u14) and the NAT66 profiles (o34,
-// g24), whose persistence across a real reboot is part of their acceptance.
-// All keep the lab zone on igc0, where the canary alias lives. c24's
-// lab-igc1 is a NAT66 profile too but is excluded: its lab prefix is on igc1,
-// so the igc0 canary would put 10.20.0.0/24 on two ports (router-rollback
-// refuses that, and its canary_profile excludes lab-igc1 as well).
+// fixed reboot canary: the NAT66 profiles (o34, g24), whose persistence
+// across a real reboot is part of their acceptance (u14 proved it first on
+// the since pruned shared profile). Both keep the lab zone on igc0, where the
+// canary alias lives. c24's lab-igc1 and j24's lab-final are NAT66 profiles
+// too but are excluded: their lab prefix is on igc1, so the igc0 canary
+// would put 10.20.0.0/24 on two ports (router-rollback refuses that, and its
+// canary_profile excludes them as well).
 func bootCanaryStage(name string) bool {
-	return name == "shared-igc0" || (nat66Stage(name) && !labPortStage(name))
+	return nat66Stage(name) && !labPortStage(name)
 }
 
 func validateMigrationFlows(flows []MigrationFlow) error {
@@ -189,36 +160,9 @@ func validateMigrationFlows(flows []MigrationFlow) error {
 	return nil
 }
 
-func validateJetKVMManagement(data RouterProfiles) error {
-	if len(data.JetKVMManagement) > 0 && !data.RetainProvisioningAlias {
-		return fmt.Errorf("JetKVM management requires retained shared provisioning alias")
-	}
-	seen := make(map[string]bool)
-	for _, endpoint := range data.JetKVMManagement {
-		if !slices.Contains([]string{"192.168.11.140", "192.168.11.141", "192.168.11.142", "192.168.11.143"}, endpoint.Address) {
-			return fmt.Errorf("unreviewed JetKVM management address %q", endpoint.Address)
-		}
-		if seen[endpoint.Address] || endpoint.UDPMin == 0 || endpoint.UDPMax < endpoint.UDPMin {
-			return fmt.Errorf("duplicate JetKVM address or invalid native UDP range")
-		}
-		seen[endpoint.Address] = true
-	}
-	return nil
-}
-
-func profilePF(s routerStage, data RouterProfiles) string {
-	return profilePFWithIPv6(s, data, localOnlyIPv6Rules())
-}
-
-// localOnlyIPv6Rules is the agreed local-only native IPv6 policy of every
-// migration profile: lab ULA neighbour discovery and router echo, no transit.
-func localOnlyIPv6Rules() string {
-	return labIPv6Rules() + "block drop quick inet6 all\n"
-}
-
 // labIPv6Rules permits only lab ULA neighbour discovery and echo to the router.
-// Shared by the local-only policy and the o34 IPv6 stages, which
-// must keep the lab ULA exactly as local as before.
+// Every o34 IPv6 stage starts its IPv6 block with it: the lab ULA stays
+// local-only (no transit) in every profile.
 func labIPv6Rules() string {
 	return `# Native IPv6 is local-only; allow address resolution on the lab link.
 pass quick on $lab_if inet6 proto icmp6 icmp6-type { neighbrsol, neighbradv }
@@ -297,14 +241,6 @@ pass in on wg2 inet proto icmp from 10.99.0.2 to { 10.99.0.1, 10.20.0.0/24 } tag
 	if s.name == labProfileName {
 		rules += labRecoveryProofRules()
 	}
-	if s.name == "shared-igc0" {
-		for _, endpoint := range data.JetKVMManagement {
-			// Exact reserved destinations only. Media uses device-native ephemeral
-			// UDP; the existing gonf_transit tag admits its routed egress/replies.
-			rules += fmt.Sprintf("pass in on wg2 inet proto tcp from 10.99.0.2 to %s port { 22, 80 } tag gonf_transit keep state\n", endpoint.Address)
-			rules += fmt.Sprintf("pass in on wg2 inet proto udp from 10.99.0.2 to %s port %d:%d tag gonf_transit keep state\n", endpoint.Address, endpoint.UDPMin, endpoint.UDPMax)
-		}
-	}
 	if s.lab == "igc1" {
 		rules += "pass in on igc1 inet proto udp from any port 68 to { 255.255.255.255, 10.20.0.1 } port 67 keep state\npass out on igc1 inet proto udp from 10.20.0.1 port 67 to any port 68 keep state\n"
 	}
@@ -338,16 +274,15 @@ pass in on wg2 inet proto tcp from 10.99.0.2 to { 10.30.0.28, 10.30.0.29 } port 
 }
 
 // dhcpInterfaces lists the ports dhcpd serves in a stage: the lab port once
-// the lab has its own port (igc1), and Wi-Fi on igc2 from wifi-first on.
-// wifi-prepare already declares the Wi-Fi subnet but leaves dhcpd off, so the
-// AP keeps serving until the separate cut-over. The shared igc0 never appears.
-// services.conf, the dhcpd.conf header and ACTIVATION.txt all derive from it.
+// the lab has its own port (igc1), and Wi-Fi on igc2. The shared igc0 never
+// appears. services.conf, the dhcpd.conf header and ACTIVATION.txt all
+// derive from it.
 func dhcpInterfaces(s routerStage) []string {
 	interfaces := []string{}
 	if s.lab == "igc1" {
 		interfaces = append(interfaces, "igc1")
 	}
-	if s.wifi == "igc2" && s.name != "wifi-prepare" {
+	if s.wifi == "igc2" {
 		interfaces = append(interfaces, "igc2")
 	}
 	return interfaces
@@ -444,54 +379,4 @@ func profileServices(s routerStage) string {
 		dhcp = strings.Join(interfaces, " ")
 	}
 	return "# Declarative activation input; never source as rc.conf.local.\ndhcpd_interfaces=" + dhcp + "\nunbound=enabled\nntpd=enabled\nrad=disabled\nwg2=blocked-until-vpn-task\n"
-}
-
-// profileActivation is the review note of the six migration stages. The
-// bundle stays a candidate until router-rollback activates it, so the header
-// keeps saying so; per-stage facts such as DHCP come from the stage itself.
-func profileActivation(s routerStage) string {
-	return fmt.Sprintf(`INACTIVE CANDIDATE: %s
-This bundle is configuration input for the separately gated rollback/activation task l14.
-Do not copy files or run netstart directly. No activation command is provided here.
-Required: native pfctl -nf and dhcpd -n -c (when enabled), unbound-checkconf,
-verified wg2 keys/peers, independent timed + persistent + boot rollback, and
-fresh old/new management tests. Preserve /etc/sysctl.conf unrelated keys.
-Remove moved IPv4 AND ULA addresses/connected routes from the old interface
-BEFORE adding them to the target. Netstart alone does not remove old aliases.
-Disable obsolete physical IPv6 autoconfiguration and remove learned default
-routes/global addresses while retaining intended link-local/ULA and wg0 state.
-Keep the existing upstream .1.2 and gateway .1.1 throughout. Never duplicate a
-connected prefix. j24 retired provisioning .11.2 (RetainProvisioningAlias=false
-after its dependency proof). That flag retains its address only;
-unlisted active provisioning clients make this candidate unready for activation.
-Inventory every such client and its required explicit PF permission first.
-Recovery 10.98/24 stays on igc1 through post-rack/post-AP rollback; shared-link
-hosts must not route laptop replies through its uncabled gateway.
-%s
-Camera updates and recorder exceptions remain closed pending measured sources/ports.
-%s IPv6 forwarding is disabled and PF
-blocks IPv6 transit; endpoint RA/DHCPv6 suppression remains a host requirement.
-Final requires explicit address/recovery retirement acceptance. Keep all retained
-host IPv4 aliases until that later gate; final files do not authorize retirement.
-`, s.name, dhcpActivation(s), isolationActivation(s))
-}
-
-// isolationActivation states whether the stage's lab shares the upstream
-// wire. Only the stages with the lab on igc0 are same-wire Stage A wiring;
-// post-rack, post-ap and final assume the separate b24 lab cabling.
-func isolationActivation(s routerStage) string {
-	if s.lab == "igc0" {
-		return "Same-wire Stage A is not physical isolation."
-	}
-	return "Lab on its own port " + s.lab + " (b24 cabling)."
-}
-
-// dhcpActivation states the stage's real DHCP role. Only Stage A
-// (shared-igc0) leaves the AP's DHCP and cabling untouched; every other line
-// follows dhcpInterfaces, the source of services.conf.
-func dhcpActivation(s routerStage) string {
-	if s.name == "shared-igc0" {
-		return "Stage A preserves the existing AP .101, SSID, DHCP and cabling; it serves NO DHCP."
-	}
-	return "DHCP: " + dhcpState(s) + ", never on the shared igc0."
 }

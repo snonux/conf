@@ -192,18 +192,16 @@ func trialCommand(action string, profile bool) {
 	})
 }
 
-// migrationProfiles lists the physical profiles a trial may stage; the list
-// must match router-rollback's profile_ok minus vpn-bootstrap, and its
-// wiring table. The legacy final is rendered for review only; j24's
-// lab-final is the stageable final profile (no recovery subnet).
+// migrationProfiles lists the physical profiles a trial may stage: the chain
+// wifi-ipv6-nat66 -> camera-igc3 -> lab-igc1 -> lab-final (j24's lab-final is
+// live). The list must match router-rollback's profile_ok and its wiring
+// table. g74 pruned the historical shared-wire stages, wifi-ipv6-uplink and
+// the wg2 vpn-bootstrap trial (IQ openbsdrouter-plan CLEANUP.md item 10a).
 func migrationProfiles() []string {
-	return []string{"shared-igc0", "wifi-prepare", "wifi-first", "post-rack", "post-ap",
-		ipv6UplinkProfileName, ipv6NAT66ProfileName, cameraProfileName, labProfileName,
-		labFinalProfileName}
+	return []string{ipv6NAT66ProfileName, cameraProfileName, labProfileName, labFinalProfileName}
 }
 
-// trialProfile admits the physical profiles plus the wg2 bootstrap, which
-// changes no physical port.
+// trialProfile admits exactly the stageable physical profiles.
 func trialProfile(name string) bool {
-	return name == "vpn-bootstrap" || slices.Contains(migrationProfiles(), name)
+	return slices.Contains(migrationProfiles(), name)
 }

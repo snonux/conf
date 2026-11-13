@@ -7,9 +7,16 @@ bootstrap. Statements below about retained old addresses, the `10.98.0.0/24`
 recovery subnet, `192.168.11.2`, the k34 tunnel or the laptop's recovery
 routes refer to their date. Those items are retired. The accepted deployment
 is described in IQ `topics/infra/openbsdrouter-plan/DEPLOYMENT.md`.
-The historical stage profiles (`shared-igc0` … `final`, `wifi-ipv6-uplink`,
-`vpn-bootstrap`) and their copies on the router stay until the camera tasks
-(l24, n24); pruning them is task g74 (IQ `CLEANUP.md` item 10a).
+**g74 (2026-11-13):** the historical stage profiles (`shared-igc0`,
+`wifi-prepare`, `wifi-first`, `post-rack`, `post-ap`, `final`,
+`wifi-ipv6-uplink`) and the wg2 `vpn-bootstrap` trial
+(`triggerfish_vpn_candidate`) are pruned from the renderer, the helper
+(`profile_ok`, `wiring`, the vpn-bootstrap journal paths) and the fixture
+suite, and their copies are gone from the router (IQ `CLEANUP.md` item 10a).
+The stageable chain is `wifi-ipv6-nat66` → `camera-igc3` → `lab-igc1` →
+`lab-final`, kept for the camera tasks. Sections below that stage the pruned
+profiles are history; the fixture suite now runs its generic journal checks
+on `wifi-ipv6-nat66`.
 
 The recovery controller and wg2 bootstrap were deployed on 2026-11-05.
 Two unconfirmed 180-second trials expired through native root cron; fresh old-LAN
@@ -682,7 +689,7 @@ cutover packet (IQ `openbsdrouter-plan/CUTOVER-B24-C24.md`) holds the
 sequence, the proofs and the fallback.
 
 Fixtures in `checks/rollback.ksh` loop over every rendered profile
-directory (only `final` skipped) for `profile_ok`, `wiring` and
+directory (since g74 exactly the four kept profiles) for `profile_ok`, `wiring` and
 `validate`, instead of a hand-written list. The c24 cases cover the
 refusals (gateway on both ports, address/macro mismatch, ULA on the uplink,
 igc0 canary and other zone addresses on a second port, missing or misplaced

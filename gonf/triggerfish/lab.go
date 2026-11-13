@@ -15,8 +15,8 @@ import (
 // igc0 to igc1, next to the retained recovery 10.98.0.1. igc0 keeps the
 // upstream 192.168.1.2, the SLAAC uplink and the NAT66 egress address; j24
 // retired the provisioning alias 192.168.11.2 (inventory) and the ISP-LAN
-// management rules (oldManagementRules). The old post-rack/post-ap stages must not be
-// used instead: they put Wi-Fi back on igc0 or drop NAT66.
+// management rules (oldManagementRules). The old post-rack/post-ap stages,
+// which put Wi-Fi back on igc0 or dropped NAT66, were pruned in g74.
 const (
 	labProfileName = "lab-igc1"
 	// labFinalProfileName is j24's final profile: lab-igc1 without the igc1

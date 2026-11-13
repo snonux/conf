@@ -19,55 +19,54 @@ NAT66_EGRESS=$BASE/nat66-egress
 fail() { print -u2 -- "router-rollback: $*"; exit 1; }
 atomic() { print -r -- "$2" > "$1.next"; mv -f "$1.next" "$1"; }
 token_ok() { [[ $1 == +([a-zA-Z0-9_-]) && ${#1} -ge 8 && ${#1} -le 64 ]]; }
-profile_ok() { case $1 in vpn-bootstrap|shared-igc0|wifi-prepare|wifi-first|post-rack|post-ap|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3|lab-igc1|lab-final) return 0;; *) return 1;; esac; }
-# o34 stages: SLAAC on the igc0 uplink; NAT66 adds Wi-Fi ULA, rad and forwarding.
+# The stageable chain (migrationProfiles in rollback.go). g74 pruned the
+# historical shared-wire stages, wifi-ipv6-uplink and the wg2 vpn-bootstrap
+# trial; a journal of theirs can no longer be staged or armed.
+profile_ok() { case $1 in wifi-ipv6-nat66|camera-igc3|lab-igc1|lab-final) return 0;; *) return 1;; esac; }
+# o34 NAT66: SLAAC on the igc0 uplink, the Wi-Fi ULA, rad and forwarding.
 # The g24 camera-igc3 profile is the NAT66 profile with the camera zone on igc3;
 # c24's lab-igc1 is camera-igc3 with the lab moved to igc1 after the b24 cables;
 # j24's lab-final is lab-igc1 without the igc1 recovery subnet.
-ipv6_profile() { [[ $1 == wifi-ipv6-uplink || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
+ipv6_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
 nat66_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 || $1 == lab-igc1 || $1 == lab-final ]]; }
 # Profiles after the b24 cable move: the lab on igc1, only the ISP CPE on igc0.
 lab_port_profile() { [[ $1 == lab-igc1 || $1 == lab-final ]]; }
 # j24: the final profile carries no igc1 recovery subnet (10.98.0.0/24) at all.
 recovery_profile() { [[ $1 != lab-final ]]; }
 # Profiles whose unconfirmed trial may carry the fixed 10.20.0.254 boot canary.
-# The canary lives on igc0, so never lab-igc1: its lab prefix is on igc1.
-canary_profile() { [[ $1 == shared-igc0 || $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
+# The canary lives on igc0, so never lab-igc1 or lab-final: their lab prefix
+# is on igc1.
+canary_profile() { [[ $1 == wifi-ipv6-nat66 || $1 == camera-igc3 ]]; }
 # Router ports of the lab, Wi-Fi and camera zones ("LAB WIFI CAMERA") of every
-# stageable physical profile; mirrors routerStages(), ipv6Stages(),
-# cameraStages() and labStages() in triggerfish/*.go. An unlisted profile has no wiring and
+# stageable physical profile; mirrors ipv6Stages(), cameraStages() and
+# labStages() in triggerfish/*.go. An unlisted profile has no wiring and
 # prints nothing: callers fail closed instead of guessing a port (i44).
 wiring() {
  case $1 in
- shared-igc0) print igc0 igc0 igc0;;
- wifi-prepare|wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66) print igc0 igc2 igc0;;
+ wifi-ipv6-nat66) print igc0 igc2 igc0;;
  camera-igc3) print igc0 igc2 igc3;;
  lab-igc1|lab-final) print igc1 igc2 igc3;;
- post-rack) print igc1 igc0 igc0;;
- post-ap) print igc1 igc2 igc3;;
  *) return 1;;
  esac
 }
 # Router port of the camera zone 10.40.0.0/24: igc0 while it shares the old
-# wire, its own still uncabled igc3 from camera-igc3 (g24) and post-ap on.
+# wire (wifi-ipv6-nat66), its own still uncabled igc3 from camera-igc3 (g24) on.
 camera_port() {
  typeset w
  w=$(wiring "$1") || return 1
  print -- "${w##* }"
 }
 # Fresh management receipts that confirmation requires. Every stage with the
-# lab on the shared igc0 proves the old and new paths the trial changes; once
-# the lab is on igc1 the fresh igc1 recovery receipt joins them (post-rack,
-# post-ap). lab-igc1 (c24) runs after the b24 cable move, when only the ISP
-# CPE shares igc0 and no host can reach 192.168.1.2 any more: it proves the
-# new path and igc1 recovery from lab hosts (see proof) and the laptop's wg2
-# instead. igc1 recovery is proven before the rack moves.
+# lab on the shared igc0 (wifi-ipv6-nat66, camera-igc3) proves the old and new
+# paths the trial changes. lab-igc1 (c24) runs after the b24 cable move, when
+# only the ISP CPE shares igc0 and no host can reach 192.168.1.2 any more: it
+# proves the new path and igc1 recovery from lab hosts (see proof) and the
+# laptop's wg2 instead.
 confirm_roles() {
  case $1 in
  lab-igc1) print new recovery vpn;;
  # j24: no recovery subnet any more; the lab-host new receipt proves igc1.
  lab-final) print new vpn;;
- post-rack|post-ap) print old new recovery;;
  *) print old new;;
  esac
 }
@@ -120,7 +119,6 @@ checksum() {
 # Stage validation never invokes hostname files, netstart, reload or ifconfig writes.
 validate() {
  typeset d=$1 p=$2 f
- if [[ $p == vpn-bootstrap ]]; then validate_bootstrap "$d"; return; fi
  typeset forward6=0
  nat66_profile "$p" && forward6=1
  for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 mygate pf.conf dhcpd.conf ntpd.conf unbound.conf sysctl.conf.fragment services.conf ACTIVATION.txt; do
@@ -150,14 +148,12 @@ net.inet6.ip6.forwarding=$forward6" ]] || fail 'unexpected sysctl fragment'
  validate_hostnames "$d"
  validate_prefixes "$d" "$p"
  case $p in
- shared-igc0|wifi-prepare) grep -qx 'dhcpd_interfaces=disabled' "$d/services.conf" || fail 'DHCP forbidden on shared wire';;
- wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
- post-rack) grep -qx 'dhcpd_interfaces=igc1' "$d/services.conf" || fail 'wrong DHCP binding';;
- post-ap|lab-igc1|lab-final) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
+ wifi-ipv6-nat66|camera-igc3) grep -qx 'dhcpd_interfaces=igc2' "$d/services.conf" || fail 'wrong Wi-Fi DHCP binding';;
+ lab-igc1|lab-final) grep -qx 'dhcpd_interfaces=igc1 igc2' "$d/services.conf" || fail 'wrong DHCP binding';;
  esac
  validate_dhcp_networks "$d"
  pfctl -nf "$d/pf.conf"
- [[ $p == shared-igc0 ]] || dhcpd -n -c "$d/dhcpd.conf"
+ dhcpd -n -c "$d/dhcpd.conf"
  nat66_profile "$p" && rad -n -f "$d/rad.conf"
  unbound-checkconf "$d/unbound.conf" >/dev/null
  ntpd -n -f "$d/ntpd.conf"
@@ -216,29 +212,6 @@ dhcpd_listening() {
  [[ $pid == +([0-9]) ]] || return 1
  bpf=$(fstat -p "$pid" | awk '$NF ~ /^bpf[0-9]+$/' | wc -l)
  (( bpf == $(print -r -- "$ports" | wc -w) ))
-}
-
-# The wg2 bootstrap candidate is exactly one bounded hostname.wg2.
-validate_bootstrap() {
- typeset d=$1
- [[ $(find "$d" -mindepth 1 | wc -l | tr -d ' ') == 1 ]] || fail 'bootstrap candidate must contain only hostname.wg2'
- check_private "$d/hostname.wg2"
- awk '
-  function key(k) {return length(k)==44 && k ~ /^[A-Za-z0-9+\/]+=+$/}
-  $0=="inet 10.99.0.1 255.255.255.0" {address++; next}
-  $0=="wgport 51822" {port++; next}
-  $1=="wgkey" && NF==2 && key($2) {private++; next}
-  $1=="wgpeer" && NF==4 && key($2) && $3=="wgaip" {
-   if ($4=="10.99.0.2/32") laptop++;
-   else if ($4=="10.99.0.3/32") phone++;
-   else exit 1;
-   if (seen[$2]++) exit 1;
-   next
-  }
-  $0=="up" {up++; next}
-  {exit 1}
-  END {if (address!=1 || port!=1 || private!=1 || laptop!=1 || phone!=1 || up!=1) exit 1}
- ' "$d/hostname.wg2" || fail 'invalid bounded wg2 bootstrap candidate'
 }
 
 # hostname.if(5) inputs: the renderer vocabulary only, one lab ULA with its
@@ -479,14 +452,15 @@ if_bound_states() {
   END {exit bad}' "$1"
 }
 
-# o34 IPv6 placement. Local-only profiles keep exactly one persistent
+# o34 IPv6 placement. A local-only profile would keep exactly one persistent
 # "inet6 -autoconf" and one "inet6 -temporary" policy line (beside the lab
-# ULA, checked in validate_hostnames), no Wi-Fi ULA and no rad. The uplink
-# stages add SLAAC on igc0 only (the ISP-facing port); while the lab shares
-# igc0 that line replaces both policy lines, and once the lab has its own
-# port (c24 lab-igc1) the policy lines stay beside the lab ULA there. Only
-# NAT66 adds the Wi-Fi ULA on igc2, the rad configuration for igc2 alone and
-# the PF egress table.
+# ULA, checked in validate_hostnames), no Wi-Fi ULA and no rad; since g74
+# every stageable profile is a NAT66 one, so those branches only guard the
+# predicates. NAT66 adds SLAAC on igc0 only (the ISP-facing port); while the
+# lab shares igc0 that line replaces both policy lines, and once the lab has
+# its own port (c24 lab-igc1, j24 lab-final) the policy lines stay beside the
+# lab ULA there. NAT66 also adds the Wi-Fi ULA on igc2, the rad
+# configuration for igc2 alone and the PF egress table.
 validate_ipv6() {
  typeset d=$1 p=$2 autoconf=0 policy=1 wifi=0 rad=disabled line w
  w=$(wiring "$p") || fail 'profile has no reviewed port wiring'
@@ -576,12 +550,6 @@ fi
 
 ready() {
  typeset review digest
- if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
-  [[ ! -e /etc/hostname.wg2 && ! -L /etc/hostname.wg2 ]] || fail 'wg2 persistent input already exists'
-  ! ifconfig wg2 >/dev/null 2>&1 || fail 'wg2 interface already exists'
-  validate "$STATE/candidate" vpn-bootstrap
-  return
- fi
  review=$BASE/router-readiness/$(cat "$STATE/profile")
  check_private "$review"
  # Exact receipt set; no unchecked unknown-client or dependency defaults.
@@ -592,8 +560,9 @@ dependencies=r14-reviewed-current-stage-only
 wg2=provisioned-and-tested
 old-management=$(old_management "$(cat "$STATE/profile")")
 current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bound readiness receipt'
- # The candidate template is never installed. A later VPN task must provision
- # a real authenticated interface first; do not generate, read out or replace keys.
+ # The candidate template is never installed. wg2 must already run with its
+ # real keys and peers (the 2026-11-05 bootstrap installed them); do not
+ # generate, read out or replace keys.
  [[ -s /etc/hostname.wg2 && ! -L /etc/hostname.wg2 ]] || fail 'wg2 keys/peers not provisioned'
  awk '
   function key(k) {return length(k)==44 && k ~ /^[A-Za-z0-9+\/]+=+$/}
@@ -608,11 +577,11 @@ current-cabling=$(cat "$STATE/profile")" ]] || fail 'missing exact candidate-bou
   [[ -x $NAT66_EGRESS && ! -L $NAT66_EGRESS ]] || fail 'NAT66 egress helper not installed'
   crontab -l | awk -v helper="$NAT66_EGRESS" '$1=="*" && $2=="*" && $3=="*" && $4=="*" && $5=="*" && $6==helper && NF==6 {ok=1} END {exit !ok}' || fail 'NAT66 egress timer not installed'
  fi
- # Must already have upstream and current-cabling recovery before post-rack
- # trials. Never synthesize a shared-wire rollback after the rack has moved.
- # lab-final (j24) is the profile that retires recovery: its trials may run
- # with or without it, and restore whatever the snapshot holds.
- if [[ $(cat "$STATE/profile") != shared-igc0 ]] && recovery_profile "$(cat "$STATE/profile")"; then
+ # Every profile but lab-final needs the current-cabling recovery on igc1,
+ # live and persistent. Never synthesize a shared-wire rollback after the rack
+ # has moved. lab-final (j24) is the profile that retires recovery: its trials
+ # may run with or without it, and restore whatever the snapshot holds.
+ if recovery_profile "$(cat "$STATE/profile")"; then
   ifconfig igc1 | grep -q 'inet 10.98.0.1 netmask 0xffffff00' || fail 'current-cabling recovery not active'
   grep -qx 'inet alias 10.98.0.1 255.255.255.0' /etc/hostname.igc1 || fail 'current-cabling recovery not persistent'
  fi
@@ -647,11 +616,6 @@ snapshot() {
  typeset s=$STATE/saved f i family service
  rm -rf "$s"
  mkdir -p "$s/files" "$s/addresses" "$s/flags" "$s/services" "$s/tables"
- if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
-  print /etc/hostname.wg2 > "$s/absent"
-  atomic "$STATE/snapshot-digest" "$(checksum "$s")"
-  return
- fi
  for f in $FILES; do
   mkdir -p "$s/files${f%/*}"
   if [[ -e $f || -L $f ]]; then
@@ -759,12 +723,9 @@ persist_candidate() {
   install -m 600 "$d/$f" "/etc/$f.gonf-next"
   mv -f "/etc/$f.gonf-next" "/etc/$f"
  done
- # Keep the old DHCP config on shared wire: the service is stopped, and the
- # intentionally subnet-less staging file is not an enabled DHCP config.
- if [[ $(cat "$STATE/profile") != shared-igc0 ]]; then
-  install -m 600 "$d/dhcpd.conf" /etc/dhcpd.conf.gonf-next
-  mv -f /etc/dhcpd.conf.gonf-next /etc/dhcpd.conf
- fi
+ # Every stageable profile serves DHCP (igc2, and igc1 after b24).
+ install -m 600 "$d/dhcpd.conf" /etc/dhcpd.conf.gonf-next
+ mv -f /etc/dhcpd.conf.gonf-next /etc/dhcpd.conf
  install -m 600 "$d/unbound.conf" /var/unbound/etc/unbound.conf.gonf-next
  mv -f /var/unbound/etc/unbound.conf.gonf-next /var/unbound/etc/unbound.conf
  [[ -f /etc/sysctl.conf ]] || touch /etc/sysctl.conf
@@ -786,10 +747,8 @@ persist_candidate() {
  rcctl set unbound flags "-c /var/unbound/etc/unbound.conf"
  rcctl set ntpd flags ""
  case $(cat "$STATE/profile") in
- shared-igc0|wifi-prepare) rcctl disable dhcpd;;
- wifi-first|wifi-ipv6-uplink|wifi-ipv6-nat66|camera-igc3) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
- post-rack) rcctl enable dhcpd; rcctl set dhcpd flags igc1;;
- post-ap|lab-igc1|lab-final) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
+ wifi-ipv6-nat66|camera-igc3) rcctl enable dhcpd; rcctl set dhcpd flags igc2;;
+ lab-igc1|lab-final) rcctl enable dhcpd; rcctl set dhcpd flags igc1 igc2;;
  esac
 }
 
@@ -893,16 +852,6 @@ activate() {
  # Mark first: partial writes, failures, disconnects and reboots all restore.
  atomic "$STATE/status" activating
  sync
- if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
-  install -m 600 "$STATE/candidate/hostname.wg2" /etc/hostname.wg2.gonf-next
-  mv -f /etc/hostname.wg2.gonf-next /etc/hostname.wg2
-  ifconfig wg2 create description "gonf-vpn-$(cat "$STATE/token")"
-  sh /etc/netstart wg2
-  atomic "$STATE/status" active-unconfirmed
-  sync
-  print 'wg2 active and UNCONFIRMED; recovery remains armed'
-  return
- fi
  for service in $SERVICES; do rcctl stop "$service"; done
  persist_candidate
  # Keep 10.98.0.1 across the drain only when the candidate keeps it; the
@@ -936,7 +885,7 @@ activate() {
  atomic /etc/resolv.conf 'nameserver 127.0.0.1'
  chmod 644 /etc/resolv.conf
  rcctl start ntpd
- case $(cat "$STATE/profile") in shared-igc0|wifi-prepare) ;; *) rcctl start dhcpd;; esac
+ rcctl start dhcpd
  # rad advertises the Wi-Fi ULA only after PF and forwarding are in place.
  if nat66_profile "$(cat "$STATE/profile")"; then rcctl start rad; fi
  check_candidate_ipv6
@@ -958,16 +907,6 @@ retire_nat66_table() {
 restore_files() {
  typeset f
  [[ $(checksum "$STATE/saved") == $(cat "$STATE/snapshot-digest") ]] || fail 'snapshot integrity failed'
- if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
-  grep -qxF /etc/hostname.wg2 "$STATE/saved/absent" || fail 'incomplete wg2 snapshot'
-  if [[ -e /etc/hostname.wg2 || -L /etc/hostname.wg2 ]]; then
-   [[ -f /etc/hostname.wg2 && ! -L /etc/hostname.wg2 ]] || fail 'wg2 file ownership changed'
-   cmp -s /etc/hostname.wg2 "$STATE/candidate/hostname.wg2" || fail 'wg2 file changed outside the trial'
-  fi
-  rm -f /etc/hostname.wg2 /etc/hostname.wg2.gonf-next
-  sync
-  return
- fi
  for f in $FILES; do
   if [[ -f $STATE/saved/files$f ]]; then
    cp -p "$STATE/saved/files$f" "$f.gonf-restore"
@@ -985,13 +924,6 @@ restore_files() {
 }
 restore_runtime() {
  typeset i family address mask destination gateway flags priority f service
- if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
-  if ifconfig wg2 >/dev/null 2>&1; then
-   ifconfig wg2 | grep -q "^[[:space:]]*description: gonf-vpn-$(cat "$STATE/token")$" || fail 'wg2 interface ownership changed'
-   ifconfig wg2 destroy
-  fi
-  return
- fi
  for service in $SERVICES; do rcctl stop "$service"; done
  print 'restoring: services stopped'
  typeset keep=no
@@ -1217,15 +1149,6 @@ confirm() {
  pending && [[ $(cat "$STATE/status") == active-unconfirmed ]] || fail 'trial is not active'
  [[ $(date +%s) -lt $(cat "$STATE/deadline") ]] || fail 'trial expired'
  typeset role
- if [[ $(cat "$STATE/profile") == vpn-bootstrap ]]; then
-  for role in old vpn; do [[ -s $STATE/proof.$role ]] || fail 'fresh old/VPN receipts missing'; done
-  [[ ${2:-} == services-checked ]] || fail 'controller handshake check required'
-  atomic "$STATE/status" confirmed
-  rm -f "$STATE/pending"
-  sync
-  print 'wg2 confirmed; bootstrap rollback cancelled'
-  return
- fi
  for role in $(confirm_roles "$(cat "$STATE/profile")"); do
   [[ -s $STATE/proof.$role ]] && continue
   case $role in

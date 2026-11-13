@@ -39,10 +39,9 @@ func cameraFiles(s routerStage, data RouterProfiles) map[string]string {
 }
 
 // cameraZoneStage names the profiles that render the explicit camera-zone
-// deny: camera-igc3 and c24's lab-igc1 built on it. post-ap and final also
-// put the cameras on igc3, but they stay byte-identical until their own
-// stage revisits the camera policy. router-rollback's camera_zone_profile
-// lists the same names.
+// deny: camera-igc3 and the lab-port profiles built on it (c24's lab-igc1,
+// j24's lab-final). router-rollback's camera_zone_profile lists the same
+// names.
 func cameraZoneStage(name string) bool {
 	return name == cameraProfileName || labPortStage(name)
 }

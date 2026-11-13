@@ -43,7 +43,7 @@ pfctl() {
  '-f '*)
   print -- "pfctl $*" >> "$BASE/operations"
   if [[ $2 == "$STATE/candidate/pf.conf" ]]; then
-   # Local-only candidates deny RA/RS; the o34 uplink stages pass the CPE's
+   # Local-only candidates would deny RA/RS; the NAT66 stages pass the CPE's
    # (lab-final with its l24 if-bound state).
    if grep -Eq '^pass in quick on [$]up6_if inet6 proto icmp6 from fe80::1 .*icmp6-type routeradv( keep state [(]if-bound[)])?$' "$2"; then
     rm -f "$BASE/pf-blocks-ra"
@@ -190,7 +190,15 @@ for i in igc0 igc1 igc2 igc3; do print -- "$i: flags=<UP,BROADCAST>" > "$base/in
 print ' inet 192.168.1.2 netmask 0xffffff00' >> "$base/interfaces/igc0"
 # Deliberate persistent/runtime drift: .11.2 is persisted but absent live.
 print 'inet 192.168.1.2 255.255.255.0\ninet alias 192.168.11.2 255.255.255.0' > "$fixture/etc/hostname.igc0"
-for i in igc1 igc2 igc3; do print up > "$fixture/etc/hostname.$i"; done
+for i in igc2 igc3; do print up > "$fixture/etc/hostname.$i"; done
+# The generic journal checks below run on wifi-ipv6-nat66, the oldest
+# stageable profile since g74 pruned the shared-wire stages. Arming it needs
+# the current-cabling recovery on igc1 (live and persistent) and the NAT66
+# egress helper with its timer (the crontab mock lists it).
+print ' inet 10.98.0.1 netmask 0xffffff00' >> "$base/interfaces/igc1"
+print 'up\ninet alias 10.98.0.1 255.255.255.0' > "$fixture/etc/hostname.igc1"
+print '#!/bin/ksh' > "$base/nat66-egress"
+chmod 700 "$base/nat66-egress"
 print 192.168.1.1 > "$fixture/etc/mygate"
 print 'set state-policy floating\npass all' > "$fixture/etc/pf.conf"
 print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0\nkern.maxfiles=12345' > "$fixture/etc/sysctl.conf"
@@ -224,7 +232,7 @@ sed 's/ rad_flags resolvd_flags pf$/ rad_flags pf/' "$fixture/etc/rc" > "$fixtur
 mv "$fixture/etc/rc.next" "$fixture/etc/rc"
 "$fixture/run" install_boot
 grep -qx ' unset dhcpd_flags unbound_flags ntpd_flags rad_flags resolvd_flags pf' "$fixture/etc/rc"
-"$fixture/run" stage trial0001 shared-igc0 180
+"$fixture/run" stage trial0001 wifi-ipv6-nat66 180
 # Produce exact reviewed candidate binding as a controller would, then verify
 # both missing readiness and missing keys block arm before any network writes.
 expect_fail() {
@@ -247,7 +255,7 @@ sed '/^ _rc_parse_conf$/d' "$fixture/etc/rc" > "$fixture/etc/rc.next"
 mv "$fixture/etc/rc.next" "$fixture/etc/rc"
 expect_fail install_boot
 cp -p "$fixture/rc.expected" "$fixture/etc/rc"
-expect_fail arm trial0001 shared-igc0 180
+expect_fail arm trial0001 wifi-ipv6-nat66 180
 # The fixture root is mode 700 and the review is owned by the invoking root.
 {
  print -- "candidate-sha256=$(cat "$base/router-state/digest")"
@@ -255,13 +263,13 @@ expect_fail arm trial0001 shared-igc0 180
  print 'dependencies=r14-reviewed-current-stage-only'
  print 'wg2=provisioned-and-tested'
  print 'old-management=fresh-authenticated'
- print 'current-cabling=shared-igc0'
-} > "$base/router-readiness/shared-igc0"
-chmod 600 "$base/router-readiness/shared-igc0"
+ print 'current-cabling=wifi-ipv6-nat66'
+} > "$base/router-readiness/wifi-ipv6-nat66"
+chmod 600 "$base/router-readiness/wifi-ipv6-nat66"
 mv "$fixture/etc/hostname.wg2" "$fixture/etc/wg2.saved"
-expect_fail arm trial0001 shared-igc0 180
+expect_fail arm trial0001 wifi-ipv6-nat66 180
 mv "$fixture/etc/wg2.saved" "$fixture/etc/hostname.wg2"
-"$fixture/run" arm trial0001 shared-igc0 180
+"$fixture/run" arm trial0001 wifi-ipv6-nat66 180
 [[ -f $base/router-owner && -f $base/router-state/pending ]]
 # Failure after addresses/files changed leaves a durable pending marker; the
 # next OS timer invocation restores runtime drift, files and unrelated sysctls.
@@ -287,8 +295,8 @@ rm "$base/fail-activate"
 # candidate-created names and retain the captured table and its contents.
 print 'table <existing> persist' >> "$fixture/etc/pf.conf"
 print '192.0.2.10' > "$base/pf-tables/existing"
-"$fixture/run" stage trialtbl1 shared-igc0 180
-"$fixture/run" arm trialtbl1 shared-igc0 180
+"$fixture/run" stage trialtbl1 wifi-ipv6-nat66 180
+"$fixture/run" arm trialtbl1 wifi-ipv6-nat66 180
 "$fixture/run" activate trialtbl1
 print '198.51.100.10' > "$base/pf-tables/existing"
 touch "$base/pf-tables/foreign"
@@ -297,10 +305,10 @@ expect_fail restore
 rm "$base/pf-tables/foreign"
 "$fixture/run" restore
 grep -qx '192.0.2.10' "$base/pf-tables/existing"
-[[ ! -e $base/pf-tables/recorders && ! -e $base/pf-tables/camera_updates ]]
+[[ ! -e $base/pf-tables/recorders && ! -e $base/pf-tables/camera_updates && ! -e $base/pf-tables/nat66_egress ]]
 # A refused later stage must not strand the last restored snapshot. Recovery
 # checks its token/integrity and archives the inactive stage before replaying.
-"$fixture/run" stage trialtbl2 shared-igc0 180
+"$fixture/run" stage trialtbl2 wifi-ipv6-nat66 180
 expect_fail recover_previous wrongtoken
 "$fixture/run" recover_previous trialtbl1
 [[ $(cat "$base/router-state/token") == trialtbl1 ]]
@@ -311,17 +319,17 @@ mv "$fixture/etc/pf.next" "$fixture/etc/pf.conf"
 # Optimizer-created const tables are part of the running policy. Unknown,
 # mutable or unreferenced runtime-only tables still refuse before arming.
 print '192.0.2.0/24' > "$base/pf-tables/__automatic_aabb_0"
-"$fixture/run" stage trialauto1 shared-igc0 180
+"$fixture/run" stage trialauto1 wifi-ipv6-nat66 180
 touch "$base/mutable-auto"
-expect_fail arm trialauto1 shared-igc0 180
+expect_fail arm trialauto1 wifi-ipv6-nat66 180
 grep -q 'mutable optimizer PF table' "$fixture/failure.log"
 [[ ! -f $base/router-state/pending ]]
 rm "$base/mutable-auto"
 touch "$base/unreferenced-auto"
-expect_fail arm trialauto1 shared-igc0 180
+expect_fail arm trialauto1 wifi-ipv6-nat66 180
 grep -q 'unreferenced optimizer PF table' "$fixture/failure.log"
 rm "$base/unreferenced-auto"
-"$fixture/run" arm trialauto1 shared-igc0 180
+"$fixture/run" arm trialauto1 wifi-ipv6-nat66 180
 grep -q '^table <__automatic_aabb_0> const' "$base/router-state/saved/pf.runtime"
 /sbin/pfctl -nf "$base/router-state/saved/pf.runtime"
 "$fixture/run" activate trialauto1
@@ -329,24 +337,24 @@ grep -q '^table <__automatic_aabb_0> const' "$base/router-state/saved/pf.runtime
 grep -qx '192.0.2.0/24' "$base/pf-tables/__automatic_aabb_0"
 rm "$base/pf-tables/__automatic_aabb_0"
 # Unsupported resolver symlinks refuse before pending authorizes activation.
-"$fixture/run" stage trialdns1 shared-igc0 180
+"$fixture/run" stage trialdns1 wifi-ipv6-nat66 180
 mv "$fixture/etc/resolv.conf" "$fixture/resolv.saved"
 ln -s "$fixture/resolv.saved" "$fixture/etc/resolv.conf"
-expect_fail arm trialdns1 shared-igc0 180
+expect_fail arm trialdns1 wifi-ipv6-nat66 180
 [[ ! -f $base/router-state/pending ]]
 rm "$fixture/etc/resolv.conf"
 ln -s "$fixture/absent-resolver-target" "$fixture/etc/resolv.conf"
-expect_fail arm trialdns1 shared-igc0 180
+expect_fail arm trialdns1 wifi-ipv6-nat66 180
 [[ ! -f $base/router-state/pending ]]
 rm "$fixture/etc/resolv.conf"
 mv "$fixture/resolv.saved" "$fixture/etc/resolv.conf"
 # Native boot can start resolvd without an rc.d runtime cache. Unknown process
 # arguments refuse, while the exact no-argument daemon captures empty flags.
 mv "$fixture/var/run/rc.d/resolvd" "$fixture/resolvd.runtime.saved"
-expect_fail arm trialdns1 shared-igc0 180
+expect_fail arm trialdns1 wifi-ipv6-nat66 180
 [[ ! -f $base/router-state/pending ]]
 touch "$base/native-resolvd"
-"$fixture/run" arm trialdns1 shared-igc0 180
+"$fixture/run" arm trialdns1 wifi-ipv6-nat66 180
 [[ ! -s $base/router-state/saved/services/resolvd.flags || $(cat "$base/router-state/saved/services/resolvd.flags") == '' ]]
 "$fixture/run" restore
 rm "$base/native-resolvd"
@@ -354,8 +362,8 @@ mv "$fixture/resolvd.runtime.saved" "$fixture/var/run/rc.d/resolvd"
 # An absent file and a stopped resolver must round-trip without starting it.
 touch "$base/resolvd-stopped"
 rm "$fixture/etc/resolv.conf"
-"$fixture/run" stage trialdns2 shared-igc0 180
-"$fixture/run" arm trialdns2 shared-igc0 180
+"$fixture/run" stage trialdns2 wifi-ipv6-nat66 180
+"$fixture/run" arm trialdns2 wifi-ipv6-nat66 180
 "$fixture/run" activate trialdns2
 : > "$base/operations"
 "$fixture/run" restore
@@ -363,8 +371,8 @@ rm "$fixture/etc/resolv.conf"
 if grep -qx 'rcctl -f start resolvd' "$base/operations"; then exit 1; fi
 rm "$base/resolvd-stopped"
 cp -p "$fixture/resolv.expected" "$fixture/etc/resolv.conf"
-"$fixture/run" stage trial0002 shared-igc0 180
-"$fixture/run" arm trial0002 shared-igc0 180
+"$fixture/run" stage trial0002 wifi-ipv6-nat66 180
+"$fixture/run" arm trial0002 wifi-ipv6-nat66 180
 "$fixture/run" activate trial0002
 grep -qx 'nameserver 127.0.0.1' "$fixture/etc/resolv.conf"
 grep -qx 'rcctl stop resolvd' "$base/operations"
@@ -383,8 +391,8 @@ expect_fail confirm trial0002
 expect_fail restore
 # A reboot while pending restores files BEFORE the native rc caller reparses
 # defaults. No rc.local/firsttime late-hook or previous-boot lock is sufficient.
-"$fixture/run" stage trial0003 shared-igc0 180
-"$fixture/run" arm trial0003 shared-igc0 180
+"$fixture/run" stage trial0003 wifi-ipv6-nat66 180
+"$fixture/run" arm trial0003 wifi-ipv6-nat66 180
 "$fixture/run" activate trial0003
 "$fixture/run" boot_restore
 [[ ! -f $base/router-state/pending ]]
@@ -419,32 +427,23 @@ print '[[ $unbound_flags == NO && $resolvd_flags == "" && $pf == YES ]]' >> "$fi
 /bin/ksh "$fixture/boot-cache"
 # Missing interface placements, template activation, changed frozen bytes and
 # unlisted dependency readiness must refuse without applying anything.
-"$fixture/run" stage trial0004 shared-igc0 180
-print 'extra=unknown' >> "$base/router-readiness/shared-igc0"
-expect_fail arm trial0004 shared-igc0 180
-sed '$d' "$base/router-readiness/shared-igc0" > "$base/review.next"
-mv "$base/review.next" "$base/router-readiness/shared-igc0"
-chmod 600 "$base/router-readiness/shared-igc0"
+"$fixture/run" stage trial0004 wifi-ipv6-nat66 180
+print 'extra=unknown' >> "$base/router-readiness/wifi-ipv6-nat66"
+expect_fail arm trial0004 wifi-ipv6-nat66 180
+sed '$d' "$base/router-readiness/wifi-ipv6-nat66" > "$base/review.next"
+mv "$base/review.next" "$base/router-readiness/wifi-ipv6-nat66"
+chmod 600 "$base/router-readiness/wifi-ipv6-nat66"
 print '# changed after freeze' >> "$base/router-state/candidate/pf.conf"
-expect_fail arm trial0004 shared-igc0 180
-"$fixture/run" stage trial0005 shared-igc0 180
+expect_fail arm trial0004 wifi-ipv6-nat66 180
+"$fixture/run" stage trial0005 wifi-ipv6-nat66 180
 print 'TEMPLATE' >> "$fixture/etc/hostname.wg2"
-expect_fail arm trial0005 shared-igc0 180
+expect_fail arm trial0005 wifi-ipv6-nat66 180
 sed '$d' "$fixture/etc/hostname.wg2" > "$fixture/etc/wg2.next"
 mv "$fixture/etc/wg2.next" "$fixture/etc/hostname.wg2"
-# On post-rack rollback, recovery is never deleted or moved to upstream. The
-# snapshot is the last accepted shared profile with recovery already on igc1.
-"$fixture/run" stage trial0006 post-rack 180
-{
- print -- "candidate-sha256=$(cat "$base/router-state/digest")"
- print 'provisioning-clients=captured-inventory-no-known-clients'
- print 'dependencies=r14-reviewed-current-stage-only'
- print 'wg2=provisioned-and-tested'
- print 'old-management=fresh-authenticated'
- print 'current-cabling=post-rack'
-} > "$base/router-readiness/post-rack"
-chmod 600 "$base/router-readiness/post-rack"
-"$fixture/run" arm trial0006 post-rack 180
+# On a rollback, recovery is never deleted or moved to upstream. The snapshot
+# is the last accepted profile with recovery already on igc1.
+"$fixture/run" stage trial0006 wifi-ipv6-nat66 180
+"$fixture/run" arm trial0006 wifi-ipv6-nat66 180
 "$fixture/run" activate trial0006
 # Discard older fixture operations, then inspect the whole restore action.
 : > "$base/operations"
@@ -460,10 +459,15 @@ print 'igc0: flags=<AUTOCONF6,AUTOCONF6TEMP,UP,BROADCAST>' > "$base/interfaces/i
  print ' inet6 2001:db8:1:0::1234 prefixlen 64 autoconf temporary pltime 100 vltime 200'
  print ' inet6 fd02:ca0b:f1cb:20::99 prefixlen 64'
 } >> "$base/interfaces/igc0"
-print ' inet6 2001:db8:1::5678 prefixlen 64 autoconf temporary pltime 100 vltime 200' > "$base/slaac-addresses"
-"$fixture/run" stage ipv6trial shared-igc0 180
-"$fixture/run" arm ipv6trial shared-igc0 180
+# The baseline Wi-Fi port has no IPv6 family at all.
+print 'igc2: flags=<UP,BROADCAST>\n inet 10.30.0.1 netmask 0xffffff00' > "$base/interfaces/igc2"
+# NAT66 keeps SLAAC on igc0: the trial learns a stable address (a temporary
+# one would refuse acceptance), the restore relearns the temporary baseline.
+print ' inet6 2001:db8:1::77 prefixlen 64 autoconf pltime 100 vltime 200' > "$base/slaac-addresses"
+"$fixture/run" stage ipv6trial wifi-ipv6-nat66 180
+"$fixture/run" arm ipv6trial wifi-ipv6-nat66 180
 "$fixture/run" activate ipv6trial
+print ' inet6 2001:db8:1::5678 prefixlen 64 autoconf temporary pltime 100 vltime 200' > "$base/slaac-addresses"
 # An address proposal surviving a late event refuses acceptance.
 print ' inet6 2001:db8:2::bad prefixlen 64' >> "$base/interfaces/igc0"
 expect_fail check_candidate_ipv6
@@ -492,13 +496,16 @@ print 0 > "$base/router-state/deadline"
 # Router reboot canaries share the durable journal and early hook.
 # The reboot action requires a genuinely changed fixed canary, a long live
 # deadline, no upgrade and three currently established management sockets.
-print 'inet alias 10.20.0.254 255.255.255.0' >> "$base/router-profiles/shared-igc0/hostname.igc0"
-print '# gonf boot canary: 10.20.0.254' >> "$base/router-profiles/shared-igc0/ntpd.conf"
-"$fixture/run" stage boottrial1 shared-igc0 1800
-sed "1s/.*/candidate-sha256=$(cat "$base/router-state/digest")/" "$base/router-readiness/shared-igc0" > "$base/review.next"
-mv "$base/review.next" "$base/router-readiness/shared-igc0"
-chmod 600 "$base/router-readiness/shared-igc0"
-"$fixture/run" arm boottrial1 shared-igc0 1800
+# No SLAAC address is offered here; the rendered profile is put back after.
+rm -f "$base/slaac-addresses"
+cp -Rp "$base/router-profiles/wifi-ipv6-nat66" "$fixture/nat66.plain"
+print 'inet alias 10.20.0.254 255.255.255.0' >> "$base/router-profiles/wifi-ipv6-nat66/hostname.igc0"
+print '# gonf boot canary: 10.20.0.254' >> "$base/router-profiles/wifi-ipv6-nat66/ntpd.conf"
+"$fixture/run" stage boottrial1 wifi-ipv6-nat66 1800
+sed "1s/.*/candidate-sha256=$(cat "$base/router-state/digest")/" "$base/router-readiness/wifi-ipv6-nat66" > "$base/review.next"
+mv "$base/review.next" "$base/router-readiness/wifi-ipv6-nat66"
+chmod 600 "$base/router-readiness/wifi-ipv6-nat66"
+"$fixture/run" arm boottrial1 wifi-ipv6-nat66 1800
 "$fixture/run" activate boottrial1
 expect_fail reboot_canary wrongtoken
 touch "$fixture/bsd.upgrade"
@@ -542,8 +549,12 @@ cp -p "$fixture/boot-sockets.expected" "$base/sockets"
 "$fixture/run" boot_restore
 if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; then exit 1; fi
 [[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
-# o34 IPv6 stages: uplink SLAAC first, then NAT66 on top of the confirmed
-# uplink. Start from a wifi-first runtime and persistent baseline.
+rm -rf "$base/router-profiles/wifi-ipv6-nat66" "$base/reboot-requested"
+cp -Rp "$fixture/nat66.plain" "$base/router-profiles/wifi-ipv6-nat66"
+# o34 NAT66 (wifi-ipv6-nat66): since g74 the oldest stageable profile. Start
+# from the local-only wifi-first wiring that preceded it (that profile was
+# pruned, so its files are written here): lab and cameras on igc0 with the
+# ISP LAN, Wi-Fi on igc2, recovery on igc1, no SLAAC, no Wi-Fi ULA, no rad.
 # The optional second argument is the old-management value; c24's lab-igc1
 # records isp-uplink-only (after b24 no host reaches 192.168.1.2).
 review() {
@@ -574,20 +585,31 @@ for i in igc0 igc1 igc2 igc3; do print -- "$i: flags=<UP,BROADCAST>" > "$base/in
 } >> "$base/interfaces/igc0"
 print ' inet 10.98.0.1 netmask 0xffffff00' >> "$base/interfaces/igc1"
 print ' inet 10.30.0.1 netmask 0xffffff00' >> "$base/interfaces/igc2"
-for i in igc0 igc1 igc2 igc3; do cp "$base/router-profiles/wifi-first/hostname.$i" "$fixture/etc/hostname.$i"; done
-rm -f "$base/reboot-requested" "$base/nat66-egress"
-up=$base/router-profiles/wifi-ipv6-uplink
+{
+ print 'inet 192.168.1.2 255.255.255.0'
+ print 'inet alias 10.20.0.1 255.255.255.0'
+ print 'inet alias 10.40.0.1 255.255.255.0'
+ print 'inet6 alias fd02:ca0b:f1cb:20::1 64'
+ print 'inet6 -autoconf'
+ print 'inet6 -temporary'
+} > "$fixture/etc/hostname.igc0"
+print 'up\ninet alias 10.98.0.1 255.255.255.0' > "$fixture/etc/hostname.igc1"
+print 'up\ninet alias 10.30.0.1 255.255.255.0' > "$fixture/etc/hostname.igc2"
+print up > "$fixture/etc/hostname.igc3"
+print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0\nkern.maxfiles=12345' > "$fixture/etc/sysctl.conf"
+print 'set state-policy floating\npass all' > "$fixture/etc/pf.conf"
+rm -rf "$base/pf-tables"
+rm -f "$fixture/etc/rad.conf" "$base/reboot-requested" "$base/nat66-egress" "$base/slaac-addresses"
+cp -p "$base/interfaces/igc0" "$fixture/igc0.base"
+cp -p "$base/interfaces/igc2" "$fixture/igc2.base"
 nat=$base/router-profiles/wifi-ipv6-nat66
 # Every misplaced o34 element refuses at stage, before any journal change.
 cp -Rp "$nat" "$fixture/nat66.saved"
-cp -Rp "$up" "$fixture/uplink.saved"
-cp -p "$base/router-profiles/wifi-first/hostname.igc0" "$fixture/wifi-first-igc0.saved"
 o34_refuses() {
  expect_fail stage o34bad01 "$1" 180
  grep -q "$2" "$fixture/failure.log" || { print -u2 -- "wrong refusal for $1: $2"; cat "$fixture/failure.log" >&2; exit 1; }
- rm -rf "$nat" "$up"
+ rm -rf "$nat"
  cp -Rp "$fixture/nat66.saved" "$nat"
- cp -Rp "$fixture/uplink.saved" "$up"
 }
 print 'interface igc0' >> "$nat/rad.conf"
 o34_refuses wifi-ipv6-nat66 'rad must serve only igc2'
@@ -605,63 +627,11 @@ print 'inet6 autoconf -temporary' >> "$nat/hostname.igc2"
 o34_refuses wifi-ipv6-nat66 'IPv6 autoconfiguration only on the igc0 uplink'
 print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0' > "$nat/sysctl.conf.fragment"
 o34_refuses wifi-ipv6-nat66 'unexpected sysctl fragment'
-print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=1' > "$up/sysctl.conf.fragment"
-o34_refuses wifi-ipv6-uplink 'unexpected sysctl fragment'
-cp -p "$nat/rad.conf" "$up/rad.conf"
-o34_refuses wifi-ipv6-uplink 'rad configuration outside the NAT66 profile'
-print 'inet6 alias fd02:ca0b:f1cb:30::1 64' >> "$up/hostname.igc2"
-o34_refuses wifi-ipv6-uplink 'unexpected Wi-Fi ULA'
-sed -e 's/^inet6 -autoconf$/inet6 autoconf -temporary/' -e '/^inet6 -temporary$/d' "$fixture/wifi-first-igc0.saved" > "$base/router-profiles/wifi-first/hostname.igc0"
-o34_refuses wifi-first 'unexpected IPv6 autoconfiguration line'
-cp -p "$fixture/wifi-first-igc0.saved" "$base/router-profiles/wifi-first/hostname.igc0"
-# A temporary SLAAC address after activation refuses acceptance; the timer
-# then restores the local-only baseline, including the persistent policy.
-print ' inet6 2001:db8:5::77 prefixlen 64 autoconf temporary pltime 100 vltime 200' > "$base/slaac-addresses"
-"$fixture/run" stage o34upl01 wifi-ipv6-uplink 180
-review wifi-ipv6-uplink
-"$fixture/run" arm o34upl01 wifi-ipv6-uplink 180
-expect_fail activate o34upl01
-grep -q 'unexpected physical IPv6 address' "$fixture/failure.log"
-[[ $(cat "$base/router-state/status") == activating ]]
-print 0 > "$base/router-state/deadline"
-"$fixture/run" tick
-[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
-if grep -q -e AUTOCONF6 -e 2001:db8:5 "$base/interfaces/igc0"; then exit 1; fi
-grep -q 'inet6 fd02:ca0b:f1cb:20::1 prefixlen 64' "$base/interfaces/igc0"
-grep -qx 'inet6 -autoconf' "$fixture/etc/hostname.igc0"
-grep -qx 'inet6 -temporary' "$fixture/etc/hostname.igc0"
-# Uplink stage: stable SLAAC address and solicitation only after its PF.
-print ' inet6 2001:db8:5::7 prefixlen 64 autoconf pltime 100 vltime 200' > "$base/slaac-addresses"
-"$fixture/run" stage o34upl02 wifi-ipv6-uplink 180
-review wifi-ipv6-uplink
-"$fixture/run" arm o34upl02 wifi-ipv6-uplink 180
-: > "$base/operations"
-"$fixture/run" activate o34upl02
-grep -qx 'ifconfig igc0 inet6 autoconf -temporary' "$base/operations"
-grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0' "$base/operations"
-grep -qx 'rcctl disable rad' "$base/operations"
-if grep -q -e 'rcctl start rad' -e 'slaacctl send solicitation igc[123]' "$base/operations"; then exit 1; fi
-awk '/^pfctl -f .*candidate\/pf.conf$/ {pf=NR} /^slaacctl send solicitation igc0$/ {rs=NR} END {exit !(pf && rs > pf)}' "$base/operations"
-grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
-grep -q 'inet6 2001:db8:5::7 .*autoconf' "$base/interfaces/igc0"
-grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
-[[ ! -e $fixture/etc/rad.conf ]]
-cp -p "$base/interfaces/igc0" "$fixture/igc0.active"
-print ' inet6 2001:db8:5::99 prefixlen 64 autoconf temporary pltime 100 vltime 200' >> "$base/interfaces/igc0"
-expect_fail check_candidate_ipv6
-cp -p "$fixture/igc0.active" "$base/interfaces/igc0"
-sed 's/flags=</flags=<AUTOCONF6TEMP,/' "$fixture/igc0.active" > "$base/interfaces/igc0"
-expect_fail check_candidate_ipv6
-cp -p "$fixture/igc0.active" "$base/interfaces/igc0"
-sed 's/flags=</flags=<AUTOCONF6,/' "$base/interfaces/igc2" > "$fixture/igc2.next"
-cp -p "$base/interfaces/igc2" "$fixture/igc2.active"
-mv "$fixture/igc2.next" "$base/interfaces/igc2"
-expect_fail check_candidate_ipv6
-cp -p "$fixture/igc2.active" "$base/interfaces/igc2"
-"$fixture/run" check_candidate_ipv6
-expect_fail reboot_canary o34upl02
-grep -q 'no active boot canary' "$fixture/failure.log"
-confirm_fresh o34upl02 46001 46002
+# The local-only policy lines instead of SLAAC on the uplink, or beside it.
+awk '$0 == "inet6 autoconf -temporary" {print "inet6 -autoconf"; print "inet6 -temporary"; next} {print}' "$nat/hostname.igc0" > "$nat/igc0.next"; mv "$nat/igc0.next" "$nat/hostname.igc0"
+o34_refuses wifi-ipv6-nat66 'unexpected IPv6 autoconfiguration line'
+print 'inet6 -temporary' >> "$nat/hostname.igc0"
+o34_refuses wifi-ipv6-nat66 'persistent IPv6 policy missing or duplicated'
 # NAT66 refuses to arm without its egress helper and timer.
 "$fixture/run" stage o34nat01 wifi-ipv6-nat66 180
 review wifi-ipv6-nat66
@@ -674,9 +644,35 @@ expect_fail arm o34nat01 wifi-ipv6-nat66 180
 grep -q 'NAT66 egress timer not installed' "$fixture/failure.log"
 [[ ! -f $base/router-state/pending ]]
 rm "$base/no-nat66-cron"
+# A temporary SLAAC address after activation refuses acceptance; the timer
+# then restores the local-only baseline, including the persistent policy.
+print ' inet6 2001:db8:5::77 prefixlen 64 autoconf temporary pltime 100 vltime 200' > "$base/slaac-addresses"
 "$fixture/run" arm o34nat01 wifi-ipv6-nat66 180
+expect_fail activate o34nat01
+grep -q 'unexpected physical IPv6 address' "$fixture/failure.log"
+[[ $(cat "$base/router-state/status") == activating ]]
+print 0 > "$base/router-state/deadline"
+"$fixture/run" tick
+[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
+if grep -q -e AUTOCONF6 -e 2001:db8:5 "$base/interfaces/igc0"; then exit 1; fi
+grep -q 'inet6 fd02:ca0b:f1cb:20::1 prefixlen 64' "$base/interfaces/igc0"
+grep -qx 'inet6 -autoconf' "$fixture/etc/hostname.igc0"
+grep -qx 'inet6 -temporary' "$fixture/etc/hostname.igc0"
+[[ ! -e $fixture/etc/rad.conf ]]
+# NAT66: stable SLAAC address and solicitation only after its PF, the Wi-Fi
+# ULA, rad, IPv6 forwarding and the egress table.
+print ' inet6 2001:db8:5::7 prefixlen 64 autoconf pltime 100 vltime 200' > "$base/slaac-addresses"
+"$fixture/run" stage o34nat02 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm o34nat02 wifi-ipv6-nat66 180
 : > "$base/operations"
-"$fixture/run" activate o34nat01
+"$fixture/run" activate o34nat02
+grep -qx 'ifconfig igc0 inet6 autoconf -temporary' "$base/operations"
+if grep -q 'slaacctl send solicitation igc[123]' "$base/operations"; then exit 1; fi
+awk '/^pfctl -f .*candidate\/pf.conf$/ {pf=NR} /^slaacctl send solicitation igc0$/ {rs=NR} END {exit !(pf && rs > pf)}' "$base/operations"
+grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
+grep -q 'inet6 2001:db8:5::7 .*autoconf' "$base/interfaces/igc0"
+grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
 grep -qx 'rcctl enable rad' "$base/operations"
 cmp -s "$nat/rad.conf" "$fixture/etc/rad.conf"
 grep -q 'inet6 fd02:ca0b:f1cb:30::1 prefixlen 64' "$base/interfaces/igc2"
@@ -689,8 +685,22 @@ awk '/^pfctl -f .*candidate\/pf.conf$/ {pf=NR}
  /^sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=1$/ {fw=NR}
  /^rcctl start rad$/ {rad=NR}
  END {exit !(pf && fw > pf && rad > fw)}' "$base/operations"
-# Timed restore returns to the confirmed uplink stage: rad, forwarding, Wi-Fi
-# IPv6, rad.conf and the NAT table go; the uplink SLAAC prefix is relearned.
+# Acceptance refuses a temporary address or temporary addressing on the
+# uplink and autoconfiguration on any other port.
+cp -p "$base/interfaces/igc0" "$fixture/igc0.trial"
+cp -p "$base/interfaces/igc2" "$fixture/igc2.trial"
+print ' inet6 2001:db8:5::99 prefixlen 64 autoconf temporary pltime 100 vltime 200' >> "$base/interfaces/igc0"
+expect_fail check_candidate_ipv6
+cp -p "$fixture/igc0.trial" "$base/interfaces/igc0"
+sed 's/flags=</flags=<AUTOCONF6TEMP,/' "$fixture/igc0.trial" > "$base/interfaces/igc0"
+expect_fail check_candidate_ipv6
+cp -p "$fixture/igc0.trial" "$base/interfaces/igc0"
+sed 's/flags=</flags=<AUTOCONF6,/' "$fixture/igc2.trial" > "$base/interfaces/igc2"
+expect_fail check_candidate_ipv6
+cp -p "$fixture/igc2.trial" "$base/interfaces/igc2"
+"$fixture/run" check_candidate_ipv6
+# Timed restore returns to the local-only baseline: rad, forwarding, SLAAC,
+# Wi-Fi IPv6, rad.conf and the NAT table go.
 print 0 > "$base/router-state/deadline"
 : > "$base/operations"
 "$fixture/run" tick
@@ -700,77 +710,42 @@ grep -qx 'rcctl stop rad' "$base/operations"
 grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0' "$base/operations"
 grep -qx 'ifconfig igc2 -inet6' "$base/operations"
 if grep -q -e 'inet6 ' "$base/interfaces/igc2"; then exit 1; fi
-if grep -q 'rcctl -f start rad' "$base/operations"; then exit 1; fi
-grep -qx 'slaacctl send solicitation igc0' "$base/operations"
-grep -q 'AUTOCONF6,' "$base/interfaces/igc0"
-grep -q 'inet6 2001:db8:5::7 .*autoconf' "$base/interfaces/igc0"
-grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
+if grep -q -e 'rcctl -f start rad' -e 'slaacctl send solicitation' "$base/operations"; then exit 1; fi
+if grep -q -e AUTOCONF6 -e 2001:db8:5 "$base/interfaces/igc0"; then exit 1; fi
+grep -qx 'inet6 -autoconf' "$fixture/etc/hostname.igc0"
 if grep -q 'f1cb:30' "$fixture/etc/hostname.igc2"; then exit 1; fi
 grep -qx 'net.inet6.ip6.forwarding=0' "$fixture/etc/sysctl.conf"
 grep -qx 'kern.maxfiles=12345' "$fixture/etc/sysctl.conf"
 # Boot restoration of an unconfirmed NAT66 trial restores the persistent
-# uplink files before netstart, rc.conf.local and sysctl included.
-"$fixture/run" stage o34nat02 wifi-ipv6-nat66 180
+# local-only files before netstart, rc.conf.local and sysctl included.
+"$fixture/run" stage o34nat03 wifi-ipv6-nat66 180
 review wifi-ipv6-nat66
-"$fixture/run" arm o34nat02 wifi-ipv6-nat66 180
-"$fixture/run" activate o34nat02
+"$fixture/run" arm o34nat03 wifi-ipv6-nat66 180
+"$fixture/run" activate o34nat03
 "$fixture/run" boot_restore
 [[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
 [[ ! -e $fixture/etc/rad.conf ]]
-grep -qx 'inet6 autoconf -temporary' "$fixture/etc/hostname.igc0"
+grep -qx 'inet6 -autoconf' "$fixture/etc/hostname.igc0"
 if grep -q 'f1cb:30' "$fixture/etc/hostname.igc2"; then exit 1; fi
 grep -qx 'net.inet6.ip6.forwarding=0' "$fixture/etc/sysctl.conf"
 cmp -s "$base/router-state/saved/files$fixture/etc/rc.conf.local" "$fixture/etc/rc.conf.local"
 # A real reboot drops runtime-only state; the mocks keep it, so reset it.
-simulated_reboot() {
- cp -p "$fixture/igc0.active" "$base/interfaces/igc0"
- cp -p "$fixture/igc2.active" "$base/interfaces/igc2"
- rm -f "$base/pf-tables/nat66_egress"
-}
-simulated_reboot
-# The reboot canary is accepted for NAT66 and removed again by boot recovery.
-print 'inet alias 10.20.0.254 255.255.255.0' >> "$nat/hostname.igc0"
-print '# gonf boot canary: 10.20.0.254' >> "$nat/ntpd.conf"
-"$fixture/run" stage o34boot1 wifi-ipv6-nat66 1800
-review wifi-ipv6-nat66
-"$fixture/run" arm o34boot1 wifi-ipv6-nat66 1800
-"$fixture/run" activate o34boot1
-print '' > "$base/router-state/preexisting-connections"
-cat > "$base/sockets" <<'SOCKETS'
-tcp 0 0 192.168.1.2.22 192.168.1.236.46011 ESTABLISHED
-tcp 0 0 10.20.0.1.22 10.99.0.2.46012 ESTABLISHED
-tcp 0 0 10.99.0.1.22 10.99.0.2.46013 ESTABLISHED
-SOCKETS
-"$fixture/run" proof old o34boot1 '192.168.1.236 46011 192.168.1.2 22'
-"$fixture/run" proof new o34boot1 '10.99.0.2 46012 10.20.0.1 22'
-"$fixture/run" proof vpn o34boot1 '10.99.0.2 46013 10.99.0.1 22'
-"$fixture/run" reboot_canary o34boot1
-[[ -f $base/reboot-requested && -f $base/router-state/pending ]]
-"$fixture/run" boot_restore
-if grep -q '10.20.0.254' "$fixture/etc/hostname.igc0" "$fixture/etc/ntpd.conf"; then exit 1; fi
-[[ ! -e $fixture/etc/rad.conf ]]
-rm -rf "$nat" && cp -Rp "$fixture/nat66.saved" "$nat"
-rm "$base/reboot-requested"
-simulated_reboot
+cp -p "$fixture/igc0.base" "$base/interfaces/igc0"
+cp -p "$fixture/igc2.base" "$base/interfaces/igc2"
+rm -rf "$base/pf-tables"
 # Journals snapshotted before rad.conf ownership omit it from the manifest:
-# a local-only or uplink candidate still restores, a NAT66 candidate refuses.
+# a NAT66 candidate (every stageable profile since g74) then refuses.
 strip_rad_manifest() {
  # rad.conf may be the only absent entry; an empty remainder is valid.
  grep -vxF "$fixture/etc/rad.conf" "$base/router-state/saved/absent" > "$fixture/absent.next" || :
  mv "$fixture/absent.next" "$base/router-state/saved/absent"
  "$fixture/run" atomic "$base/router-state/snapshot-digest" "$("$fixture/run" checksum "$base/router-state/saved")"
 }
-"$fixture/run" stage o34leg01 wifi-ipv6-uplink 180
-review wifi-ipv6-uplink
-"$fixture/run" arm o34leg01 wifi-ipv6-uplink 180
-grep -qxF "$fixture/etc/rad.conf" "$base/router-state/saved/absent"
-strip_rad_manifest
-"$fixture/run" activate o34leg01
-"$fixture/run" restore
-"$fixture/run" stage o34leg02 wifi-ipv6-nat66 180
+"$fixture/run" stage o34leg01 wifi-ipv6-nat66 180
 review wifi-ipv6-nat66
-"$fixture/run" arm o34leg02 wifi-ipv6-nat66 180
-"$fixture/run" activate o34leg02
+"$fixture/run" arm o34leg01 wifi-ipv6-nat66 180
+grep -qxF "$fixture/etc/rad.conf" "$base/router-state/saved/absent"
+"$fixture/run" activate o34leg01
 strip_rad_manifest
 expect_fail restore
 grep -q 'incomplete saved file manifest' "$fixture/failure.log"
@@ -779,9 +754,8 @@ print -r -- "$fixture/etc/rad.conf" >> "$base/router-state/saved/absent"
 "$fixture/run" atomic "$base/router-state/snapshot-digest" "$("$fixture/run" checksum "$base/router-state/saved")"
 "$fixture/run" restore
 [[ ! -e $fixture/etc/rad.conf && ! -f $base/router-state/pending ]]
-# A persist table survives a reload that does not declare it. Forward
-# activation from a confirmed NAT66 stage to one without NAT66 must retire
-# <nat66_egress>; otherwise the next snapshot refuses the orphan.
+# A confirmed NAT66 profile keeps its egress table across a reapply: the
+# snapshot captures the helper's address and a restore puts it back.
 "$fixture/run" stage o34fwd01 wifi-ipv6-nat66 180
 review wifi-ipv6-nat66
 "$fixture/run" arm o34fwd01 wifi-ipv6-nat66 180
@@ -789,30 +763,14 @@ review wifi-ipv6-nat66
 confirm_fresh o34fwd01 46021 46022
 [[ -f $base/pf-tables/nat66_egress ]]
 print '2001:db8:5::7' > "$base/pf-tables/nat66_egress"
-"$fixture/run" stage o34fwd02 wifi-ipv6-uplink 180
-review wifi-ipv6-uplink
-"$fixture/run" arm o34fwd02 wifi-ipv6-uplink 180
+"$fixture/run" stage o34fwd02 wifi-ipv6-nat66 180
+review wifi-ipv6-nat66
+"$fixture/run" arm o34fwd02 wifi-ipv6-nat66 180
 grep -qx '2001:db8:5::7' "$base/router-state/saved/tables/nat66_egress"
-: > "$base/operations"
 "$fixture/run" activate o34fwd02
-[[ ! -e $base/pf-tables/nat66_egress ]]
-# Restoring the NAT66 baseline brings the table back with its saved address.
+print '2001:db8:5::8' > "$base/pf-tables/nat66_egress"
 "$fixture/run" restore
 grep -qx '2001:db8:5::7' "$base/pf-tables/nat66_egress"
-"$fixture/run" stage o34fwd03 wifi-ipv6-uplink 180
-review wifi-ipv6-uplink
-"$fixture/run" arm o34fwd03 wifi-ipv6-uplink 180
-"$fixture/run" activate o34fwd03
-confirm_fresh o34fwd03 46031 46032
-[[ ! -e $base/pf-tables/nat66_egress ]]
-# Without retirement the orphan would block the next arm: show the refusal.
-print '2001:db8:5::7' > "$base/pf-tables/nat66_egress"
-"$fixture/run" stage o34fwd04 wifi-ipv6-uplink 180
-review wifi-ipv6-uplink
-expect_fail arm o34fwd04 wifi-ipv6-uplink 180
-grep -q 'runtime-only PF table' "$fixture/failure.log"
-[[ ! -f $base/router-state/pending ]]
-rm "$base/pf-tables/nat66_egress"
 # The journal lock waits briefly for a live short holder (the egress helper)
 # and still refuses a holder that does not let go.
 mkdir "$base/router-lock"
@@ -832,9 +790,9 @@ rm -rf "$base/router-lock"
 # (the per-minute egress helper) briefly holds the lock: it waits, it never
 # skips. Only a live "$SELF activate" holder is terminated.
 expired_trial() {
- "$fixture/run" stage "$1" wifi-ipv6-uplink 180
- review wifi-ipv6-uplink
- "$fixture/run" arm "$1" wifi-ipv6-uplink 180
+ "$fixture/run" stage "$1" wifi-ipv6-nat66 180
+ review wifi-ipv6-nat66
+ "$fixture/run" arm "$1" wifi-ipv6-nat66 180
  "$fixture/run" activate "$1"
  print 0 > "$base/router-state/deadline"
 }
@@ -925,8 +883,6 @@ print 'interface igc3' >> "$cam/rad.conf"
 camera_refuses camera-igc3 'rad must serve only igc2'
 edit 's/^dhcpd_interfaces=igc2$/dhcpd_interfaces=igc2 igc3/' "$cam/services.conf"
 camera_refuses camera-igc3 'wrong Wi-Fi DHCP binding'
-# post-ap also puts the cameras on igc3; it stages without the explicit deny.
-"$fixture/run" stage g24pap01 post-ap 180
 # Activation moves the prefix: drained from igc0 before it is added to igc3,
 # any stray IPv6 on the camera port removed. Nothing else changes.
 "$fixture/run" stage g24cam01 camera-igc3 180
@@ -955,6 +911,11 @@ expect_fail check_candidate_ipv6
 grep -q 'camera port carries IPv6' "$fixture/failure.log"
 cp -p "$fixture/igc3.camera" "$base/interfaces/igc3"
 "$fixture/run" check_candidate_ipv6
+# An unlisted profile name in the journal fails closed instead of using igc0.
+print camera-igc4 > "$base/router-state/profile"
+expect_fail check_candidate_ipv6
+grep -q 'profile has no reviewed camera port' "$fixture/failure.log"
+print camera-igc3 > "$base/router-state/profile"
 # Timed restore returns the zone to igc0, files included; NAT66 stays.
 print 0 > "$base/router-state/deadline"
 "$fixture/run" tick
@@ -1026,36 +987,41 @@ for f in hostname.igc0 hostname.igc3 pf.conf; do cmp -s "$cam/$f" "$fixture/etc/
 # i44: port wiring is a closed table. Every stageable physical profile has
 # one; any other name has none, so no port is ever guessed (g24 N6). c24:
 # loop over every rendered profile directory, not a hand-written list, so a
-# newly rendered profile cannot miss profile_ok or the wiring table. final is
-# rendered for review only: it has no wiring and needs the retirement gate.
+# newly rendered profile cannot miss profile_ok or the wiring table.
 rendered=0
 for d in "$base"/router-profiles/*/; do
  p=${d%/}
  p=${p##*/}
- [[ $p != final ]] || continue
  "$fixture/run" profile_ok "$p"
  "$fixture/run" wiring "$p" > /dev/null
  (( rendered += 1 ))
 done
-# The ten stageable physical profiles (c24's lab-igc1 and j24's lab-final included).
-(( rendered >= 10 ))
+# The four stageable physical profiles (g74 pruned every other one).
+(( rendered == 4 ))
 [[ -d $base/router-profiles/lab-igc1 && -d $base/router-profiles/lab-final ]]
 [[ $("$fixture/run" wiring lab-final) == 'igc1 igc2 igc3' && $("$fixture/run" camera_port lab-final) == igc3 ]]
 [[ $("$fixture/run" wiring lab-igc1) == 'igc1 igc2 igc3' && $("$fixture/run" camera_port lab-igc1) == igc3 ]]
-[[ $("$fixture/run" camera_port camera-igc3) == igc3 && $("$fixture/run" camera_port post-ap) == igc3 ]]
-[[ $("$fixture/run" camera_port wifi-first) == igc0 && $("$fixture/run" camera_port post-rack) == igc0 ]]
-for p in final vpn-bootstrap camera-igc4 ''; do
+[[ $("$fixture/run" wiring camera-igc3) == 'igc0 igc2 igc3' && $("$fixture/run" camera_port camera-igc3) == igc3 ]]
+[[ $("$fixture/run" wiring wifi-ipv6-nat66) == 'igc0 igc2 igc0' && $("$fixture/run" camera_port wifi-ipv6-nat66) == igc0 ]]
+# The pruned profiles (g74) and any other name are neither stageable nor wired.
+for p in shared-igc0 wifi-prepare wifi-first post-rack post-ap final wifi-ipv6-uplink vpn-bootstrap camera-igc4 ''; do
+ expect_fail profile_ok "$p"
  expect_fail camera_port "$p"
  [[ ! -s $fixture/failure.log ]]
+ expect_fail stage g74gone1 "$p" 180
+ grep -q 'invalid stage profile' "$fixture/failure.log"
 done
-# A non-NAT66 bundle under an unlisted name reaches the wiring check.
-expect_fail validate "$base/router-profiles/post-ap" post-ap2
+# A bundle under an unlisted name reaches the wiring check. Its sysctl
+# fragment is the non-NAT66 one, which an unlisted name expects.
+cp -Rp "$cam" "$fixture/unlisted"
+print 'net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=0' > "$fixture/unlisted/sysctl.conf.fragment"
+expect_fail validate "$fixture/unlisted" post-ap
 grep -q 'profile has no reviewed port wiring' "$fixture/failure.log"
+rm -rf "$fixture/unlisted"
 # Every rendered stageable profile passes the tightened validator unchanged.
 for d in "$base"/router-profiles/*/; do
  p=${d%/}
  p=${p##*/}
- [[ $p != final ]] || continue
  "$fixture/run" validate "$base/router-profiles/$p" "$p"
 done
 [[ ! -e $base/router-pf-expanded ]]
@@ -1068,44 +1034,40 @@ i44_refuses() {
  rm -rf "$base/router-profiles"
  cp -Rp "$fixture/profiles.saved" "$base/router-profiles"
 }
-wf=$base/router-profiles/wifi-first
-wp=$base/router-profiles/wifi-prepare
+# The local-only policy lines live on lab-igc1's lab port igc1.
+li=$base/router-profiles/lab-igc1
 # 10.30.0.1 is bound to igc2 by address and by the PF macro, not merely once.
-edit '/^inet alias 10[.]30[.]0[.]1 /d' "$wf/hostname.igc2"
-print 'inet alias 10.30.0.1 255.255.255.0' >> "$wf/hostname.igc0"
-i44_refuses wifi-first 'Wi-Fi zone on the wrong port'
-edit 's/^wifi_if = "igc2"$/wifi_if = "igc0"/' "$wf/pf.conf"
-i44_refuses wifi-first 'Wi-Fi zone on the wrong port'
-edit '/^inet alias 10[.]30[.]0[.]1 /d' "$wp/hostname.igc2"
-print 'inet alias 10.30.0.1 255.255.255.0' >> "$wp/hostname.igc3"
-i44_refuses wifi-prepare 'Wi-Fi zone on the wrong port'
+edit '/^inet alias 10[.]30[.]0[.]1 /d' "$nat/hostname.igc2"
+print 'inet alias 10.30.0.1 255.255.255.0' >> "$nat/hostname.igc0"
+i44_refuses wifi-ipv6-nat66 'Wi-Fi zone on the wrong port'
+edit 's/^wifi_if = "igc2"$/wifi_if = "igc0"/' "$nat/pf.conf"
+i44_refuses wifi-ipv6-nat66 'Wi-Fi zone on the wrong port'
+edit '/^inet alias 10[.]30[.]0[.]1 /d' "$nat/hostname.igc2"
+print 'inet alias 10.30.0.1 255.255.255.0' >> "$nat/hostname.igc3"
+i44_refuses wifi-ipv6-nat66 'Wi-Fi zone on the wrong port'
 edit '/^inet alias 10[.]30[.]0[.]1 /d' "$cam/hostname.igc2"
 print 'inet alias 10.30.0.1 255.255.255.0' >> "$cam/hostname.igc0"
 i44_refuses camera-igc3 'Wi-Fi zone on the wrong port'
-edit '/^inet alias 10[.]20[.]0[.]1 /d' "$wf/hostname.igc0"
-print 'inet alias 10.20.0.1 255.255.255.0' >> "$wf/hostname.igc2"
-i44_refuses wifi-first 'lab zone on the wrong port'
-edit '/^inet6 /d' "$wf/hostname.igc0"
-print 'inet6 alias fd02:ca0b:f1cb:20::1 64\ninet6 -autoconf\ninet6 -temporary' >> "$wf/hostname.igc2"
-i44_refuses wifi-first 'lab ULA on the wrong port'
-# DHCP follows the stage: none in wifi-prepare, igc2 only in wifi-first.
-edit 's/^dhcpd_interfaces=disabled$/dhcpd_interfaces=igc2/' "$wp/services.conf"
-i44_refuses wifi-prepare 'DHCP forbidden on shared wire'
-edit 's/^dhcpd_interfaces=igc2$/dhcpd_interfaces=disabled/' "$wf/services.conf"
-i44_refuses wifi-first 'wrong Wi-Fi DHCP binding'
+edit '/^inet alias 10[.]20[.]0[.]1 /d' "$nat/hostname.igc0"
+print 'inet alias 10.20.0.1 255.255.255.0' >> "$nat/hostname.igc2"
+i44_refuses wifi-ipv6-nat66 'lab zone on the wrong port'
+edit '/^inet6 /d' "$nat/hostname.igc0"
+print 'inet6 alias fd02:ca0b:f1cb:20::1 64\ninet6 -autoconf\ninet6 -temporary' >> "$nat/hostname.igc3"
+i44_refuses wifi-ipv6-nat66 'lab ULA on the wrong port'
+# DHCP follows the stage: igc2 only before b24.
+edit 's/^dhcpd_interfaces=igc2$/dhcpd_interfaces=disabled/' "$nat/services.conf"
+i44_refuses wifi-ipv6-nat66 'wrong Wi-Fi DHCP binding'
 # netstart turns a third word into a prefix length: the joined policy line refuses.
-edit '/^inet6 -temporary$/d' "$wf/hostname.igc0"
-edit 's/^inet6 -autoconf$/inet6 -autoconf -temporary/' "$wf/hostname.igc0"
-i44_refuses wifi-first 'netstart misparses'
-edit '/^inet6 -temporary$/d' "$wf/hostname.igc0"
-i44_refuses wifi-first 'persistent IPv6 policy missing or duplicated'
-print 'inet6 -autoconf' >> "$wf/hostname.igc2"
-i44_refuses wifi-first 'persistent IPv6 policy missing or duplicated'
-edit '/^inet6 -/d' "$wf/hostname.igc0"
-print 'inet6 -autoconf\ninet6 -temporary' >> "$wf/hostname.igc2"
-i44_refuses wifi-first 'IPv6 policy must accompany the lab address'
-print 'inet6 -temporary' >> "$up/hostname.igc0"
-i44_refuses wifi-ipv6-uplink 'persistent IPv6 policy missing or duplicated'
+edit '/^inet6 -temporary$/d' "$li/hostname.igc1"
+edit 's/^inet6 -autoconf$/inet6 -autoconf -temporary/' "$li/hostname.igc1"
+i44_refuses lab-igc1 'netstart misparses'
+edit '/^inet6 -temporary$/d' "$li/hostname.igc1"
+i44_refuses lab-igc1 'persistent IPv6 policy missing or duplicated'
+print 'inet6 -autoconf' >> "$li/hostname.igc2"
+i44_refuses lab-igc1 'persistent IPv6 policy missing or duplicated'
+edit '/^inet6 -/d' "$li/hostname.igc1"
+print 'inet6 -autoconf\ninet6 -temporary' >> "$li/hostname.igc2"
+i44_refuses lab-igc1 'IPv6 policy must accompany the lab address'
 # g24 N1: the camera checks read pfctl's expansion, so every spelling of the
 # port or zone refuses, and the deny must come before any permit that can
 # match the port. Literal PF text below, not shell expansions.
@@ -1192,93 +1154,10 @@ cam_before_deny 'pass in log (all, to pflog0) quick on igc2 inet proto tcp from 
 "$fixture/run" validate "$cam" camera-igc3
 rm -rf "$base/router-profiles"
 cp -Rp "$fixture/profiles.saved" "$base/router-profiles"
-# i44: wifi-prepare and wifi-first through the journal, from the confirmed
-# camera-igc3 placement the g24 section left behind.
-"$fixture/run" stage i44wfp01 wifi-prepare 180
-review wifi-prepare
-"$fixture/run" arm i44wfp01 wifi-prepare 180
-: > "$base/operations"
-"$fixture/run" activate i44wfp01
-# DHCP stays off, the Wi-Fi gateway moves to igc2, cameras return to igc0.
-grep -qx 'rcctl disable dhcpd' "$base/operations"
-if grep -q 'rcctl start dhcpd' "$base/operations"; then exit 1; fi
-grep -qx 'rcctl disable rad' "$base/operations"
-grep -qx 'sysctl net.inet.ip.forwarding=1 net.inet6.ip6.forwarding=0' "$base/operations"
-grep -q ' inet 10.30.0.1 ' "$base/interfaces/igc2"
-grep -q ' inet 10.40.0.1 ' "$base/interfaces/igc0"
-if grep -q '10.40.0.1' "$base/interfaces/igc3"; then exit 1; fi
-# The split policy reaches ifconfig as netstart would issue it at boot.
-grep -qx 'ifconfig igc0 inet6 -autoconf' "$base/operations"
-grep -qx 'ifconfig igc0 inet6 -temporary' "$base/operations"
-if grep -q prefixlen.-temporary "$base/operations"; then exit 1; fi
-for f in hostname.igc0 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf; do cmp -s "$wp/$f" "$fixture/etc/$f"; done
-[[ ! -e $fixture/etc/rad.conf ]]
-"$fixture/run" check_candidate_ipv6
-# An unlisted profile name in the journal fails closed instead of using igc0.
-print camera-igc4 > "$base/router-state/profile"
-expect_fail check_candidate_ipv6
-grep -q 'profile has no reviewed camera port' "$fixture/failure.log"
-print wifi-prepare > "$base/router-state/profile"
-# The lab stays on the shared igc0: old/new receipts confirm, no igc1 receipt.
-confirm_fresh i44wfp01 47101 47102
-[[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
-cp -p "$base/interfaces/igc0" "$fixture/igc0.prepare"
-cp -p "$base/interfaces/igc2" "$fixture/igc2.prepare"
-# wifi-first starts dhcpd on igc2 only; timed expiry returns wifi-prepare.
-"$fixture/run" stage i44wfa01 wifi-first 180
-review wifi-first
-"$fixture/run" arm i44wfa01 wifi-first 180
-: > "$base/operations"
-"$fixture/run" activate i44wfa01
-grep -qx 'rcctl enable dhcpd' "$base/operations"
-grep -qx 'rcctl set dhcpd flags igc2' "$base/operations"
-grep -qx 'rcctl start dhcpd' "$base/operations"
-for f in hostname.igc0 hostname.igc2 pf.conf dhcpd.conf; do cmp -s "$wf/$f" "$fixture/etc/$f"; done
-print 0 > "$base/router-state/deadline"
-"$fixture/run" tick
-[[ $(cat "$base/router-state/status") == restored && ! -f $base/router-state/pending ]]
-for f in hostname.igc0 hostname.igc2 pf.conf dhcpd.conf; do cmp -s "$wp/$f" "$fixture/etc/$f"; done
-grep -q ' inet 10.30.0.1 ' "$base/interfaces/igc2"
-# Boot restoration of an unconfirmed wifi-first trial restores wifi-prepare.
-"$fixture/run" stage i44wfa02 wifi-first 180
-review wifi-first
-"$fixture/run" arm i44wfa02 wifi-first 180
-"$fixture/run" activate i44wfa02
-"$fixture/run" boot_restore
-[[ $(cat "$base/router-state/status") == restored-at-boot && ! -f $base/router-state/pending ]]
-for f in hostname.igc0 hostname.igc2 pf.conf dhcpd.conf; do cmp -s "$wp/$f" "$fixture/etc/$f"; done
-cp -p "$fixture/igc0.prepare" "$base/interfaces/igc0"
-cp -p "$fixture/igc2.prepare" "$base/interfaces/igc2"
-# wifi-first confirms on old/new receipts as well.
-"$fixture/run" stage i44wfa03 wifi-first 180
-review wifi-first
-"$fixture/run" arm i44wfa03 wifi-first 180
-"$fixture/run" activate i44wfa03
-confirm_fresh i44wfa03 47111 47112
-[[ $(cat "$base/router-state/status") == confirmed ]]
-# Once the lab moves to igc1 (post-rack), confirmation needs the fresh igc1
-# recovery receipt; a recovery tuple for the wrong address is refused.
-"$fixture/run" stage i44rack1 post-rack 180
-review post-rack
-"$fixture/run" arm i44rack1 post-rack 180
-"$fixture/run" activate i44rack1
-print '' > "$base/router-state/preexisting-connections"
-print 'tcp 0 0 192.168.1.2.22 192.168.1.236.47121 ESTABLISHED' > "$base/sockets"
-"$fixture/run" proof old i44rack1 '192.168.1.236 47121 192.168.1.2 22'
-print 'tcp 0 0 10.20.0.1.22 10.99.0.2.47122 ESTABLISHED' > "$base/sockets"
-"$fixture/run" proof new i44rack1 '10.99.0.2 47122 10.20.0.1 22'
-expect_fail confirm i44rack1 services-checked
-grep -q 'fresh igc1 recovery receipt missing' "$fixture/failure.log"
-print 'tcp 0 0 10.20.0.1.22 10.98.0.250.47123 ESTABLISHED' > "$base/sockets"
-expect_fail proof recovery i44rack1 '10.98.0.250 47123 10.20.0.1 22'
-grep -q 'wrong management address' "$fixture/failure.log"
-print 'tcp 0 0 10.98.0.1.22 10.98.0.250.47124 ESTABLISHED' > "$base/sockets"
-"$fixture/run" proof recovery i44rack1 '10.98.0.250 47124 10.98.0.1 22'
-"$fixture/run" confirm i44rack1 services-checked
-[[ $(cat "$base/router-state/status") == confirmed && ! -f $base/router-state/pending ]]
 # c24 lab-igc1: camera-igc3 with 10.20.0.1/24, the lab ULA and their routes
 # moved from igc0 to igc1 after the b24 cable move. Start from a confirmed
-# camera-igc3 baseline, as on the live router.
+# camera-igc3 baseline, as on the live router (the journal holds the restored
+# g24fwd01 trial, the camera zone already on igc3).
 "$fixture/run" stage c24cam01 camera-igc3 180
 review camera-igc3
 "$fixture/run" arm c24cam01 camera-igc3 180
@@ -1396,8 +1275,10 @@ awk '$0=="ifconfig igc0 inet 10.20.0.1 delete" {del=NR}
  $0=="ifconfig igc1 inet6 alias fd02:ca0b:f1cb:20::1 prefixlen 64" {add6=NR}
  END {exit !(del && add > del && del6 && add6 > del6)}' "$base/operations"
 # Local-only policy on the lab port, SLAAC on the uplink, the camera port bare.
+# The split policy reaches ifconfig as netstart would issue it at boot (i44).
 grep -qx 'ifconfig igc1 inet6 -autoconf' "$base/operations"
 grep -qx 'ifconfig igc1 inet6 -temporary' "$base/operations"
+if grep -q prefixlen.-temporary "$base/operations"; then exit 1; fi
 grep -qx 'ifconfig igc0 inet6 autoconf -temporary' "$base/operations"
 grep -qx 'ifconfig igc3 -inet6' "$base/operations"
 grep -qx 'slaacctl send solicitation igc0' "$base/operations"
@@ -1433,6 +1314,10 @@ print 'tcp 0 0 10.20.0.1.22 10.20.0.125.47212 ESTABLISHED' > "$base/sockets"
 "$fixture/run" proof new c24lab01 '10.20.0.125 47212 10.20.0.1 22'
 expect_fail confirm c24lab01 services-checked
 grep -q 'fresh igc1 recovery receipt missing' "$fixture/failure.log"
+# A recovery tuple for the wrong management address is refused.
+print 'tcp 0 0 10.20.0.1.22 10.98.0.125.47215 ESTABLISHED' > "$base/sockets"
+expect_fail proof recovery c24lab01 '10.98.0.125 47215 10.20.0.1 22'
+grep -q 'wrong management address' "$fixture/failure.log"
 print 'tcp 0 0 10.98.0.1.22 10.99.0.2.47213 ESTABLISHED' > "$base/sockets"
 expect_fail proof recovery c24lab01 '10.99.0.2 47213 10.98.0.1 22'
 grep -q 'lab-port new and recovery receipts must come from a lab host' "$fixture/failure.log"
@@ -1602,63 +1487,6 @@ review lab-final isp-uplink-only
 for f in hostname.igc0 hostname.igc1 hostname.igc2 hostname.igc3 pf.conf dhcpd.conf rad.conf; do cmp -s "$fixture/final.saved/$f" "$fixture/etc/$f"; done
 rm -rf "$fixture/final.saved"
 rm -rf "$fixture/lab.saved" "$fixture/camera.c24"
-# Bootstrap must not alter physical interfaces, PF, routes or service state.
-rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
-mkdir "$base/router-profiles/vpn-bootstrap"
-{
- print 'inet 10.99.0.1 255.255.255.0'
- print 'wgport 51822'
- printf 'wgkey %043d=\n' 1
- printf 'wgpeer %043d= wgaip 10.99.0.2/32\n' 2
- printf 'wgpeer %043d= wgaip 10.99.0.3/32\n' 3
- print up
-} > "$base/router-profiles/vpn-bootstrap/hostname.wg2"
-chmod 600 "$base/router-profiles/vpn-bootstrap/hostname.wg2"
-"$fixture/run" stage vpntrial1 vpn-bootstrap 180
-touch "$base/router-profiles/vpn-bootstrap/unknown-input"
-expect_fail stage vpntrial1 vpn-bootstrap 180
-rm "$base/router-profiles/vpn-bootstrap/unknown-input"
-touch "$fixture/etc/hostname.wg2"
-expect_fail arm vpntrial1 vpn-bootstrap 180
-rm "$fixture/etc/hostname.wg2"
-print 'wg2: flags=<UP>' > "$base/interfaces/wg2"
-expect_fail arm vpntrial1 vpn-bootstrap 180
-rm "$base/interfaces/wg2"
-"$fixture/run" arm vpntrial1 vpn-bootstrap 180
-: > "$base/operations"
-"$fixture/run" activate vpntrial1
-print 0 > "$base/router-state/deadline"
-"$fixture/run" tick
-[[ ! -e $fixture/etc/hostname.wg2 && ! -e $base/interfaces/wg2 ]]
-if grep -Ev '^(ifconfig wg2 (create description gonf-vpn-vpntrial1|destroy)|rcctl check cron)$' "$base/operations"; then exit 1; fi
-"$fixture/run" restore
-"$fixture/run" stage vpntrial2 vpn-bootstrap 180
-"$fixture/run" arm vpntrial2 vpn-bootstrap 180
-"$fixture/run" activate vpntrial2
-expect_fail confirm vpntrial2 services-checked
-print '' > "$base/router-state/preexisting-connections"
-print 'tcp 0 0 192.168.1.2.22 192.168.1.236.45671 ESTABLISHED' > "$base/sockets"
-"$fixture/run" proof old vpntrial2 '192.168.1.236 45671 192.168.1.2 22'
-print 'tcp 0 0 10.99.0.1.22 10.99.0.2.45672 ESTABLISHED' > "$base/sockets"
-expect_fail proof vpn vpntrial2 '192.168.1.236 45672 10.99.0.1 22'
-"$fixture/run" proof vpn vpntrial2 '10.99.0.2 45672 10.99.0.1 22'
-"$fixture/run" confirm vpntrial2 services-checked
-expect_fail restore
-# Boot file restoration is exercised without booting or touching native state.
-rm "$fixture/etc/hostname.wg2" "$base/interfaces/wg2"
-"$fixture/run" stage vpntrial3 vpn-bootstrap 180
-"$fixture/run" arm vpntrial3 vpn-bootstrap 180
-"$fixture/run" activate vpntrial3
-"$fixture/run" boot_restore
-[[ ! -e $fixture/etc/hostname.wg2 && ! -e $base/router-state/pending ]]
-# An externally replaced interface must never be destroyed by this journal.
-rm "$base/interfaces/wg2"
-"$fixture/run" stage vpntrial4 vpn-bootstrap 180
-"$fixture/run" arm vpntrial4 vpn-bootstrap 180
-"$fixture/run" activate vpntrial4
-print 'wg2: flags=<UP>\n description: external-owner' > "$base/interfaces/wg2"
-expect_fail restore
-[[ -f $base/interfaces/wg2 && -f $base/router-state/pending ]]
 # NAT66 egress helper: exactly one address, only while the loaded rules use
 # the table, only under the journal lock, failures logged. Mocked commands
 # record into files; the helper's own dispatch runs unchanged.

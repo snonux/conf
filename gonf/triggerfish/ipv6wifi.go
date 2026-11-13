@@ -13,12 +13,12 @@ import (
 // to reach: the ULA is unroutable from the internet and PF has no inbound
 // permit on the uplink.
 //
-// Two stages share the current verified wiring (wifi-first: lab and cameras
-// still share igc0 with the ISP LAN, Wi-Fi is on igc2) so each can run as its
-// own guarded trial: the uplink first, then Wi-Fi on top of it.
+// o34 ran two guarded trials on the wifi-first wiring (lab and cameras still
+// shared igc0 with the ISP LAN, Wi-Fi on igc2): the uplink first, then Wi-Fi
+// on top of it. g74 pruned the uplink-only stage; the NAT66 stage stays as
+// the base of camera-igc3, lab-igc1 and lab-final.
 const (
-	ipv6UplinkProfileName = "wifi-ipv6-uplink"
-	ipv6NAT66ProfileName  = "wifi-ipv6-nat66"
+	ipv6NAT66ProfileName = "wifi-ipv6-nat66"
 	// ipv6Uplink is the ISP-facing port in every wiring stage.
 	ipv6Uplink = "igc0"
 	// The local-only policy lines (localOnlyIPv6Policy, profiles.go) are
@@ -42,10 +42,9 @@ const (
 	nat66EgressTable = "nat66_egress"
 )
 
-// ipv6Stages lists the o34 stages. Both use the wifi-first wiring.
+// ipv6Stages lists the o34 NAT66 stage on the wifi-first wiring.
 func ipv6Stages() []routerStage {
 	return []routerStage{
-		{ipv6UplinkProfileName, "igc0", "igc2", "igc0", true, true},
 		{ipv6NAT66ProfileName, "igc0", "igc2", "igc0", true, true},
 	}
 }
@@ -58,13 +57,12 @@ func nat66Stage(name string) bool {
 	return name == ipv6NAT66ProfileName || name == cameraProfileName || labPortStage(name)
 }
 
-// ipv6Files derives an o34 stage from the stage's IPv4/ULA files. The uplink
-// stage changes only igc0 SLAAC and the IPv6 PF block. Every other stage gets
-// the full NAT66 stage: the Wi-Fi ULA, rad(8), IPv6 forwarding and
-// translation. For the o34 stages the IPv4 output stays byte-identical to
-// wifi-first apart from the profile name in the PF and dhcpd.conf headers;
-// the g24 camera stage and the c24 lab stage also pass through here and
-// differ only by their wiring (camera.go, lab.go).
+// ipv6Files derives a NAT66 stage from the stage's IPv4/ULA files: igc0
+// SLAAC, the Wi-Fi ULA, rad(8), IPv6 forwarding and translation. The o34
+// NAT66 IPv4 output stayed byte-identical to the (since pruned) wifi-first
+// stage apart from the profile name in the PF and dhcpd.conf headers; the g24
+// camera stage and the c24 lab stage also pass through here and differ only
+// by their wiring (camera.go, lab.go).
 func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 	files := profileFiles(s, data)
 	uplink := "hostname." + ipv6Uplink
@@ -76,10 +74,6 @@ func ipv6Files(s routerStage, data RouterProfiles) map[string]string {
 		files[uplink] += uplinkIPv6Line
 	}
 	files["ACTIVATION.txt"] = ipv6Activation(s)
-	if s.name == ipv6UplinkProfileName {
-		files["pf.conf"] = profilePFWithIPv6(s, data, labIPv6Rules()+uplinkIPv6Head()+uplinkIPv6Rules(s)+ipv6Tail())
-		return files
-	}
 	// rad(8) needs a link-local source; assigning the ULA creates one.
 	files["hostname."+s.wifi] += "inet6 alias " + wifiULARouter + " 64\n"
 	files["sysctl.conf.fragment"] = "net.inet.ip.forwarding=1\nnet.inet6.ip6.forwarding=1\n"
@@ -176,7 +170,7 @@ pass out quick on $up6_if inet6 to ! <nonglobal6> tagged gonf_transit6 keep stat
 `, wifiULARouter)
 }
 
-// ipv6Tail closes every o34 IPv6 block. Replies and ICMPv6 errors (Packet Too
+// ipv6Tail closes every NAT66 IPv6 block. Replies and ICMPv6 errors (Packet Too
 // Big etc.) for the states above match by state. Anything unsolicited from a
 // global source on the uplink is dropped and logged: this is the pflog
 // evidence for the external-vantage probe. The inet6 default deny stays last.
@@ -188,11 +182,11 @@ block drop quick inet6 all
 `
 }
 
+// ipv6Activation is the o34 NAT66 review note. Its text keeps the accepted
+// bytes, the uplink-first order included (o34 ran the uplink trial first);
+// camera.go and lab.go replace it for their stages.
 func ipv6Activation(s routerStage) string {
-	stage := "uplink only: router SLAAC address and IPv6 default via the CPE, forwarding off, Wi-Fi unchanged"
-	if s.name == ipv6NAT66ProfileName {
-		stage = "uplink plus Wi-Fi ULA " + wifiULAPrefix + ", rad on " + s.wifi + " only, IPv6 forwarding, NAT66 to <" + nat66EgressTable + ">"
-	}
+	stage := "uplink plus Wi-Fi ULA " + wifiULAPrefix + ", rad on " + s.wifi + " only, IPv6 forwarding, NAT66 to <" + nat66EgressTable + ">"
 	return fmt.Sprintf(`O34 CANDIDATE: %s (wiring of wifi-first: lab/camera igc0, Wi-Fi %s)
 Stage: %s.
 Design: IQ openbsdrouter-plan/IPV6-WIFI.md. Activate only through

@@ -26,6 +26,10 @@ func (Profiles) DescCandidates() string {
 	return "Stages inactive network, firewall and service configuration bundles"
 }
 
+func (Profiles) DescRetire() string {
+	return "Removes the pruned profiles, their readiness receipts, the t14 rejected stage and the previous journal"
+}
+
 func (Rollback) DescActivate() string {
 	return "Applies only the frozen, armed and explicitly reviewed trial"
 }
@@ -75,7 +79,3 @@ func (Unattended) DescCron() string {
 func (Unattended) DescNewsyslog() string { return "Rotates the private unattended-upgrade log" }
 
 func (Unattended) DescScript() string { return "Installs the router's base, package and audit wrapper" }
-
-func (VPN) DescCandidate() string {
-	return "Stages the private wg2 input without creating an interface"
-}
