@@ -53,14 +53,19 @@ TCP to a local address on a `cluster_nodeports` port jumps into chain
 policies: the r-nodes 192.168.2.120-122 and the laptop/phone .200/.201 on all
 five ports, the frontends .110/.111 (relayd) only on 30001/30222/30800, the
 ports relayd forwards; `protonbridge-nodeport` does not admit them. Every
-other mesh peer (f-hosts, Pis, rocky routed through a gateway) and all IPv6
-(the Services are IPv4-only, no policy admits IPv6) is counted and dropped.
-Established flows and every other wg0 port (etcd, API, kubelet, NFS,
-monitoring) are not inspected. `check-offline.py` derives the wg0
-expectations from the four policies in `f3s/network-policies/namespaces`
-(map `NODEPORT_POLICIES`), so a policy change fails the check until the
-guard follows it; the o74 file fails it, as it admits every mesh peer. Before the change a 5-minute SYN capture on wg0 of all
-three nodes saw no source other than .110/.111 on these ports.
+other IPv4 mesh peer (f-hosts, Pis, rocky routed through a gateway) is
+counted and dropped. IPv6 (the Services are IPv4-only, no policy admits
+IPv6) is counted and answered with a TCP reset, as before u74 when nothing
+listened: `*.wg0.wan.buetow.org` is dual-stack and OpenSSH would otherwise
+wait out the IPv6 connect timeout before trying IPv4. Established flows and
+every other wg0 port (etcd, API, kubelet, NFS, monitoring) are not
+inspected. `check-offline.py` probes a fixed set of known mesh peers plus
+every policy source and takes each expectation from the four policies in
+`f3s/network-policies/namespaces` (map `NODEPORT_POLICIES`), so adding or
+removing a wg0 ipBlock there fails the check until the guard follows; the
+o74 file fails it, as it admits every mesh peer. Before the change a
+5-minute SYN capture on wg0 of all three nodes saw no source other than
+.110/.111 on these ports.
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),

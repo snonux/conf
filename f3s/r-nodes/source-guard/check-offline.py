@@ -27,6 +27,12 @@ NODEPORT_POLICIES = {30001: ('infra', 'registry-nodeport', 5000),
                      30800: ('services', 'anki-sync-server', 8080),
                      30143: ('services', 'protonbridge-nodeport', 143),
                      30025: ('services', 'protonbridge-nodeport', 25)}
+# Known wg0 peers (IQ WireGuard mesh): gateways, r-nodes, rocky, f-hosts,
+# laptop, phone, Pis. Each is probed whether or not a policy admits it.
+WG0_MESH_PEERS = {'192.168.2.110', '192.168.2.111', '192.168.2.120', '192.168.2.121',
+                  '192.168.2.123', '192.168.2.130', '192.168.2.131', '192.168.2.132',
+                  '192.168.2.133', '192.168.2.200', '192.168.2.201', '192.168.2.203',
+                  '192.168.2.204'}
 
 
 def policy_wg0_sources(root):
@@ -59,7 +65,7 @@ def policy_wg0_sources(root):
     return allowed
 
 
-def wg0_namespace(sources):
+def wg0_namespace(sources, ipv6):
     """Attach a second client namespace as wg0 peer, holding the given sources.
 
     A separate namespace keeps the mesh /32s (incl. 192.168.2.121, a routed
@@ -82,33 +88,50 @@ def wg0_namespace(sources):
         run(*via, 'ip', 'addr', 'add', address + '/32', 'dev', 'client1')
         run('ip', 'route', 'add', address + '/32', 'dev', 'wg0')
     run('ip', '-6', 'addr', 'add', 'fd42:beef:cafe:2::122/64', 'dev', 'wg0', 'nodad')
-    for address in ['fd42:beef:cafe:2::130', 'fd42:beef:cafe:2::110']:
+    for address in ipv6:
         run(*via, 'ip', '-6', 'addr', 'add', address + '/64', 'dev', 'client1', 'nodad')
     time.sleep(.15)  # let the veth pair come up, as for the enp0s5 fixture
     return peer, via
 
 
+def refused(source, target, port, via):
+    """Assert a fast TCP reset (ConnectionRefusedError), not a silent drop."""
+    code = '''import socket,sys
+s=socket.socket(socket.AF_INET6 if ':' in sys.argv[1] else socket.AF_INET)
+s.settimeout(1); s.bind((sys.argv[1],0))
+try: s.connect((sys.argv[2],int(sys.argv[3]))); r='connected'
+except ConnectionRefusedError: r='refused'
+except (TimeoutError,OSError) as e: r=repr(e)
+assert r=='refused', sys.argv[1:]+[r]
+'''
+    run(*via, sys.executable, '-c', code, source, target, str(port))
+
+
 def check_wg0(probe, drops, allowed, cluster):
     """u74: the Cluster NodePorts over wg0 admit exactly the policy sources.
 
-    f0 (.130), pi0 (.203) and rocky routed through a gateway (.123) stand for
-    mesh peers no receiver admits; the frontends .110/.111 reach only the
-    relayd ports. Other wg0 ports stay uninspected for every peer.
+    Every known mesh peer is probed, not only the policy sources, so a peer
+    dropped from all policies (e.g. a retired phone) must be dropped by the
+    guard too. The frontends .110/.111 reach only the relayd ports; IPv6 is
+    refused with a reset. Other wg0 ports stay uninspected for every peer.
     """
     # The node's own .122 reaches itself over lo, never wg0: not a source.
-    mesh = sorted((set().union(*allowed.values()) - {'192.168.2.122'}) |
-                  {'192.168.2.130', '192.168.2.203', '192.168.2.123'})
-    peer, via = wg0_namespace(mesh)
+    mesh = sorted((set().union(*allowed.values()) | WG0_MESH_PEERS) - {'192.168.2.122'})
+    ipv6 = ['fd42:beef:cafe:2::130', 'fd42:beef:cafe:2::110']
+    peer, via = wg0_namespace(mesh, ipv6)
     try:
+        # Positive controls: every fixture source connects on other ports.
+        for source in mesh + ipv6:
+            target = 'fd42:beef:cafe:2::122' if ':' in source else '192.168.2.122'
+            probe(source, target, 9999, True, via)
         for port in cluster:
             for source in mesh:
                 probe(source, '192.168.2.122', port, source in allowed[port], via)
-            for source in ['fd42:beef:cafe:2::130', 'fd42:beef:cafe:2::110']:
-                probe(source, 'fd42:beef:cafe:2::122', port, False, via)
+            for source in ipv6:
+                refused(source, 'fd42:beef:cafe:2::122', port, via)
         for source in ['192.168.2.130', '192.168.2.203', '192.168.2.110']:
-            for port in [22, 6443, 30090, 30091, 32200, 9999]:
+            for port in [22, 6443, 30090, 30091, 32200]:
                 probe(source, '192.168.2.122', port, True, via)
-        probe('fd42:beef:cafe:2::130', 'fd42:beef:cafe:2::122', 9999, True, via)
         before = drops('wg0_cluster_nodeport')
         probe('192.168.2.130', '192.168.2.122', 30143, False, via)
         assert drops('wg0_cluster_nodeport') > before, 'wg0_cluster_nodeport drop counter did not count'
@@ -196,9 +219,12 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         run(*via, sys.executable, '-c', code, source, target, str(port), str(allowed))
 
     def drops(chain):
+        """Sum of the chain's counters (each sits before its drop/reject)."""
         listing = run('nft', '-j', 'list', 'chain', 'inet', 'f3s_guard', chain).stdout
-        return [e['rule']['expr'][-2]['counter']['packets'] for e in json.loads(listing)['nftables']
-                if 'rule' in e and 'counter' in e['rule']['expr'][-2]][0]
+        counters = [e['rule']['expr'][-2]['counter']['packets'] for e in json.loads(listing)['nftables']
+                    if 'rule' in e and 'counter' in e['rule']['expr'][-2]]
+        assert counters, f'{chain} has no counter'
+        return sum(counters)
 
     probe('10.20.0.130', destinations[0], 9999, True)
     probe('10.20.0.130', destinations[2], 22, False)

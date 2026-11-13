@@ -80,8 +80,12 @@ table inet f3s_guard {
         # registry 30001, Forgejo SSH 30222 and Anki 30800; Bridge 30143/30025
         # does not admit them (its clients use a kubectl port-forward).
         ip saddr { 192.168.2.110, 192.168.2.111 } tcp dport { 30001, 30222, 30800 } return
-        # Every other mesh peer (f-hosts, Pis, rocky via a gateway) and all
-        # IPv6, as those Services are IPv4-only and no policy admits IPv6.
+        # IPv6: the Services are IPv4-only and no policy admits IPv6, but
+        # r0.wg0.wan.buetow.org is dual-stack and before u74 an IPv6 SYN got
+        # an instant RST (no listener), so ssh/git fell back to IPv4 at once.
+        # Keep that RST: a silent drop would stall OpenSSH ~2 min first.
+        meta nfproto ipv6 counter reject with tcp reset
+        # Every other IPv4 mesh peer (f-hosts, Pis, rocky via a gateway).
         counter drop
     }
 }
