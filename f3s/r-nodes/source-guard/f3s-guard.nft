@@ -4,6 +4,18 @@
 add table inet f3s_guard
 delete table inet f3s_guard
 table inet f3s_guard {
+    # o74: the externalTrafficPolicy Cluster NodePorts behind the per-/32
+    # NetworkPolicies (registry, Forgejo SSH, Anki, Bridge IMAP/SMTP). A node
+    # that does not host the pod masquerades a NodePort connection to its
+    # flannel address 10.42.N.0, which every one of these receivers admits,
+    # so without this restriction any lab host bypassed the receiver policy.
+    # Keep in sync with the receiver_ports of f3s_nodeport_guard and with
+    # `kubectl get svc -A` (Local NodePorts keep the client source and are
+    # filtered by their own policy, so they are not listed).
+    set cluster_nodeports {
+        type inet_service
+        elements = { 30001, 30222, 30800, 30143, 30025 }
+    }
     chain before_dnat {
         type filter hook prerouting priority -150; policy accept;
         # Preserve original host/NodePort destination before kube-proxy DNAT.
@@ -11,6 +23,9 @@ table inet f3s_guard {
     }
     chain from_lan {
         ct state established,related return
+        # o74: before the lab-wide trust below; IPv6 has no NodePort endpoint
+        # (single-stack IPv4 Services), so it falls to the drop as well.
+        tcp dport @cluster_nodeports jump cluster_nodeport
         # Task j24 retired the igc1 recovery aliases 10.98.0.120-122 and
         # their laptop-only SSH chain: such destinations fall to the drop.
         # Homelab-local service trust; no trust of Wi-Fi/camera/wg2 subnets.
@@ -35,6 +50,16 @@ table inet f3s_guard {
         meta l4proto ipv6-icmp icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-neighbor-solicit, nd-neighbor-advert } return
         # Preserve authenticated wg0 transport, including public gateway peers.
         udp dport 56709 return
+        counter drop
+    }
+    chain cluster_nodeport {
+        # The r-nodes themselves (node-to-node NodePort paths, probes).
+        ip saddr { 10.20.0.120, 10.20.0.121, 10.20.0.122 } ip daddr 10.20.0.0/24 return
+        # The rocky build VM pushes images to the registry, nothing else;
+        # registry-nodeport admits 10.20.0.123/32 for the same-node path.
+        ip saddr 10.20.0.123 ip daddr 10.20.0.0/24 tcp dport 30001 return
+        # Every other enp0s5 source, incl. f-hosts, Pis and wg2. The frontends
+        # (relayd) reach these ports over wg0, which never enters this table.
         counter drop
     }
 }

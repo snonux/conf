@@ -127,7 +127,9 @@ the parallel cluster aggregates for rollout.
 
 4. Before the timer expires, verify a **new** SSH connection using LAN IPv4
    and ULA, laptop kubectl over LAN and wg0, node Ready/etcd leader health,
-   pod-to-pod and pod DNS, LAN NodePort 30001/30090 and ingress, monitoring,
+   pod-to-pod and pod DNS, registry NodePort 30001 from rocky and from the
+   frontends over wg0 (task o74: other lab sources are dropped on the five
+   Cluster NodePorts; 30090 admits only wg0 proxy sources), ingress, monitoring,
    and a bounded read of an existing NFS file. Pi2 additionally requires
    UDP/TCP DNS, wildcard response and admin UI from LAN IPv4/ULA and affected
    real clients. Do not restart anything or use CARP failover/remount tests.

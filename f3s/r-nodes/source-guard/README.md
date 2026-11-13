@@ -22,6 +22,24 @@ it grants no new global-prefix trust. Native ICMPv6 errors and NDP are allowed;
 RA/DHCPv6 receive no service exception. Host RA suppression is in the
 NetworkManager profile (set by n14; its helper was removed in c74).
 
+Task o74 (2026-11-13) narrows that lab trust for the five
+`externalTrafficPolicy: Cluster` NodePorts, set `cluster_nodeports` = 30001
+registry, 30222 Forgejo SSH, 30800 Anki, 30143/30025 Bridge. Their receiver
+NetworkPolicies admit each node's flannel address 10.42.N.0, and a node that
+does not host the pod masquerades a NodePort connection to exactly that
+address, so any trusted lab host reached them through a non-hosting node
+whatever the policy said. Chain `cluster_nodeport` now admits only the
+r-nodes 10.20.0.120-122 (all five) and the rocky build VM 10.20.0.123 (30001
+only, matching `registry-nodeport`); every other enp0s5 source, IPv6
+included, is counted and dropped there. The frontends' relayd and the node-
+local registry mirror are untouched: they use wg0 and localhost, which never
+enter this table. The Local NodePorts 30090/30091/32200 and Traefik's
+31637/30154 keep the client source, so their own policies decide and they are
+not in the set. Keep the set equal to the Cluster NodePorts of `kubectl get
+svc -A` and to `receiver_ports` of `f3s_nodeport_guard`. Other mesh peers that
+reach a node over wg0 (measured from f0) still have the cross-node SNAT
+path; closing it would need a wg0 rule, which this task did not add.
+
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
 plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
 phone 10.99.0.3 TCP443, to lab addresses only. The igc1 recovery aliases

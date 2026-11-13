@@ -15,6 +15,8 @@ spec:
     targetPort: 143
     # NodePort 30143 — configure email clients as:
     # IMAP server: <any-r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
+    # (only from the r-nodes on the lab LAN since task o74; the laptop uses a
+    # kubectl port-forward; the protonbridge skill has the tunnel)
     nodePort: 30143
   - name: smtp
     protocol: TCP

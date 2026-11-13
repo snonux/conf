@@ -451,7 +451,11 @@ leaves flannel as the admitted 10.42.N.0. `registry-nodeport` now also admits
 The same mechanism explains why lab sources such as f0 (10.20.0.130) reach
 the Forgejo SSH, Anki and Bridge NodePorts only through a node that does not
 host the pod. That cross-node SNAT path is not a granted permission: health
-probes must not expect f0 (or any lab host other than the r-nodes and rocky)
-to reach 30001/30222/30800/30143/30025. Probe those receivers from the
+probes must not expect f0 (or any lab host other than the r-nodes, and rocky
+on 30001) to reach 30001/30222/30800/30143/30025. Probe those receivers from the
 frontends over wg0 (192.168.2.110/.111 via relayd), from each node itself and,
-for the registry, from rocky.
+for the registry, from rocky. The r-node source guard `f3s_guard` now drops
+new enp0s5 connections to these five ports from every source but the r-nodes
+and (30001 only) rocky, so a lab host is refused on every node, not just on
+the hosting one (`f3s/r-nodes/source-guard/README.md`). Over wg0 the
+cross-node SNAT path remains for other mesh peers (measured from f0).

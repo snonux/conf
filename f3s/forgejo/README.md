@@ -70,8 +70,12 @@ same paths; no configuration was moved during the upgrade.
 ```sh
 git clone https://code.f3s.buetow.org/<user>/<repo>.git
 git clone ssh://git@code.f3s.buetow.org:2022/<user>/<repo>.git   # via relayd
-git clone ssh://git@r0.lan.buetow.org:30222/<user>/<repo>.git    # LAN, direct NodePort
+git clone ssh://git@r0.wg0.wan.buetow.org:30222/<user>/<repo>.git # wg0 mesh, direct NodePort
 ```
+
+The direct NodePort is not open to the lab LAN: since task o74 the r-node
+source guard admits 30222 on enp0s5 only from the r-nodes themselves, and the
+`forgejo` receiver policy admits the frontends, laptop/phone wg0 and node paths.
 
 SSH is on 2022 because 22 draws scanners and 2222 is dserver on the gateways.
 Gateway admin SSH stays on port 2. For the short form:

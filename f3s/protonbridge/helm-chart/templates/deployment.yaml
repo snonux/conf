@@ -85,6 +85,8 @@ spec:
         # EMAIL CLIENT SETUP (after login):
         #   IMAP: <any-r-vm-lan-ip>:30143, STARTTLS, accept self-signed cert
         #   SMTP: <any-r-vm-lan-ip>:30025, STARTTLS, accept self-signed cert
+        #   (the lab LAN reaches these NodePorts only from the r-nodes since
+        #   task o74; clients use a kubectl port-forward)
         #   Username: your ProtonMail address
         #   Password: bridge-generated password (from 'info' in the CLI above)
         image: shenxn/protonmail-bridge:3.19.0-1

@@ -41,7 +41,7 @@ do not prune it. Clear it with `kubectl delete job -n services <job>`.
 ```sh
 # in ~/git/shuriken.sh first: just build   (bin/shuriken must be current)
 cd ~/git/conf/f3s/shuriken
-just build-push      # -> r0.lan.buetow.org:30001/shuriken:<TAG>, run on the LAN
+just build-push      # -> r0.lan.buetow.org:30001/shuriken:<TAG>, run on rocky
 ```
 
 Pods pull `registry.lan.buetow.org:30001/shuriken:0.14.1-runtime20261108`

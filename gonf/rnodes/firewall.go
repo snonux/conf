@@ -16,7 +16,9 @@ func (Firewall) OptsStage() TaskOptions { return TaskOptions{Operational()} }
 func (Firewall) Stage() {
 	// The policy trusts the lab LAN and individual wg2 identities; its old
 	// 192.168.1.x trust was removed after i24 retired those addresses (task
-	// 074). Routine staging must retain this policy.
+	// 074). The Cluster NodePorts admit only the r-nodes and, for the
+	// registry, rocky (task o74), since a non-hosting node masquerades them
+	// past the receiver NetworkPolicies. Routine staging must retain this policy.
 	hostfirewall.Stage(hostfirewall.Profile{Interface: "enp0s5", EnableWireGuard: true, WireGuardPort: 56709,
 		Rules: paths.RNodeAsset("source-guard/f3s-guard.nft")})
 }

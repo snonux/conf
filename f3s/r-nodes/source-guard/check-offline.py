@@ -39,9 +39,13 @@ try:
     # 192.168.1.120 stays as a fixture destination to prove it is no longer
     # trusted (task 074); the live hosts no longer carry it.
     destinations = ['10.20.0.120', '192.168.1.120', '10.98.0.120']
+    # o74: 10.20.0.122 stands for a peer r-node, 10.20.0.123 for rocky and
+    # 10.20.0.124 for an unlisted lab host (10.20.0.121 stays a routed
+    # remote-alias target for the pod guard trace below).
     sources = ['10.20.0.130', '192.168.1.130', '192.168.1.138', '192.168.1.236',
                '192.168.1.50', '10.99.0.2', '10.99.0.3', '10.99.0.4',
-               '10.30.0.2', '10.40.0.11', '10.42.0.2']
+               '10.30.0.2', '10.40.0.11', '10.42.0.2',
+               '10.20.0.122', '10.20.0.123', '10.20.0.124']
     for address in destinations:
         run('ip', 'addr', 'add', address + '/32', 'dev', 'enp0s5')
     for address in sources:
@@ -57,7 +61,7 @@ try:
     server = subprocess.Popen([sys.executable, '-c', '''
 import selectors, socket
 sel = selectors.DefaultSelector()
-for port in (22, 80, 443, 6443, 30001, 32200, 9999):
+for port in (22, 80, 443, 6443, 30001, 30222, 30800, 30143, 30025, 30090, 30091, 32200, 9999):
     s = socket.socket(socket.AF_INET6)
     s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
     s.bind(('::', port)); s.listen(); sel.register(s, selectors.EVENT_READ)
@@ -111,6 +115,31 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         probe(source, destinations[0], 32200, False)
     probe('fd02:ca0b:f1cb:20::130', 'fd02:ca0b:f1cb:20::120', 9999, True)
     probe('fd22:c702:acb7::130', 'fd02:ca0b:f1cb:20::120', 9999, True)
+    # o74: the Cluster NodePorts admit only r-nodes, plus rocky to the
+    # registry; other lab hosts (f0 .130, .124), wg2 and the trusted IPv6
+    # ranges are dropped there but keep every other lab port, including
+    # the Local NodePorts 30090/30091 that their own policies filter.
+    cluster = [30001, 30222, 30800, 30143, 30025]
+    for port in cluster:
+        probe('10.20.0.122', destinations[0], port, True)
+        probe('10.20.0.123', destinations[0], port, port == 30001)
+        for source in ['10.20.0.130', '10.20.0.124', '10.99.0.2', '10.99.0.3']:
+            probe(source, destinations[0], port, False)
+        for source in ['fd02:ca0b:f1cb:20::130', 'fd22:c702:acb7::130']:
+            probe(source, 'fd02:ca0b:f1cb:20::120', port, False)
+        # Retired destinations stay closed even to an r-node source.
+        probe('10.20.0.122', destinations[1], port, False)
+        probe('10.20.0.122', destinations[2], port, False)
+    for source in ['10.20.0.130', '10.20.0.123', '10.20.0.124', '10.20.0.122']:
+        for port in [22, 443, 6443, 30090, 30091, 9999]:
+            probe(source, destinations[0], port, True)
+    def nodeport_drops():
+        chain = run('nft', '-j', 'list', 'chain', 'inet', 'f3s_guard', 'cluster_nodeport').stdout
+        return [e['rule']['expr'][-2]['counter']['packets'] for e in json.loads(chain)['nftables']
+                if 'rule' in e and 'counter' in e['rule']['expr'][-2]][0]
+    before = nodeport_drops()
+    probe('10.20.0.130', destinations[0], 30001, False)
+    assert nodeport_drops() > before, 'cluster_nodeport drop counter did not count'
     # Verify the pod guard independently, with the host table removed.
     run('nft', 'delete', 'table', 'inet', 'f3s_guard')
     for target in destinations:
@@ -126,7 +155,7 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         probe('10.42.0.2', target, 30001, False)
         after = run('nft', 'list', 'chain', 'inet', 'f3s_nodeport_guard', 'from_pod').stdout
         assert (before != after) == guarded, target
-    print('PASS: native syntax, atomic replacement, retired old /24 and recovery aliases denied, wg2 scope (incl. n44 32200), ULA, independent local/remote pod guard')
+    print('PASS: native syntax, atomic replacement, retired old /24 and recovery aliases denied, wg2 scope (incl. n44 32200), ULA, o74 Cluster NodePorts node/rocky-only, independent local/remote pod guard')
 finally:
     if server:
         server.terminate()
