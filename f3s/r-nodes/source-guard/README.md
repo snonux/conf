@@ -111,10 +111,11 @@ laptop /32 return route, after the cable move the igc1 recovery gateway
 (`retire-recovery`), so the nodes answer the laptop through their default.
 
 Flannel's interface comes from
-`/etc/rancher/k3s/config.yaml.d/60-network-migration.yaml`
-(`flannel-iface: enp0s5`) on r0-r2. n14's network-migration helper wrote it;
-the helper went in task c74 and the file has no gonf owner now (kept on
-purpose, rename or adopt later; IQ `openbsdrouter-plan/CLEANUP.md` item 1).
+`/etc/rancher/k3s/config.yaml.d/60-flannel-iface.yaml`
+(`flannel-iface: enp0s5`) on r0-r2, owned by gonf `rnodes_k3s_flannel_iface`
+(`f3s/r-nodes/k3s/60-flannel-iface.yaml`). n14's network-migration helper
+first wrote it as `60-network-migration.yaml`; task 484 adopted it under the
+new name and removed the old file (IQ `openbsdrouter-plan/CLEANUP.md` item 1).
 No alternate selector is in the routine k3s template. After a change that
 touches it, verify the VXLAN local address, FDB endpoints, quorum,
 cross-node pod TCP/DNS, Services, ingress and NFS on each node: Node Ready

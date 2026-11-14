@@ -19,6 +19,8 @@ import (
 //
 // config.yaml.d/50-image-gc.yaml is Maintenance.ImageGC (rnodes_image_gc);
 // its "kubelet-arg+" appends, so it coexists with this config.yaml.
+// config.yaml.d/60-flannel-iface.yaml is K3s.FlannelIface and
+// 60-servicelb.yaml is K3s.ServiceLBImage; neither key is in config.yaml.
 //
 // Nothing here restarts k3s. k3s reads these files only at start, and the
 // three control-plane members deploy in parallel: restarting all of them at
@@ -44,6 +46,7 @@ type K3sNode struct {
 const (
 	k3sConfigDir    = "/etc/rancher/k3s"
 	k3sConfig       = k3sConfigDir + "/config.yaml"
+	k3sDropInDir    = k3sConfigDir + "/config.yaml.d"
 	k3sRegistries   = k3sConfigDir + "/registries.yaml"
 	k3sAssetsPath   = "k3s/"
 	k3sManifests    = "/var/lib/rancher/k3s/server/manifests"
@@ -83,6 +86,26 @@ func (K3s) Registries() {
 		RootOwned)
 }
 
+// FlannelIface installs config.yaml.d/60-flannel-iface.yaml (flannel-iface:
+// enp0s5) and removes its predecessor 60-network-migration.yaml; no k3s restart.
+//
+// FlannelIface adopts the drop-in that n14's network-migration helper wrote on
+// r0-r2. The helper went in task c74 and left the file without an owner
+// (task 484). The key and value are the same, only the name and a header
+// comment change, so the running k3s and the next start see the same flannel
+// interface and no restart is needed. The new file goes in before the old one
+// is removed: in between both carry the same key, never neither.
+//
+// The interface is a constant, not per-host data: all three r-VMs are bhyve
+// guests whose LAN NIC is enp0s5. Mode 0600 as found.
+func (K3s) FlannelIface() {
+	EnsureDir(k3sConfigDir, RootOwned)
+	EnsureDir(k3sDropInDir, RootOwned)
+	dropIn := InstallFile(k3sDropInDir+"/60-flannel-iface.yaml",
+		paths.RNodeAsset(k3sAssetsPath+"60-flannel-iface.yaml"), RootPrivate)
+	NoFile(k3sDropInDir+"/60-network-migration.yaml", DependsOn(dropIn))
+}
+
 // ServiceLBImage installs the cloud-provider image override without restarting k3s.
 //
 // ServiceLBImage preserves the current cloud-provider defaults and changes only
@@ -91,10 +114,10 @@ func (K3s) Registries() {
 // DaemonSets. Apply with serial k3s restarts; never restart all etcd members.
 func (K3s) ServiceLBImage() {
 	EnsureDir(k3sConfigDir, RootOwned)
-	EnsureDir(k3sConfigDir+"/config.yaml.d", RootOwned)
+	EnsureDir(k3sDropInDir, RootOwned)
 	InstallFile(k3sConfigDir+"/servicelb-cloud-config.json",
 		paths.RNodeAsset(k3sAssetsPath+"servicelb-cloud-config.json"), RootPrivate)
-	InstallFile(k3sConfigDir+"/config.yaml.d/60-servicelb.yaml",
+	InstallFile(k3sDropInDir+"/60-servicelb.yaml",
 		paths.RNodeAsset(k3sAssetsPath+"60-servicelb.yaml"), RootPrivate)
 }
 

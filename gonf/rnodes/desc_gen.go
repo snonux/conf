@@ -42,6 +42,10 @@ func (K3s) DescCoreDNSPrepare() string {
 	return "Retains the bundled DNS resources while suppressing their manifest"
 }
 
+func (K3s) DescFlannelIface() string {
+	return "Installs config.yaml.d/60-flannel-iface.yaml (flannel-iface: enp0s5) and removes its predecessor 60-network-migration.yaml; no k3s restart"
+}
+
 func (K3s) DescMetricsServer() string {
 	return "Deploys the pinned metrics AddOn with unchanged TLS and permissions"
 }

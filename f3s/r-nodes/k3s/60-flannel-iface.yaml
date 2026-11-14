@@ -1,0 +1,3 @@
+# Flannel's VXLAN rides the LAN NIC (same name on r0-r2), not wg0.
+# Owned by gonf rnodes_k3s_flannel_iface; k3s reads it only at start.
+flannel-iface: enp0s5
