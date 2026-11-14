@@ -3,7 +3,7 @@ REGISTRY := env_var_or_default("GOPRECORDS_REGISTRY", "r0.lan.buetow.org:30001")
 IMAGE := "goprecords"
 # Immutable tag: <app version>-runtime<build date>. Set GOPRECORDS_TAG to a NEW
 # tag for every rebuild (base, toolchain or app); never re-push a deployed tag.
-TAG := env_var_or_default("GOPRECORDS_TAG", "0.6.2-runtime20261108")
+TAG := env_var_or_default("GOPRECORDS_TAG", "0.6.3-runtime20261114")
 # Standalone source checkout; its Dockerfile pins the Go and Alpine bases.
 SRC := env_var_or_default("GOPRECORDS_SRC", "/home/paul/git/goprecords")
 

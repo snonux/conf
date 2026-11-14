@@ -16,14 +16,17 @@ fixture tests as a non-root user) before the `runtime` stage. The source
 Dockerfile pins the Go and Alpine bases by digest. Every rebuild gets a NEW
 immutable tag; never re-push a deployed tag.
 
-Current image (app v0.6.2, Go 1.27.3, Alpine 3.24.4, task 644):
+Current image (app v0.6.3: top lists default to 23 entries; Go 1.27.3,
+Alpine 3.24.4, task 464):
 
-- pushed as `r0.lan.buetow.org:30001/goprecords:0.6.2-runtime20261108`
-- deployed as `registry.lan.buetow.org:30001/goprecords:0.6.2-runtime20261108`
-  (manifest `sha256:f725e56bb71108a105c52740833ceddf6afb233ff8e1feb15b1ffc833a04b445`)
+- pushed as `r0.lan.buetow.org:30001/goprecords:0.6.3-runtime20261114`
+- deployed as `registry.lan.buetow.org:30001/goprecords:0.6.3-runtime20261114`
+  (manifest `sha256:3f52e0c8c79fa14638734b9760bac6619a64b2a515c6885d6d437c22b1d03066`)
 
-The previous image `goprecords:0.6.2` (Go 1.21.13, Alpine 3.20.10) stays in
-the registry for emergency rollback only.
+The previous image `goprecords:0.6.2-runtime20261108` (manifest
+`sha256:f725e56bb71108a105c52740833ceddf6afb233ff8e1feb15b1ffc833a04b445`)
+stays in the registry for rollback; `goprecords:0.6.2` (Go 1.21.13, Alpine
+3.20.10) only for emergencies.
 
 ## Updating the image safely
 
