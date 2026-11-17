@@ -652,8 +652,9 @@ Before it, DTail clients on the laptop got "connection refused" on 2222
 test needed an `ssh -L` through f0. The r-node and Pi-hole `f3s_guard`
 admit the same identity (conf 37863d4); NetBSD pi0/pi1 npf already admitted
 2222. Laptop only, lab addresses only, no phone, no NAT. The FreeBSD f-host
-PF (`f3s/freebsd-hosts/pf/pf.conf`) still admits the laptop on 22 only, so
-f0-f3 stay unreachable on 2222 from wg2 until their own approved rollout.
+PF (`f3s/freebsd-hosts/pf/pf.conf`) admitted the laptop on 22 only; with the
+owner's approval it got the same permit (conf ebeb014) the same evening, see
+`f3s/freebsd-hosts/pf/README.md`.
 
 Live 2026-11-17, under `live-rollout.lock`: the host guards first (r2, r1,
 r0, pi3, pi2, each `f3s-firewall check/apply/confirm` with fresh SSH, lab
@@ -669,7 +670,7 @@ also probed f0, which timed out at the f-host PF (above), so the script
 stopped unconfirmed; the router change itself had passed every check, and
 it was confirmed with `j24-gate-checks.py confirm` before the deadline.
 Afterwards dgrep/dcat/dmap/dtail ran from the laptop directly against
-r0-r2 and pi0-pi3. No boot-time input changed, so no reboot canary.
+r0-r2 and pi0-pi3, and after the f-host rollout against all 11 lab dservers. No boot-time input changed, so no reboot canary.
 Receipts: `~/.local/state/conf/d2222-dtail-20261117/`.
 
 ## c24 lab port (lab-igc1), live since 2026-11-09

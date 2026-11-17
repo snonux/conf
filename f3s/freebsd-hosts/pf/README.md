@@ -94,6 +94,20 @@ f3 was left on the previous ruleset while a homelabfs session used it; the
 Rocky VM there has no f3 wg0 peer, so apply the same task to f3 when it is
 free, to keep the four hosts identical.
 
+**d2222 (2026-11-17, owner approved):** one more laptop permit, `10.99.0.2`
+to the host's own addresses on TCP 2222 (DTail's dserver), IPv4 only,
+matching the router and r-node/Pi-hole permits (conf 37863d4, ebeb014).
+Rolled out f1, f0, f2, f3 under the live-rollout lock with this README's
+guard (fresh dir `/root/pf-d2222-rollback`, the completed rm3 guard left as
+it was) and `freebsd_firewall_config` (reload, states kept). Accepted per
+host: PF enabled, file and loaded checksum equal to the repo, the new rule
+loaded (it expands to four rules like the port-22 one), fresh LAN SSH, the
+laptop's 2222 dial answered with an SSH banner, the laptop's 2049 still
+closed, NFS `stat` on r0-r2, 3 Ready nodes, VIP 80/443 from pi0; then
+f0->f1 and f3->f2 zrepl each finished a new run. No CARP failover test (one
+added pass rule on an enabled PF; no first activation). Receipts:
+`~/.local/state/conf/d2222-dtail-20261117/` (`fhost*.log`).
+
 Read-only baseline on 2026-10-22:
 
 | Check | Result |
