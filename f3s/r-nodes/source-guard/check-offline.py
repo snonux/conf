@@ -187,7 +187,7 @@ try:
     server = subprocess.Popen([sys.executable, '-c', '''
 import selectors, socket
 sel = selectors.DefaultSelector()
-for port in (22, 80, 443, 6443, 30001, 30222, 30800, 30143, 30025, 30090, 30091, 32200, 9999):
+for port in (22, 80, 443, 2222, 6443, 30001, 30222, 30800, 30143, 30025, 30090, 30091, 32200, 9999):
     s = socket.socket(socket.AF_INET6)
     s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
     s.bind(('::', port)); s.listen(); sel.register(s, selectors.EVENT_READ)
@@ -236,17 +236,19 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
     probe('10.20.0.130', destinations[1], 9999, False)
     for source in ['192.168.1.50', '10.99.0.4', '10.30.0.2', '10.40.0.11']:
         probe(source, destinations[0], 443, False)
-    # n44: the laptop also reaches the Syncthing NodePort 32200, on lab
-    # addresses only (not old LAN or recovery aliases); the phone does not.
-    for port in [22, 80, 443, 6443, 30001, 32200]:
-        probe('10.99.0.2', destinations[0], port, port in [22, 80, 443, 32200])
+    # n44: the laptop also reaches the Syncthing NodePort 32200, and DTail's
+    # dserver on 2222, on lab addresses only (not old LAN or recovery
+    # aliases); the phone does not.
+    for port in [22, 80, 443, 2222, 6443, 30001, 32200]:
+        probe('10.99.0.2', destinations[0], port, port in [22, 80, 443, 2222, 32200])
         probe('10.99.0.3', destinations[0], port, port == 443)
         # j24: the retired recovery alias admits nothing, not even laptop SSH.
         probe('10.99.0.2', destinations[2], port, False)
         probe('10.99.0.3', destinations[2], port, False)
-    probe('10.99.0.2', destinations[1], 32200, False)
-    for source in ['10.99.0.4', '192.168.1.50', '10.30.0.2']:
-        probe(source, destinations[0], 32200, False)
+    for port in [2222, 32200]:
+        probe('10.99.0.2', destinations[1], port, False)
+        for source in ['10.99.0.4', '192.168.1.50', '10.30.0.2']:
+            probe(source, destinations[0], port, False)
     probe('fd02:ca0b:f1cb:20::130', 'fd02:ca0b:f1cb:20::120', 9999, True)
     probe('fd22:c702:acb7::130', 'fd02:ca0b:f1cb:20::120', 9999, True)
     # o74: the Cluster NodePorts admit only r-nodes, plus rocky to the
@@ -286,7 +288,7 @@ assert ok == (sys.argv[4]=='True'), sys.argv[1:]
         probe('10.42.0.2', target, 30001, False)
         after = run('nft', 'list', 'chain', 'inet', 'f3s_nodeport_guard', 'from_pod').stdout
         assert (before != after) == guarded, target
-    print('PASS: native syntax, atomic replacement, retired old /24 and recovery aliases denied, wg2 scope (incl. n44 32200), ULA, o74 Cluster NodePorts node/rocky-only, u74 wg0 Cluster NodePorts per receiver policy, independent local/remote pod guard')
+    print('PASS: native syntax, atomic replacement, retired old /24 and recovery aliases denied, wg2 scope (incl. n44 32200, DTail 2222), ULA, o74 Cluster NodePorts node/rocky-only, u74 wg0 Cluster NodePorts per receiver policy, independent local/remote pod guard')
 finally:
     if server:
         server.terminate()

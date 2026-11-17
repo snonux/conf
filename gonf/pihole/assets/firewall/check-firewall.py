@@ -48,7 +48,7 @@ try:
     server = subprocess.Popen([sys.executable, '-c', '''
 import selectors,socket
 sel=selectors.DefaultSelector()
-for port in (22,53,80,443,9999):
+for port in (22,53,80,443,2222,9999):
  s=socket.socket(socket.AF_INET6);s.setsockopt(socket.IPPROTO_IPV6,socket.IPV6_V6ONLY,0)
  s.bind(('::',port));s.listen();sel.register(s,selectors.EVENT_READ,'tcp')
 for port in (53,9999):
@@ -108,13 +108,19 @@ assert ok==(expected=='True'),sys.argv[1:]
             # j24: the retired recovery aliases admit nothing, not even SSH.
             probe(source, target, 22, False)
     probe('10.20.0.130', targets[3], 22, False)
-    for port in (22,80,443):
+    for port in (22,80,443,2222):
         probe('10.99.0.2', targets[0], port, True)
         probe('10.99.0.3', targets[0], port, port == 443)
+    # DTail 2222: the laptop only, on the resolver pair only (not the
+    # retired recovery aliases), and no other wg2/Wi-Fi/camera source.
+    for target in targets[3:5]:
+        probe('10.99.0.2', target, 2222, False)
+    for source in ['10.99.0.4', '10.30.0.2', '10.40.0.11']:
+        probe(source, targets[0], 2222, False)
     for transport in ('tcp', 'udp'):
         probe('fd02:ca0b:f1cb:20::130', 'fd02:ca0b:f1cb:20::127', 53, True, transport)
     print('PASS: native atomic rules, retired OLD /24 denied, NEW/ULA DNS, '
-          'scoped two-peer TCP/UDP DNS, retired recovery SSH and denied Wi-Fi/camera sources')
+          'scoped two-peer TCP/UDP DNS, laptop-only DTail 2222, retired recovery SSH and denied Wi-Fi/camera sources')
 finally:
     if server:
         server.terminate()
