@@ -639,6 +639,39 @@ gonf call (router unchanged). Receipts:
 `~/.local/state/conf/n44-syncthing-direct-20261109/` (`n44-*.json`,
 `STEP-JOURNAL.md`).
 
+## d2222 DTail dserver for the laptop (TCP2222)
+
+Every profile adds one wg2 permit, next to the laptop's other lab permits:
+
+```
+pass in on wg2 inet proto tcp from 10.99.0.2 to <lab> port 2222 tag gonf_transit keep state
+```
+
+Before it, DTail clients on the laptop got "connection refused" on 2222
+(this ruleset's `block return`) while SSH on 22 worked, so every client
+test needed an `ssh -L` through f0. The r-node and Pi-hole `f3s_guard`
+admit the same identity (conf 37863d4); NetBSD pi0/pi1 npf already admitted
+2222. Laptop only, lab addresses only, no phone, no NAT. The FreeBSD f-host
+PF (`f3s/freebsd-hosts/pf/pf.conf`) still admits the laptop on 22 only, so
+f0-f3 stay unreachable on 2222 from wg2 until their own approved rollout.
+
+Live 2026-11-17, under `live-rollout.lock`: the host guards first (r2, r1,
+r0, pi3, pi2, each `f3s-firewall check/apply/confirm` with fresh SSH, lab
+trust and dserver banner checks), then trial `d2222-dtail-20261117-a`
+re-applied `lab-final` (conf 37863d4; every staged profile equal to the
+render, live files equal to the previous render, candidate vs live exactly
+`pf.conf`, which `pfctl -o none -nf` accepted on the router). GATE PASS
+(new/vpn proofs, router, cluster, DNS, Wi-Fi IPv4/IPv6, DHCP, gateways);
+82 loaded pass rules all `(if-bound)`, the one new permit loaded, 12/12
+fresh host SSH, laptop 6443 to r0 still closed, and r0/pi2/pi0 answered the
+laptop's 2222 dial with an SSH banner. The trial script's own banner check
+also probed f0, which timed out at the f-host PF (above), so the script
+stopped unconfirmed; the router change itself had passed every check, and
+it was confirmed with `j24-gate-checks.py confirm` before the deadline.
+Afterwards dgrep/dcat/dmap/dtail ran from the laptop directly against
+r0-r2 and pi0-pi3. No boot-time input changed, so no reboot canary.
+Receipts: `~/.local/state/conf/d2222-dtail-20261117/`.
+
 ## c24 lab port (lab-igc1), live since 2026-11-09
 
 `lab-igc1` (`lab.go`) is the live `camera-igc3` profile with the lab moved to

@@ -8,8 +8,9 @@ hooked at prerouting -150, and leaves firewalld and Docker alone.
   host's own lab addresses, and the old physical ULA `fd22:c702:acb7::/64`
   (IPv6 compatibility).
 - wg2 (routed by triggerfish): laptop `10.99.0.2` and phone `10.99.0.3` get
-  TCP/UDP 53; the laptop also TCP 22/80/443, the phone TCP 443. These match
-  the router's own wg2 permits.
+  TCP/UDP 53; the laptop also TCP 22/80/443 and DTail's dserver TCP 2222
+  (d2222, 2026-11-17), the phone TCP 443. These match the router's own wg2
+  permits.
 - ICMP/ICMPv6 and DHCPv6 replies pass; everything else new from `eth0` to a
   local address is dropped. Wi-Fi and camera subnets get no trust.
 

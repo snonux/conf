@@ -80,13 +80,16 @@ ports, and the registry mirror, rocky on 30001, the laptop's wg2 path to
 32200 and the relayd host states stayed as before.
 
 Per-peer wg2 permissions match the router policy: laptop 10.99.0.2 TCP22/80/443
-plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`),
+plus the Syncthing NodePort TCP32200 (n44, see `f3s/syncthing/README.md`) and
+DTail's dserver TCP2222 (d2222, 2026-11-17, see `gonf/triggerfish/ROLLBACK.md`),
 phone 10.99.0.3 TCP443, to lab addresses only. The igc1 recovery aliases
 10.98.0.120–122 and their laptop-only TCP22 chain were retired in task j24
 (the nodes no longer carry them; laptop replies use the 10.20.0.1 default).
 Existing established
 traffic may finish. Additional direct wg2 services require a scoped matching
-router/host/pod review; no direct SMTP/IMAP/DTail/NodePort exception is implied.
+router/host/pod review; no direct SMTP/IMAP/NodePort exception is implied (DTail 2222 got its own
+reviewed router/host permit in d2222; dserver runs on the hosts, so there is
+no pod layer).
 Public wg0 transport UDP56709 stays available. No wg0 identity, IPv6, peers,
 AllowedIPs, node/advertise-address, pod or Service CIDR changes are made.
 
