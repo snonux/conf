@@ -159,3 +159,27 @@ hostname-prefix symlink; the corrected command passes the same checks.
 No `*_test.go` is added to conf. These checks do not prove native OpenBSD
 permissions, real WG source identity, production deletion or live report
 acceptance; those remain gates after approval.
+
+## Cron replication fix (task 594, 2026-11-21)
+
+From 2026-10-23 until 2026-11-21, every nightly `/etc/daily` run failed to
+replicate. Cron's PATH (`/bin:/sbin:/usr/bin:/usr/sbin`) lacks
+`/usr/local/bin`, so the bare `rsync` call printed `Can't exec "rsync"` and
+each frontend published single-node reports. Foostats commit d63aacd now
+resolves rsync by absolute path. The cron line in `/etc/daily.local` and the
+host PATH were left unchanged.
+
+On 2026-11-21, `./gonf.sh cluster frontends frontends_foostats` deployed it to
+blowfish and fishfinger. The dry run showed only `/usr/local/bin/foostats.pl`
+changing. Both hosts now carry SHA256
+`d9f79452...d7235`. Before, they had `18f72b26...4497b`. A `--replicate` run
+under `env -i PATH=/bin:/sbin:/usr/bin:/usr/sbin` printed no exec error. It
+fetched the partner archives for 2026-10-23 through 2026-11-20 on both hosts.
+
+The stale daily reports for 2026-10-23 through 2026-11-18 were moved to
+`/var/backups/foostats-reports-20261121/{gemini,htdocs}` on each host and
+regenerated with `--report`. The reporter skips existing pages older than
+three days and has no regenerate option. Reports for 2026-11-19 and
+2026-11-20 were rebuilt by the normal three-day rule. The new totals equal
+the sum of the two old single-node pages, for example 4486 + 1882 = 6368
+requests on 2026-11-01. Both frontends serve them on stats.foo.zone.
