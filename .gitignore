@@ -2,3 +2,4 @@ dotfiles/gitsyncer/.gitsyncer-work/
 f3s/garage/secrets/
 f3s/prometheus/*-ALERTS.md
 __pycache__/
+.serena/
