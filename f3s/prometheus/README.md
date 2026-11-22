@@ -45,6 +45,16 @@ Current values worth knowing:
   it: its admin password is the one leaked in public history (`a8341c5`).
 - etcd and controller-manager scraped at 192.168.2.120-122 (ports 2381,
   10257). kube-proxy and kube-scheduler are off (embedded in k3s).
+- k3s serves one metrics registry from apiserver, controller-manager and
+  kubelet `/metrics`, so each used to repeat ~145k apiserver/etcd series
+  (task pj4, 2026-11-22). The `apiserver` job owns that registry now.
+  `kube-controller-manager` keeps only `process_start_time_seconds` and
+  `leader_election_master_status` (its alert only needs `up`), and kubelet
+  `/metrics` keeps `kubelet_*`, `volume_manager_*`, `storage_operation_*`
+  and `csi_operations_*`. Per scrape that is 3 + ~3k samples instead of
+  2 × ~145k, and ~455k active series drop to ~165k. The values sit inline
+  in the Application, so `kubectl apply -f
+  argocd-apps/monitoring/prometheus.yaml` after pushing.
 - node-exporter reads the textfile collector at
   `/var/lib/node_exporter/textfile_collector` (NFS mount monitor metrics).
 - Extra scrape jobs from secret `additional-scrape-configs`: node-exporter
