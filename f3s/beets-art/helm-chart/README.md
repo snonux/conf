@@ -1,11 +1,14 @@
 # beets-art
 
 Daily CronJob running `beets` over the Navidrome library: fetches
-`cover.jpg` per album and embeds art in every audio file. Navidrome's hourly
+`cover.jpg` per album and embeds art in every audio file that is still
+missing it. Navidrome's hourly
 scan (`Scanner.Schedule` in the navidrome ConfigMap's `navidrome.toml`, task
 o44) picks it up; a quick scan's folder hash includes each file's size and
 mtime, so it sees the changes even when beets-art runs on another node.
-Namespace `services`, ArgoCD app `beets-art`; the pod is not pinned to a node.
+Namespace `services`, ArgoCD app `beets-art`; the pod is pinned to `r0` —
+see `templates/cronjob.yaml` for why the thermal exception to the
+"nothing is pinned" house rule.
 
 Schedule 12:00 Europe/Sofia, `activeDeadlineSeconds` 6h per pod, and one
 pod retry (`backoffLimit: 1`) so a run killed by an f3s power-off is
@@ -15,8 +18,9 @@ retried after boot instead of failing the Job (see the comments in
 1. `beet import -A -q --quiet-fallback=asis /music` (`incremental: yes`;
    `auto: yes` on fetchart/embedart handles new albums).
 2. `beet fetchart` (retries albums that failed before).
-3. `beet embedart` (`compare_threshold: 50`, `ifempty: no`: won't overwrite
-   existing embeds).
+3. `beet embedart` (`ifempty: yes`: embeds only where art is missing;
+   `compare_threshold: 0`: the similarity check is disabled — it is broken
+   with ImageMagick 7, see Failures).
 
 | Storage | |
 |---|---|
@@ -35,13 +39,23 @@ ZFS-snapshot the music dataset first so the embed pass can be undone, then
 `just run-now`.
 
 Knobs in `templates/configmap.yaml`: `embedart.maxwidth` (1200),
-`embedart.compare_threshold` (0 always overwrite, 100 never),
+`embedart.compare_threshold` (0 disables the similarity comparison,
+`ifempty: yes` embeds only where art is missing),
 `fetchart.sources` (Cover Art Archive first), `embedart.remove_art_file: no`
-(keep `cover.jpg` for Navidrome and cmus). Schedule and deadline in
-`templates/cronjob.yaml`.
+(keep `cover.jpg` for Navidrome and cmus). Schedule, deadline and the `r0`
+nodeSelector in `templates/cronjob.yaml`.
 
 ## Failures
 
+- `Error while checking art similarity; skipping.` on every track
+  (fixed 2026-11-22): with beets 2.14.1 + ImageMagick 7.1.2-35, comparing
+  identical images always failed — IM writes the PHASH metric to stderr
+  and exits 0, beets reads stdout on the exit-0 path, gets `''` and
+  returns `None`. Every already-embedded track errored and was skipped
+  (1,296 per run, identical across runs and nodes): the sweep still spent
+  ~2.5h extracting art it then discarded, burning ~1 core on whichever
+  host landed the job (the original f1 thermal spike). Disabled via
+  `compare_threshold: 0` + `ifempty: yes`.
 - Non-zero Job: `just logs`. Usually NFS or Cover Art Archive rate limits;
   the next run clears it.
 - A failed Job keeps KubeJobFailed firing until three newer Jobs fail

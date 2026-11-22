@@ -15,9 +15,13 @@
 #     The explicit `beet fetchart`/`beet embedart` invocations in the
 #     CronJob command are the *backfill* sweep for albums that previously
 #     failed art lookup.
-#   - embedart.compare_threshold: 50 -> refuse to overwrite an existing
-#     embed that diverges wildly from the new candidate (guards against
-#     accidental "wrong cover stomps right cover").
+#   - embedart.compare_threshold: 0 + embedart.ifempty: yes -> embed only
+#     where art is missing. The similarity comparison is broken with
+#     ImageMagick 7 (see the embedart section below) and, while it ran,
+#     cost ~2.5h of no-op churn per sweep on whichever host landed the
+#     job. Existing embeds are never overwritten; to re-embed after a
+#     deliberate cover.jpg change use `just shell`, then
+#     `beet clearart -- album:X` + `beet embedart -f cover.jpg -- album:X`.
 #   - embedart.remove_art_file: no -> keep cover.jpg in the album folder
 #     too; Navidrome serves it directly without decoding tags, and cmus /
 #     file managers benefit.
@@ -66,6 +70,17 @@ data:
     embedart:
       auto: yes
       maxwidth: 1200
-      compare_threshold: 50
-      ifempty: no
+      # Comparison disabled 2026-11-22. With beets 2.14.1 + ImageMagick
+      # 7.1.2-35 (this image), comparing identical images always fails:
+      # IM writes the PHASH metric to stderr and exits 0, but beets reads
+      # stdout on the exit-0 path (artresizer.py IMBackend.compare), gets
+      # '' and returns None — so every already-embedded track logged
+      # "Error while checking art similarity; skipping." (1296/run) and
+      # the sweep burned ~1 core for ~2.5h extracting art it then
+      # skipped. compare_threshold: 0 skips the comparison entirely;
+      # ifempty: yes then makes the backfill a cheap gap-filler: one tag
+      # read per track, embed only where art is missing (all embeds are
+      # byte-identical to their cover.jpg, so nothing is lost).
+      compare_threshold: 0
+      ifempty: yes
       remove_art_file: no

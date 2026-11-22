@@ -6,8 +6,10 @@
 # Why this works alongside Navidrome:
 #   - The music volume is an NFS hostPath PV. Kubernetes does not enforce
 #     RWO for hostPath, and the NFS export is mounted on every r-node, so
-#     this CronJob and Navidrome can run on different nodes at once. Nothing
-#     is pinned to a node (house rule since 2026-09-25).
+#     this CronJob and Navidrome can run on different nodes at once. The
+#     job itself is pinned to r0 (nodeSelector below) — the exception to
+#     the "nothing is pinned" house rule (2026-09-25), for thermal
+#     reasons, not storage: see the nodeSelector comment.
 #   - Navidrome and beets only conflict on file *write* if they touch the
 #     same file at the same instant. Navidrome writes nothing under /music
 #     (read-only consumer); beets writes art into album folders and embeds
@@ -56,11 +58,22 @@ spec:
           # the 12:00 run should show a retry pod after boot, no Degraded
           # app and no failed Job.
           activeDeadlineSeconds: 21600
-          # Not pinned to any node: the music library is RWX NFS (shared
-          # across r0/r1/r2) and the state PVC is now NFS-backed too, so the
-          # job may land on any r-node. Letting the scheduler spread it avoids
-          # the thermal spike that occurred when it was hard-pinned to r1
-          # (on the passively-cooled f1) with a CPU limit of 2.
+          # Pinned to r0 (2026-11-22): both PVCs are RWX NFS, so any
+          # r-node can host the job, but unpinned the scheduler put 3 of
+          # the last 4 daily runs on r1 — the mid-stack host with the worst
+          # airflow (2026-11-22: f1 at 85 C, over the runbook's 80 C
+          # investigate line, with the CPU only ~43% busy; "let the
+          # scheduler spread it" did not actually spread it). f0 is the
+          # edge of the rack stack, stayed flat during the 2026-11-19 fan
+          # incident and has the most thermal headroom for this ~2.5h
+          # one-core sweep. Deliberate deviation from the "nothing is
+          # pinned" house rule (2026-09-25, set when Navidrome's
+          # local-path PVC made r1 a SPOF): storage does not force the
+          # pin here, heat moves it to the best-cooled node. If f0 is
+          # down at run time the pod pends until activeDeadlineSeconds
+          # kills it; the run retries the next day (backoffLimit 1).
+          nodeSelector:
+            kubernetes.io/hostname: r0.lan.buetow.org
           containers:
             - name: beets
               # Pinned version tag (linuxserver <beets>-ls<build>): :latest
@@ -106,7 +119,9 @@ spec:
                   # `beet embedart` (no -f) prompts "Modify artwork for N
                   # albums (Y/n)?" with no flag to bypass; pipe `yes` so
                   # it proceeds non-interactively. embedart still respects
-                  # ifempty: no and compare_threshold: 50 from config.
+                  # ifempty: yes and compare_threshold: 0 from config —
+                  # the similarity comparison is broken with ImageMagick 7
+                  # (see configmap.yaml).
                   echo "--- embedart (backfill) ---"
                   yes | $BEET embedart || echo "embedart returned non-zero (continuing)"
 
