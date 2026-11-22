@@ -41,6 +41,36 @@ spec:
               enabled: true
               https: true
               insecureSkipVerify: true
+              # k3s runs apiserver, controller-manager and kubelet in one
+              # process with one metrics registry. r0-r2 are all servers, so
+              # :10257 serves the same ~145k series as the apiserver job
+              # (task pj4, docs/grafana-cloud-cost-audit-20261122.md). The
+              # apiserver job owns them; keep only a liveness signal here.
+              # The only rule on this job is absent(up{...}), and `up` is
+              # synthetic, so metric relabelling cannot drop it.
+              metricRelabelings:
+                - action: keep
+                  sourceLabels: [__name__]
+                  regex: process_start_time_seconds|leader_election_master_status
+
+          # Same shared k3s registry as above: the kubelet /metrics endpoint
+          # also repeats every apiserver/etcd/workqueue family (~145k series).
+          # Keep the kubelet's own families, which the default kubelet rules
+          # and alerts read (kubelet_volume_stats_*, kubelet_pleg_*,
+          # kubelet_running_pods, kubelet_certificate_manager_*, ...).
+          # /metrics/cadvisor and /metrics/probes are unaffected: they use
+          # cAdvisorMetricRelabelings / probesMetricRelabelings. The second
+          # rule repeats the chart's default bucket thinning, which this list
+          # replaces.
+          kubelet:
+            serviceMonitor:
+              metricRelabelings:
+                - action: keep
+                  sourceLabels: [__name__]
+                  regex: (kubelet|volume_manager|storage_operation|csi_operations)_.*
+                - action: drop
+                  sourceLabels: [__name__, le]
+                  regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
 
           # k3s embeds kube-proxy and kube-scheduler into the main process
           # Disable these components to prevent false-positive alerts
