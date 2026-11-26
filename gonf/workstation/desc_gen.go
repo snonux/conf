@@ -8,6 +8,8 @@ func (Pkg) DescFishTools() string { return "Installs fzf and zoxide (Fedora)" }
 
 func (Pkg) DescHelix() string { return "Installs the helix editor (Fedora)" }
 
+func (Pkg) DescLazygit() string { return "Installs the lazygit git TUI (Fedora)" }
+
 func (Pkg) DescOpendoas() string {
 	return "Installs opendoas and a passwordless wheel doas.conf (Fedora)"
 }

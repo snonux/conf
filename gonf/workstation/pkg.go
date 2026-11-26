@@ -51,6 +51,15 @@ func (Pkg) Helix() {
 	Package("helix")
 }
 
+// Lazygit installs the lazygit git TUI (Fedora).
+//
+// Lazygit is separate from the full pkg_fedora workstation set so every
+// Fedora host gets lazygit even when that set is not applied. home_lazygit
+// only syncs ~/.config/lazygit.
+func (Pkg) Lazygit() {
+	Package("lazygit")
+}
+
 // Fedora installs Fedora packages.
 //
 // Fedora installs the workstation package set. It also uninstalls the Rex
@@ -63,7 +72,7 @@ func (Pkg) Helix() {
 // dnf apply; reinstall with "go install github.com/tomnomnom/gron@latest"
 // if it is ever needed again.
 // opendoas lives in Opendoas; fzf and zoxide in FishTools; task in Taskwarrior;
-// helix in Helix.
+// helix in Helix; lazygit in Lazygit.
 func (Pkg) Fedora() {
 	NoPackage("Rex")
 	Packages(

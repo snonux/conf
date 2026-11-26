@@ -10,7 +10,7 @@ func Register() {
 	RegisterMethods(Pkg{}, WithPrefix("pkg_"), WhenProfile("fedora"))
 	RegisterMethods(System{}, WithPrefix("system_"))
 	AggregateTasks("workstation", "Configure Fedora workstation packages and system settings",
-		"pkg_opendoas", "pkg_fish_tools", "pkg_taskwarrior", "pkg_helix", "pkg_fedora",
+		"pkg_opendoas", "pkg_fish_tools", "pkg_taskwarrior", "pkg_helix", "pkg_lazygit", "pkg_fedora",
 		"system_hosts", "system_wireguard", "system_uptimed", "system_fish_shell", "system_timezone",
 	)
 }
