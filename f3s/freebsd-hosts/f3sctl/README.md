@@ -17,6 +17,7 @@ verb and never hands anything to a shell:
 | `zusb-unload` | yes |
 | `carp-quiesce` | yes |
 | `poweroff` | yes |
+| `vm-start` | yes (starts the k3s guest `rocky`; f0-f2 only, since v0.12.0) |
 
 Layers:
 
@@ -28,7 +29,7 @@ Layers:
 3. `ForceCommand` in a `Match User f3sctl` block in `sshd_config` (the
    authoritative one; beats any `command=`). gonf owns the whole
    [`sshd_config`](sshd_config) (stock FreeBSD 15.1 file plus that block).
-4. `doas` rules on exact argv for the four root verbs. `agent-root` refuses
+4. `doas` rules on exact argv for the five root verbs. `agent-root` refuses
    to run unless euid is 0.
 
 The login shell must stay `/bin/sh`: sshd runs `ForceCommand` through it,
